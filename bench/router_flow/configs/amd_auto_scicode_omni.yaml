@@ -1,0 +1,450 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 900
+
+providers:
+  defaults:
+    default_model: gpt-worker
+    default_reasoning_effort: medium
+    reasoning_families:
+      openrouter:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: opus-worker
+      provider_model_id: anthropic/claude-opus-4.8
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 5
+        cached_input_per_1m: 0
+        completion_per_1m: 25
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gemini-worker
+      provider_model_id: google/gemini-3.1-pro-preview
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 2
+        cached_input_per_1m: 0
+        completion_per_1m: 12
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt-worker
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 5
+        cached_input_per_1m: 0
+        completion_per_1m: 30
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: opus-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for long-horizon scientific code reasoning.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.95
+      modality: text
+      tags: [deployment:openrouter, benchmark:scicode, role:worker]
+    - name: gemini-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for broad scientific code reasoning.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, benchmark:scicode, role:worker]
+    - name: gpt-worker
+      context_window_size: 1048576
+      description: OpenRouter worker and synthesis model for SciCode.
+      capabilities: [chat, code, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, benchmark:scicode, role:synthesis]
+
+  signals:
+    keywords:
+      - name: scicode_any
+        operator: OR
+        keywords:
+          - "PROBLEM DESCRIPTION:"
+          - "SUBPROBLEM DESCRIPTION:"
+          - "FUNCTION HEADER:"
+          - "RETURN LINE:"
+          - "SCIENTIFIC BACKGROUND:"
+          - "scientific problem"
+          - "subproblem"
+          - "required_dependencies"
+          - "The response must be formatted as ```python```"
+          - "function header"
+          - "return line"
+          - "scientific background"
+      - name: scicode_function_contract
+        operator: OR
+        keywords:
+          - "FUNCTION HEADER:"
+          - "RETURN LINE:"
+          - "You MUST NOT import"
+          - "must use in your solution implementation"
+          - "must only use the following dependencies"
+          - "Do not import"
+          - "function header"
+          - "return line"
+          - "must not include code to import"
+          - "must not import"
+          - "dependencies"
+          - "function implementation"
+      - name: scicode_multistep_dependency
+        operator: OR
+        keywords:
+          - "previous subproblems"
+          - "functions that you generated previously"
+          - "solutions to previous subproblems"
+          - "may be implemented using your solutions to earlier subproblems"
+      - name: scicode_scientific_background
+        operator: OR
+        keywords:
+          - "SCIENTIFIC BACKGROUND:"
+          - "physics"
+          - "chemistry"
+          - "biology"
+          - "material science"
+          - "equation"
+          - "simulation"
+          - "differential"
+          - "integral"
+          - "matrix"
+          - "tensor"
+          - "optimization"
+          - "scientific background"
+          - "background"
+          - "minimum image"
+          - "lennard-jones"
+          - "virial"
+          - "molecular"
+      - name: scicode_numeric_risk
+        operator: OR
+        keywords:
+          - "numpy"
+          - "scipy"
+          - "pandas"
+          - "sympy"
+          - "float"
+          - "tolerance"
+          - "are_dicts_close"
+          - "cmp_tuple_or_list"
+          - "process_hdf5_to_tuple"
+          - "target"
+          - "test cases"
+          - "test case"
+          - "np."
+          - "array"
+          - "vector"
+    context:
+      - name: scicode_long_context
+        min_tokens: 4K
+        max_tokens: 1M
+        description: Long SciCode prompt with background, prior subproblem code, or verbose scientific setup.
+
+  projections:
+    scores:
+      - name: scicode_risk_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: scicode_function_contract
+            weight: 0.25
+          - type: keyword
+            name: scicode_multistep_dependency
+            weight: 0.25
+          - type: keyword
+            name: scicode_scientific_background
+            weight: 0.20
+          - type: keyword
+            name: scicode_numeric_risk
+            weight: 0.20
+          - type: context
+            name: scicode_long_context
+            weight: 0.10
+    mappings:
+      - name: scicode_risk_band
+        source: scicode_risk_score
+        method: threshold_bands
+        outputs:
+          - name: scicode_low_risk
+            lt: 0.35
+          - name: scicode_medium_risk
+            gte: 0.35
+            lt: 0.65
+          - name: scicode_high_risk
+            gte: 0.65
+
+  decisions:
+    - name: scicode_function_contract_fusion
+      description: SciCode function-header tasks use a three-model scientific code panel and GPT synthesis.
+      priority: 340
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: scicode_any
+          - type: keyword
+            name: scicode_function_contract
+      output_contract: >-
+        Return exactly one Python code block. Implement only the requested
+        function using the exact FUNCTION HEADER and RETURN LINE. Do not import
+        dependencies, do not include tests, do not print, and do not add prose
+        outside the code block. Reuse prior subproblem functions only by name.
+        Follow the prompt's sign, vector-direction, unit, and virial-equation
+        conventions literally.
+      modelRefs:
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: fusion
+        fusion:
+          model: gpt-worker
+          max_concurrent: 3
+          max_completion_tokens: 32768
+          round_timeout_seconds: 300
+          min_successful_responses: 2
+          temperature: 0.2
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final SciCode code judge.
+
+            Original subproblem:
+            {{original}}
+
+            Candidate implementations:
+            {{responses}}
+
+            Select the implementation most likely to pass the hidden SciCode
+            sandbox tests. Preserve the exact function header and required
+            return line from the prompt. Remove imports, examples, tests, main
+            guards, print calls, and prose. When candidates disagree on vector
+            direction, force sign, pressure units, or virial convention, choose
+            the implementation that follows the prompt literally and is
+            internally consistent with previously defined functions. Return
+            exactly one ```python code block.
+          grounding:
+            enabled: false
+            reference: panel
+            policy: weight
+            min_score: 0.0
+            min_keep: 1
+            nli_contradiction_penalty: 1.0
+            on_error: skip
+
+    - name: scicode_multistep_remom
+      description: Dependency-sensitive subproblems use ReMoM to refine function composition across prior generated code.
+      priority: 260
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: scicode_multistep_dependency
+          - type: projection
+            name: scicode_medium_risk
+      output_contract: >-
+        Return exactly one Python code block containing only the requested
+        function implementation. Preserve the exact FUNCTION HEADER and RETURN
+        LINE. Do not import dependencies or redefine prior subproblem functions.
+      modelRefs:
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [5]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 3000
+          synthesis_model: gpt-worker
+          max_concurrent: 3
+          round_timeout_seconds: 300
+          min_successful_responses: 2
+          max_responses_per_round: 5
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving one turn of SciCode. Compare the reference
+            implementations against the original subproblem and return the
+            single most reliable Python function.
+
+            Original subproblem:
+            {{.OriginalContent}}
+
+            Reference implementations:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Preserve the exact function header and return line. Do not import
+            dependencies, include tests, or add prose. Return exactly one
+            ```python code block.
+
+    - name: scicode_low_risk_remom
+      description: Low-risk SciCode subproblems still use a lightweight loop for stable code formatting.
+      priority: 160
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: scicode_any
+          - type: projection
+            name: scicode_low_risk
+      output_contract: >-
+        Return exactly one Python code block containing only the requested
+        function implementation. Preserve the exact FUNCTION HEADER and RETURN
+        LINE. Do not import dependencies, include tests, print, or add prose.
+      modelRefs:
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 2000
+          synthesis_model: gpt-worker
+          max_concurrent: 3
+          round_timeout_seconds: 240
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving one SciCode subproblem. Compare the reference
+            implementations and return the most reliable final implementation.
+
+            Original subproblem:
+            {{.OriginalContent}}
+
+            Reference implementations:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly one ```python code block. Preserve the exact function
+            header and return line. Do not import dependencies or add prose.
+
+    - name: scicode_fallback_remom
+      description: Catch-all fallback for unmatched SciCode traffic.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Preserve the benchmark output format exactly. For SciCode, return one
+        Python code block containing only the requested function implementation,
+        without imports, tests, prints, or prose.
+      modelRefs:
+        - model: gemini-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: opus-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [5]
+          model_distribution: round_robin
+          temperature: 0.2
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 3000
+          synthesis_model: gpt-worker
+          max_concurrent: 3
+          round_timeout_seconds: 300
+          min_successful_responses: 2
+          max_responses_per_round: 5
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are solving SciCode. Compare the reference implementations
+            against the original prompt and return the single most reliable
+            final answer in the requested format.
+
+            Original prompt:
+            {{.OriginalContent}}
+
+            Reference implementations:
+            {{range $i, $resp := .ReferenceResponses}}
+            Reference {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly one ```python code block and no prose.

@@ -9,7 +9,8 @@
 pub mod chunked_sdpa;
 
 pub use chunked_sdpa::{
-    build_local_band_mask, chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+    build_causal_mask, build_local_band_mask, chunked_sdpa, prepare_padding_mask,
+    ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
 };
 
 #[cfg(test)]

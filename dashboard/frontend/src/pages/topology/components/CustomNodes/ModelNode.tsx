@@ -72,7 +72,7 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
         {hasMultipleModes && hasAnyReasoning && hasAnyStandard ? (
           <div className={styles.modesContainer}>
             {/* Reasoning Mode */}
-            <div className={styles.modeBadge} style={{ background: 'rgba(118, 185, 0, 0.2)', borderColor: '#76b900', color: 'white' }}>
+            <div className={styles.modeBadge} style={{ background: 'rgba(143, 148, 156, 0.2)', borderColor: '#8f949c', color: 'white' }}>
               <span>🧠</span>
               <span>Reasoning</span>
               {reasoning_family && (

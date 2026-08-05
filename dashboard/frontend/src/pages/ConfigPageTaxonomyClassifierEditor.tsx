@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { StringListEditor } from '../components/StringListEditor'
 import styles from './ConfigPageTaxonomyClassifiers.module.css'
 import {
   emptyTaxonomyClassifierDraft,
@@ -134,25 +135,24 @@ export default function ConfigPageTaxonomyClassifierEditor({
                   />
                 </label>
               </div>
-              <label className={styles.editorField}>
+              <div className={styles.editorField}>
                 <span className={styles.editorLabel}>Exemplars</span>
-                <textarea
-                  className={styles.editorTextarea}
-                  rows={4}
-                  placeholder="One exemplar per line"
-                  value={label.exemplars.join('\n')}
-                  onChange={(event) =>
+                <StringListEditor
+                  value={label.exemplars}
+                  onChange={(exemplars) =>
                     updateDraft({
                       ...draft,
                       labels: draft.labels.map((entry, entryIndex) =>
-                        entryIndex === index
-                          ? { ...entry, exemplars: event.target.value.split('\n') }
-                          : entry
+                        entryIndex === index ? { ...entry, exemplars } : entry
                       ),
                     })
                   }
+                  addLabel="Add exemplar"
+                  emptyLabel="Add at least one representative exemplar."
+                  itemLabel="Exemplar"
+                  placeholder="A representative request for this label"
                 />
-              </label>
+              </div>
               <div className={styles.categoryFooter}>
                 <span className={styles.footerHint}>Signals can bind to this label by name.</span>
                 <button
@@ -165,10 +165,8 @@ export default function ConfigPageTaxonomyClassifierEditor({
                       groups: draft.groups.map((group) => ({
                         ...group,
                         labels: group.labels
-                          .split(',')
                           .map((item) => item.trim())
-                          .filter((item) => item && item !== label.name)
-                          .join(', '),
+                          .filter((item) => item && item !== label.name),
                       })),
                       label_thresholds: draft.label_thresholds.filter((entry) => entry.label !== label.name),
                     })
@@ -187,7 +185,7 @@ export default function ConfigPageTaxonomyClassifierEditor({
           <div>
             <h3 className={styles.editorSectionTitle}>Groups</h3>
             <p className={styles.editorSectionHint}>
-              Groups collect labels into higher-level routing concepts. Use comma-separated label names.
+              Groups collect labels into higher-level routing concepts.
             </p>
           </div>
           <button
@@ -196,7 +194,7 @@ export default function ConfigPageTaxonomyClassifierEditor({
             onClick={() =>
               updateDraft({
                 ...draft,
-                groups: [...draft.groups, { name: '', labels: '' }],
+                groups: [...draft.groups, { name: '', labels: [] }],
               })
             }
           >
@@ -205,48 +203,61 @@ export default function ConfigPageTaxonomyClassifierEditor({
         </div>
         <div className={styles.stack}>
           {draft.groups.map((group, index) => (
-            <div key={`group-${index}`} className={styles.editorRow}>
-              <input
-                className={styles.editorInput}
-                placeholder="private"
-                value={group.name}
-                onChange={(event) =>
-                  updateDraft({
-                    ...draft,
-                    groups: draft.groups.map((entry, entryIndex) =>
-                      entryIndex === index ? { ...entry, name: event.target.value } : entry
-                    ),
-                  })
-                }
-              />
-              <input
-                className={styles.editorInput}
-                placeholder={labelOptions.length > 0 ? labelOptions.join(', ') : 'Comma-separated label names'}
-                value={group.labels}
-                onChange={(event) =>
-                  updateDraft({
-                    ...draft,
-                    groups: draft.groups.map((entry, entryIndex) =>
-                      entryIndex === index ? { ...entry, labels: event.target.value } : entry
-                    ),
-                  })
-                }
-              />
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() =>
-                  updateDraft({
-                    ...draft,
-                    groups: draft.groups.filter((_, entryIndex) => entryIndex !== index),
-                    metrics: draft.metrics.filter(
-                      (metric) => metric.positive_group !== group.name && metric.negative_group !== group.name
-                    ),
-                  })
-                }
-              >
-                Remove
-              </button>
+            <div key={`group-${index}`} className={styles.categoryCard}>
+              <div className={styles.editorGrid}>
+                <label className={styles.editorField}>
+                  <span className={styles.editorLabel}>Group Name</span>
+                  <input
+                    className={styles.editorInput}
+                    placeholder="private"
+                    value={group.name}
+                    onChange={(event) =>
+                      updateDraft({
+                        ...draft,
+                        groups: draft.groups.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, name: event.target.value } : entry
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <div className={styles.editorField}>
+                  <span className={styles.editorLabel}>Assigned Labels</span>
+                  <StringListEditor
+                    value={group.labels}
+                    onChange={(labels) =>
+                      updateDraft({
+                        ...draft,
+                        groups: draft.groups.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, labels } : entry
+                        ),
+                      })
+                    }
+                    addLabel="Assign label"
+                    emptyLabel="No labels assigned to this group."
+                    itemLabel="Label"
+                    placeholder={labelOptions[0] ?? 'label_name'}
+                  />
+                </div>
+              </div>
+              <div className={styles.categoryFooter}>
+                <span className={styles.footerHint}>Use an existing label name from this knowledge base.</span>
+                <button
+                  type="button"
+                  className={styles.removeButton}
+                  onClick={() =>
+                    updateDraft({
+                      ...draft,
+                      groups: draft.groups.filter((_, entryIndex) => entryIndex !== index),
+                      metrics: draft.metrics.filter(
+                        (metric) => metric.positive_group !== group.name && metric.negative_group !== group.name
+                      ),
+                    })
+                  }
+                >
+                  Remove Group
+                </button>
+              </div>
             </div>
           ))}
         </div>

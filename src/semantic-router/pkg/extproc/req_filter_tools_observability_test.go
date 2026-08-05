@@ -12,13 +12,14 @@ import (
 
 var _ = Describe("emitToolObservability", func() {
 	var response *ext_proc.ProcessingResponse
+	debugCtx := &RequestContext{Headers: map[string]string{headers.VSRDebug: "true"}}
 
 	BeforeEach(func() {
 		response = &ext_proc.ProcessingResponse{}
 	})
 
-	It("sets all three x-vsr-tools-* headers", func() {
-		emitToolObservability(&response, "default", 0.87, 4*time.Millisecond)
+	It("sets all three x-vsr-tools-* headers under x-vsr-debug", func() {
+		emitToolObservability(&response, debugCtx, "default", 0.87, 4*time.Millisecond)
 
 		common := response.GetRequestBody().GetResponse()
 		Expect(common).NotTo(BeNil())
@@ -33,9 +34,14 @@ var _ = Describe("emitToolObservability", func() {
 		Expect(headerMap[headers.VSRToolsLatencyMs]).To(Equal("4"))
 	})
 
-	It("does nothing when strategy is empty", func() {
+	It("omits the headers on the default (non-debug) surface", func() {
+		emitToolObservability(&response, nil, "default", 0.87, 4*time.Millisecond)
+		Expect(response.GetRequestBody()).To(BeNil())
+	})
+
+	It("does nothing when the response pointer is nil", func() {
 		var nilResponse *ext_proc.ProcessingResponse
-		emitToolObservability(&nilResponse, "", 0, 0)
+		emitToolObservability(&nilResponse, debugCtx, "", 0, 0)
 		Expect(nilResponse).To(BeNil())
 	})
 })

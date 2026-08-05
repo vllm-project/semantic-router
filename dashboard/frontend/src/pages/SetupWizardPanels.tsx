@@ -1,13 +1,21 @@
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import ConfirmDialog from "../components/ConfirmDialog";
 import styles from "./SetupWizardPage.module.css";
+import SetupWizardPresetChecklist from "./SetupWizardPresetChecklist";
 import {
   DEFAULT_REMOTE_SETUP_CONFIG_URL,
+  filterSetupModels,
   getModelDraftFieldErrors,
+  paginateSetupModels,
   PROVIDER_OPTIONS,
+  SETUP_MODELS_PER_PAGE,
   SETUP_STEP_LABELS,
   type ImportedSetupConfig,
   type ModelDraft,
+  type PresetCatalogState,
   type PresetDelta,
   type PresetInfo,
+  type PresetRequestState,
   type RemoteImportState,
   type SetupConfigCounts,
   type SetupRoutingMode,
@@ -20,7 +28,7 @@ interface RouteSummaryProps {
 
 interface SetupWizardStepperProps {
   currentStep: SetupStep;
-  onGoToStep: (step: SetupStep) => void;
+  onGoToStep: (step: SetupStep) => boolean;
 }
 
 interface ModelStepPanelProps {
@@ -31,9 +39,11 @@ interface ModelStepPanelProps {
   stepOneErrors: string[];
   stepOneAttempted: boolean;
   draftBuildError: string | null;
+  removedModel: ModelDraft | null;
   onAddModel: () => void;
   onUpdateModel: (id: string, field: keyof ModelDraft, value: string) => void;
   onRemoveModel: (id: string) => void;
+  onUndoRemoveModel: () => void;
   onSelectDefaultModel: (id: string) => void;
 }
 
@@ -46,7 +56,10 @@ interface RoutingStarterPanelProps {
   importedConfig: ImportedSetupConfig | null;
   counts: SetupConfigCounts;
   presets: PresetInfo[];
+  presetCatalogState: PresetCatalogState;
+  presetCatalogError: string | null;
   selectedPresetId: string | null;
+  presetRequestState: PresetRequestState;
   presetDelta: PresetDelta | null;
   presetImportedConfig: ImportedSetupConfig | null;
   presetError: string | null;
@@ -55,163 +68,7 @@ interface RoutingStarterPanelProps {
   onImportRemoteConfig: () => void;
   onSelectPreset: (id: string) => void;
   onImportPresetConfig: () => void;
-}
-
-function PresetModelChecklist({
-  presetDelta,
-  presetImportedConfig,
-  counts,
-  presetError,
-  onImportPresetConfig,
-}: {
-  presetDelta: PresetDelta;
-  presetImportedConfig: ImportedSetupConfig | null;
-  counts: SetupConfigCounts;
-  presetError: string | null;
-  onImportPresetConfig: () => void;
-}) {
-  const total =
-    presetDelta.configured_models.length + presetDelta.missing_models.length;
-  const readyCount = presetDelta.configured_models.length;
-  const pct = total > 0 ? Math.round((readyCount / total) * 100) : 0;
-
-  return (
-    <div className={styles.remoteImportSummary}>
-      <div className={styles.remoteImportSummaryHeader}>
-        <h4 className={styles.presetCardTitle}>
-          {presetDelta.ready ? "Ready to activate" : "Model requirements"}
-        </h4>
-        <span className={styles.presetCardMeta}>
-          {readyCount}/{total} models ready
-        </span>
-      </div>
-
-      <div
-        style={{
-          height: 4,
-          borderRadius: 2,
-          background: "var(--color-border, #333)",
-          marginBottom: 12,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            width: `${pct}%`,
-            height: "100%",
-            borderRadius: 2,
-            background: presetDelta.ready
-              ? "var(--color-success, #22c55e)"
-              : "var(--color-warning, #eab308)",
-            transition: "width 0.3s ease",
-          }}
-        />
-      </div>
-
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {presetDelta.configured_models.map((name) => (
-          <li
-            key={name}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 0",
-              color: "var(--color-success, #22c55e)",
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>&#10003;</span>
-            <span style={{ color: "var(--color-text, #e5e5e5)" }}>
-              <strong>{name}</strong>
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--color-text-muted, #888)",
-              }}
-            >
-              configured
-            </span>
-          </li>
-        ))}
-        {presetDelta.missing_models.map((m) => (
-          <li
-            key={m.name}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 0",
-              color: "var(--color-warning, #eab308)",
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>&#9675;</span>
-            <span style={{ color: "var(--color-text, #e5e5e5)" }}>
-              <strong>{m.name}</strong>
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--color-text-muted, #888)",
-              }}
-            >
-              {m.role} &mdash; add in step 1
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {!presetDelta.ready && (
-        <p className={styles.fieldHint} style={{ marginTop: 12 }}>
-          Missing models will use placeholder endpoints. You can update them
-          after activation from the config page.
-        </p>
-      )}
-
-      {presetError && (
-        <p className={styles.fieldErrorText} style={{ marginTop: 8 }}>
-          {presetError}
-        </p>
-      )}
-
-      {!presetImportedConfig && (
-        <div className={styles.remoteImportActions}>
-          <button
-            className={styles.secondaryButton}
-            onClick={onImportPresetConfig}
-          >
-            {presetDelta.ready
-              ? "Import preset config"
-              : "Import with placeholders"}
-          </button>
-        </div>
-      )}
-
-      {presetImportedConfig && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: "8px 12px",
-            borderRadius: 6,
-            background: "var(--color-success-bg, rgba(34,197,94,0.1))",
-            border: "1px solid var(--color-success, #22c55e)",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span style={{ color: "var(--color-success, #22c55e)", fontSize: 16 }}>
-            &#10003;
-          </span>
-          <span>
-            <strong>Preset config ready</strong> &mdash; {counts.models} models
-            &middot; {counts.decisions} decisions &middot; {counts.signals}{" "}
-            signals
-          </span>
-        </div>
-      )}
-    </div>
-  );
+  onRetryPresets: () => void;
 }
 
 export function SetupRouteSummary({ currentRouteLabel }: RouteSummaryProps) {
@@ -227,25 +84,72 @@ export function SetupWizardStepper({
   currentStep,
   onGoToStep,
 }: SetupWizardStepperProps) {
-  return (
-    <div className={styles.stepper}>
-      {SETUP_STEP_LABELS.map(([index, label], stepIndex) => {
-        const numericStep = stepIndex as SetupStep;
-        const isActive = currentStep === numericStep;
-        const isDone = currentStep > numericStep;
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-        return (
-          <button
-            key={label}
-            className={`${styles.stepButton} ${isActive ? styles.stepButtonActive : ""} ${isDone ? styles.stepButtonDone : ""}`}
-            onClick={() => onGoToStep(numericStep)}
-          >
-            <span className={styles.stepNumber}>{index}</span>
-            <span className={styles.stepLabel}>{label}</span>
-          </button>
-        );
-      })}
-    </div>
+  const focusStep = (step: number) => {
+    buttonRefs.current[step]?.focus();
+  };
+
+  const handleStepKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    stepIndex: number,
+  ) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.key === "Home") {
+      focusStep(0);
+    } else if (event.key === "End") {
+      focusStep(SETUP_STEP_LABELS.length - 1);
+    } else {
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      focusStep(
+        (stepIndex + direction + SETUP_STEP_LABELS.length) %
+          SETUP_STEP_LABELS.length,
+      );
+    }
+  };
+
+  const activateStep = (step: SetupStep) => {
+    if (!onGoToStep(step)) {
+      window.requestAnimationFrame(() => focusStep(currentStep));
+    }
+  };
+
+  return (
+    <nav className={styles.stepper} aria-label="Setup progress">
+      <ol className={styles.stepList}>
+        {SETUP_STEP_LABELS.map(([index, label], stepIndex) => {
+          const numericStep = stepIndex as SetupStep;
+          const isActive = currentStep === numericStep;
+          const isDone = currentStep > numericStep;
+
+          return (
+            <li key={label} className={styles.stepItem}>
+              <button
+                ref={(element) => {
+                  buttonRefs.current[stepIndex] = element;
+                }}
+                id={`setup-step-${numericStep}-button`}
+                type="button"
+                className={`${styles.stepButton} ${isActive ? styles.stepButtonActive : ""} ${isDone ? styles.stepButtonDone : ""}`}
+                aria-current={isActive ? "step" : undefined}
+                aria-controls={`setup-step-${numericStep}-panel`}
+                aria-label={`Step ${index}: ${label}${isDone ? ", complete" : ""}`}
+                tabIndex={isActive ? 0 : -1}
+                onKeyDown={(event) => handleStepKeyDown(event, stepIndex)}
+                onClick={() => activateStep(numericStep)}
+              >
+                <span className={styles.stepNumber}>{isDone ? "✓" : index}</span>
+                <span className={styles.stepLabel}>{label}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -257,15 +161,70 @@ export function ModelStepPanel({
   stepOneErrors,
   stepOneAttempted,
   draftBuildError,
+  removedModel,
   onAddModel,
   onUpdateModel,
   onRemoveModel,
+  onUndoRemoveModel,
   onSelectDefaultModel,
 }: ModelStepPanelProps) {
+  const [modelQuery, setModelQuery] = useState("");
+  const [modelPageNumber, setModelPageNumber] = useState(1);
+  const [pendingRemoveModel, setPendingRemoveModel] =
+    useState<ModelDraft | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const validationFocusHandledRef = useRef(false);
   const fieldErrorsByModelId = getModelDraftFieldErrors(models);
+  const filteredModels = filterSetupModels(models, modelQuery);
+  const modelPage = paginateSetupModels(filteredModels, modelPageNumber);
+
+  useEffect(() => {
+    if (modelPage.page !== modelPageNumber) {
+      setModelPageNumber(modelPage.page);
+    }
+  }, [modelPage.page, modelPageNumber]);
+
+  useEffect(() => {
+    const shouldFocusValidation =
+      shouldShowStepOneIssues || Boolean(stepOneAttempted && draftBuildError);
+    if (!shouldFocusValidation) {
+      validationFocusHandledRef.current = false;
+      return;
+    }
+    if (validationFocusHandledRef.current) {
+      return;
+    }
+    validationFocusHandledRef.current = true;
+    const currentFieldErrors = getModelDraftFieldErrors(models);
+    const firstInvalidModelIndex = models.findIndex((model) => {
+      const errors = currentFieldErrors[model.id];
+      return Boolean(errors?.name || errors?.baseUrl);
+    });
+    if (firstInvalidModelIndex >= 0) {
+      setModelQuery("");
+      setModelPageNumber(
+        Math.floor(firstInvalidModelIndex / SETUP_MODELS_PER_PAGE) + 1,
+      );
+    }
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        panelRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus();
+      });
+    });
+  }, [draftBuildError, models, shouldShowStepOneIssues, stepOneAttempted]);
+
+  const handleAddModel = () => {
+    setModelQuery("");
+    setModelPageNumber(
+      Math.max(1, Math.ceil((models.length + 1) / SETUP_MODELS_PER_PAGE)),
+    );
+    onAddModel();
+  };
 
   return (
-    <div className={styles.stepBody}>
+    <div ref={panelRef} className={styles.stepBody}>
       <div className={styles.sectionHeader}>
         <div className={styles.sectionHeaderMain}>
           <h2 className={styles.sectionTitle}>Connect your first model</h2>
@@ -277,14 +236,54 @@ export function ModelStepPanel({
           <SetupRouteSummary currentRouteLabel={currentRouteLabel} />
         </div>
         <div className={styles.sectionHeaderAside}>
-          <button className={styles.secondaryButton} onClick={onAddModel}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={handleAddModel}
+          >
             Add model
           </button>
         </div>
       </div>
 
-      <div className={styles.modelList}>
-        {models.map((model, index) => {
+      <div className={styles.modelCollectionToolbar}>
+        <label className={styles.modelSearchField}>
+          <span className={styles.fieldLabel}>Find a model</span>
+          <input
+            type="search"
+            value={modelQuery}
+            onChange={(event) => {
+              setModelQuery(event.target.value);
+              setModelPageNumber(1);
+            }}
+            placeholder="Search name, provider, or endpoint"
+          />
+        </label>
+        <p className={styles.modelCount} aria-live="polite">
+          {modelQuery.trim()
+            ? `${filteredModels.length} of ${models.length} models`
+            : `${models.length} model${models.length === 1 ? "" : "s"}`}
+        </p>
+      </div>
+
+      {removedModel && (
+        <div className={styles.undoNotice} role="status" aria-live="polite">
+          <span>
+            Removed <strong>{removedModel.name || "model draft"}</strong>.
+          </span>
+          <button
+            type="button"
+            className={styles.undoButton}
+            onClick={onUndoRemoveModel}
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
+      <div className={styles.modelList} aria-label="Connected models">
+        {modelPage.items.map((model) => {
+          const index = models.findIndex((candidate) => candidate.id === model.id);
           const providerMeta = PROVIDER_OPTIONS.find(
             (option) => option.id === model.providerKind,
           );
@@ -299,7 +298,7 @@ export function ModelStepPanel({
           const hasBaseUrlError = Boolean(baseUrlError);
 
           return (
-            <div key={model.id} className={styles.modelCard}>
+            <article key={model.id} className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <div>
                   <div className={styles.modelCardEyebrow}>
@@ -320,8 +319,10 @@ export function ModelStepPanel({
                     <span>Default</span>
                   </label>
                   <button
+                    type="button"
                     className={styles.ghostButton}
-                    onClick={() => onRemoveModel(model.id)}
+                    aria-label={`Remove model ${model.name.trim() || index + 1}`}
+                    onClick={() => setPendingRemoveModel(model)}
                     disabled={models.length === 1}
                   >
                     Remove
@@ -341,9 +342,15 @@ export function ModelStepPanel({
                     }
                     placeholder="qwen/qwen3.5-rocm"
                     aria-invalid={hasNameError}
+                    aria-describedby={
+                      hasNameError ? `${model.id}-name-error` : undefined
+                    }
                   />
                   {hasNameError && (
-                    <span className={styles.fieldErrorText}>
+                    <span
+                      id={`${model.id}-name-error`}
+                      className={styles.fieldErrorText}
+                    >
                       {nameError}
                     </span>
                   )}
@@ -380,6 +387,9 @@ export function ModelStepPanel({
                     }
                     placeholder={providerMeta?.placeholder}
                     aria-invalid={hasBaseUrlError}
+                    aria-describedby={
+                      hasBaseUrlError ? `${model.id}-base-url-error` : undefined
+                    }
                   />
                   <span className={styles.fieldHint}>
                     {providerMeta?.description} You can enter a full URL like{" "}
@@ -387,7 +397,10 @@ export function ModelStepPanel({
                     <code>localhost:8000/v1</code>.
                   </span>
                   {hasBaseUrlError && (
-                    <span className={styles.fieldErrorText}>
+                    <span
+                      id={`${model.id}-base-url-error`}
+                      className={styles.fieldErrorText}
+                    >
                       {baseUrlError}
                     </span>
                   )}
@@ -420,13 +433,46 @@ export function ModelStepPanel({
                   />
                 </label>
               </div>
-            </div>
+            </article>
           );
         })}
+
+        {modelPage.total === 0 && (
+          <div className={styles.modelEmptyState} role="status">
+            No models match “{modelQuery.trim()}”. Clear the search to return to
+            the full inventory.
+          </div>
+        )}
       </div>
 
+      {modelPage.pageCount > 1 && (
+        <nav className={styles.modelPagination} aria-label="Model pages">
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setModelPageNumber((page) => Math.max(1, page - 1))}
+            disabled={modelPage.page === 1}
+          >
+            Previous
+          </button>
+          <span aria-live="polite">
+            Page {modelPage.page} of {modelPage.pageCount}
+          </span>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() =>
+              setModelPageNumber((page) => Math.min(modelPage.pageCount, page + 1))
+            }
+            disabled={modelPage.page === modelPage.pageCount}
+          >
+            Next models
+          </button>
+        </nav>
+      )}
+
       {(shouldShowStepOneIssues || (stepOneAttempted && draftBuildError)) && (
-        <div className={styles.errorPanel}>
+        <div className={styles.errorPanel} role="alert">
           <div className={styles.errorTitle}>
             Finish the model setup before continuing
           </div>
@@ -437,6 +483,27 @@ export function ModelStepPanel({
           </ul>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingRemoveModel)}
+        eyebrow="Model inventory"
+        title="Remove this model?"
+        description={
+          <p>
+            {pendingRemoveModel?.name || "This model draft"} will be removed from
+            the setup configuration. You can undo immediately after removal.
+          </p>
+        }
+        confirmLabel="Remove model"
+        tone="danger"
+        onCancel={() => setPendingRemoveModel(null)}
+        onConfirm={() => {
+          if (pendingRemoveModel) {
+            onRemoveModel(pendingRemoveModel.id);
+          }
+          setPendingRemoveModel(null);
+        }}
+      />
     </div>
   );
 }
@@ -450,7 +517,10 @@ export function RoutingStarterPanel({
   importedConfig,
   counts,
   presets,
+  presetCatalogState,
+  presetCatalogError,
   selectedPresetId,
+  presetRequestState,
   presetDelta,
   presetImportedConfig,
   presetError,
@@ -459,6 +529,7 @@ export function RoutingStarterPanel({
   onImportRemoteConfig,
   onSelectPreset,
   onImportPresetConfig,
+  onRetryPresets,
 }: RoutingStarterPanelProps) {
   const isScratchMode = routingMode === "scratch";
   const isRemoteMode = routingMode === "remote";
@@ -495,7 +566,9 @@ export function RoutingStarterPanel({
 
         <div className={styles.presetGrid}>
           <button
+            type="button"
             className={`${styles.presetCard} ${isScratchMode ? styles.presetCardActive : ""}`}
+            aria-pressed={isScratchMode}
             onClick={() => onSelectRoutingMode("scratch")}
           >
             <div className={styles.presetCardHeader}>
@@ -514,7 +587,9 @@ export function RoutingStarterPanel({
             return (
               <button
                 key={preset.id}
+                type="button"
                 className={`${styles.presetCard} ${isActive ? styles.presetCardActive : ""}`}
+                aria-pressed={isActive}
                 onClick={() => {
                   onSelectRoutingMode("preset");
                   onSelectPreset(preset.id);
@@ -535,7 +610,9 @@ export function RoutingStarterPanel({
           })}
 
           <button
+            type="button"
             className={`${styles.presetCard} ${isRemoteMode ? styles.presetCardActive : ""}`}
+            aria-pressed={isRemoteMode}
             onClick={() => onSelectRoutingMode("remote")}
           >
             <div className={styles.presetCardHeader}>
@@ -553,13 +630,59 @@ export function RoutingStarterPanel({
           </button>
         </div>
 
+        {presetCatalogState === "loading" && (
+          <div className={styles.asyncNotice} role="status">
+            Loading starter architectures…
+          </div>
+        )}
+
+        {presetCatalogState === "error" && (
+          <div className={styles.errorPanel} role="alert">
+            <div className={styles.errorTitle}>Starter architectures unavailable</div>
+            <p className={styles.errorText}>{presetCatalogError}</p>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={onRetryPresets}
+            >
+              Retry presets
+            </button>
+          </div>
+        )}
+
+        {isPresetMode && presetRequestState === "loading" && (
+          <div className={styles.asyncNotice} role="status">
+            Checking the selected architecture against your model inventory…
+          </div>
+        )}
+
+        {isPresetMode &&
+          selectedPresetId &&
+          presetRequestState === "idle" &&
+          !presetDelta && (
+            <div className={styles.asyncNotice} role="status">
+              <span>The model inventory changed. Recheck this preset before continuing.</span>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => onSelectPreset(selectedPresetId)}
+              >
+                Recheck preset
+              </button>
+            </div>
+          )}
+
         {isPresetMode && presetDelta && (
-          <div className={styles.remoteImportPanel}>
-            <PresetModelChecklist
+          <div
+            className={styles.remoteImportPanel}
+            aria-busy={presetRequestState === "importing"}
+          >
+            <SetupWizardPresetChecklist
               presetDelta={presetDelta}
               presetImportedConfig={presetImportedConfig}
               counts={counts}
               presetError={presetError}
+              presetRequestState={presetRequestState}
               onImportPresetConfig={onImportPresetConfig}
             />
           </div>
@@ -567,12 +690,23 @@ export function RoutingStarterPanel({
 
         {isPresetMode && !presetDelta && presetError && (
           <div className={styles.remoteImportPanel}>
-            <p className={styles.fieldErrorText}>{presetError}</p>
+            <p className={styles.fieldErrorText} role="alert">
+              {presetError}
+            </p>
+            {selectedPresetId && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => onSelectPreset(selectedPresetId)}
+              >
+                Retry selected preset
+              </button>
+            )}
           </div>
         )}
 
         {isRemoteMode && (
-          <div className={styles.remoteImportPanel}>
+          <div className={styles.remoteImportPanel} aria-busy={isImporting}>
             <label
               className={`${styles.field} ${styles.fieldWide} ${remoteImportError ? styles.fieldError : ""}`}
             >
@@ -583,6 +717,7 @@ export function RoutingStarterPanel({
                   onChangeRemoteConfigUrl(event.target.value)
                 }
                 placeholder={DEFAULT_REMOTE_SETUP_CONFIG_URL}
+                aria-invalid={Boolean(remoteImportError)}
               />
               <span className={styles.fieldHint}>
                 Paste a direct YAML link. The wizard fetches the file, parses
@@ -597,16 +732,27 @@ export function RoutingStarterPanel({
 
             <div className={styles.remoteImportActions}>
               <button
+                type="button"
                 className={styles.secondaryButton}
                 onClick={onImportRemoteConfig}
                 disabled={isImporting}
               >
-                {isImporting ? "Importing…" : "Import"}
+                {isImporting
+                  ? "Importing…"
+                  : remoteImportState === "error"
+                    ? "Retry import"
+                    : "Import"}
               </button>
             </div>
 
+            {isImporting && (
+              <div className={styles.asyncNotice} role="status">
+                Fetching and parsing the remote configuration…
+              </div>
+            )}
+
             {importedConfig && (
-              <div className={styles.remoteImportSummary}>
+              <div className={styles.remoteImportSummary} role="status">
                 <div className={styles.remoteImportSummaryHeader}>
                   <h4 className={styles.presetCardTitle}>
                     Remote config ready

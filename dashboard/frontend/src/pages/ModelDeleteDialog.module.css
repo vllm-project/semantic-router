@@ -1,0 +1,153 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dialog {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 2rem);
+  padding: 1.35rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(16, 16, 18, 0.96);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+@media (max-width: 520px), (max-height: 560px) {
+  .overlay {
+    align-items: flex-start;
+    padding: 0.5rem;
+  }
+
+  .dialog {
+    max-height: calc(100dvh - 1rem);
+    padding: 1rem;
+  }
+}
+
+.signal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(239, 68, 68, 0.34);
+  border-radius: 9px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-weight: 800;
+}
+
+.copy {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.eyebrow {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.copy h2 {
+  margin: 0;
+  color: #f5f5f7;
+  font-size: 1.45rem;
+  letter-spacing: -0.035em;
+}
+
+.copy p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.modelList {
+  display: grid;
+  gap: 0.42rem;
+  max-height: 174px;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.modelList code {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelList span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.76rem;
+}
+
+.confirmation {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+}
+
+.confirmation input {
+  min-height: 42px;
+  border-radius: 9px;
+  background: #09090a;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.cancelButton,
+.deleteButton {
+  min-height: 40px;
+  padding: 0.55rem 0.9rem;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.cancelButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.deleteButton {
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.deleteButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}

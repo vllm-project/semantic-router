@@ -14,7 +14,7 @@ It aligns to `config/plugin/memory/session-memory.yaml`.
 
 ## What Problem Does It Solve?
 
-Not every route should pay the complexity or privacy cost of memory. `memory` lets one matched route opt into session-aware behavior while the shared store remains configured under `global.stores.memory`.
+Not every route should pay the complexity or privacy cost of retrieval memory. `memory` lets one matched route retrieve and store conversation context while the shared store remains configured under `global.stores.memory`. Session-aware model stability is a separate Router Learning adaptation configured under `global.router.learning`.
 
 ## When to Use
 

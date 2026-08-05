@@ -74,8 +74,8 @@
 }
 
 .badge {
-  background: rgba(118, 185, 0, 0.14);
-  border: 1px solid rgba(118, 185, 0, 0.32);
+  background: rgba(143, 148, 156, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.32);
   color: var(--color-primary);
 }
 
@@ -266,7 +266,7 @@
 .secondaryBtn:hover,
 .ghostBtn:hover {
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
 }
 
@@ -311,7 +311,7 @@
 .select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.14);
+  box-shadow: 0 0 0 3px rgba(143, 148, 156, 0.14);
 }
 
 .contextPanel,
@@ -329,9 +329,9 @@
 }
 
 .contextPanel {
-  border: 1px dashed rgba(118, 185, 0, 0.3);
+  border: 1px dashed rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.06), transparent);
+  background: linear-gradient(180deg, rgba(143, 148, 156, 0.06), transparent);
 }
 
 .checkboxRow {
@@ -403,8 +403,8 @@
 }
 
 .segmentActive {
-  border-color: rgba(118, 185, 0, 0.3);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.18), rgba(118, 185, 0, 0.08));
+  border-color: rgba(143, 148, 156, 0.3);
+  background: linear-gradient(180deg, rgba(143, 148, 156, 0.18), rgba(143, 148, 156, 0.08));
   color: var(--color-text);
   box-shadow: var(--glow-primary);
 }
@@ -463,7 +463,7 @@
 .consoleCard {
   gap: 0.9rem;
   background:
-    radial-gradient(circle at top right, rgba(118, 185, 0, 0.08), transparent 34%),
+    radial-gradient(circle at top right, rgba(143, 148, 156, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(16, 20, 16, 0.18), rgba(16, 20, 16, 0.05)),
     var(--color-bg-secondary);
 }
@@ -506,8 +506,8 @@
   height: 42px;
   border-radius: 15px;
   color: #d7f6bf;
-  background: rgba(118, 185, 0, 0.14);
-  border: 1px solid rgba(118, 185, 0, 0.24);
+  background: rgba(143, 148, 156, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.24);
   flex-shrink: 0;
 }
 
@@ -627,7 +627,7 @@
 }
 
 .consoleRunning {
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(143, 148, 156, 0.14);
   color: var(--color-primary);
 }
 
@@ -638,7 +638,7 @@
 
 .consolePhase {
   padding: 0.2rem 0.55rem;
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -742,8 +742,8 @@
   height: 40px;
   border-radius: 14px;
   color: #d7f6bf;
-  background: rgba(118, 185, 0, 0.14);
-  border: 1px solid rgba(118, 185, 0, 0.24);
+  background: rgba(143, 148, 156, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.24);
 }
 
 .processJourneyIcon svg {
@@ -817,8 +817,8 @@
   justify-content: center;
   border-radius: 16px;
   color: #d7f6bf;
-  background: rgba(118, 185, 0, 0.14);
-  border: 1px solid rgba(118, 185, 0, 0.26);
+  background: rgba(143, 148, 156, 0.14);
+  border: 1px solid rgba(143, 148, 156, 0.26);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -872,7 +872,7 @@
   width: 42%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(118, 185, 0, 0), rgba(118, 185, 0, 0.95), rgba(223, 255, 191, 0.92));
+  background: linear-gradient(90deg, rgba(143, 148, 156, 0), rgba(143, 148, 156, 0.95), rgba(223, 255, 191, 0.92));
   animation: processProgress 1.4s ease-in-out infinite;
 }
 
@@ -891,8 +891,8 @@
 }
 
 .runningNode {
-  border-color: rgba(118, 185, 0, 0.28);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(118, 185, 0, 0.02));
+  border-color: rgba(143, 148, 156, 0.28);
+  background: linear-gradient(180deg, rgba(143, 148, 156, 0.08), rgba(143, 148, 156, 0.02));
 }
 
 .completedNode {
@@ -959,7 +959,7 @@
 
 .processStatusRunning,
 .processEventInfo {
-  background: rgba(118, 185, 0, 0.14);
+  background: rgba(143, 148, 156, 0.14);
   color: #d7f6bf;
 }
 
@@ -1063,7 +1063,7 @@
 }
 
 .primaryBtn {
-  border: 1px solid rgba(118, 185, 0, 0.3);
+  border: 1px solid rgba(143, 148, 156, 0.3);
   background: linear-gradient(180deg, var(--color-primary-light), var(--color-primary));
   color: #101410;
   box-shadow: var(--glow-primary);
@@ -1085,7 +1085,7 @@
 
 .summaryCard {
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.08), transparent 60%),
     var(--color-bg-secondary);
 }
 
@@ -1232,7 +1232,7 @@
   padding: 1rem;
   border-radius: var(--radius-md);
   background:
-    linear-gradient(180deg, rgba(118, 185, 0, 0.06), transparent 18%),
+    linear-gradient(180deg, rgba(143, 148, 156, 0.06), transparent 18%),
     var(--color-bg);
   color: var(--color-text);
   white-space: pre-wrap;

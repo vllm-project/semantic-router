@@ -732,7 +732,7 @@ export function calculateFullLayout(
           node.style = {
             ...(node.style || {}),
             opacity: 1,
-            filter: 'drop-shadow(0 0 14px rgba(118, 185, 0, 0.6))',
+            filter: 'drop-shadow(0 0 14px rgba(143, 148, 156, 0.6))',
           }
         }
       })

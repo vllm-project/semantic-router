@@ -36,11 +36,30 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-md, 1rem);
+  flex-wrap: wrap;
 }
 
 .filters {
   display: flex;
+  flex: 1 1 680px;
+  flex-wrap: wrap;
   gap: var(--spacing-sm, 0.5rem);
+}
+
+.searchInput {
+  flex: 1 1 240px;
+  min-width: 220px;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  background: var(--color-bg-secondary, #242424);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-text, #e8e8e8);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-primary, #8f949c);
 }
 
 .select {
@@ -55,12 +74,12 @@
 
 .select:focus {
   outline: none;
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .compareButton {
   padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   border: none;
   border-radius: var(--radius-md, 0.375rem);
   color: white;
@@ -70,7 +89,41 @@
 }
 
 .compareButton:hover {
-  background: var(--color-primary-dark, #5a8f00);
+  background: var(--color-primary-dark, #696d74);
+}
+
+.toolbarMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.resultCount,
+.clientPagingNote {
+  color: var(--color-text-secondary, #999);
+  font-size: 0.75rem;
+}
+
+.resultCount {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.refreshButton,
+.errorState button {
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: var(--color-text, #e8e8e8);
+  cursor: pointer;
+}
+
+.refreshButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .list {
@@ -91,12 +144,12 @@
 }
 
 .card:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .card.selected {
-  border-color: var(--color-primary, #76b900);
-  background: rgba(118, 185, 0, 0.05);
+  border-color: var(--color-primary, #8f949c);
+  background: rgba(143, 148, 156, 0.05);
 }
 
 .checkbox {
@@ -121,6 +174,14 @@
 .cardHeader h4 {
   margin: 0;
   font-size: var(--text-base, 1rem);
+}
+
+.taskId {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-secondary, #999);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
 }
 
 .statusBadge {
@@ -160,6 +221,57 @@
 
 .viewButton:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
+}
+
+.loading,
+.errorState,
+.noMatches {
+  padding: var(--spacing-2xl, 3rem);
+  text-align: center;
+  background: var(--color-bg-secondary, #242424);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+  color: var(--color-text-secondary, #999);
+}
+
+.errorState h3,
+.noMatches h3 {
+  margin: 0 0 0.35rem;
+  color: var(--color-text, #e8e8e8);
+}
+
+.errorState p,
+.noMatches p {
+  margin: 0;
+}
+
+.errorState button {
+  margin-top: 1rem;
+}
+
+.inlineError {
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-md, 0.375rem);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-danger, #ef4444);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 720px) {
+  .card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .cardMeta {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .viewButton {
+    width: 100%;
+  }
 }

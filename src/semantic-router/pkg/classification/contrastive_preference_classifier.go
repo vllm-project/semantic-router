@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 var ErrPreferenceBelowThreshold = errors.New("preference below threshold")
@@ -24,6 +25,7 @@ type ContrastivePreferenceClassifier struct {
 	// ruleThresholds stores per-preference similarity thresholds
 	ruleThresholds map[string]float32
 	prototypeCfg   config.PrototypeScoringConfig
+	provider       embedding.Provider
 
 	mu sync.RWMutex
 }
@@ -49,6 +51,10 @@ type PreferenceClassificationDetails struct {
 // NewContrastivePreferenceClassifier builds a contrastive preference classifier.
 // modelType follows GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert").
 func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string) (*ContrastivePreferenceClassifier, error) {
+	return NewContrastivePreferenceClassifierWithProvider(rules, modelType, nil)
+}
+
+func NewContrastivePreferenceClassifierWithProvider(rules []config.PreferenceRule, modelType string, provider embedding.Provider) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")
 	}
@@ -69,6 +75,7 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 		ruleBanks:      make(map[string]*prototypeBank),
 		ruleThresholds: ruleThresholds,
 		prototypeCfg:   config.PrototypeScoringConfig{}.WithDefaults(),
+		provider:       provider,
 	}
 
 	if err := c.preloadRuleEmbeddings(); err != nil {
@@ -82,8 +89,13 @@ func NewContrastivePreferenceClassifierWithConfig(
 	rules []config.PreferenceRule,
 	modelType string,
 	prototypeCfg config.PrototypeScoringConfig,
+	providers ...embedding.Provider,
 ) (*ContrastivePreferenceClassifier, error) {
-	classifier, err := NewContrastivePreferenceClassifier(rules, modelType)
+	var provider embedding.Provider
+	if len(providers) > 0 {
+		provider = providers[0]
+	}
+	classifier, err := NewContrastivePreferenceClassifierWithProvider(rules, modelType, provider)
 	if err != nil {
 		return nil, err
 	}

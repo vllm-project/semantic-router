@@ -1,0 +1,196 @@
+.root {
+  position: relative;
+  min-width: 0;
+}
+
+.trigger {
+  display: inline-flex;
+  max-width: min(320px, 42vw);
+  height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(20, 20, 22, 0.92);
+  color: var(--text-primary, #f4f4f5);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.trigger:hover:not(:disabled),
+.trigger[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--brand-amd, #e31b23) 58%, transparent);
+  background: rgba(39, 39, 42, 0.96);
+}
+
+.trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.brandMark {
+  display: inline-grid;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-amd, #e31b23) 14%, transparent);
+  color: #ff8d91;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.triggerLabel {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.chevron {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--text-secondary, #a1a1aa);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.menu {
+  position: absolute;
+  z-index: 80;
+  bottom: calc(100% + 10px);
+  left: 0;
+  width: min(430px, calc(100vw - 32px));
+  max-height: min(480px, 70vh);
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  background: #111113;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.48);
+}
+
+.menuHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 7px 8px 10px;
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.menuHeader > div {
+  display: grid;
+  gap: 2px;
+}
+
+.menuHeader small,
+.menuHeader > div small {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.search {
+  width: 100%;
+  height: 36px;
+  margin-bottom: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  outline: none;
+  background: #0b0b0d;
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.78rem;
+}
+
+.search:focus {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.option {
+  position: relative;
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary, #f4f4f5);
+  cursor: pointer;
+  text-align: left;
+}
+
+.option:hover,
+.optionActive {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: #18181b;
+}
+
+.optionActive {
+  border-left-color: var(--brand-amd, #e31b23);
+}
+
+.optionIdentity {
+  display: flex;
+  align-items: baseline;
+  padding-right: 24px;
+}
+
+.optionIdentity code {
+  overflow: hidden;
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionDescription {
+  max-width: 92%;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.71rem;
+  line-height: 1.35;
+}
+
+.activeMark {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  color: #ff7b80;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.empty {
+  display: block;
+  padding: 18px 10px;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .trigger {
+    max-width: calc(100vw - 180px);
+  }
+
+  .menu {
+    position: fixed;
+    right: 12px;
+    bottom: 82px;
+    left: 12px;
+    width: auto;
+  }
+}

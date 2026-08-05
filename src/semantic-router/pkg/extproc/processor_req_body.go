@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -55,7 +57,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return nil, err
 	}
 
-	originalModel := fast.Model
+	originalModel := strings.TrimSpace(fast.Model)
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -109,11 +111,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		},
 	}
 
-	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
+	isAutoModel := r.requestModelActsAsAuto(originalModel)
 
 	targetModel := originalModel
 	if isAutoModel && selectedModel != "" {
 		targetModel = selectedModel
+	}
+
+	if directResp, handled, err := r.handleDirectLoopModel(openAIRequest, originalModel, ctx); handled || err != nil {
+		return directResp, err
 	}
 
 	// Anthropic model routing
@@ -131,14 +137,52 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			"decision":   ctx.VSRSelectedDecision.Name,
 			"algorithm":  ctx.VSRSelectedDecision.Algorithm.Type,
 		})
+		// Track VSR decision information the same way handleAutoModelRouting's
+		// trackVSRDecision does for non-looper decisions, and the direct
+		// fusion/remom/workflows dispatchers already do for their algorithm
+		// types; otherwise x-vsr-selected-decision comes back empty.
+		ctx.VSRSelectedDecisionName = ctx.VSRSelectedDecision.Name
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
 	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
 	default:
-		// Auto model without selection - no routing needed
-		ctx.RequestModel = originalModel
-		return response, nil
+		// Auto model selected no concrete model (e.g. empty or contentless
+		// messages). Fall back to the configured default model instead of
+		// forwarding the unresolved auto-model name, which would reach the
+		// backend without resolvable credentials and surface as a misleading
+		// upstream "401 No api key" rather than a clear client error.
+		if r.Config.DefaultModel != "" {
+			logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"model":      r.Config.DefaultModel,
+			})
+			return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
+		}
+		logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
+		metrics.RecordRequestError(originalModel, "no_model_selected")
+		return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 	}
+}
+
+func (r *OpenAIRouter) handleDirectLoopModel(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool, error) {
+	if r.Config == nil {
+		return nil, false, nil
+	}
+	if r.Config.IsReMoMModelName(originalModel) {
+		resp, err := r.handleDirectReMoMExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	if r.Config.IsFusionModelName(originalModel) {
+		resp, err := r.handleDirectFusionExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	if r.Config.IsFlowModelName(originalModel) {
+		resp, err := r.handleDirectFlowExecution(openAIRequest, originalModel, ctx)
+		return resp, true, err
+	}
+	return nil, false, nil
 }
 
 // handleAutoModelRouting handles routing for auto model selection
@@ -230,12 +274,23 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 		"model":      originalModel,
 	})
 
-	// Track VSR decision information for non-auto models
+	// Reject models that are not configured. Without this guard an unknown
+	// model is forwarded with no resolvable backend credential and surfaces as
+	// a misleading upstream "401 No api key" instead of a clear client error.
+	if len(r.Config.GetEndpointsForModel(originalModel)) == 0 {
+		logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      originalModel,
+		})
+		metrics.RecordRequestError(originalModel, "model_not_found")
+		return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", originalModel)), nil
+	}
+
+	// Concrete backend models bypass every recipe-local signal, decision, and
+	// plugin. They still use shared provider/backend infrastructure.
 	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
-	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
-	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Resolve backend metadata for provider-specific request shaping. This is
 	// not an endpoint routing decision; Envoy owns endpoint load balancing.

@@ -20,13 +20,15 @@ type CanonicalGlobal struct {
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
 	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  string                `yaml:"strategy,omitempty"`
+	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
 	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
 	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
+	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -43,6 +45,7 @@ type CanonicalServiceGlobal struct {
 	Observability ObservabilityConfig `yaml:"observability"`
 	Authz         AuthzConfig         `yaml:"authz"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
+	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
 	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
 	StartupStatus StartupStatusConfig `yaml:"startup_status"`
 }
@@ -208,6 +211,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
+	cfg.AutoModelNames = nil
+	if global.Router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
+	}
 	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
@@ -215,12 +222,14 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
 	cfg.SkipProcessing = global.Router.SkipProcessing
 	cfg.ModelSelection = global.Router.ModelSelection
+	cfg.RouterLearning = global.Router.Learning
 
 	cfg.API = global.Services.API
 	cfg.ResponseAPI = global.Services.ResponseAPI
 	cfg.Observability = global.Services.Observability
 	cfg.Authz = global.Services.Authz
 	cfg.RateLimit = global.Services.RateLimit
+	cfg.ManagementAPI = global.Services.ManagementAPI
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 

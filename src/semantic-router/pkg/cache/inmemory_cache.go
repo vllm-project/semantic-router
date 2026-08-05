@@ -40,6 +40,11 @@ type InMemoryCache struct {
 	hnswEfSearch     int    // Search-time ef parameter
 	embeddingModel   string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 
+	// embMemo deduplicates query-embedding inference: a cache-miss request
+	// otherwise embeds the same query twice (lookup + pending write), so the
+	// memo turns the second compute into a memory hit.
+	embMemo *embeddingMemo
+
 	// Background cleanup
 	cleanupTicker *time.Ticker
 	stopCleanup   chan struct{}
@@ -152,6 +157,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
+		embMemo:             newEmbeddingMemo(defaultEmbeddingMemoSize),
 	}
 
 	logging.ComponentEvent("cache", "inmemory_cache_initialized", map[string]interface{}{
@@ -184,8 +190,18 @@ func (c *InMemoryCache) CheckConnection() error {
 	return nil
 }
 
-// generateEmbedding generates an embedding using the configured model
+// generateEmbedding returns an embedding for text using the configured model,
+// served from the embedding memo when the same text was embedded recently
+// (e.g. the lookup + pending-write pair of a single cache-miss request).
 func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
+	if c.embMemo != nil {
+		return c.embMemo.getOrCompute(text, c.computeEmbedding)
+	}
+	return c.computeEmbedding(text)
+}
+
+// computeEmbedding runs the configured embedding model for text (no caching).
+func (c *InMemoryCache) computeEmbedding(text string) ([]float32, error) {
 	modelName := c.embeddingModel
 
 	switch modelName {

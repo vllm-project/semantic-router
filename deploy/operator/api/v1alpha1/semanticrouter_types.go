@@ -1123,13 +1123,24 @@ type EmbeddingModelsConfig struct {
 	// Embedding configuration for embedding-based classification
 	// +optional
 	EmbeddingConfig *HNSWEmbeddingConfig `json:"embedding_config,omitempty"`
+
+	// Endpoint configures an external embedding provider endpoint.
+	// The API key should be injected into the semantic router pod environment
+	// and referenced by APIKeyEnv rather than stored directly in the CR.
+	// +optional
+	Endpoint *EmbeddingEndpointConfig `json:"endpoint,omitempty"`
 }
 
 // HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
 type HNSWEmbeddingConfig struct {
+	// Backend selects the embedding provider backend.
+	// +kubebuilder:validation:Enum=candle;openvino;openai_compatible
+	// +optional
+	Backend string `json:"backend,omitempty"`
+
 	// ModelType specifies which embedding model to use
-	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
-	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert
+	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider)
+	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert;remote
 	// +optional
 	ModelType string `json:"model_type,omitempty"`
 
@@ -1139,9 +1150,9 @@ type HNSWEmbeddingConfig struct {
 	PreloadEmbeddings bool `json:"preload_embeddings,omitempty"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
-	// Supported dimensions: 64, 128, 256, 512, 768
-	// For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
-	// +kubebuilder:validation:Enum=64;128;256;512;768
+	// For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.
+	// External providers may use other positive dimensions such as 1024, 1536, or 3072.
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	TargetDimension int `json:"target_dimension,omitempty"`
 
@@ -1161,6 +1172,36 @@ type HNSWEmbeddingConfig struct {
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	MinScoreThreshold string `json:"min_score_threshold,omitempty"`
+}
+
+// EmbeddingEndpointConfig defines an external OpenAI-compatible embedding endpoint.
+type EmbeddingEndpointConfig struct {
+	// BaseURL is the base URL for the embedding endpoint, typically ending in /v1.
+	// +optional
+	BaseURL string `json:"base_url,omitempty"`
+
+	// Model is the embedding model name sent to the external provider.
+	// +optional
+	Model string `json:"model,omitempty"`
+
+	// APIKeyEnv names the environment variable containing the provider API key.
+	// +optional
+	APIKeyEnv string `json:"api_key_env,omitempty"`
+
+	// TimeoutSeconds is the request timeout for embedding calls.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+
+	// MaxRetries is the maximum number of retry attempts for embedding calls.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxRetries int `json:"max_retries,omitempty"`
+
+	// Dimensions requests a provider-side output dimension when supported.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Dimensions int `json:"dimensions,omitempty"`
 }
 
 // ComplexityRulesConfig defines complexity-based signal classification
@@ -1242,9 +1283,9 @@ type DecisionConfig struct {
 	// +optional
 	Plugins []runtime.RawExtension `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 
-	// Algorithm configures model selection for this decision. It is preserved as
-	// a router-owned object so supported algorithms such as session_aware can
-	// evolve without requiring the operator CRD to duplicate every nested field.
+	// Algorithm configures base model selection for this decision. It is
+	// preserved as a router-owned object so supported algorithms can evolve
+	// without requiring the operator CRD to duplicate every nested field.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object

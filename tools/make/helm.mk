@@ -167,15 +167,15 @@ helm-safety-validate: helm-ci-setup
 		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
 	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
-	echo "Validating schema rejection for invalid selector guard type..."; \
+	echo "Validating schema rejection for invalid learning guard type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
-		--set safetyGuards.rejectMultiReplicaLocalSelectorState=maybe \
+		--set safetyGuards.rejectMultiReplicaLocalLearningState=maybe \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-guard.out" 2>&1; then \
-		echo "Expected invalid selector guard type to fail schema validation"; \
+		echo "Expected invalid learning guard type to fail schema validation"; \
 		cat "$$tmp_dir/invalid-guard.out"; \
 		exit 1; \
 	fi; \
-	grep -Eq "rejectMultiReplicaLocalSelectorState.*(Invalid type|want boolean)" "$$tmp_dir/invalid-guard.out"; \
+	grep -Eq "rejectMultiReplicaLocalLearningState.*(Invalid type|want boolean)" "$$tmp_dir/invalid-guard.out"; \
 	echo "Validating schema rejection for invalid replicaCount type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set replicaCount=oops \
@@ -185,28 +185,28 @@ helm-safety-validate: helm-ci-setup
 		exit 1; \
 	fi; \
 	grep -Eq "replicaCount.*(Invalid type|want integer)" "$$tmp_dir/invalid-replica.out"; \
-	echo "Validating RL-driven selector local-state multi-replica rejection..."; \
+	echo "Validating Router Learning local-state multi-replica rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=false \
 		--set replicaCount=2 \
-		--set 'config.routing.decisions[0].name=adaptive' \
-		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
-		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/rl-driven.out" 2>&1; then \
-		echo "Expected RL-driven local selector state to reject multi-replica render"; \
-		cat "$$tmp_dir/rl-driven.out"; \
+		--set 'config.global.router.learning.enabled=true' \
+		--set 'config.global.router.learning.adaptation.enabled=true' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/learning.out" 2>&1; then \
+		echo "Expected Router Learning local state to reject multi-replica render"; \
+		cat "$$tmp_dir/learning.out"; \
 		exit 1; \
 	fi; \
-	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/rl-driven.out"; \
-	echo "Validating explicit selector local-state opt-out escape hatch..."; \
+	grep -q "multi-replica router deployments cannot use Router Learning local state" "$$tmp_dir/learning.out"; \
+	echo "Validating explicit Router Learning local-state opt-out escape hatch..."; \
 	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=false \
 		--set replicaCount=2 \
-		--set safetyGuards.rejectMultiReplicaLocalSelectorState=false \
-		--set 'config.routing.decisions[0].name=adaptive' \
-		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
-		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/unsafe-rl-driven.yaml"; \
-	grep -q "type: rl_driven" "$$tmp_dir/unsafe-rl-driven.yaml"; \
-	grep -q "replicas: 2" "$$tmp_dir/unsafe-rl-driven.yaml"; \
+		--set safetyGuards.rejectMultiReplicaLocalLearningState=false \
+		--set 'config.global.router.learning.enabled=true' \
+		--set 'config.global.router.learning.adaptation.enabled=true' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/unsafe-learning.yaml"; \
+	grep -q "learning:" "$$tmp_dir/unsafe-learning.yaml"; \
+	grep -q "replicas: 2" "$$tmp_dir/unsafe-learning.yaml"; \
 	echo "Validating HPA replica bound rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=true \
@@ -218,18 +218,18 @@ helm-safety-validate: helm-ci-setup
 		exit 1; \
 	fi; \
 	grep -q "autoscaling.minReplicas (3) cannot be greater than autoscaling.maxReplicas (2)" "$$tmp_dir/hpa-bounds.out"; \
-	echo "Validating GMTRouter selector local-state HPA rejection..."; \
+	echo "Validating Router Learning local-state HPA rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=true \
 		--set autoscaling.maxReplicas=2 \
-		--set 'config.routing.decisions[0].name=adaptive' \
-		--set 'config.routing.decisions[0].algorithm.type=gmtrouter' \
-		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/gmtrouter.out" 2>&1; then \
-		echo "Expected GMTRouter local selector state to reject HPA multi-replica render"; \
-		cat "$$tmp_dir/gmtrouter.out"; \
+		--set 'config.global.router.learning.enabled=true' \
+		--set 'config.global.router.learning.protection.enabled=true' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/learning-hpa.out" 2>&1; then \
+		echo "Expected Router Learning local state to reject HPA multi-replica render"; \
+		cat "$$tmp_dir/learning-hpa.out"; \
 		exit 1; \
 	fi; \
-	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/gmtrouter.out"
+	grep -q "multi-replica router deployments cannot use Router Learning local state" "$$tmp_dir/learning-hpa.out"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm safety validation completed successfully"
 
 helm-install: ## Install the Helm chart

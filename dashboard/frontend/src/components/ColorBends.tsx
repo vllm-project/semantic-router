@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import * as THREE from 'three'
 import './ColorBends.css'
@@ -8,7 +8,7 @@ type ColorBendsProps = {
   style?: CSSProperties
   rotation?: number
   speed?: number
-  colors?: string[]
+  colors?: readonly string[]
   transparent?: boolean
   autoRotate?: number
   scale?: number
@@ -21,6 +21,13 @@ type ColorBendsProps = {
 
 const MAX_COLORS = 8 as const
 const INITIAL_TRANSPARENT = true
+
+function prefersReducedMotion() {
+  return (
+    typeof window === 'undefined' ||
+    (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+  )
+}
 
 const frag = `
 #define MAX_COLORS ${MAX_COLORS}
@@ -129,7 +136,7 @@ const hexToVector3 = (hex: string): THREE.Vector3 => {
   return new THREE.Vector3(
     ((parsed >> 16) & 255) / 255,
     ((parsed >> 8) & 255) / 255,
-    (parsed & 255) / 255
+    (parsed & 255) / 255,
   )
 }
 
@@ -151,22 +158,38 @@ export default function ColorBends({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
+  const renderRef = useRef<(() => void) | null>(null)
   const rafRef = useRef<number | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const pointerTargetRef = useRef(new THREE.Vector2(0, 0))
   const pointerCurrentRef = useRef(new THREE.Vector2(0, 0))
   const rotationRef = useRef(rotation)
   const autoRotateRef = useRef(autoRotate)
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion)
+
+  useEffect(() => {
+    const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!motionQuery) return
+
+    const handleMotionChange = (event: MediaQueryListEvent) => {
+      setReducedMotion(event.matches)
+    }
+    motionQuery.addEventListener?.('change', handleMotionChange)
+    return () => motionQuery.removeEventListener?.('change', handleMotionChange)
+  }, [])
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || reducedMotion) return
 
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     const geometry = new THREE.PlaneGeometry(2, 2)
 
-    const uColorsArray: THREE.Vector3[] = Array.from({ length: MAX_COLORS }, () => new THREE.Vector3())
+    const uColorsArray: THREE.Vector3[] = Array.from(
+      { length: MAX_COLORS },
+      () => new THREE.Vector3(),
+    )
 
     const material = new THREE.ShaderMaterial({
       vertexShader: vert,
@@ -233,6 +256,9 @@ export default function ColorBends({
 
     const clock = new THREE.Clock()
 
+    const renderScene = () => renderer.render(scene, camera)
+    renderRef.current = renderScene
+
     const loop = () => {
       const delta = clock.getDelta()
       const elapsed = clock.elapsedTime
@@ -248,7 +274,7 @@ export default function ColorBends({
       currentPointer.lerp(targetPointer, lerpAmount)
       ;(material.uniforms.uPointer.value as THREE.Vector2).copy(currentPointer)
 
-      renderer.render(scene, camera)
+      renderScene()
       rafRef.current = requestAnimationFrame(loop)
     }
 
@@ -266,12 +292,17 @@ export default function ColorBends({
       geometry.dispose()
       material.dispose()
       renderer.dispose()
+      materialRef.current = null
+      rendererRef.current = null
+      renderRef.current = null
+      resizeObserverRef.current = null
+      rafRef.current = null
 
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement)
       }
     }
-  }, [])
+  }, [reducedMotion])
 
   useEffect(() => {
     const material = materialRef.current
@@ -305,6 +336,7 @@ export default function ColorBends({
     if (renderer) {
       renderer.setClearColor(0x000000, transparent ? 0 : 1)
     }
+    renderRef.current?.()
   }, [
     autoRotate,
     colors,
@@ -313,6 +345,7 @@ export default function ColorBends({
     noise,
     parallax,
     rotation,
+    reducedMotion,
     scale,
     speed,
     transparent,
@@ -321,7 +354,7 @@ export default function ColorBends({
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || reducedMotion) return
 
     const handlePointerMove = (event: PointerEvent) => {
       const rect = container.getBoundingClientRect()
@@ -341,11 +374,18 @@ export default function ColorBends({
       container.removeEventListener('pointermove', handlePointerMove)
       container.removeEventListener('pointerleave', handlePointerLeave)
     }
-  }, [])
+  }, [reducedMotion])
 
   const containerClassName = className
     ? `color-bends-container ${className}`
     : 'color-bends-container'
 
-  return <div ref={containerRef} className={containerClassName} style={style} />
+  return (
+    <div
+      ref={containerRef}
+      className={containerClassName}
+      style={style}
+      data-motion={reducedMotion ? 'reduced' : 'animated'}
+    />
+  )
 }

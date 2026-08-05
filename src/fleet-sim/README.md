@@ -4,9 +4,9 @@
 
 Repository-maintained docs now live in the website:
 
-- https://vllm-semantic-router.com/docs/fleet-sim/overview
-- https://vllm-semantic-router.com/docs/fleet-sim/getting-started
-- https://vllm-semantic-router.com/docs/fleet-sim/use-cases
+- https://vllm-sr.ai/docs/fleet-sim/overview
+- https://vllm-sr.ai/docs/fleet-sim/getting-started
+- https://vllm-sr.ai/docs/fleet-sim/use-cases
 
 ## Install
 

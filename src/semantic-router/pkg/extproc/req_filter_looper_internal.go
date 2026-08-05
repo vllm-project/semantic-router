@@ -10,21 +10,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// findDecisionByName finds a decision by name in the router configuration.
-func (r *OpenAIRouter) findDecisionByName(name string) *config.Decision {
-	if r.Config == nil || r.Config.Decisions == nil {
-		return nil
-	}
-
-	for i := range r.Config.Decisions {
-		if r.Config.Decisions[i].Name == name {
-			return &r.Config.Decisions[i]
-		}
-	}
-
-	return nil
+type looperBackendRoute struct {
+	upstreamModel  string
+	backendAddress string
+	backendName    string
+	found          bool
 }
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -78,11 +71,12 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	openAIRequest *openai.ChatCompletionNewParams,
 	modelName string,
+	upstreamModel string,
 	decisionName string,
 	useReasoning bool,
 	ctx *RequestContext,
 ) ([]byte, error) {
-	openAIRequest.Model = modelName
+	openAIRequest.Model = upstreamModel
 
 	modifiedBody, err := serializeOpenAIRequestWithStream(
 		openAIRequest,
@@ -91,7 +85,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"model":      modelName,
+			"model":      upstreamModel,
 			"error":      err.Error(),
 		})
 		return nil, fmt.Errorf("error serializing modified request: %w", err)
@@ -104,7 +98,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	modifiedBody, err = r.setReasoningModeToRequestBody(
 		modifiedBody,
 		useReasoning,
-		decisionName,
+		ctx.VSRSelectedDecision,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_reasoning_mode_apply_failed", map[string]interface{}{
@@ -140,24 +134,35 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	decision *config.Decision,
 	modelName string,
-) ([]*core.HeaderValueOption, []string) {
-	setHeaders := []*core.HeaderValueOption{
-		newHeaderValueOption(headers.VSRSelectedModel, modelName),
-	}
+	route looperBackendRoute,
+	ctx *RequestContext,
+) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
+	setHeaders := []*core.HeaderValueOption{}
 	removeHeaders := []string{"content-length"}
 
-	if accessKey := r.getModelAccessKey(modelName); accessKey != "" {
-		setHeaders = append(
-			setHeaders,
-			newHeaderValueOption("Authorization", fmt.Sprintf("Bearer %s", accessKey)),
-		)
-		logging.ComponentDebugEvent("extproc", "looper_authorization_header_injected", map[string]interface{}{
-			"model": modelName,
-		})
+	if route.found {
+		routedSetHeaders, routedRemoveHeaders, errorResponse := r.buildRoutedLooperHeaders(modelName, route, ctx)
+		if errorResponse != nil {
+			return nil, nil, errorResponse
+		}
+		setHeaders = append(setHeaders, routedSetHeaders...)
+		removeHeaders = append(removeHeaders, routedRemoveHeaders...)
+	} else {
+		setHeaders = append(setHeaders, newHeaderValueOption(headers.SelectedModel, modelName))
+		if accessKey := r.getModelAccessKey(modelName); accessKey != "" {
+			setHeaders = append(
+				setHeaders,
+				newHeaderValueOption("Authorization", fmt.Sprintf("Bearer %s", accessKey)),
+			)
+			logging.ComponentDebugEvent("extproc", "looper_authorization_header_injected", map[string]interface{}{
+				"model": modelName,
+			})
+		}
 	}
+	setHeaders = append(setHeaders, newHeaderValueOption(headers.VSRSelectedModel, modelName))
 
 	if decision == nil {
-		return setHeaders, removeHeaders
+		return setHeaders, removeHeaders, nil
 	}
 
 	pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(decision)
@@ -168,7 +173,22 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 		removeHeaders = append(removeHeaders, pluginRemoveHeaders...)
 	}
 
-	return setHeaders, removeHeaders
+	return setHeaders, removeHeaders, nil
+}
+
+func (r *OpenAIRouter) buildRoutedLooperHeaders(
+	modelName string,
+	route looperBackendRoute,
+	ctx *RequestContext,
+) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
+	state, errorResponse := r.buildRouteHeaderState(modelName, route.backendAddress, route.backendName, ctx, nil)
+	if errorResponse != nil {
+		return nil, nil, errorResponse
+	}
+	if _, errorResponse := r.applyRoutingPathHeader(state, route.backendName, ctx, true); errorResponse != nil {
+		return nil, nil, errorResponse
+	}
+	return state.setHeaders, state.removeHeaders, nil
 }
 
 // handleLooperInternalRequest handles requests from looper to extproc.
@@ -181,9 +201,9 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 		"model":      modelName,
 	})
 
-	modifiedBody, err := rewriteRequestModel(ctx.OriginalRequestBody, modelName)
+	route, err := r.resolveLooperBackendRoute(ctx, modelName)
 	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_request_rewrite_failed", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "looper_request_backend_resolve_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      modelName,
 			"error":      err.Error(),
@@ -191,8 +211,22 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
 	}
 
-	setHeaders := []*core.HeaderValueOption{newHeaderValueOption(headers.VSRSelectedModel, modelName)}
-	return buildLooperContinueResponse(modifiedBody, setHeaders, nil), nil
+	modifiedBody, err := rewriteRequestModel(ctx.OriginalRequestBody, route.upstreamModel)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "looper_request_rewrite_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"upstream":   route.upstreamModel,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
+	}
+
+	setHeaders, removeHeaders, errorResponse := r.buildHeaderMutationsForLooper(nil, modelName, route, ctx)
+	if errorResponse != nil {
+		return errorResponse, nil
+	}
+	return buildLooperContinueResponse(modifiedBody, setHeaders, removeHeaders), nil
 }
 
 // handleLooperInternalRequestWithPlugins handles looper internal requests with plugin execution.
@@ -219,9 +253,21 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return response, nil
 	}
 
+	route, err := r.resolveLooperBackendRoute(ctx, modelName)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "looper_request_backend_resolve_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"decision":   decisionName,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(500, "Failed to process looper request"), nil
+	}
+
 	modifiedBody, err := r.modifyRequestBodyForLooper(
 		openAIRequest,
 		modelName,
+		route.upstreamModel,
 		decisionName,
 		useReasoning,
 		ctx,
@@ -236,9 +282,43 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(500, "Failed to process looper request"), nil
 	}
 
-	setHeaders, removeHeaders := r.buildHeaderMutationsForLooper(decision, modelName)
+	setHeaders, removeHeaders, errorResponse := r.buildHeaderMutationsForLooper(decision, modelName, route, ctx)
+	if errorResponse != nil {
+		return errorResponse, nil
+	}
 	r.startLooperInternalReplay(ctx, modelName, decisionName)
 	return buildLooperContinueResponse(modifiedBody, setHeaders, removeHeaders), nil
+}
+
+func (r *OpenAIRouter) resolveLooperBackendRoute(
+	ctx *RequestContext,
+	modelName string,
+) (looperBackendRoute, error) {
+	route := looperBackendRoute{upstreamModel: modelName}
+	if r == nil || r.Config == nil {
+		return route, nil
+	}
+
+	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(modelName)
+	if err != nil {
+		return route, fmt.Errorf("backend resolution for model %q: %w", modelName, err)
+	}
+	if !found {
+		return route, nil
+	}
+
+	logging.ComponentDebugEvent("extproc", "looper_backend_resolved", map[string]interface{}{
+		"request_id":      ctx.RequestID,
+		"model":           modelName,
+		"backend_address": backendAddress,
+		"backend_name":    backendName,
+	})
+	metrics.IncrementModelActiveRequests(modelName)
+	route.upstreamModel = r.resolveModelNameForBackend(modelName, backendName)
+	route.backendAddress = backendAddress
+	route.backendName = backendName
+	route.found = true
+	return route, nil
 }
 
 func (r *OpenAIRouter) resolveLooperDecision(
@@ -262,7 +342,10 @@ func (r *OpenAIRouter) resolveLooperDecision(
 		"decision":   decisionName,
 	})
 
-	decision := r.findDecisionByName(decisionName)
+	decision := ctx.VSRSelectedDecision
+	if decision != nil && decision.Name != decisionName {
+		decision = nil
+	}
 	if decision != nil {
 		return decision, nil
 	}
@@ -288,7 +371,7 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.Config.EffectiveRouterReplayConfigForDecision(decisionName); replayCfg != nil {
+	if replayCfg := r.Config.EffectiveRouterReplayConfig(decision); replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{

@@ -344,7 +344,7 @@ func TestUpdateStatus(t *testing.T) {
 		Scheme: s,
 	}
 
-	err := r.updateStatus(context.Background(), sr)
+	err := r.updateStatus(context.Background(), sr, sr.DeepCopy())
 	if err != nil {
 		t.Fatalf("updateStatus() failed when deployment not found: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestUpdateStatus(t *testing.T) {
 		Scheme: s,
 	}
 
-	err = r.updateStatus(context.Background(), sr)
+	err = r.updateStatus(context.Background(), sr, sr.DeepCopy())
 	if err != nil {
 		t.Fatalf("updateStatus() failed: %v", err)
 	}
@@ -396,6 +396,70 @@ func TestUpdateStatus(t *testing.T) {
 
 	if updatedSR2.Status.ReadyReplicas != 2 {
 		t.Errorf("expected 2 ready replicas, got %d", updatedSR2.Status.ReadyReplicas)
+	}
+}
+
+func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test",
+			Namespace:  "default",
+			Generation: 3,
+		},
+		Spec: vllmv1alpha1.SemanticRouterSpec{},
+	}
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Status: appsv1.DeploymentStatus{
+			Replicas:      1,
+			ReadyReplicas: 1,
+		},
+	}
+
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr).Build()
+	r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+	baseSR := sr.DeepCopy()
+
+	sr.Status.GatewayMode = "standalone"
+	sr.Status.OpenShiftFeatures = &vllmv1alpha1.OpenShiftFeaturesStatus{
+		RoutesEnabled: true,
+		RouteHostname: "sr.apps.example.com",
+	}
+
+	if err := r.updateStatus(context.Background(), sr, baseSR); err != nil {
+		t.Fatalf("updateStatus() failed: %v", err)
+	}
+
+	got := &vllmv1alpha1.SemanticRouter{}
+	if err := cl.Get(context.Background(), types.NamespacedName{Name: "test", Namespace: "default"}, got); err != nil {
+		t.Fatalf("failed to get updated SemanticRouter: %v", err)
+	}
+
+	if got.Status.GatewayMode != "standalone" {
+		t.Errorf("GatewayMode: want %q, got %q", "standalone", got.Status.GatewayMode)
+	}
+
+	if got.Status.OpenShiftFeatures == nil {
+		t.Fatal("OpenShiftFeatures: want non-nil, got nil")
+	}
+	if !got.Status.OpenShiftFeatures.RoutesEnabled {
+		t.Error("OpenShiftFeatures.RoutesEnabled: want true, got false")
+	}
+	if got.Status.OpenShiftFeatures.RouteHostname != "sr.apps.example.com" {
+		t.Errorf("OpenShiftFeatures.RouteHostname: want %q, got %q", "sr.apps.example.com", got.Status.OpenShiftFeatures.RouteHostname)
+	}
+
+	if got.Status.ObservedGeneration != 3 {
+		t.Errorf("ObservedGeneration: want 3, got %d", got.Status.ObservedGeneration)
 	}
 }
 

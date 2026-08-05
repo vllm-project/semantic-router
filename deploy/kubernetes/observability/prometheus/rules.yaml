@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-alert-rules
+  labels:
+    app: prometheus
+data:
+  semantic-router-alerts.yml: |
+    groups:
+      - name: semantic-router-observability
+        rules:
+          - alert: HighRequestErrorRate
+            expr: |
+              (
+                sum(rate(llm_request_errors_total[5m]))
+                /
+                clamp_min(sum(rate(llm_model_requests_total[5m])), 1)
+              ) > 0.05
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router request error rate is above 5%
+              dashboard_panel: Request Errors by Reason
+
+          - alert: HighCompletionLatencyP95
+            expr: |
+              histogram_quantile(0.95, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le)) > 30
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router completion latency p95 is above 30s
+              dashboard_panel: Request Latency (P50/P95/P99)
+
+          - alert: HighTTFTP95
+            expr: |
+              histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le)) > 5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router TTFT p95 is above 5s
+              dashboard_panel: TTFT (Time to First Token) by Model - P95
+
+          - alert: HighTPOTP95
+            expr: |
+              histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le)) > 0.25
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router TPOT p95 is above 250ms
+              dashboard_panel: TPOT (Time per Output Token) by Model - P95
+
+          - alert: HighRoutingLatencyP95
+            expr: |
+              histogram_quantile(0.95, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le)) > 0.1
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router routing latency p95 is above 100ms
+              dashboard_panel: Router Routing Latency (P50/P95/P99)
+
+          - alert: HighInflightRequests
+            expr: |
+              sum(llm_model_inflight_requests) by (model) > 50
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: Semantic Router has more than 50 in-flight requests for a model
+              dashboard_panel: Inflight Requests by Model
+
+          - alert: LowCacheHitRate
+            expr: |
+              (
+                sum(rate(llm_cache_plugin_hits_total[15m]))
+                /
+                (sum(rate(llm_cache_plugin_hits_total[15m])) + sum(rate(llm_cache_plugin_misses_total[15m])))
+              ) < 0.2
+              and
+              (sum(rate(llm_cache_plugin_hits_total[15m])) + sum(rate(llm_cache_plugin_misses_total[15m]))) > 0
+            for: 15m
+            labels:
+              severity: info
+            annotations:
+              summary: Semantic Router cache hit rate is below 20%
+              dashboard_panel: Cache Hit Rate by Decision

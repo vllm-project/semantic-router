@@ -42,6 +42,7 @@ func NormalizeFeedback(feedback *Feedback) error {
 	feedback.DecisionName = strings.TrimSpace(feedback.DecisionName)
 	feedback.UserID = strings.TrimSpace(feedback.UserID)
 	feedback.SessionID = strings.TrimSpace(feedback.SessionID)
+	feedback.ConversationID = strings.TrimSpace(feedback.ConversationID)
 	feedback.FeedbackType = strings.TrimSpace(feedback.FeedbackType)
 
 	return ValidateFeedback(feedback)

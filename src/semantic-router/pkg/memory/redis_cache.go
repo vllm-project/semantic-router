@@ -30,7 +30,10 @@ type RedisCacheConfig struct {
 }
 
 // RedisCache is a Redis-backed cache for memory retrieval results.
-// Key format: {keyPrefix}{userID}:{queryHash}. Cache is invalidated per user on store/update/forget.
+// Value keys: {keyPrefix}v:{userID}:{queryHash}. Each value key is also recorded
+// in a per-user index set ({keyPrefix}u:{userID}); the cache is invalidated per
+// user on store/update/forget by deleting that set's members, so invalidation
+// costs O(user's cached queries) instead of an O(keyspace) SCAN.
 type RedisCache struct {
 	client *redis.Client
 	prefix string
@@ -72,7 +75,10 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 	}, nil
 }
 
-// cacheKey builds a key from userID and a hash of the retrieval options (query, limit, threshold, types, projectID).
+// cacheKey builds a value key from userID and a hash of the retrieval options
+// (query, projectID, limit, threshold, types). Value keys live under the "v:"
+// namespace so they can never collide with a per-user index key (see
+// userIndexKey), regardless of userID content.
 func cacheKey(prefix, userID string, opts RetrieveOptions) string {
 	h := sha256.New()
 	h.Write([]byte(opts.Query))
@@ -87,7 +93,14 @@ func cacheKey(prefix, userID string, opts RetrieveOptions) string {
 		h.Write([]byte(t))
 	}
 	hash := hex.EncodeToString(h.Sum(nil))[:16]
-	return prefix + userID + ":" + hash
+	return prefix + "v:" + userID + ":" + hash
+}
+
+// userIndexKey returns the Redis set key that tracks every cached value key for a
+// user. The "u:" namespace is disjoint from the "v:" value-key namespace, so an
+// index key can never collide with a cached value, regardless of userID content.
+func (c *RedisCache) userIndexKey(userID string) string {
+	return c.prefix + "u:" + userID
 }
 
 // Get retrieves cached results for the given options. Returns (nil, nil) on miss or error (no fatal).
@@ -122,30 +135,40 @@ func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*R
 		logging.Warnf("Memory Redis cache set marshal error: %v", err)
 		return
 	}
-	if err := c.client.Set(ctx, key, val, c.ttl).Err(); err != nil {
+	// Cache the value and, when scoped to a user, record the key in that user's
+	// index set so InvalidateByUser can find it without scanning the keyspace.
+	// The index set is given the same TTL as the value and refreshed on every
+	// Set, so it always outlives every live key it tracks.
+	pipe := c.client.Pipeline()
+	pipe.Set(ctx, key, val, c.ttl)
+	if opts.UserID != "" {
+		idxKey := c.userIndexKey(opts.UserID)
+		pipe.SAdd(ctx, idxKey, key)
+		pipe.Expire(ctx, idxKey, c.ttl)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
 		logging.Debugf("Memory Redis cache set error: %v", err)
 	}
 }
 
 // InvalidateByUser deletes all cache entries for the given user (e.g. after store/update/forget).
+// It reads the user's index set rather than scanning the keyspace, so cost is
+// proportional to the number of cached queries for that user, not the total
+// number of keys in Redis.
 func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) {
 	if c == nil || c.client == nil || userID == "" {
 		return
 	}
-	pattern := c.prefix + userID + ":*"
-	iter := c.client.Scan(ctx, 0, pattern, 100).Iterator()
-	var keys []string
-	for iter.Next(ctx) {
-		keys = append(keys, iter.Val())
-	}
-	if err := iter.Err(); err != nil {
-		logging.Debugf("Memory Redis cache scan error: %v", err)
+	idxKey := c.userIndexKey(userID)
+	keys, err := c.client.SMembers(ctx, idxKey).Result()
+	if err != nil {
+		logging.Debugf("Memory Redis cache index read error: %v", err)
 		return
 	}
-	if len(keys) == 0 {
-		return
-	}
-	if err := c.client.Del(ctx, keys...).Err(); err != nil {
+	// Delete the tracked value keys together with the index set itself. DEL on a
+	// key that already expired via TTL is a harmless no-op, so stale index members
+	// (entries whose value key already expired) never cause errors.
+	if err := c.client.Del(ctx, append(keys, idxKey)...).Err(); err != nil {
 		logging.Debugf("Memory Redis cache invalidate error: %v", err)
 	}
 }

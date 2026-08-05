@@ -18,16 +18,21 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 	}
 }
 
-func TestDecisionAlgorithmCatalog_BackwardsCompatible(t *testing.T) {
-	previousTypes := []string{
-		"automix", "confidence", "elo", "gmtrouter", "hybrid",
-		"kmeans", "knn", "latency_aware", "ratings", "remom",
-		"rl_driven", "router_dc", "static", "svm",
+func TestDecisionAlgorithmCatalog_PublicAlgorithmSurface(t *testing.T) {
+	publicTypes := []string{
+		"automix", "confidence", "fusion", "hybrid", "kmeans",
+		"knn", "latency_aware", "mlp", "multi_factor", "ratings",
+		"remom", "router_dc", "static", "svm",
 	}
 
-	for _, algType := range previousTypes {
+	for _, algType := range publicTypes {
 		if !IsSupportedDecisionAlgorithmType(algType) {
-			t.Errorf("Previously supported algorithm type %q is no longer supported", algType)
+			t.Errorf("public algorithm type %q is not supported", algType)
+		}
+	}
+	for _, migratedType := range []string{"elo", "rl_driven", "gmtrouter", "session_aware"} {
+		if IsSupportedDecisionAlgorithmType(migratedType) {
+			t.Errorf("learning-owned algorithm type %q should not be public", migratedType)
 		}
 	}
 }
@@ -38,13 +43,11 @@ func TestGetAlgorithmTier(t *testing.T) {
 		expectedTier string
 	}{
 		{"static", "supported"},
-		{"elo", "supported"},
 		{"router_dc", "supported"},
 		{"latency_aware", "supported"},
 		{"hybrid", "supported"},
 		{"automix", "experimental"},
-		{"rl_driven", "experimental"},
-		{"gmtrouter", "experimental"},
+		{"fusion", "experimental"},
 		{"knn", "experimental"},
 		{"kmeans", "experimental"},
 		{"svm", "experimental"},

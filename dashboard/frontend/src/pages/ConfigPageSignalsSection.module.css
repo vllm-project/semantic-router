@@ -1,0 +1,54 @@
+.bulkBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  padding: 0.75rem 1rem;
+}
+
+.bulkCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+}
+
+.bulkHint {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.bulkActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clearButton,
+.deleteButton {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteButton {
+  border-color: color-mix(in srgb, var(--color-danger) 55%, var(--color-border));
+  color: var(--color-danger);
+}
+
+@media (max-width: 720px) {
+  .bulkBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

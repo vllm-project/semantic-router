@@ -1,0 +1,130 @@
+{
+  "generated_from": "AMD EvalScope runs joined with public reference scores",
+  "router_image": "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:loop-flow-majority-v1",
+  "score_unit": "0_to_100",
+  "benchmarks": [
+    {
+      "benchmark": "GPQA-Diamond",
+      "run_type": "formal-50",
+      "metric": "mean_acc",
+      "results": [
+        {
+          "mode": "vsr1_pro",
+          "model_api_name": "vllm-sr/auto",
+          "scorecard_name": "VSR 1.0 Pro",
+          "score": 96.0,
+          "num": 50,
+          "source_mode": "remom",
+          "config_snapshot": "bench/router_flow/configs/amd_auto_gpqa_omni.yaml",
+          "report_path": "bench/router_flow/results/evalscope-remom-formal-synthesis-model-report-v1/evalscope_scores.json"
+        }
+      ],
+      "public_references": [
+        {
+          "name": "Fugu Ultra",
+          "score": 95.5,
+          "source": "https://sakana.ai/fugu/"
+        },
+        {
+          "name": "Fugu",
+          "score": 95.5,
+          "source": "https://sakana.ai/fugu/"
+        },
+        {
+          "name": "Gemini 3.1 Pro",
+          "score": 94.3,
+          "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+        },
+        {
+          "name": "Claude Opus 4.8",
+          "score": 93.6,
+          "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+        },
+        {
+          "name": "GPT 5.5",
+          "score": 93.6,
+          "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+        }
+      ],
+      "notes": [
+        "VSR 1.0 Pro uses the best existing GPQA-Diamond closed-model loop recipe, preserved as amd_auto_gpqa_omni.yaml and exposed externally as vllm-sr/auto."
+      ]
+    },
+    {
+      "benchmark": "LiveCodeBench",
+      "run_type": "formal-175-janapr-v6-omni-all-loop-repair-v1",
+      "metric": "mean_acc",
+      "results": [
+        {
+          "mode": "vsr1_pro",
+          "model_api_name": "vllm-sr/auto",
+          "scorecard_name": "VSR 1.0 Pro",
+          "score": 92.6,
+          "num": 175,
+          "source_mode": "auto",
+          "config_snapshot": "bench/router_flow/configs/amd_auto_livecode_omni.yaml",
+          "report_path": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/live_code_bench/auto/livecode_omni_summary.json",
+          "raw_predictions": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/live_code_bench/auto/predictions/auto_live_code_bench/live_code_bench_v6.jsonl",
+          "raw_reviews": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/live_code_bench/auto/reviews/auto_live_code_bench/live_code_bench_v6.jsonl",
+          "scorecard_json": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/livecode_scorecard.json",
+          "scorecard_svg": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/livecode_scorecard.svg",
+          "scorecard_png": "bench/router_flow/results/omni-livecode-formal175-janapr-allloop-repair-v1/livecode_scorecard.png"
+        }
+      ],
+      "public_references": [
+        {
+          "name": "Fugu Ultra",
+          "score": 92.0,
+          "source": "Sakana Fugu technical report Table 1 and Appendix A"
+        },
+        {
+          "name": "Fugu",
+          "score": 90.3,
+          "source": "Sakana Fugu technical report Table 1 and Appendix A"
+        },
+        {
+          "name": "Opus 4.8",
+          "score": 90.3,
+          "source": "Sakana Fugu technical report Table 1 and Appendix A"
+        },
+        {
+          "name": "Gemini 3.1 Pro",
+          "score": 88.9,
+          "source": "Sakana Fugu technical report Table 1 and Appendix A"
+        },
+        {
+          "name": "GPT 5.5",
+          "score": 90.7,
+          "source": "Sakana Fugu technical report Table 1 and Appendix A"
+        },
+        {
+          "name": "DeepSeek-R1-0528",
+          "score": 71.9,
+          "source": "https://huggingface.co/deepseek-ai/DeepSeek-R1-0528"
+        },
+        {
+          "name": "Gemini-2.5-Pro-05-06",
+          "score": 70.0,
+          "source": "https://blog.google/technology/google-deepmind/gemini-model-thinking-updates-march-2025/#advanced-coding"
+        },
+        {
+          "name": "Qwen3-235B-A22B",
+          "score": 60.0,
+          "source": "https://huggingface.co/Qwen/Qwen3-235B-A22B"
+        }
+      ],
+      "notes": [
+        "Report-aligned LiveCodeBench v6 Jan-Apr 2025 result using the 175-question denominator.",
+        "The local review artifact contains 170 reviewed rows; five missing samples are counted wrong in the 175-question denominator.",
+        "All recipe decisions use loop algorithms only; the single-model low-risk route was removed before this run.",
+        "The primary scorecard includes Fugu technical-report baselines plus user-provided public model context rows for DeepSeek-R1-0528, Gemini-2.5-Pro-05-06, and Qwen3-235B-A22B."
+      ]
+    }
+  ],
+  "notes": [
+    "GPQA-Diamond uses the existing 50-question ReMoM loop result as the current VSR 1.0 Pro score.",
+    "LiveCodeBench now uses the report-aligned v6 Jan-Apr 2025 175-question denominator; the score is 92.6 with five missing samples counted wrong.",
+    "LiveCodeBench VSR 1.0 open-model comparison should use OpenRouter moonshotai/kimi-k2.7-code rather than the earlier GLM 5.2 plan.",
+    "HLE, SWE Bench Pro, TerminalBench, and SciCode require new benchmark-specific auto recipes before they are re-added to the current matrix."
+  ]
+}

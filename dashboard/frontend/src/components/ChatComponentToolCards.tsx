@@ -103,7 +103,13 @@ export const ToolCard = ({
 
   return (
     <div className={`${styles.webSearchCard} ${isClawMCPToolCall ? styles.mcpToolCard : ''}`}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.webSearchHeader}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${displayToolName}`}
+      >
         <div className={`${styles.webSearchIcon} ${isClawMCPToolCall ? styles.mcpToolIcon : ''}`}>
           {isClawMCPToolCall ? (
             <img src="/openclaw.svg" alt="" aria-hidden="true" />
@@ -134,7 +140,7 @@ export const ToolCard = ({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
       {toolCall.status === 'running' || toolCall.status === 'pending' ? (
         <div className={styles.webSearchLoading}>
           <div className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`} />

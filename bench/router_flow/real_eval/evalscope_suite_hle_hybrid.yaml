@@ -1,0 +1,55 @@
+defaults:
+  api_url: http://127.0.0.1:8899/v1
+  api_key: EMPTY
+  eval_type: openai_api
+  eval_batch_size: 24
+  generation_config:
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 32768
+    batch_size: 24
+    timeout: 1800
+    retries: 2
+    retry_interval: 15
+
+models:
+  auto: vllm-sr/auto
+
+model_labels:
+  auto: VSR Hybrid
+
+benchmarks:
+  - id: hle_text
+    public_name: Humanity's Last Exam
+    dataset: hle
+    metric: acc
+    tier: core
+    default_run: true
+    smoke_limit: 24
+    formal_limit: 2500
+    eval_batch_size: 24
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      max_tokens: 32768
+      batch_size: 24
+      timeout: 1800
+      retries: 2
+    dataset_args:
+      extra_params:
+        include_multi_modal: false
+    smoke_dataset_args:
+      subset_list:
+        - Math
+    judge_strategy: auto
+    judge_model_args:
+      model_id: gpt55-verifier
+      api_url: http://127.0.0.1:8899/v1
+      api_key: EMPTY
+      generation_config:
+        temperature: 0
+        max_tokens: 1024
+    notes: >-
+      Competitive hybrid HLE smoke. Backend pool deliberately includes GLM-5.2
+      plus closed models for verifier/finalizer roles; do not describe this as
+      GLM-only. Native GLM-5.2 remains a reference column, not a rerun.

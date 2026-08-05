@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -15,6 +16,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // TracingConfig holds the tracing configuration
@@ -73,18 +76,7 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 		return fmt.Errorf("unsupported exporter type: %s", cfg.ExporterType)
 	}
 
-	// Create sampler based on configuration
-	var sampler sdktrace.Sampler
-	switch cfg.SamplingType {
-	case "always_on":
-		sampler = sdktrace.AlwaysSample()
-	case "always_off":
-		sampler = sdktrace.NeverSample()
-	case "probabilistic":
-		sampler = sdktrace.TraceIDRatioBased(cfg.SamplingRate)
-	default:
-		sampler = sdktrace.AlwaysSample()
-	}
+	sampler := samplerFromConfig(cfg)
 
 	// Create tracer provider
 	tracerProvider = sdktrace.NewTracerProvider(
@@ -106,6 +98,25 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 	tracer = tracerProvider.Tracer("semantic-router")
 
 	return nil
+}
+
+func samplerFromConfig(cfg TracingConfig) sdktrace.Sampler {
+	switch samplingType := strings.ToLower(strings.TrimSpace(cfg.SamplingType)); samplingType {
+	case "always_on":
+		return sdktrace.AlwaysSample()
+	case "always_off":
+		return sdktrace.NeverSample()
+	case "probabilistic", "traceidratio", "trace_id_ratio":
+		return sdktrace.TraceIDRatioBased(cfg.SamplingRate)
+	case "":
+		return sdktrace.AlwaysSample()
+	default:
+		logging.ComponentWarnEvent("tracing", "tracing_sampling_type_unknown", map[string]interface{}{
+			"sampling_type": cfg.SamplingType,
+			"fallback":      "always_on",
+		})
+		return sdktrace.AlwaysSample()
+	}
 }
 
 // createOTLPExporter creates an OTLP gRPC exporter

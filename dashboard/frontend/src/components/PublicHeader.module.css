@@ -1,0 +1,135 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #202020;
+  background: #000000;
+}
+
+.inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  height: var(--app-header-height);
+  margin: 0 auto;
+  padding: 0 var(--app-shell-gutter);
+  gap: clamp(2rem, 2.8vw, 3.5rem);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.7rem;
+  min-width: 10.4rem;
+  padding: 0.35rem 0;
+  color: #f5f5f7;
+  font-size: 0.8rem;
+  font-weight: 720;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.brand:hover {
+  color: #f5f5f7;
+  opacity: 0.85;
+}
+
+.logo {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.nav {
+  display: flex;
+  grid-column: 3;
+  align-items: center;
+  justify-self: end;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.utilityLink,
+.dashboardLink {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.utilityLink {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.utilityLink:hover {
+  color: #f5f5f7;
+}
+
+.dashboardLink {
+  margin-left: 0.45rem;
+  min-width: 154px;
+  border: 1px solid var(--color-primary-dark);
+  border-radius: 4px;
+  background: var(--color-primary-dark);
+  color: #09090a;
+  white-space: nowrap;
+}
+
+.dashboardLink:hover {
+  border-color: var(--action-primary-bg);
+  background: var(--action-primary-bg);
+  color: #050505;
+}
+
+@media (max-width: 1180px) {
+  .inner {
+    gap: 0.75rem;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brandText {
+    display: none;
+  }
+
+  .utilityLink,
+  .dashboardLink {
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-width: 1023px) {
+  .inner {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .utilityLink {
+    display: none;
+  }
+
+  .dashboardLink {
+    min-width: 0;
+    margin-left: 0;
+    padding: 0 0.72rem;
+    font-size: 0.72rem;
+  }
+}

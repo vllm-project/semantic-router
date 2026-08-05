@@ -13,7 +13,10 @@ const HomepageFeatures: React.FC = () => {
             <Translate id="features.sectionTitle">Our Goals</Translate>
           </h2>
           <p className={styles.featuresSubtitle}>
-            <Translate id="features.sectionSubtitle">Building the System Level Intelligence for Mixture-of-Models (MoM), bringing Collective Intelligence into LLM systems</Translate>
+            <Translate id="features.sectionSubtitle">
+              Building Mixture-of-Models: The Next-Generation Model Architecture
+              for Heterogeneous LLM Inference
+            </Translate>
           </p>
         </div>
         <div className={styles.goalsBanner}>
@@ -27,31 +30,44 @@ const HomepageFeatures: React.FC = () => {
           <div className={styles.goalItem}>
             <div className={styles.goalNumber}>1</div>
             <div className={styles.goalText}>
-              <Translate id="features.goal1">How to capture the missing signals in request, response and context?</Translate>
+              <Translate id="features.goal1">
+                How to capture the missing signals in request, response and
+                context?
+              </Translate>
             </div>
           </div>
           <div className={styles.goalItem}>
             <div className={styles.goalNumber}>2</div>
             <div className={styles.goalText}>
-              <Translate id="features.goal2">How to combine the signals to make better decisions?</Translate>
+              <Translate id="features.goal2">
+                How to combine the signals to make better decisions?
+              </Translate>
             </div>
           </div>
           <div className={styles.goalItem}>
             <div className={styles.goalNumber}>3</div>
             <div className={styles.goalText}>
-              <Translate id="features.goal3">How to collaborate more efficiently between different models?</Translate>
+              <Translate id="features.goal3">
+                How to collaborate more efficiently between different models?
+              </Translate>
             </div>
           </div>
           <div className={styles.goalItem}>
             <div className={styles.goalNumber}>4</div>
             <div className={styles.goalText}>
-              <Translate id="features.goal4">How to secure the real world and LLM system from jailbreaks, pii leaks, hallucinations?</Translate>
+              <Translate id="features.goal4">
+                How to secure the real world and LLM system from jailbreaks, pii
+                leaks, hallucinations?
+              </Translate>
             </div>
           </div>
           <div className={styles.goalItem}>
             <div className={styles.goalNumber}>5</div>
             <div className={styles.goalText}>
-              <Translate id="features.goal5">How to collect the valuable signals and build a self-learning system?</Translate>
+              <Translate id="features.goal5">
+                How to collect the valuable signals and build a self-learning
+                system?
+              </Translate>
             </div>
           </div>
         </div>

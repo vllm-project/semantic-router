@@ -33,9 +33,11 @@ pub struct ChunkedSdpaConfig {
     /// `Some(w)` = local sliding-window band (keep only `|i - j| <= w`),
     /// `None` = global attention (every query attends to every key).
     pub window: Option<usize>,
-    /// Decoder causal masking. **Reserved — not yet implemented**; callers must pass
-    /// `false` (passing `true` is rejected with an error). Causal support lands with
-    /// the generative-model migration.
+    /// Decoder causal masking: when `true`, a query at absolute index `i` attends
+    /// only to keys `j <= i`. Composes with `window` (intersection of the causal
+    /// triangle and the sliding-window band). Implemented for the same-length case
+    /// (`q_len == k_len`); the KV-cache/decode-offset path (`k_len > q_len`) lands
+    /// with the generative-model migration.
     pub causal: bool,
     /// Softmax scale applied to the queries, typically `head_dim^-0.5`.
     pub scale: f64,
@@ -56,16 +58,6 @@ pub fn chunked_sdpa(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
-    // Causal masking is reserved for the generative-model migration and not yet
-    // applied. Hard-fail instead of silently returning non-causal attention, so a
-    // future caller that sets `causal: true` gets a clear error rather than wrong
-    // (and hard-to-debug) results.
-    if cfg.causal {
-        candle_core::bail!(
-            "chunked_sdpa: causal masking is not yet implemented; cfg.causal must be false"
-        );
-    }
-
     let (_b, _heads, seq_len, _head_dim) = q.dims4()?;
     let device = q.device();
 
@@ -89,10 +81,15 @@ pub fn chunked_sdpa(
         let qe = qs + blk;
 
         // Key/value range for this query block: a local layer only needs the
-        // `±window` band around the block; a global layer needs every key.
-        let (ks, ke) = match cfg.window {
-            Some(w) => (qs.saturating_sub(w), (qe + w).min(seq_len)),
-            None => (0, seq_len),
+        // `±window` band around the block; a global layer needs every key. A causal
+        // query at absolute index `i` never attends to keys `j > i`, so keys beyond
+        // the block end (`qe`) are always masked — cap the upper bound there (a
+        // correctness-preserving memory win, since those keys would softmax to zero).
+        let (ks, ke) = match (cfg.window, cfg.causal) {
+            (Some(w), false) => (qs.saturating_sub(w), (qe + w).min(seq_len)),
+            (Some(w), true) => (qs.saturating_sub(w), qe),
+            (None, false) => (0, seq_len),
+            (None, true) => (0, qe),
         };
         let kw = ke - ks;
 
@@ -115,6 +112,13 @@ pub fn chunked_sdpa(
             let band =
                 build_local_band_mask(qs, blk, ks, kw, window, device)?.to_dtype(scores.dtype())?;
             scores = scores.broadcast_add(&band)?;
+        }
+
+        // Causal triangle: keep only keys j <= i. Composes with the window band and
+        // the padding mask by addition (-inf + anything = -inf).
+        if cfg.causal {
+            let causal = build_causal_mask(qs, blk, ks, kw, device)?.to_dtype(scores.dtype())?;
+            scores = scores.broadcast_add(&causal)?;
         }
 
         let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
@@ -161,6 +165,33 @@ pub fn build_local_band_mask(
         for c in 0..k_len {
             let j = (k_start + c) as i64;
             if (i - j).abs() > window {
+                mask[a * k_len + c] = f32::NEG_INFINITY;
+            }
+        }
+    }
+    Tensor::from_slice(&mask, (q_len, k_len), device)
+}
+
+/// Build the additive causal mask for one query block.
+///
+/// Returns a `(q_len, k_len)` tensor (broadcasts over batch/heads) where entry
+/// `(a, c)` — query at absolute index `q_start + a`, key at `k_start + c` — is `0`
+/// when the key is at or before the query (`j <= i`) and `-inf` otherwise. Taking
+/// absolute `q_start`/`k_start` keeps this correct under a future decode offset
+/// where the query window trails the cached keys (`k_start != q_start`).
+pub fn build_causal_mask(
+    q_start: usize,
+    q_len: usize,
+    k_start: usize,
+    k_len: usize,
+    device: &Device,
+) -> candle_core::Result<Tensor> {
+    let mut mask = vec![0f32; q_len * k_len];
+    for a in 0..q_len {
+        let i = (q_start + a) as i64;
+        for c in 0..k_len {
+            let j = (k_start + c) as i64;
+            if j > i {
                 mask[a * k_len + c] = f32::NEG_INFINITY;
             }
         }

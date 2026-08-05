@@ -22,6 +22,7 @@ const (
 
 type routerReplayFilters struct {
 	search      string
+	recipe      string
 	decision    string
 	model       string
 	cacheStatus string
@@ -29,9 +30,10 @@ type routerReplayFilters struct {
 }
 
 type routerReplayListQuery struct {
-	filters routerReplayFilters
-	limit   int
-	offset  int
+	filters     routerReplayFilters
+	limit       int
+	offset      int
+	showDetails bool
 }
 
 type routerReplayListResponse struct {
@@ -167,7 +169,8 @@ func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.Rou
 
 func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) {
 	query := routerReplayListQuery{
-		limit: routerReplayDefaultListLimit,
+		limit:       routerReplayDefaultListLimit,
+		showDetails: false,
 	}
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
@@ -198,12 +201,22 @@ func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) 
 		query.offset = offset
 	}
 
+	if values.Has("showDetails") {
+		raw := strings.TrimSpace(values.Get("showDetails"))
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			return query, fmt.Errorf("showDetails must be a boolean")
+		}
+		query.showDetails = parsed
+	}
+
 	return query, nil
 }
 
 func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 	filters := routerReplayFilters{
 		search:    strings.TrimSpace(values.Get("search")),
+		recipe:    strings.TrimSpace(values.Get("recipe")),
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
@@ -260,22 +273,40 @@ func doesRouterReplayRecordMatchFilters(
 	filters routerReplayFilters,
 	search string,
 ) bool {
-	if filters.cacheStatus != "" && !hasMatchingCacheStatus(record, filters.cacheStatus) {
-		return false
+	matches := [...]bool{
+		matchesOptionalCacheStatus(record, filters.cacheStatus),
+		matchesOptionalValue(record.Decision, filters.decision),
+		matchesOptionalValue(record.Recipe, filters.recipe),
+		matchesOptionalModel(record, filters.model),
+		matchesOptionalValue(record.SessionID, filters.sessionID),
+		matchesReplaySearch(record, search),
 	}
-	if filters.decision != "" && record.Decision != filters.decision {
-		return false
-	}
-	if filters.model != "" && !doesModelMatch(record, filters.model) {
-		return false
-	}
-	if filters.sessionID != "" && record.SessionID != filters.sessionID {
-		return false
-	}
-	if search != "" && !strings.Contains(strings.ToLower(record.RequestID), search) {
-		return false
+	for _, match := range matches {
+		if !match {
+			return false
+		}
 	}
 	return true
+}
+
+func matchesOptionalCacheStatus(record routerreplay.RoutingRecord, cacheStatus string) bool {
+	return cacheStatus == "" || hasMatchingCacheStatus(record, cacheStatus)
+}
+
+func matchesOptionalValue(value, filter string) bool {
+	return filter == "" || value == filter
+}
+
+func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool {
+	return model == "" || doesModelMatch(record, model)
+}
+
+func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {
+	if search == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(record.RequestID), search) ||
+		strings.Contains(strings.ToLower(record.Recipe), search)
 }
 
 func hasMatchingCacheStatus(record routerreplay.RoutingRecord, cacheStatus string) bool {
@@ -309,6 +340,13 @@ func buildRouterReplayListPayload(
 	}
 
 	page := records[offset:end]
+	if !query.showDetails {
+		summarized := make([]routerreplay.RoutingRecord, len(page))
+		for i := range page {
+			summarized[i] = routerreplay.ListSummaryRecord(page[i])
+		}
+		page = summarized
+	}
 	payload := routerReplayListResponse{
 		Object:  "router_replay.list",
 		Count:   len(page),

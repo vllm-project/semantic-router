@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -119,69 +118,30 @@ var _ = Describe("Response Jailbreak Filter", func() {
 		})
 	})
 
-	Describe("applyResponseJailbreakWarning", func() {
-		It("should not modify response when no jailbreak detected", func() {
-			ctx := &RequestContext{
-				ResponseJailbreakDetected: false,
-			}
-			response := createMockBodyResponse()
-			body := []byte(`{"choices":[{"message":{"content":"hello"}}]}`)
-
-			resultBody, resultResp := router.applyResponseJailbreakWarning(response, ctx, body)
-			Expect(resultBody).To(Equal(body))
-			Expect(resultResp).To(Equal(response))
+	Describe("responseJailbreakWarningCode", func() {
+		It("returns no code when no jailbreak detected", func() {
+			ctx := &RequestContext{ResponseJailbreakDetected: false}
+			Expect(router.responseJailbreakWarningCode(ctx)).To(BeEmpty())
 		})
 
-		It("should add headers when action is header", func() {
+		It("returns the response_jailbreak code when action is header", func() {
 			ctx := &RequestContext{
 				ResponseJailbreakDetected:   true,
 				ResponseJailbreakType:       "entity_redirection",
 				ResponseJailbreakConfidence: 0.85,
 				VSRSelectedDecision:         createDecisionWithResponseJailbreak(true, "header"),
 			}
-			response := createMockBodyResponse()
-			body := []byte(`{"choices":[{"message":{"content":"hello"}}]}`)
-
-			_, resultResp := router.applyResponseJailbreakWarning(response, ctx, body)
-
-			bodyResp, ok := resultResp.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-			Expect(ok).To(BeTrue())
-			Expect(bodyResp.ResponseBody.Response).NotTo(BeNil())
-			Expect(bodyResp.ResponseBody.Response.HeaderMutation).NotTo(BeNil())
-
-			foundDetected := false
-			foundType := false
-			foundConfidence := false
-			for _, h := range bodyResp.ResponseBody.Response.HeaderMutation.SetHeaders {
-				switch h.Header.Key {
-				case headers.ResponseJailbreakDetected:
-					foundDetected = true
-					Expect(string(h.Header.RawValue)).To(Equal("true"))
-				case headers.ResponseJailbreakType:
-					foundType = true
-					Expect(string(h.Header.RawValue)).To(Equal("entity_redirection"))
-				case headers.ResponseJailbreakConfidence:
-					foundConfidence = true
-					Expect(string(h.Header.RawValue)).To(Equal("0.850"))
-				}
-			}
-			Expect(foundDetected).To(BeTrue())
-			Expect(foundType).To(BeTrue())
-			Expect(foundConfidence).To(BeTrue())
+			Expect(router.responseJailbreakWarningCode(ctx)).To(Equal(headers.ResponseWarningJailbreak))
 		})
 
-		It("should not add headers when action is none", func() {
+		It("returns no code when action is none", func() {
 			ctx := &RequestContext{
 				ResponseJailbreakDetected:   true,
 				ResponseJailbreakType:       "entity_redirection",
 				ResponseJailbreakConfidence: 0.85,
 				VSRSelectedDecision:         createDecisionWithResponseJailbreak(true, "none"),
 			}
-			response := createMockBodyResponse()
-			body := []byte(`{"choices":[{"message":{"content":"hello"}}]}`)
-
-			resultBody, _ := router.applyResponseJailbreakWarning(response, ctx, body)
-			Expect(resultBody).To(Equal(body))
+			Expect(router.responseJailbreakWarningCode(ctx)).To(BeEmpty())
 		})
 	})
 

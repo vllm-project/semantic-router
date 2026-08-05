@@ -21,6 +21,7 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 import yaml
+from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 
 HTTP_STATUS_OK = 200
 
@@ -58,11 +59,31 @@ class CLITestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class - ensure clean state."""
+        cls.runtime_stack = resolve_runtime_stack()
+        stack_name = cls.runtime_stack.stack_name
+        cls.CONTAINER_NAME = (
+            "vllm-sr-container"
+            if stack_name == DEFAULT_STACK_NAME
+            else f"{stack_name}-vllm-sr-container"
+        )
+        cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
+        cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
+        cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
+        cls.SIM_CONTAINER_NAME = cls.runtime_stack.fleet_sim_container_name
+        cls.AUXILIARY_CONTAINER_NAMES = (
+            cls.runtime_stack.grafana_container_name,
+            cls.runtime_stack.prometheus_container_name,
+            cls.runtime_stack.jaeger_container_name,
+            cls.runtime_stack.redis_container_name,
+            cls.runtime_stack.postgres_container_name,
+            cls.runtime_stack.milvus_container_name,
+        )
+
         # Detect container runtime
         cls.container_runtime = cls._detect_container_runtime()
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Using container runtime: {cls.container_runtime}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Ensure no leftover container from previous tests
         cls._cleanup_container()
@@ -90,30 +111,38 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _detect_container_runtime(cls) -> str:
-        """Detect the required Docker runtime for CLI tests."""
-        # Check for explicit environment variable
+        """Detect the container runtime used to drive CLI tests.
+
+        Both Docker and Podman are supported (matching the CLI). The selection
+        order is: explicit ``CONTAINER_RUNTIME`` env var → docker on PATH →
+        podman on PATH.
+        """
         env_runtime = os.getenv("CONTAINER_RUNTIME")
         normalized_runtime = (env_runtime or "").lower()
         if normalized_runtime:
-            if normalized_runtime != "docker":
+            if normalized_runtime not in ("docker", "podman"):
                 raise RuntimeError(
                     f"CONTAINER_RUNTIME={normalized_runtime} is unsupported; "
-                    "CLI tests require Docker"
+                    "CLI tests support docker or podman"
                 )
-            if shutil.which("docker"):
-                return "docker"
+            if shutil.which(normalized_runtime):
+                return normalized_runtime
             raise RuntimeError(
-                "CONTAINER_RUNTIME=docker was requested but docker is not in PATH"
+                f"CONTAINER_RUNTIME={normalized_runtime} was requested but "
+                f"{normalized_runtime} is not in PATH"
             )
 
-        # Auto-detect
         if shutil.which("docker"):
             return "docker"
         if shutil.which("podman"):
-            raise RuntimeError(
-                "Podman is installed but unsupported; CLI tests require Docker"
-            )
-        raise RuntimeError("Docker not found in PATH")
+            return "podman"
+        if os.getenv("RUN_INTEGRATION_TESTS", "").lower() != "true":
+            # Unit-only suites mock container commands at their behavioral
+            # seams. Keep a deterministic command name so those tests can run
+            # inside the precommit image, which intentionally has no runtime
+            # client or daemon.
+            return "docker"
+        raise RuntimeError("Neither docker nor podman was found in PATH")
 
     @staticmethod
     def _run_subprocess(
@@ -161,25 +190,19 @@ class CLITestBase(unittest.TestCase):
             result = self._run_subprocess(
                 [
                     self.container_runtime,
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
+                    "inspect",
                     "--format",
-                    "{{.Status}}",
+                    "{{.State.Status}}",
+                    container_name,
                 ],
                 timeout=10,
             )
-            status = result.stdout.strip()
-            if not status:
+            if result.returncode != 0:
                 return "not found"
-            if "Up" in status:
-                return "running"
-            if "Exited" in status:
-                return "exited"
-            if "Paused" in status:
-                return "paused"
-            return "unknown"
+            status = result.stdout.strip().lower()
+            if status in {"running", "created", "exited", "paused"}:
+                return status
+            return status or "unknown"
         except Exception as e:
             print(f"Failed to get container status: {e}")
             return "error"
@@ -464,11 +487,11 @@ class CLITestBase(unittest.TestCase):
 
     def print_test_header(self, name: str, description: str | None = None):
         """Print a formatted test header."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"TEST: {name}")
         if description:
             print(f"Description: {description}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def print_test_result(self, passed: bool, message: str = ""):
         """Print test result with pass/fail indicator."""

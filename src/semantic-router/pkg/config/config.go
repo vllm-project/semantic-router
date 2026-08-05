@@ -60,6 +60,9 @@ const (
 type RouterConfig struct {
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
 	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
+	// SkipExternalAssetValidation is set only for untrusted read-only
+	// validation requests, which must never trigger filesystem reads.
+	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`
@@ -74,18 +77,30 @@ type RouterConfig struct {
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
+	RouterLearning   RouterLearningConfig `yaml:"learning,omitempty"`
 
-	// Dynamic user-facing routing configuration.
+	// Dynamic user-facing routing configuration. Entrypoints and Recipes are
+	// the normalized multi-recipe state produced by the canonical loader; the
+	// inline IntelligentRouting fields always mirror the default recipe.
 	IntelligentRouting `yaml:",inline"`
-	BackendModels      `yaml:",inline"`
-	ToolSelection      `yaml:",inline"`
+	Entrypoints        []EntrypointMapping `yaml:"-"`
+	Recipes            []RoutingRecipe     `yaml:"-"`
+	// RoutingScope is populated only on immutable recipe views.
+	RoutingScope  RecipeName `yaml:"-"`
+	BackendModels `yaml:",inline"`
+	ToolSelection `yaml:",inline"`
 
-	Authz     AuthzConfig     `yaml:"authz,omitempty"`
-	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
+	Authz         AuthzConfig         `yaml:"authz,omitempty"`
+	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
 	ConfigBaseDir  string                `yaml:"-"`
+	// DocumentHash identifies the exact YAML document from which this immutable
+	// runtime snapshot was parsed. Management APIs use it to distinguish a
+	// persisted config from the config that has completed hot reload.
+	DocumentHash string `yaml:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.
@@ -168,6 +183,7 @@ type LLMObservability struct {
 
 type RouterOptions struct {
 	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
 	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
 	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`
@@ -203,7 +219,7 @@ type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
 	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
-	Strategy        string               `yaml:"strategy,omitempty"`
+	Strategy        RoutingStrategy      `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
 }

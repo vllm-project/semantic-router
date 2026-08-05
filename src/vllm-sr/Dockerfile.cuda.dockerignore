@@ -1,0 +1,55 @@
+# Per-Dockerfile ignore (overrides root .dockerignore for Dockerfile.cuda only)
+# Inherits the intent of root .dockerignore + excludes runtime state dirs that
+# get created by `vllm-sr serve` (milvus, etcd, postgres data) and are owned
+# by root so the build context loader cannot read them.
+
+# --- Mirror of repo-root .dockerignore (so we don't lose its protections) ---
+.git/
+.github/
+.gitlab-ci.yml
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+__pycache__/
+*.py[cod]
+.venv/
+.venv-agent/
+.agent-harness/
+venv/
+env/
+ENV/
+
+models/
+e2e/
+website/
+docs/
+paper/
+perf/
+candle-binding/target/
+ml-binding/target/
+nlp-binding/target/
+onnx-binding/target/
+src/training/model_classifier/verified_single_judge_*/
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/
+
+# --- CUDA-build-specific additions ---
+# Runtime state from `vllm-sr serve`. Owned by milvus/etcd/postgres
+# containers running as root, so the host-side build context loader hits
+# EACCES if they are included.
+**/.vllm-sr/
+**/milvus-data/
+**/etcd/
+**/postgres-data/
+
+# Bench artifacts that the router image never touches
+bench/
+slides/
+
+# Editor / lockfiles
+*.log

@@ -3,20 +3,25 @@
 from cli import __version__
 
 # Docker image configuration
-VLLM_SR_DOCKER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
-VLLM_SR_DOCKER_IMAGE_ROCM = "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
-VLLM_SR_ROUTER_DOCKER_IMAGE_DEFAULT = VLLM_SR_DOCKER_IMAGE_DEFAULT
-VLLM_SR_ROUTER_DOCKER_IMAGE_ROCM = VLLM_SR_DOCKER_IMAGE_ROCM
-VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
-VLLM_SR_DASHBOARD_DOCKER_IMAGE_DEFAULT = (
+VLLM_SR_CONTAINER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+VLLM_SR_CONTAINER_IMAGE_ROCM = (
+    "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
+)
+VLLM_SR_CONTAINER_IMAGE_CUDA = (
+    "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest"
+)
+VLLM_SR_ROUTER_CONTAINER_IMAGE_DEFAULT = VLLM_SR_CONTAINER_IMAGE_DEFAULT
+VLLM_SR_ROUTER_CONTAINER_IMAGE_ROCM = VLLM_SR_CONTAINER_IMAGE_ROCM
+VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
+VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     "ghcr.io/vllm-project/semantic-router/dashboard:latest"
 )
-VLLM_SR_DOCKER_IMAGE_DEV = "vllm-sr:dev"
-VLLM_SR_DOCKER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
-VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT = (
+VLLM_SR_CONTAINER_IMAGE_DEV = "vllm-sr:dev"
+VLLM_SR_CONTAINER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
+VLLM_SR_SIM_CONTAINER_IMAGE_DEFAULT = (
     "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
 )
-VLLM_SR_SIM_DOCKER_NAME = "vllm-sr-sim-container"
+VLLM_SR_SIM_CONTAINER_NAME = "vllm-sr-sim-container"
 DEFAULT_STACK_NAME = "vllm-sr"
 PLATFORM_AMD = "amd"
 PLATFORM_NVIDIA = "nvidia"
@@ -56,6 +61,15 @@ LOG_PREFIX_ACCESS = "[access_logs]"
 # File descriptor limits
 DEFAULT_NOFILE_LIMIT = 65536
 MIN_NOFILE_LIMIT = 8192
+
+# Container runtime selection
+CONTAINER_RUNTIME_DOCKER = "docker"
+CONTAINER_RUNTIME_PODMAN = "podman"
+SUPPORTED_CONTAINER_RUNTIMES = (
+    CONTAINER_RUNTIME_DOCKER,
+    CONTAINER_RUNTIME_PODMAN,
+)
+CONTAINER_RUNTIME_ENV = "CONTAINER_RUNTIME"
 
 # External API model formats (routed through Envoy to external API endpoints)
 # These models don't require vLLM endpoints - they use external APIs like Anthropic

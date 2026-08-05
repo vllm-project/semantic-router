@@ -587,6 +587,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	}
 
 	var lastResponse *ModelResponse
+	var allResponses []*ModelResponse
 	var modelsUsed []string
 	iteration := 0
 
@@ -631,6 +632,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		ApplyTokenFilter(resp, evaluator.TokenFilter)
 
 		lastResponse = resp
+		allResponses = append(allResponses, resp)
 		modelsUsed = append(modelsUsed, modelName)
 
 		var confidence float64
@@ -725,10 +727,13 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		return nil, fmt.Errorf("all models failed")
 	}
 
-	// Format the final response (only include the last response, not aggregated)
+	// Format the final response. Content/model come from the chosen (last)
+	// response, but every attempted call is included so token usage reflects the
+	// full cost of the confidence cascade, not just the accepted answer.
+	// allResponses is ordered, so its final element is always lastResponse.
 	agg := &AggregatedResponse{
 		Models:          modelsUsed,
-		Responses:       []*ModelResponse{lastResponse},
+		Responses:       allResponses,
 		CombinedContent: lastResponse.Content,
 		FinalModel:      lastResponse.Model,
 		AverageLogprob:  lastResponse.AverageLogprob,

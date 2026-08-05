@@ -82,7 +82,7 @@
   transform: translateX(-50%);
   width: 60px;
   height: 3px;
-  background: linear-gradient(90deg, transparent, #76b900, transparent);
+  background: linear-gradient(90deg, transparent, #8f949c, transparent);
   border-radius: 2px;
 }
 
@@ -91,6 +91,96 @@
   flex-direction: column;
   gap: 1.25rem;
   width: 100%;
+}
+
+.pathLabel {
+  color: rgba(255, 255, 255, 0.44);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+}
+
+.decisionPath {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.decisionPath .section {
+  position: relative;
+  min-width: 0;
+  padding: 1rem 0.75rem 1.1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.decisionPath .section:first-child {
+  border-left: 0;
+}
+
+.decisionPath .section:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: -0.28rem;
+  z-index: 1;
+  width: 0.5rem;
+  height: 0.5rem;
+  content: '';
+  background: #111;
+  border-top: 1px solid #e31b23;
+  border-right: 1px solid #e31b23;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.decisionPath .sectionTitle {
+  padding: 0;
+  color: #e31b23;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.13em;
+  text-align: left;
+}
+
+.decisionPath .sectionItems {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.decisionPath .headerItem,
+.decisionPath .headerItemPrimary {
+  align-items: flex-start;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.decisionPath .headerItem:hover,
+.decisionPath .headerItemPrimary:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.decisionPath .headerLabel {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.58rem;
+}
+
+.decisionPath .headerValue,
+.decisionPath .headerItemPrimary .headerValue {
+  width: 100%;
+  overflow: hidden;
+  color: #fff;
+  font-size: clamp(0.78rem, 1.2vw, 0.96rem);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .section {
@@ -107,7 +197,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.6875rem;
   font-weight: 700;
-  color: rgba(118, 185, 0, 0.8);
+  color: rgba(143, 148, 156, 0.8);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding-left: 0.375rem;
@@ -116,7 +206,7 @@
 
 .sectionPrimary .sectionTitle {
   font-size: 0.875rem;
-  color: #76b900;
+  color: #8f949c;
   letter-spacing: 0.15em;
   opacity: 1;
 }
@@ -204,9 +294,9 @@
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   transform: translateY(-2px);
   box-shadow:
-    0 4px 16px rgba(118, 185, 0, 0.15),
+    0 4px 16px rgba(143, 148, 156, 0.15),
     0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(118, 185, 0, 0.1);
+    inset 0 1px 0 rgba(143, 148, 156, 0.1);
 }
 
 .headerItemPrimary:hover {
@@ -214,9 +304,9 @@
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   box-shadow:
-    0 4px 16px rgba(118, 185, 0, 0.15),
+    0 4px 16px rgba(143, 148, 156, 0.15),
     0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(118, 185, 0, 0.1);
+    inset 0 1px 0 rgba(143, 148, 156, 0.1);
   transform: translateY(-2px);
 }
 
@@ -224,14 +314,14 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: rgba(118, 185, 0, 0.6);
+  color: rgba(143, 148, 156, 0.6);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .headerItemPrimary .headerLabel {
   font-size: 0.75rem;
-  color: rgba(118, 185, 0, 0.7);
+  color: rgba(143, 148, 156, 0.7);
   font-weight: 700;
 }
 
@@ -258,7 +348,7 @@
 .hint {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.875rem;
-  color: rgba(118, 185, 0, 0.6);
+  color: rgba(143, 148, 156, 0.6);
   margin-top: 0.5rem;
   animation: pulse 2s ease-in-out infinite;
   text-align: center;
@@ -301,6 +391,24 @@
 
   .sections {
     gap: 1rem;
+  }
+
+  .decisionPath {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionPath .section {
+    padding: 0.75rem 0.2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 0;
+  }
+
+  .decisionPath .section:first-child {
+    border-top: 0;
+  }
+
+  .decisionPath .section::after {
+    display: none;
   }
 
   .section {
@@ -436,5 +544,18 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .overlay.fadeOut,
+  .container,
+  .headerItem,
+  .hint {
+    animation: none;
+  }
 
+  .headerItem,
+  .headerItemPrimary {
+    transition: none;
+  }
+}
 

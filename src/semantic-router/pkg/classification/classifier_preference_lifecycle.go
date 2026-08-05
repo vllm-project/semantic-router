@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -31,7 +32,11 @@ func (c *Classifier) initializePreferenceClassifier() error {
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
 	preferenceCfg := c.Config.PreferenceModel.WithDefaults()
-	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &preferenceCfg)
+	provider, err := c.preferenceEmbeddingProvider()
+	if err != nil {
+		return err
+	}
+	classifier, err := NewPreferenceClassifierWithProvider(externalCfg, c.Config.PreferenceRules, &preferenceCfg, provider)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}
@@ -39,6 +44,17 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	c.preferenceClassifier = classifier
 	logPreferenceClassifierInitialized(preferenceCfg, externalCfg, len(c.Config.PreferenceRules))
 	return nil
+}
+
+func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
+	if c == nil || c.Config == nil || !c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return nil, nil
+	}
+	provider, err := embedding.NewProvider(c.Config.EmbeddingModels, embedding.ProviderOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create preference embedding provider: %w", err)
+	}
+	return provider, nil
 }
 
 func logPreferenceClassifierInitialized(

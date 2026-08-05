@@ -38,6 +38,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `models`
   - `providers.defaults` holds `default_model`, `reasoning_families`, and `default_reasoning_effort`
   - `providers.models[*]` holds `provider_model_id`, `backend_refs`, `pricing`, `api_format`, and `external_model_ids`
+  - `providers.models[*].pricing` uses per-million-token rates for prompt, cached input, optional cache writes, and completion; `cache_write_per_1m` defaults to `prompt_per_1m` when omitted
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
@@ -222,15 +223,15 @@ Latest tutorials follow the same taxonomy:
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
-- `deploy/examples/runtime/semantic-cache/`
-- `deploy/examples/runtime/response-api/`
-- `deploy/examples/runtime/tools/`
+- `config/runtime/semantic-cache/`
+- `config/runtime/response-api/`
+- `config/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `deploy/examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `config/runtime/tools/tools_db.json` for local development.
 
 `config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
 
@@ -256,8 +257,8 @@ The dashboard mirrors the same contract:
 
 For a focused tutorial, read [Projections](../tutorials/projection/overview). For a maintained end-to-end example, use:
 
-- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+- [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+- [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 ## How to use it
 

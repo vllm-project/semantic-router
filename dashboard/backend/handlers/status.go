@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 // ServiceStatus represents the status of a single service
@@ -16,13 +18,14 @@ type ServiceStatus struct {
 
 // RouterRuntimeStatus captures router startup progress beyond process-level health.
 type RouterRuntimeStatus struct {
-	Phase            string   `json:"phase"`
-	Ready            bool     `json:"ready"`
-	Message          string   `json:"message,omitempty"`
-	DownloadingModel string   `json:"downloading_model,omitempty"`
-	PendingModels    []string `json:"pending_models,omitempty"`
-	ReadyModels      int      `json:"ready_models,omitempty"`
-	TotalModels      int      `json:"total_models,omitempty"`
+	Phase             string                                 `json:"phase"`
+	Ready             bool                                   `json:"ready"`
+	Message           string                                 `json:"message,omitempty"`
+	DownloadingModel  string                                 `json:"downloading_model,omitempty"`
+	PendingModels     []string                               `json:"pending_models,omitempty"`
+	ReadyModels       int                                    `json:"ready_models,omitempty"`
+	TotalModels       int                                    `json:"total_models,omitempty"`
+	EmbeddingProvider *startupstatus.EmbeddingProviderStatus `json:"embedding_provider,omitempty"`
 }
 
 // SystemStatus represents the overall system status

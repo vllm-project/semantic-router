@@ -110,6 +110,7 @@ providers:
         currency: USD
         prompt_per_1m: 3.0
         cached_input_per_1m: 0.30
+        cache_write_per_1m: 3.75
         completion_per_1m: 15.0
       backend_refs:
         - base_url: https://api.anthropic.com
@@ -118,7 +119,8 @@ providers:
 
 - Upstream routing targets are configured under `providers.models[].backend_refs[]`.
 - Optional cost-aware policies can use `pricing:`. Session-aware routing prices
-  prefix-cache checkout from `prompt_per_1m - cached_input_per_1m`; completion
+  prefix-cache checkout from `cache_write_per_1m - cached_input_per_1m`.
+  `cache_write_per_1m` defaults to `prompt_per_1m` when omitted; completion
   price is not used as the input checkout cost.
 - Response API behavior is configured under `global.services.response_api`.
 - Modality and image-generation behavior is configured through routing decisions and image-generation backends such as `vllm_omni`.

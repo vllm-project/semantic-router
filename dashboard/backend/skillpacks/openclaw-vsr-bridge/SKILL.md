@@ -24,7 +24,7 @@ user-invocable: true
 2. If VSR is missing, run the supported installer in agent-safe mode:
 
    ```bash
-   curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli --runtime skip --no-launch
+   curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli --runtime skip --no-launch
    ```
 
 3. Locate the OpenClaw config in this order unless the user already gave you a path:

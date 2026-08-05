@@ -5,6 +5,34 @@
 # Default GPU device for testing (can be overridden: TEST_GPU_DEVICE=3 make test-rust)
 TEST_GPU_DEVICE ?= 2
 
+# Rust lib unit tests that are safe for PR CI:
+# - no downloaded model assets
+# - no GPU/CUDA requirement
+# - deterministic pure Rust/FFI helper logic
+#
+# Keep this list explicit. Do not include tests whose fixtures initialize
+# models from ../models unless those tests have been converted to skip cleanly.
+RUST_CI_LIB_TESTS ?= \
+	core::tokenization_test::test_tokenization_config_default \
+	core::tokenization_test::test_tokenization_config_custom \
+	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head
+
+test-rust-ci:
+	@$(LOG_TARGET)
+	@echo "Running CI-safe Rust lib unit tests (CPU-only, no model assets)"
+	@cd candle-binding && \
+	test_list="$$(cargo test --release --no-default-features --lib -- --list)" && \
+	for test_filter in $(RUST_CI_LIB_TESTS); do \
+		echo "$$test_list" | grep -F "$${test_filter}:" >/dev/null || { \
+			echo "Configured Rust CI test not found: $$test_filter"; \
+			exit 1; \
+		}; \
+		echo "Running $$test_filter"; \
+		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
+	done
+
 # Test Rust unit tests (with release optimization for performance)
 # Note: Uses TEST_GPU_DEVICE env var (default: 2) to avoid GPU 0/1 which may be busy
 # Override with: TEST_GPU_DEVICE=3 make test-rust
@@ -51,12 +79,56 @@ test-rust-flash-attn-module: rust-flash-attn
 	@cd candle-binding && CUDA_VISIBLE_DEVICES=$(TEST_GPU_DEVICE) cargo test --release --features flash-attn $(MODULE) --lib -- --nocapture
 
 # Test the Rust library - minimal models only (conditionally use rust-ci in CI environments)
+# The MultiModal entries are the hermetic (no-network) subset of the
+# MULTIMODAL_MODEL_PATH-gated tests; they skip cleanly when the variable is
+# unset and run against models/mom-embedding-multimodal in CI, where
+# download-models has already fetched it (issue #2319). The image-encode
+# binding tests (TestMultiModalEncodeImageFrom*) stay out of this lane because
+# they download fixture images from Wikimedia at test time; run them via
+# make test-binding-multimodal.
 test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal models (BERT, ModernBERT)
 	@$(LOG_TARGET)
 	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency)$$"
+		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
+
+# Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
+# the candle-binding Go tests (including the network-dependent image-encode
+# ones), the Go router integration tests in pkg/classification, and the
+# ignored Rust unit tests in multimodal_embedding.rs. This is the manual
+# receipt command for PRs touching the multimodal FFI (issue #2319).
+# Requires models/mom-embedding-multimodal (make download-models) and network
+# access for the Wikimedia fixture images.
+test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run the multimodal model-gated Go tests (binding + router integration)
+	@$(LOG_TARGET)
+	@if [ ! -d "$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal}" ]; then \
+		echo "Multimodal model not found at $${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal}"; \
+		echo "Run 'make download-models' first, or set MULTIMODAL_MODEL_PATH."; \
+		exit 1; \
+	fi
+	@echo "Running candle-binding multimodal Go tests..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		export MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} && \
+		cd candle-binding && CGO_ENABLED=1 go test -v -race -run "^TestMultiModal" .
+	@echo "Running Go router multimodal integration tests (pkg/classification)..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		export MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} && \
+		cd src/semantic-router && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-L$(CURDIR)/candle-binding/target/release" \
+		go test -v -run "^TestEmbeddingClassifier_Integration" ./pkg/classification/
+
+# Exploratory lane for the #[ignore] Rust multimodal unit tests. Kept OUT of
+# test-binding-multimodal so that target stays a pass/fail receipt: this suite
+# has a known-red baseline (see tools/agent/docs/testing-strategy.md, "Model-Gated
+# Multimodal Tests") and is expected to exit non-zero until those pre-existing
+# defects are fixed.
+test-binding-multimodal-rust-baseline: $(if $(CI),rust-ci,rust) ## Run the ignored Rust multimodal unit tests (known-red baseline)
+	@$(LOG_TARGET)
+	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see tools/agent/docs/testing-strategy.md)..."
+	@cd candle-binding && \
+		MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} \
+		cargo test --release --no-default-features --lib multimodal_embedding::integration_tests -- --ignored --test-threads=1
 
 # Test the Rust library - LoRA and advanced embedding models (conditionally use rust-ci in CI environments)
 test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanced embedding models

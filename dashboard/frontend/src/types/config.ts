@@ -15,7 +15,7 @@
 export interface ProviderEndpoint {
   name: string
   weight: number
-  endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
+  endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
   base_url?: string
   provider?: 'openai' | 'anthropic'
@@ -24,7 +24,7 @@ export interface ProviderEndpoint {
 }
 
 export interface ProviderModel {
-  name: string  // e.g., "openai/gpt-oss-120b"
+  name: string // e.g., "openai/gpt-oss-120b"
   reasoning_family?: string
   provider_model_id?: string
   backend_refs?: ProviderEndpoint[]
@@ -35,6 +35,8 @@ export interface ProviderModel {
   pricing?: {
     currency?: string
     prompt_per_1m?: number
+    cached_input_per_1m?: number
+    cache_write_per_1m?: number
     completion_per_1m?: number
   }
 }
@@ -47,7 +49,7 @@ export interface ProviderDefaults {
 
 export interface ReasoningFamily {
   type: 'reasoning_effort' | 'chat_template_kwargs'
-  parameter: string  // e.g., "reasoning_effort", "enable_thinking"
+  parameter: string // e.g., "reasoning_effort", "enable_thinking"
 }
 
 export interface Providers {
@@ -142,6 +144,41 @@ export interface StructureSignal {
   predicate?: NumericPredicate
 }
 
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: {
+    type: 'count' | 'exists'
+    source: {
+      type: string
+      role?: string
+    }
+  }
+  predicate?: NumericPredicate
+}
+
+export interface MetadataSignal {
+  name: string
+  description?: string
+  key: string
+  predicate: {
+    equals?: string
+    in?: string[]
+    exists?: boolean
+  }
+}
+
+export interface ClassifierSignal {
+  name: string
+  description?: string
+  type: 'local' | 'llm'
+  model?: string
+  model_path?: string
+  labels: string[]
+  instructions?: string
+  use_cpu?: boolean
+}
+
 export interface ComplexityCandidates {
   candidates: string[]
 }
@@ -214,17 +251,43 @@ export interface Signals {
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
+  conversation?: ConversationSignal[]
+  metadata?: MetadataSignal[]
+  classifiers?: ClassifierSignal[]
 }
 
 // =============================================================================
 // DECISIONS - Routing logic
 // =============================================================================
 
-
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'reask' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
+export type DecisionConditionType =
+  | 'keyword'
+  | 'domain'
+  | 'preference'
+  | 'user_feedback'
+  | 'reask'
+  | 'embedding'
+  | 'fact_check'
+  | 'language'
+  | 'context'
+  | 'structure'
+  | 'complexity'
+  | 'modality'
+  | 'authz'
+  | 'jailbreak'
+  | 'pii'
+  | 'kb'
+  | 'conversation'
+  | 'event'
+  | 'metadata'
+  | 'classifier'
+  | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
+  label?: string
+  predicate?: NumericPredicate
+  on_error?: 'no_match' | 'match'
 }
 
 export interface DecisionRules {
@@ -265,6 +328,17 @@ export interface Decision {
   rules: DecisionRules
   modelRefs: ModelRef[]
   plugins?: PluginConfig[]
+  algorithm?: {
+    type: string
+    on_error?: string
+    prompt?: {
+      model: string
+      instructions: string
+      timeout_seconds?: number
+    }
+    [key: string]: unknown
+  }
+  annotations?: Record<string, unknown>
 }
 
 // =============================================================================
@@ -422,7 +496,7 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
  * Detect the config format based on key indicators
  */
 const asUnknownConfigRecord = (value: unknown): UnknownConfigRecord | null =>
-  value && typeof value === 'object' ? value as UnknownConfigRecord : null
+  value && typeof value === 'object' ? (value as UnknownConfigRecord) : null
 
 export function detectConfigFormat(config: unknown): ConfigFormat {
   const root = asUnknownConfigRecord(config)

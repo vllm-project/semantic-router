@@ -324,6 +324,22 @@ func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 	return initClassifier("feedback", modelPath, !useCPU)
 }
 
+// InitClassifier initializes the generic sequence-classifier slot used by the
+// router's backend-neutral classifier signal.
+func InitClassifier(modelPath string, _ int, useCPU bool) error {
+	return initClassifier("generic", modelPath, !useCPU)
+}
+
+// InitGenericClassifier matches the generic-classifier API exposed by the
+// Candle backend while preserving the ONNX implementation's named slot.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	return InitClassifier(modelPath, numClasses, useCPU)
+}
+
 // InitMmBert32KPIIClassifier initializes the PII token classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	return initTokenClassifier("pii", modelPath, !useCPU)
@@ -570,6 +586,22 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
+// returns the full probability distribution. The ONNX backend does not yet extract
+// per-class probabilities, so Probabilities is empty and callers fall back to a
+// confidence-based estimate.
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("jailbreak", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
 // ClassifyMmBert32KFeedback classifies text for feedback detection
 func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
@@ -634,6 +666,25 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class_id),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyTextWithProbabilities classifies text with the generic classifier.
+// The ONNX FFI currently exposes the winning class and confidence; callers
+// receive a sparse probability vector with the winning score populated.
+func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("generic", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	probabilities := make([]float32, result.Class+1)
+	if result.Class >= 0 {
+		probabilities[result.Class] = result.Confidence
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: probabilities,
 	}, nil
 }
 
@@ -801,6 +852,9 @@ const (
 	NLINeutral NLILabel = 1
 	// NLIContradiction means the premise contradicts the hypothesis
 	NLIContradiction NLILabel = 2
+	// NLIUnknown means no NLI judgment is available (e.g. the endpoint backend,
+	// which does not produce NLI labels).
+	NLIUnknown NLILabel = 3
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
@@ -1161,13 +1215,23 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, errors.New("only https URLs are allowed")
 	}
 
+	// Identify the client instead of sending Go's default User-Agent: hosts
+	// that enforce a User-Agent policy (e.g. Wikimedia) return HTTP 403 for
+	// generic library strings. Mirrors candle-binding's URL-encode path.
+	const userAgent = "vllm-semantic-router/onnx-binding (https://github.com/vllm-project/semantic-router)"
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET error: %w", err)
 	}

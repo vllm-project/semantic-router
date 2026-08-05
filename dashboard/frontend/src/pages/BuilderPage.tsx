@@ -23,6 +23,8 @@ import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
 import { BuilderToolbar } from "./builderPageToolbar";
 import { useReadonly } from "@/contexts/ReadonlyContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { canDeployConfig } from "@/utils/accessControl";
 import type { EntityKind, SectionState, Selection } from "./builderPageTypes";
 
 // ---------- Component ----------
@@ -92,6 +94,8 @@ const BuilderPage: React.FC = () => {
     discardNaturalLanguageDraft,
   } = useDSLStore();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
+  const { user } = useAuth();
+  const hasDeployPermission = canDeployConfig(user);
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sections, setSections] = useState<SectionState>({
@@ -173,7 +177,8 @@ const BuilderPage: React.FC = () => {
     [setMode, wasmReady, dslSource, parseAST],
   );
   const hasPendingNLDraft = nlStagedDraft !== null;
-  const deployDisabled = readonlyLoading || isReadonly || hasPendingNLDraft;
+  const deployDisabled =
+    readonlyLoading || isReadonly || !hasDeployPermission || hasPendingNLDraft;
 
   // --- Entity CRUD handlers ---
 
@@ -535,11 +540,13 @@ const BuilderPage: React.FC = () => {
         deployDisabledReason={
           isReadonly
             ? "Deploy is unavailable in read-only mode"
-            : hasPendingNLDraft
-              ? "Apply or discard the staged NL draft before deploying the live Builder config"
-            : readonlyLoading
-              ? "Checking deploy permissions..."
-              : undefined
+            : !hasDeployPermission
+              ? "Deploy requires the config.deploy permission"
+              : hasPendingNLDraft
+                ? "Apply or discard the staged NL draft before deploying the live Builder config"
+                : readonlyLoading
+                  ? "Checking deploy permissions..."
+                  : undefined
         }
         showBuilderSecondaryActions={!isNaturalLanguageMode}
         guideOpen={guideOpen}

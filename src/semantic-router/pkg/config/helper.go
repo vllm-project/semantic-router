@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+const (
+	DefaultAutoModelName    = "MoM"
+	LegacyAutoModelAlias    = "auto"
+	DefaultVSRAutoModelName = "vllm-sr/auto"
+)
+
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
 	familyName, ok := rc.GetModelReasoningFamilyName(modelName)
@@ -76,16 +82,51 @@ func (c *RouterConfig) GetEffectiveAutoModelName() string {
 	if c.AutoModelName != "" {
 		return c.AutoModelName
 	}
-	return "MoM" // Default value
+	return DefaultAutoModelName
 }
 
-// IsAutoModelName checks if the given model name should trigger automatic model selection
-// Returns true if the model name is either the configured AutoModelName or "auto" (for backward compatibility)
-func (c *RouterConfig) IsAutoModelName(modelName string) bool {
-	if modelName == "auto" {
-		return true // Always support "auto" for backward compatibility
+func DefaultAutoModelNames() []string {
+	return []string{DefaultVSRAutoModelName, LegacyAutoModelAlias, DefaultAutoModelName}
+}
+
+// EffectiveAutoModelNames returns all request model names that trigger
+// automatic routing. auto_model_names is an explicit allow-list; when omitted,
+// vLLM-SR keeps the new namespaced alias plus legacy auto/MoM compatibility.
+func (c *RouterConfig) EffectiveAutoModelNames() []string {
+	if c == nil {
+		return DefaultAutoModelNames()
 	}
-	return modelName == c.GetEffectiveAutoModelName()
+	if c.AutoModelNames != nil {
+		return normalizeAutoModelNames(c.AutoModelNames)
+	}
+	return normalizeAutoModelNames([]string{
+		DefaultVSRAutoModelName,
+		LegacyAutoModelAlias,
+		c.GetEffectiveAutoModelName(),
+	})
+}
+
+func normalizeAutoModelNames(names []string) []string {
+	seen := make(map[string]bool, len(names))
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		result = append(result, trimmed)
+	}
+	return result
+}
+
+// IsAutoModelName checks if the given model name should trigger automatic model selection.
+func (c *RouterConfig) IsAutoModelName(modelName string) bool {
+	normalized := strings.TrimSpace(modelName)
+	if normalized == "" {
+		return false
+	}
+	return slices.Contains(c.EffectiveAutoModelNames(), normalized)
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching
@@ -140,47 +181,21 @@ func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) 
 // Accepts both short names ("claude-haiku-4-5") and provider model IDs
 // ("eu.anthropic.claude-haiku-4-5-20251001-v1:0").
 func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if modelConfig, okc := c.resolveModelConfig(modelName); okc {
-		p := modelConfig.Pricing
-		// Treat an explicit zero-price entry as configured pricing when a currency is
-		// present so self-hosted/free models still produce cost=0 and savings data.
-		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.Currency != "" {
-			cur := p.Currency
-			if cur == "" {
-				cur = "USD"
-			}
-			return p.PromptPer1M, p.CompletionPer1M, cur, true
-		}
+	pricing, ok := c.GetFullModelPricing(modelName)
+	if !ok {
+		return 0, 0, "", false
 	}
-	return 0, 0, "", false
+	return pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetMostExpensivePricedModel returns the configured model with the highest combined
-// prompt+completion rate among models that define pricing.
+// GetMostExpensivePricedModel returns prompt and completion rates for the model
+// selected by GetMostExpensiveFullModelPricing.
 func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if c == nil || c.ModelConfig == nil {
+	modelName, pricing, ok := c.GetMostExpensiveFullModelPricing()
+	if !ok {
 		return "", 0, 0, "", false
 	}
-
-	bestScore := 0.0
-	for candidate := range c.ModelConfig {
-		promptRate, completionRate, candidateCurrency, found := c.GetModelPricing(candidate)
-		if !found {
-			continue
-		}
-
-		score := promptRate + completionRate
-		if !ok || score > bestScore {
-			modelName = candidate
-			promptPer1M = promptRate
-			completionPer1M = completionRate
-			currency = candidateCurrency
-			bestScore = score
-			ok = true
-		}
-	}
-
-	return modelName, promptPer1M, completionPer1M, currency, ok
+	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
 // GetModelAPIFormat returns the API format for the given model.
@@ -435,7 +450,9 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 	return nil
 }
 
-// GetDecisionByName returns a decision by name
+// GetDecisionByName returns a decision from the default routing profile. Names
+// are recipe-local; request-time callers should retain the selected Decision
+// object instead of performing a global bare-name lookup.
 func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 	for i := range c.Decisions {
 		if c.Decisions[i].Name == name {
@@ -449,7 +466,11 @@ func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 // Returns true only if the decision has an explicit semantic-cache plugin configured with enabled: true
 // This ensures per-decision scoping - decisions without semantic-cache plugin won't execute caching
 func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
+	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// IsCacheEnabled resolves semantic-cache policy from a scoped decision.
+func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil {
@@ -463,7 +484,11 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 
 // GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
 func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
+func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil && config.SimilarityThreshold != nil {
@@ -478,7 +503,11 @@ func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName strin
 // Returns 0 if caching should be skipped for this decision
 // Returns -1 to use the global default TTL when not specified at decision level
 func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheTTLSeconds resolves TTL from a scoped decision.
+func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
 	if decision != nil {
 		config := decision.GetSemanticCacheConfig()
 		if config != nil && config.TTLSeconds != nil {

@@ -1,0 +1,57 @@
+name: Router Learning Eval
+
+# Runs the deterministic Router Learning architecture eval and gates the summary
+# against the named PR profile. Pure stdlib Python — no router/model deployment needed.
+# See bench/profiles/router_learning/ for the threshold profiles and bench/README
+# "Router Learning architecture eval" for details.
+
+on:
+  pull_request:
+    paths:
+      - 'bench/agentic_routing_experiment.py'
+      - 'bench/profiles/router_learning/**'
+      - 'bench/test_agentic_routing_experiment.py'
+      - 'src/semantic-router/pkg/**'
+      - '.github/workflows/router-learning-eval.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profile to gate against (pr/release)'
+        default: 'pr'
+
+permissions:
+  contents: read
+
+jobs:
+  router-learning-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test deps
+        run: pip install pytest
+      - name: Run unit tests for the eval harness
+        run: python -m pytest bench/test_agentic_routing_experiment.py -q
+      - name: Gate Router Learning architecture eval
+        run: |
+          python bench/agentic_routing_experiment.py \
+            --learning-architecture \
+            --profile "${{ github.event.inputs.profile || 'pr' }}" \
+            --output-dir "$GITHUB_WORKSPACE/.rl-eval"
+      - name: Attach verdict + summary to job summary
+        if: always()
+        run: |
+          {
+            echo '## Router Learning Eval'
+            echo '```'
+            cat "$GITHUB_WORKSPACE/.rl-eval/learning_architecture_verdict.json" 2>/dev/null || echo 'no verdict produced'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload eval artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: router-learning-eval
+          path: .rl-eval/

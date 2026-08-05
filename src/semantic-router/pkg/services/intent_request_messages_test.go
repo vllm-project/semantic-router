@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,40 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 	)
 }
 
+func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *testing.T) {
+	req := IntentRequest{
+		Tools: []json.RawMessage{
+			mustMessageContent(t, map[string]any{"type": "function", "name": "search"}),
+			mustMessageContent(t, map[string]any{"type": "function", "name": "edit"}),
+		},
+		Messages: []IntentMessage{
+			{Role: "developer", Content: mustMessageContent(t, "Use tools when needed.")},
+			{Role: "user", Content: mustMessageContent(t, "Investigate the failure.")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, ""),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{"id": "call-1"})},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "failure log")},
+			{Role: "user", Content: mustMessageContent(t, "Now implement the fix.")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.True(t, facts.HasDeveloperMessage)
+	assert.Equal(t, 2, facts.UserMessageCount)
+	assert.Equal(t, 1, facts.AssistantMessageCount)
+	assert.Equal(t, 1, facts.ToolMessageCount)
+	assert.Equal(t, 2, facts.ToolDefinitionCount)
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Equal(t, 1, facts.ToolResultCount)
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.True(t, facts.LastUserAfterToolResult)
+}
+
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 
@@ -67,6 +102,236 @@ func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	assert.Empty(t, input.priorUserMessages)
 	assert.Empty(t, input.nonUserMessages)
 	assert.False(t, input.hasAssistantReply)
+}
+
+func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *testing.T) {
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "What does this screenshot show?"},
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
+}
+
+func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) {
+	const dataURI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+}
+
+func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testing.T) {
+	// An uppercase-scheme data URI passes the safety gate, but the classifier
+	// backend scans for ";base64," case-sensitively. The resolved imageURL must be
+	// canonicalized (lowercase scheme/marker, payload preserved) so the image
+	// signal actually fires on the classify/eval path instead of silently dropping.
+	const rawURI = "DATA:IMAGE/PNG;BASE64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	const canonicalURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "What does this screenshot show?"},
+					{"type": "image_url", "image_url": map[string]string{"url": rawURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
+	assert.Equal(t, canonicalURI, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_StringImageURLDoesNotPoisonText(t *testing.T) {
+	// Responses API shape: image_url is a bare string, not a {"url": ...} object.
+	// A string-valued part must not fail the whole content-parts unmarshal, which
+	// would drop the text and regress a previously-classifiable request.
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "input_text", "text": "hello world"},
+					{"type": "input_image", "image_url": dataURI},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "hello world", input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_MalformedImageURLDoesNotPoisonText(t *testing.T) {
+	// A non-string, non-object image_url (e.g. a JSON number) must not fail the
+	// whole content-parts unmarshal and drop the sibling text.
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "input_text", "text": "keep this text"},
+					{"type": "input_image", "image_url": 123},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "keep this text", input.evaluationText)
+	assert.Empty(t, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_ImageOnlyTurnFallsBackToTopLevelText(t *testing.T) {
+	// A safe-image-only message plus top-level text must still score the supplied
+	// text; image safety (client-controlled) must not toggle whether it is scored.
+	const dataURI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD"
+	req := IntentRequest{
+		Text: "summarize my quarterly report",
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "summarize my quarterly report", input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_ImageOnlyFollowUpKeepsPriorUserText(t *testing.T) {
+	// An image-only follow-up turn must not rotate the real user question into
+	// history and let the assistant reply be promoted into the scored slot.
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "What is our refund policy?")},
+			{Role: "assistant", Content: mustMessageContent(t, "Refunds are processed within 30 days.")},
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "What is our refund policy?", input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+	assert.NotEqual(t, "Refunds are processed within 30 days.", input.evaluationText,
+		"assistant reply must never be promoted into the scored evaluation text")
+}
+
+func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "Describe it."},
+					{"type": "image_url", "image_url": map[string]string{"url": "https://example.com/cat.png"}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "Describe it.", input.evaluationText)
+	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount,
+		"image_content is a shape fact and must not depend on URL fetch safety")
+}
+
+func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {
+	req := IntentRequest{Metadata: map[string]string{"cohort": "canary"}}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, "canary", input.requestFacts.Metadata["cohort"])
+}
+
+func TestIntentRequestResolveSignalInput_PreservesWhitespaceForTextBytes(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{{
+			Role:    "user",
+			Content: mustMessageContent(t, " \t \n"),
+		}},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
+}
+
+func TestIntentRequestResolveSignalInput_PreservesTopLevelWhitespaceForTextBytes(t *testing.T) {
+	input, err := (IntentRequest{Text: " \t \n"}).resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+}
+
+func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) {
+	req := IntentRequest{
+		Metadata: map[string]string{"cohort": strings.Repeat("x", maxIntentMetadataValueBytes+1)},
+	}
+
+	_, err := req.resolveSignalInput()
+	require.ErrorIs(t, err, ErrInvalidRequestFacts)
 }
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {

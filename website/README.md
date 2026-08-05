@@ -85,7 +85,7 @@ Treat the current website redesign as the default design contract for all public
 
 ## 📁 Project Structure
 
-```
+```text
 website/
 ├── docs/                   # Documentation content (Markdown files)
 ├── src/
@@ -130,11 +130,14 @@ Modify `docusaurus.config.ts` for:
 ## Available Commands
 
 | Command | Description |
-|---------|-------------|
+| ------- | ----------- |
 | `make docs-dev` | Start development server |
 | `make docs-build` | Build for production |
 | `make docs-serve` | Preview production build |
 | `make docs-clean` | Clear build cache |
+| `make docs-check-translations` | Audit Chinese translation coverage, metadata, and source drift |
+| `make docs-test-translation-sync` | Test translation status synchronization behavior |
+| `make docs-fix-translation-status` | Update unambiguous Chinese translation `outdated` flags |
 
 ## Links
 

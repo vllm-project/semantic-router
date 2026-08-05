@@ -1,4 +1,6 @@
 @import './tokens.css';
+@import './typography.css';
+@import './section-surfaces.css';
 @import './base.css';
 @import './shell.css';
 @import './docs.css';

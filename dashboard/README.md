@@ -221,11 +221,18 @@ Recommended upstream settings for embedding:
 - Dashboard auth uses JWTs from `Authorization: Bearer <token>` for protected `/api/*` and `/embedded/*` requests.
 - Protected embedded entry URLs may also carry `authToken=<token>`. Login and bootstrap responses set an HttpOnly `vsr_session` cookie, and logout revokes newly issued server-side session ids before clearing that cookie.
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only.
-- **Security Policy page** (`/security`, accessible via Manager dropdown): allows admins to define role-to-model RBAC mappings and per-role rate-limit tiers. On save, the dashboard translates these into canonical router config (`routing.signals.role_bindings`, `routing.decisions`, and `global.services.ratelimit`), merges them into the running `config.yaml`, and triggers a hot-reload so the router enforces the new policy immediately. Requires the `security.manage` permission for writes; `config.read` is sufficient for viewing. See [security-hardening.md](../docs/architecture/security-hardening.md) for full details.
+- **Security Policy page** (`/security`, accessible via Manager dropdown): allows admins to define role-to-model RBAC mappings and per-role rate-limit tiers. On save, the dashboard translates these into canonical router config (`routing.signals.role_bindings`, `routing.decisions`, and `global.services.ratelimit`), merges them into the running `config.yaml`, and triggers a hot-reload so the router enforces the new policy immediately. Requires the `security.manage` permission for writes; `config.read` is sufficient for viewing. See [security-hardening.md](../website/docs/installation/security-hardening.md) for full details.
 - **Dashboard RBAC permissions**: `feedback.submit`, `replay.read`, and `security.manage` extend the built-in role/permission matrix. Only admin-role users receive `security.manage` by default.
 - Auth users, roles, permissions, audit logs, workflow state, and session ids use SQLite under `./data` by default. In containers or Kubernetes, mount `/app/data` or set `DASHBOARD_AUTH_DB_PATH` and `DASHBOARD_WORKFLOW_DB_PATH` to persistent paths if you need state to survive restarts.
 - The current SQLite auth/session store is single-replica local state. Run one dashboard replica unless you add a shared production auth/session store.
 - Future: OIDC login on dashboard and signed proxy sessions to embedded services.
+
+## Runtime status and version reporting
+
+- `/api/status` is the dashboard's live runtime summary endpoint. It is protected by dashboard auth and requires the logs/observability read permission.
+- The status response reports the dashboard backend version in tag form, such as `v0.3.0`, `v0.3.0-dev.<sha>`, or `v0.3.0-nightly.<date>.<sha>`.
+- Version values are injected into release dashboard images from the pushed `v<version>` tag. Non-release dashboard images derive their version from `src/vllm-sr/pyproject.toml` plus CI context. Local source runs fall back to `src/vllm-sr/pyproject.toml` plus Go VCS metadata when available.
+- When the dashboard backend is running but Router or Envoy is not reachable, `/api/status` still reports the Dashboard service as `running` and marks Router as not running instead of returning an empty `0/0` service list.
 
 Write access warning for config updates:
 

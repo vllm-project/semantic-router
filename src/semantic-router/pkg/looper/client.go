@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -34,11 +33,12 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient        *http.Client
-	endpoint          string
-	headers           map[string]string
-	decisionName      string            // Decision name to pass in looper requests
-	endpointOverrides map[string]string // Per-model endpoint URL overrides
+	httpClient       *http.Client
+	endpoint         string
+	headers          map[string]string
+	decisionName     string // Decision name to pass in looper requests
+	fusionDepth      int    // Recursion guard for Fusion requests
+	maxResponseBytes int64  // Ceiling for a single upstream response body
 }
 
 // NewClient creates a new looper HTTP client
@@ -47,14 +47,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
-		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
-	}
-	if len(cfg.ModelEndpoints) > 0 {
-		c.endpointOverrides = cfg.ModelEndpoints
-		logging.ComponentEvent("looper", "endpoint_overrides_loaded", map[string]interface{}{
-			"count": len(cfg.ModelEndpoints),
-		})
+		endpoint:         cfg.Endpoint,
+		headers:          cfg.Headers,
+		maxResponseBytes: cfg.GetMaxResponseBytes(),
 	}
 	return c
 }
@@ -64,20 +59,13 @@ func (c *Client) SetDecisionName(name string) {
 	c.decisionName = name
 }
 
-// SetEndpointOverrides sets per-model endpoint URL overrides.
-// When calling a model, the client checks this map first; if found,
-// the override URL is used instead of the default looper endpoint.
-func (c *Client) SetEndpointOverrides(overrides map[string]string) {
-	c.endpointOverrides = overrides
+// SetFusionDepth sets the Fusion recursion depth marker for internal requests.
+func (c *Client) SetFusionDepth(depth int) {
+	c.fusionDepth = depth
 }
 
-// resolveEndpoint returns the endpoint URL for the given model name.
-func (c *Client) resolveEndpoint(modelName string) string {
-	if c.endpointOverrides != nil {
-		if ep, ok := c.endpointOverrides[modelName]; ok {
-			return ep
-		}
-	}
+// resolveEndpoint returns the configured looper endpoint.
+func (c *Client) resolveEndpoint() string {
 	return c.endpoint
 }
 
@@ -134,6 +122,15 @@ type ModelResponse struct {
 
 	// StreamingChunks contains the raw SSE chunks for streaming responses
 	StreamingChunks []string
+
+	// Usage holds the token counts reported by the backend for this single
+	// call. It is zero when the backend omits usage (e.g. streaming responses
+	// without stream_options.include_usage).
+	Usage TokenUsage
+
+	// LatencyMs is the wall-clock duration in milliseconds of the upstream
+	// round-trip (request + read + parse) for this single call.
+	LatencyMs int64
 }
 
 // LogprobsConfig controls logprobs behavior for model calls
@@ -178,7 +175,7 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
-	endpoint := c.resolveEndpoint(modelName)
+	endpoint := c.resolveEndpoint()
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
 		"decision":  c.decisionName,
 		"model_ref": modelName,
@@ -209,6 +206,9 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	// These allow extproc to identify looper requests and lookup decision configuration
 	httpReq.Header.Set("x-vsr-looper-request", "true")
 	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+	if c.fusionDepth > 0 {
+		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
+	}
 
 	// Add decision name header for extproc to lookup decision configuration
 	if c.decisionName != "" {
@@ -216,27 +216,30 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	// Execute request
+	start := time.Now()
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readResponseBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response based on streaming mode
+	var result *ModelResponse
 	if streaming {
-		return c.parseStreamingResponse(respBody, modelName)
+		result, err = c.parseStreamingResponse(respBody, modelName)
+	} else {
+		result, err = c.parseNonStreamingResponse(respBody, modelName)
 	}
-	return c.parseNonStreamingResponse(respBody, modelName)
+	if err != nil {
+		return nil, err
+	}
+	result.LatencyMs = time.Since(start).Milliseconds()
+	return result, nil
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
@@ -251,12 +254,17 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
+		Usage: TokenUsage{
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		},
 	}
 
 	// Extract content, tool_calls, and logprobs
 	if len(completion.Choices) > 0 {
 		result.Content = completion.Choices[0].Message.Content
-		if len(completion.Choices[0].Message.ToolCalls) > 0 {
+		if len(completion.Choices[0].Message.ToolCalls) > 0 || completion.Choices[0].Message.FunctionCall.Name != "" {
 			result.HasToolCalls = true
 		}
 
@@ -292,16 +300,18 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content
+	// Parse SSE chunks to extract content and usage
 	content, chunks := parseSSEContent(body)
 	result.Content = content
 	result.StreamingChunks = chunks
+	result.Usage = parseStreamingUsage(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":    c.decisionName,
-		"model_ref":   modelName,
-		"content_len": len(content),
-		"streaming":   true,
+		"decision":     c.decisionName,
+		"model_ref":    modelName,
+		"content_len":  len(content),
+		"total_tokens": result.Usage.TotalTokens,
+		"streaming":    true,
 	})
 
 	return result, nil
@@ -656,7 +666,16 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		return nil, err
 	}
 	reqMap["stream"] = streaming
-	if !streaming {
+	if streaming {
+		// Ask the backend to emit a trailing usage chunk so token accounting
+		// works for streamed calls; preserve any caller-set stream_options.
+		opts, _ := reqMap["stream_options"].(map[string]interface{})
+		if opts == nil {
+			opts = map[string]interface{}{}
+		}
+		opts["include_usage"] = true
+		reqMap["stream_options"] = opts
+	} else {
 		delete(reqMap, "stream_options")
 	}
 	return json.Marshal(reqMap)

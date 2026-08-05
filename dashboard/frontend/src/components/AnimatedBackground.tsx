@@ -1,150 +1,169 @@
-import React, { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import styles from './AnimatedBackground.module.css'
 
-interface Blob {
-  x: number
-  y: number
+type Rgb = readonly [number, number, number]
+
+interface BlobDefinition {
   baseX: number
   baseY: number
   radius: number
-  color: { h: number; s: number; l: number }
-  offsetX: number
-  offsetY: number
-  speedX: number
-  speedY: number
+  phase: number
+  color: Rgb
+  opacity: number
 }
 
 interface AnimatedBackgroundProps {
   speed?: 'slow' | 'normal'
-  theme?: 'default' | 'claw'
 }
 
-const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
-  speed = 'normal',
-  theme = 'default',
-}) => {
+const FRAME_INTERVAL = 1000 / 24
+const STATIC_PHASE = 11.5
+const BLOB_DEFINITIONS: readonly BlobDefinition[] = [
+  { baseX: 0.16, baseY: 0.22, radius: 0.42, phase: 0.2, color: [214, 216, 220], opacity: 0.2 },
+  { baseX: 0.78, baseY: 0.18, radius: 0.34, phase: 1.45, color: [96, 100, 108], opacity: 0.24 },
+  { baseX: 0.82, baseY: 0.74, radius: 0.4, phase: 2.8, color: [227, 27, 35], opacity: 0.22 },
+  { baseX: 0.34, baseY: 0.82, radius: 0.38, phase: 4.1, color: [52, 54, 59], opacity: 0.32 },
+  { baseX: 0.52, baseY: 0.5, radius: 0.28, phase: 5.2, color: [156, 159, 165], opacity: 0.14 },
+]
+
+const rgba = ([red, green, blue]: Rgb, opacity: number) =>
+  `rgba(${red}, ${green}, ${blue}, ${opacity})`
+
+const drawBackground = (
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  phase: number,
+) => {
+  context.clearRect(0, 0, width, height)
+
+  const backdrop = context.createRadialGradient(
+    width * 0.5,
+    height * 0.45,
+    0,
+    width * 0.5,
+    height * 0.45,
+    Math.max(width, height) * 0.72,
+  )
+  backdrop.addColorStop(0, '#111113')
+  backdrop.addColorStop(1, '#030303')
+  context.fillStyle = backdrop
+  context.fillRect(0, 0, width, height)
+
+  const shortestSide = Math.min(width, height)
+  const travel = shortestSide * 0.18
+
+  BLOB_DEFINITIONS.forEach((blob, index) => {
+    const x = width * blob.baseX + Math.sin(phase + blob.phase) * travel
+    const y = height * blob.baseY + Math.cos(phase * 0.86 + blob.phase * 1.2) * travel
+    const radius =
+      Math.max(170, shortestSide * blob.radius) * (1 + Math.sin(phase * 0.72 + index) * 0.08)
+    const gradient = context.createRadialGradient(x, y, 0, x, y, radius)
+
+    gradient.addColorStop(0, rgba(blob.color, blob.opacity))
+    gradient.addColorStop(0.36, rgba(blob.color, blob.opacity * 0.66))
+    gradient.addColorStop(0.72, rgba(blob.color, blob.opacity * 0.24))
+    gradient.addColorStop(1, rgba(blob.color, 0))
+
+    context.fillStyle = gradient
+    context.beginPath()
+    context.arc(x, y, radius, 0, Math.PI * 2)
+    context.fill()
+  })
+}
+
+const AnimatedBackground = ({ speed = 'normal' }: AnimatedBackgroundProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const context = canvas?.getContext('2d')
+    const parent = canvas?.parentElement
+    if (!canvas || !context || !parent) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const phaseRate = speed === 'slow' ? 0.11 : 0.34
+    let width = 1
+    let height = 1
+    let phase = 0
+    let lastPaint = 0
 
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+    const paint = (nextPhase = phase) => {
+      phase = nextPhase
+      drawBackground(context, width, height, phase)
     }
 
-    resizeCanvas()
-    window.addEventListener('resize', resizeCanvas)
+    const resize = () => {
+      const bounds = parent.getBoundingClientRect()
+      width = Math.max(1, Math.round(bounds.width))
+      height = Math.max(1, Math.round(bounds.height))
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25)
 
-    const blobs: Blob[] = []
-    const palette = theme === 'claw'
-      ? {
-        backgroundInner: '#14090a',
-        backgroundOuter: '#040202',
-        colors: [
-          { h: 6, s: 78, l: 46 },
-          { h: 358, s: 74, l: 42 },
-          { h: 14, s: 72, l: 44 },
-          { h: 348, s: 64, l: 40 },
-          { h: 22, s: 62, l: 42 },
-        ],
-      }
-      : {
-        backgroundInner: '#0a0a0a',
-        backgroundOuter: '#000000',
-        colors: [
-          { h: 84, s: 70, l: 50 },   // NVIDIA green
-          { h: 90, s: 65, l: 55 },   // Yellow-green
-          { h: 78, s: 75, l: 45 },   // Deep green
-          { h: 160, s: 60, l: 50 },  // Cyan accent
-          { h: 200, s: 55, l: 55 },  // Blue accent
-        ],
-      }
-    const colors = palette.colors
-
-    const speedMultiplier = speed === 'slow' ? 0.3 : 1
-
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2
-      const distance = Math.min(canvas.width, canvas.height) * 0.35
-
-      blobs.push({
-        baseX: canvas.width / 2 + Math.cos(angle) * distance,
-        baseY: canvas.height / 2 + Math.sin(angle) * distance,
-        x: 0,
-        y: 0,
-        radius: 200 + Math.random() * 150,
-        color: colors[i],
-        offsetX: 0,
-        offsetY: 0,
-        speedX: (0.006 + Math.random() * 0.003) * speedMultiplier,
-        speedY: (0.006 + Math.random() * 0.003) * speedMultiplier,
-      })
+      canvas.width = Math.round(width * pixelRatio)
+      canvas.height = Math.round(height * pixelRatio)
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+      paint(motionQuery.matches ? STATIC_PHASE : phase)
     }
 
-    let time = 0
+    const stopAnimation = () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
+    }
 
-    const animate = () => {
-      time += 1
-
-      const bgGradient = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
-      )
-      bgGradient.addColorStop(0, palette.backgroundInner)
-      bgGradient.addColorStop(1, palette.backgroundOuter)
-      ctx.fillStyle = bgGradient
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      blobs.forEach((blob, index) => {
-        blob.offsetX = Math.sin(time * blob.speedX + index) * 250
-        blob.offsetY = Math.cos(time * blob.speedY + index * 1.3) * 250
-
-        blob.x = blob.baseX + blob.offsetX
-        blob.y = blob.baseY + blob.offsetY
-
-        const pulseRadius = blob.radius + Math.sin(time * 0.001 + index * 0.7) * 30
-
-        const gradient = ctx.createRadialGradient(
-          blob.x, blob.y, 0,
-          blob.x, blob.y, pulseRadius
-        )
-
-        const { h, s, l } = blob.color
-
-        gradient.addColorStop(0, `hsla(${h}, ${s}%, ${l + 10}%, 0.8)`)
-        gradient.addColorStop(0.3, `hsla(${h}, ${s}%, ${l}%, 0.6)`)
-        gradient.addColorStop(0.6, `hsla(${h}, ${s - 10}%, ${l - 10}%, 0.3)`)
-        gradient.addColorStop(1, `hsla(${h}, ${s - 20}%, ${l - 20}%, 0)`)
-
-        ctx.save()
-        ctx.filter = 'blur(60px)'
-        ctx.fillStyle = gradient
-        ctx.beginPath()
-        ctx.arc(blob.x, blob.y, pulseRadius, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.restore()
-      })
-
+    const animate = (timestamp: number) => {
+      if (timestamp - lastPaint >= FRAME_INTERVAL) {
+        lastPaint = timestamp
+        paint(timestamp * 0.001 * phaseRate)
+      }
       animationRef.current = requestAnimationFrame(animate)
     }
 
-    animate()
+    const syncMotion = () => {
+      stopAnimation()
+      canvas.dataset.motion = motionQuery.matches ? 'static' : 'animated'
 
-    return () => {
-      window.removeEventListener('resize', resizeCanvas)
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current)
+      if (motionQuery.matches) {
+        paint(STATIC_PHASE)
+      } else if (!document.hidden) {
+        animationRef.current = requestAnimationFrame(animate)
       }
     }
-  }, [speed, theme])
 
-  return <canvas ref={canvasRef} className={styles.canvas} />
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopAnimation()
+      } else {
+        syncMotion()
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(parent)
+    motionQuery.addEventListener('change', syncMotion)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    resize()
+    syncMotion()
+
+    return () => {
+      stopAnimation()
+      resizeObserver.disconnect()
+      motionQuery.removeEventListener('change', syncMotion)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [speed])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className={styles.canvas}
+      data-testid="playground-motion-background"
+      data-motion="animated"
+      aria-hidden="true"
+    />
+  )
 }
 
 export default AnimatedBackground

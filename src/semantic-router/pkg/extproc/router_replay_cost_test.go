@@ -54,6 +54,52 @@ func TestBuildReplayUsageCostComputesBaselineSavings(t *testing.T) {
 	}
 }
 
+func TestBuildReplayUsageCostIncludesCacheWrites(t *testing.T) {
+	selectedWriteRate := 1.25
+	baselineWriteRate := 6.25
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"cheap-model": {
+						Pricing: config.ModelPricing{
+							Currency:         "USD",
+							PromptPer1M:      1,
+							CachedInputPer1M: 0.1,
+							CacheWritePer1M:  &selectedWriteRate,
+							CompletionPer1M:  6,
+						},
+					},
+					"expensive-model": {
+						Pricing: config.ModelPricing{
+							Currency:         "USD",
+							PromptPer1M:      5,
+							CachedInputPer1M: 0.5,
+							CacheWritePer1M:  &baselineWriteRate,
+							CompletionPer1M:  30,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	usage := responseUsageMetrics{
+		promptTokens:       1_000,
+		cachedPromptTokens: 200,
+		cacheWriteTokens:   300,
+		completionTokens:   100,
+	}
+	snapshot := router.buildReplayUsageCost(&RequestContext{RequestModel: "cheap-model"}, usage)
+
+	assertApproxFloat64(t, snapshot.ActualCost, 0.001495)
+	assertApproxFloat64(t, snapshot.BaselineCost, 0.007475)
+	assertApproxFloat64(t, snapshot.CostSavings, 0.00598)
+	if snapshot.CacheWriteTokens == nil || *snapshot.CacheWriteTokens != 300 {
+		t.Fatalf("expected cache-write tokens to be recorded, got %#v", snapshot.CacheWriteTokens)
+	}
+}
+
 func TestBuildReplayUsageCostKeepsTokenCountsWhenPricingIsMissing(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
@@ -133,6 +179,7 @@ func TestBuildReplayUsageCostSkipsEmptyUsage(t *testing.T) {
 	)
 
 	if snapshot.PromptTokens != nil ||
+		snapshot.CacheWriteTokens != nil ||
 		snapshot.CompletionTokens != nil ||
 		snapshot.TotalTokens != nil ||
 		snapshot.ActualCost != nil ||

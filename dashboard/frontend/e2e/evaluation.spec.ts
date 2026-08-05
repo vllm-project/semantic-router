@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { mockAuthenticatedAppShell, mockAuthenticatedSession } from './support/auth';
+import { mockAuthenticatedAppShell } from './support/auth';
 
 const evalUser = {
   id: 'user-eval-1',
@@ -11,7 +11,7 @@ const evalUser = {
 
 test.describe('Evaluation page', () => {
   test('loads evaluation page and shows signal/system workflow UI', async ({ page }) => {
-    await mockAuthenticatedSession(page, { user: evalUser });
+    await mockAuthenticatedAppShell(page, { user: evalUser });
 
     await page.route('**/api/evaluation/tasks', async (route) => {
       if (route.request().method() === 'GET') {
@@ -38,7 +38,7 @@ test.describe('Evaluation page', () => {
     });
 
     await page.goto('/evaluation');
-    await expect(page.getByRole('heading', { name: /evaluation/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Evaluation', exact: true })).toBeVisible();
     await expect(page.getByText(/signal and system level/i)).toBeVisible();
     await expect(page.getByRole('tab', { name: /tasks/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: /create/i })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe('Evaluation page', () => {
   });
 
   test('create tab shows signal and system level options', async ({ page }) => {
-    await mockAuthenticatedSession(page, { user: evalUser });
+    await mockAuthenticatedAppShell(page, { user: evalUser });
 
     await page.route('**/api/evaluation/tasks', async (route) => {
       if (route.request().method() === 'GET') {
@@ -69,10 +69,10 @@ test.describe('Evaluation page', () => {
     });
 
     await page.goto('/evaluation');
-    await page.getByRole('button', { name: /create/i }).click();
-    await expect(page.getByText(/evaluation level/i)).toBeVisible();
-    await expect(page.getByText(/signal level/i)).toBeVisible();
-    await expect(page.getByText(/system level/i)).toBeVisible();
+    await page.getByRole('tab', { name: /create/i }).click();
+    await expect(page.getByText('Evaluation Level *', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Signal Level', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'System Level', exact: true })).toBeVisible();
   });
 
   test('system-level creation normalizes dimensions and datasets before submit', async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe('Evaluation page', () => {
     });
 
     await page.goto('/evaluation');
-    await page.getByRole('button', { name: /create/i }).click();
+    await page.getByRole('tab', { name: /create/i }).click();
     await page.getByRole('button', { name: /system level/i }).click();
     await page.getByLabel('Task Name *').fill('System Eval');
     await page.getByRole('button', { name: 'Next' }).click();
@@ -184,7 +184,7 @@ test.describe('Evaluation page', () => {
     });
 
     await page.goto('/evaluation');
-    await page.getByRole('button', { name: /create/i }).click();
+    await page.getByRole('tab', { name: /create/i }).click();
     await page.getByLabel('Task Name *').fill('Signal Eval');
     await page.getByRole('button', { name: 'Next' }).click();
     await page.getByRole('button', { name: 'Next' }).click();

@@ -190,17 +190,14 @@ func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, mo
 		}
 	}
 
+	usage := SumUsage(responses...)
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
 		"model":   strings.Join(modelsUsed, ","), // Combined model names
 		"choices": choices,
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
-		},
+		"usage":   usage.Map(),
 	}
 
 	body, err := json.Marshal(completion)
@@ -215,6 +212,7 @@ func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, mo
 		ModelsUsed:    modelsUsed,
 		Iterations:    iterations,
 		AlgorithmType: "ratings",
+		Usage:         usage,
 	}, nil
 }
 
@@ -319,5 +317,6 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 		ModelsUsed:    modelsUsed,
 		Iterations:    iterations,
 		AlgorithmType: "ratings",
+		Usage:         SumUsage(responses...),
 	}, nil
 }

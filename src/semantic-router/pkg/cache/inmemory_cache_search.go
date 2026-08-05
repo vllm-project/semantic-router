@@ -33,8 +33,42 @@ func (c *InMemoryCache) refreshHNSWIfStaleDuringSearch() {
 	c.mu.RLock()
 }
 
+// entryEligible reports whether an entry may be returned as a search match for
+// the requester's scope (ok), and separately whether it was skipped because it
+// has expired (expired). The two search paths share it so the per-candidate
+// skip logic — and the security-critical scope gate in particular — lives in
+// exactly one place that neither path can silently drop.
+//
+// The check order is load-bearing:
+//  1. entries without a stored response are not matchable;
+//  2. the exact model partition drops entries owned by another model/recipe;
+//  3. the hard user-scope gate (see CacheScopeNamespaceOf) drops a different
+//     user's entry BEFORE the expiry check, so an out-of-scope entry never
+//     counts toward expiredCount;
+//  4. expired entries are not matchable but are reported via expired=true so
+//     the caller can tally them.
+func (c *InMemoryCache) entryEligible(entry CacheEntry, model, scopeNamespace string, now time.Time) (ok bool, expired bool) {
+	if entry.ResponseBody == nil {
+		return false, false
+	}
+	if entry.Model != model {
+		return false, false
+	}
+	// Hard user-scope gate: never return another user's entry even if its
+	// embedding is the nearest neighbor.
+	if CacheScopeNamespaceOf(entry.Query) != scopeNamespace {
+		return false, false
+	}
+	if c.isExpired(entry, now) {
+		return false, true
+	}
+	return true, false
+}
+
 func (c *InMemoryCache) scanHNSWCandidates(
 	queryEmbedding []float32,
+	model string,
+	scopeNamespace string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
@@ -44,11 +78,11 @@ func (c *InMemoryCache) scanHNSWCandidates(
 			continue
 		}
 		entry := c.entries[entryIndex]
-		if entry.ResponseBody == nil {
-			continue
-		}
-		if c.isExpired(entry, now) {
+		ok, expired := c.entryEligible(entry, model, scopeNamespace, now)
+		if expired {
 			expiredCount++
+		}
+		if !ok {
 			continue
 		}
 		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
@@ -64,15 +98,17 @@ func (c *InMemoryCache) scanHNSWCandidates(
 
 func (c *InMemoryCache) scanLinearForSimilarity(
 	queryEmbedding []float32,
+	model string,
+	scopeNamespace string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
 	for entryIndex, entry := range c.entries {
-		if entry.ResponseBody == nil {
-			continue
-		}
-		if c.isExpired(entry, now) {
+		ok, expired := c.entryEligible(entry, model, scopeNamespace, now)
+		if expired {
 			expiredCount++
+		}
+		if !ok {
 			continue
 		}
 		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
@@ -101,12 +137,8 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
+		model, logging.ContentDescriptor(query), threshold)
 
 	queryEmbedding, err := c.generateEmbedding(query)
 	if err != nil {
@@ -114,7 +146,11 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(queryEmbedding)
+	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(
+		queryEmbedding,
+		model,
+		CacheScopeNamespaceOf(query),
+	)
 
 	return c.finishFindSimilarSearch(
 		start, model, threshold,
@@ -122,7 +158,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	)
 }
 
-func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32) (
+func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, model, scopeNamespace string) (
 	bestIndex int,
 	bestEntry CacheEntry,
 	bestSimilarity float32,
@@ -133,9 +169,9 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32) 
 	now := time.Now()
 	if c.useHNSW && c.hnswIndex != nil {
 		c.refreshHNSWIfStaleDuringSearch()
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, model, scopeNamespace, now)
 	} else {
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, model, scopeNamespace, now)
 	}
 	if bestIndex >= 0 {
 		bestEntry = c.entries[bestIndex]

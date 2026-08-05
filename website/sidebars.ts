@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/ollama',
         'installation/k8s/operator',
         'installation/configuration',
         'installation/native-backends',
@@ -84,6 +85,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/event',
+                'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
               ],
             },
@@ -91,6 +93,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Learned',
               items: [
+                'tutorials/signal/learned/classifier',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -140,17 +143,14 @@ const sidebars: SidebarsConfig = {
               label: 'Selection',
               items: [
                 'tutorials/algorithm/selection/automix',
-                'tutorials/algorithm/selection/elo',
-                'tutorials/algorithm/selection/gmtrouter',
                 'tutorials/algorithm/selection/hybrid',
                 'tutorials/algorithm/selection/kmeans',
                 'tutorials/algorithm/selection/knn',
                 'tutorials/algorithm/selection/latency-aware',
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
-                'tutorials/algorithm/selection/rl-driven',
+                'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/router-dc',
-                'tutorials/algorithm/selection/session-aware',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
               ],
@@ -160,10 +160,24 @@ const sidebars: SidebarsConfig = {
               label: 'Looper',
               items: [
                 'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
+                'tutorials/algorithm/looper/workflows',
               ],
             },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Learning',
+          items: [
+            'tutorials/learning/overview',
+            'tutorials/learning/adaptations',
+            'tutorials/learning/protection',
+            'tutorials/learning/memory-and-replay',
+            'tutorials/learning/decision-adaptations',
+            'tutorials/learning/experience',
           ],
         },
         {
@@ -210,9 +224,11 @@ const sidebars: SidebarsConfig = {
           label: 'Global',
           items: [
             'tutorials/global/overview',
+            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
+            'tutorials/global/remote-embeddings',
           ],
         },
       ],
@@ -238,7 +254,9 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/batch-and-capacity-aware-routing',
         'proposals/unified-config-contract-v0-3',
+        'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
@@ -256,6 +274,13 @@ const sidebars: SidebarsConfig = {
         'training/training-overview',
         'training/model-performance-eval',
         'training/ml-model-selection',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Benchmarking',
+      items: [
+        'benchmarking/overview',
       ],
     },
     {

@@ -3,7 +3,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 72px);
   overflow: hidden;
 }
 
@@ -187,8 +187,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ===== Main Content Area ===== */
@@ -223,7 +228,7 @@
 
 .resizeHandle:hover,
 .resizeHandle:active {
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
 }
 
 .resizeHandleLine {
@@ -231,7 +236,9 @@
   height: 32px;
   border-radius: 1px;
   background: var(--color-border);
-  transition: background var(--transition-fast), height var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    height var(--transition-fast);
 }
 
 .resizeHandle:hover .resizeHandleLine,
@@ -257,7 +264,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: #050505;
   border-left: 1px solid var(--color-border);
   overflow: hidden;
   min-width: 200px;
@@ -388,7 +395,7 @@
 
 .toolbarBtnActive {
   composes: toolbarBtn;
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary);
   border-color: var(--color-primary);
 }
@@ -420,6 +427,7 @@
   flex-direction: column;
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.2);
   animation: slideInRight 0.25s ease;
+  outline: none;
 }
 
 .guideDrawerResizeHandle {
@@ -438,7 +446,7 @@
 
 .guideDrawerResizeHandle:hover,
 .guideDrawerResizeHandle:active {
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
 }
 
 .guideDrawerResizeLine {
@@ -446,7 +454,9 @@
   height: 32px;
   border-radius: 1px;
   background: var(--color-border);
-  transition: background var(--transition-fast), height var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    height var(--transition-fast);
 }
 
 .guideDrawerResizeHandle:hover .guideDrawerResizeLine,
@@ -456,13 +466,21 @@
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .guideDrawerHeader {
@@ -482,6 +500,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text);
+  margin: 0;
 }
 
 .guideDrawerClose {
@@ -562,7 +581,7 @@
 
 .sidebarHomeActive {
   composes: sidebarHome;
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-primary);
   border-left: 2px solid var(--color-primary);
 }
@@ -608,7 +627,7 @@
   font-size: 0.6875rem;
   padding: 0.125rem 0.375rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary);
   font-weight: 600;
 }
@@ -651,7 +670,7 @@
 
 .sidebarItemActive {
   composes: sidebarItem;
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
   border-left: 2px solid var(--color-primary);
 }
@@ -694,7 +713,7 @@
 }
 
 .sidebarAddBtn:hover {
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 /* Right panel: editor / detail view */
@@ -786,7 +805,7 @@
 
 .statCard:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(143, 148, 156, 0.1);
 }
 
 .statLabel {
@@ -876,9 +895,9 @@
 
 .quickActionBtn:hover {
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   color: var(--color-primary);
-  box-shadow: 0 2px 12px rgba(118, 185, 0, 0.12);
+  box-shadow: 0 2px 12px rgba(143, 148, 156, 0.12);
   transform: translateY(-1px);
 }
 
@@ -894,7 +913,7 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   color: var(--color-primary);
   font-weight: 700;
   font-size: 1.125rem;
@@ -940,7 +959,7 @@
 }
 
 .routeMapBranch:hover {
-  background: rgba(118, 185, 0, 0.04);
+  background: rgba(143, 148, 156, 0.04);
 }
 
 .routeMapCondition {
@@ -1136,7 +1155,7 @@
 
 .dashModeBtn:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(118, 185, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(143, 148, 156, 0.1);
 }
 
 .dashModeBtnIcon {
@@ -1189,7 +1208,7 @@
 .backBtn:hover {
   color: var(--color-primary);
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .editorTitle {
@@ -1205,7 +1224,7 @@
   font-size: 0.6875rem;
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary);
   font-weight: 600;
   font-family: var(--font-mono);
@@ -1245,7 +1264,7 @@
 .fieldInput:focus {
   border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.2);
 }
 
 .fieldSelect {
@@ -1271,7 +1290,9 @@
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   font-family: var(--font-mono);
   cursor: pointer;
   user-select: none;
@@ -1285,7 +1306,7 @@
 .customSelectTriggerOpen {
   composes: customSelectTrigger;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.2);
 }
 
 .customSelectChevron {
@@ -1307,7 +1328,9 @@
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.3);
   padding: 4px;
 }
 
@@ -1326,18 +1349,18 @@
 }
 
 .customSelectOption:hover {
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
   color: var(--color-text);
 }
 
 .customSelectOptionActive {
   composes: customSelectOption;
   color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
 }
 
 .customSelectOptionActive:hover {
-  background: rgba(118, 185, 0, 0.18);
+  background: rgba(143, 148, 156, 0.18);
 }
 
 .customSelectCheck {
@@ -1356,6 +1379,202 @@
   composes: fieldInput;
   min-height: 80px;
   resize: vertical;
+}
+
+/* ===== Schema-driven structured fields ===== */
+
+.structuredFieldHeader,
+.structuredCardHeader,
+.ruleConditionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.structuredRequired {
+  color: var(--color-danger);
+}
+
+.structuredDescription,
+.structuredEmpty,
+.structuredInlineError {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.structuredDescription,
+.structuredEmpty {
+  color: var(--color-text-muted);
+}
+
+.structuredInlineError {
+  color: var(--color-danger);
+}
+
+.structuredSurface,
+.ruleNode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.structuredList,
+.structuredCardBody,
+.ruleConditions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.structuredCard,
+.ruleCondition {
+  padding: var(--spacing-md);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.structuredCardHeader,
+.ruleConditionHeader {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.structuredCardHeader > div {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.structuredCardHeader h4 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structuredIndex {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+}
+
+.structuredClearButton,
+.structuredRemoveButton,
+.structuredAddButton {
+  min-height: 32px;
+  padding: 0.35rem 0.65rem;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.structuredClearButton,
+.structuredRemoveButton {
+  color: var(--color-danger);
+}
+
+.structuredAddButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 0.4rem;
+  margin-top: var(--spacing-sm);
+  border-style: dashed;
+}
+
+.structuredClearButton:hover:not(:disabled),
+.structuredRemoveButton:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(248, 113, 113, 0.36);
+}
+
+.structuredAddButton:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--color-border-hover);
+}
+
+.structuredClearButton:disabled,
+.structuredRemoveButton:disabled,
+.structuredAddButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.structuredClearButton:focus-visible,
+.structuredRemoveButton:focus-visible,
+.structuredAddButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.structuredErrors {
+  margin: 0 0 var(--spacing-md);
+  padding-left: 1.1rem;
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.structuredMiniLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ruleNode[data-depth='0'] {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.ruleNode:not([data-depth='0']) {
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.ruleLeafGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.ruleConditionHeader {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .ruleLeafGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Expression Builder ===== */
@@ -1420,7 +1639,7 @@
 
 .exprChip:hover {
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .exprChipType {
@@ -1453,7 +1672,7 @@
 .exprOpBtn:hover {
   color: var(--color-primary);
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .exprOpBtnDanger {
@@ -1487,7 +1706,7 @@
 .modelDropdownBtn:hover {
   color: var(--color-primary);
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 /* ===== Model Card ===== */
@@ -1520,7 +1739,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
   color: var(--color-primary);
   font-size: 0.625rem;
   font-weight: 700;
@@ -1589,11 +1808,11 @@
 .pluginToggleActive {
   composes: pluginToggle;
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
 }
 
 .pluginToggleActive:hover {
-  background: rgba(118, 185, 0, 0.15);
+  background: rgba(143, 148, 156, 0.15);
 }
 
 .pluginToggleCheck {
@@ -1772,8 +1991,16 @@
 }
 
 .emptyIcon {
-  font-size: 2rem;
-  opacity: 0.5;
+  width: 2rem;
+  height: 2rem;
+  color: var(--brand-amd);
+  opacity: 0.78;
+}
+
+.emptyIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ===== WASM loading overlay ===== */
@@ -1802,7 +2029,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== Responsive ===== */
@@ -1851,6 +2080,7 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  outline: none;
 }
 
 .modalHeader {
@@ -2141,15 +2371,15 @@
   font-size: 0.625rem;
   font-weight: 600;
   color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.12);
-  border: 1px solid rgba(118, 185, 0, 0.3);
+  background: rgba(143, 148, 156, 0.12);
+  border: 1px solid rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .valFixBtn:hover {
-  background: rgba(118, 185, 0, 0.25);
+  background: rgba(143, 148, 156, 0.25);
   border-color: var(--color-primary);
   color: #fff;
 }
@@ -2209,7 +2439,7 @@
   color: var(--color-text-muted);
 }
 
-.gsSectionChevron[data-open="true"] {
+.gsSectionChevron[data-open='true'] {
   transform: rotate(90deg);
 }
 
@@ -2266,7 +2496,7 @@
   cursor: pointer;
 }
 
-.gsRadio input[type="radio"] {
+.gsRadio input[type='radio'] {
   accent-color: var(--color-primary);
   margin: 0;
   cursor: pointer;
@@ -2282,7 +2512,7 @@
   cursor: pointer;
 }
 
-.gsCheckbox input[type="checkbox"] {
+.gsCheckbox input[type='checkbox'] {
   accent-color: var(--color-primary);
   margin: 0;
   cursor: pointer;
@@ -2339,7 +2569,7 @@
   font-weight: 700;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
   color: var(--color-primary);
   margin-left: auto;
 }
@@ -2446,6 +2676,12 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  outline: none;
+}
+
+.deployModalTitle {
+  margin: 0;
+  font: inherit;
 }
 
 .deployDiffBody {
@@ -2506,7 +2742,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .deployModalHeader {
@@ -2562,7 +2800,10 @@
   background: var(--color-bg-secondary);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .deployDiffNavBtn:hover {

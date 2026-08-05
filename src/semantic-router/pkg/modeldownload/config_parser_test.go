@@ -138,46 +138,40 @@ func TestIsModelDirectory(t *testing.T) {
 }
 
 func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http-8888
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: openai/gpt-oss-120b
-  models:
-    - name: openai/gpt-oss-120b
-      provider_model_id: openai/gpt-oss-120b
-      backend_refs:
-        - name: primary
-          endpoint: localhost:8000
-          protocol: http
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
-      modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      algorithm:
-        type: gmtrouter
-        gmtrouter:
-          model_path: models/gmtrouter.pt
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
-`))
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: "default-route",
+					Algorithm: &config.AlgorithmConfig{
+						GMTRouter: &config.GMTRouterSelectionConfig{
+							ModelPath: "models/gmtrouter.pt",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/gmtrouter.pt") {
 		t.Fatalf("ExtractModelPaths() unexpectedly included root-level model file: %v", got)
+	}
+}
+
+func TestExtractModelPathsIncludesLocalClassifierSignals(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk-classifier",
+				Labels:    []string{"SAFE", "RISKY"},
+			}}},
+		},
+	}
+
+	if got := ExtractModelPaths(cfg); !slices.Contains(got, "models/risk-classifier") {
+		t.Fatalf("ExtractModelPaths() = %v, want local classifier model path", got)
 	}
 }
 
@@ -624,7 +618,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatal("failed to resolve amd config path")
 	}
 
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/recipes/balance/config.yaml"))
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", configPath, err)

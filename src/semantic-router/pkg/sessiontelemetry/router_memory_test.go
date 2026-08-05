@@ -28,6 +28,7 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 		Model:                       "small",
 		PromptTokens:                1000,
 		CachedPromptTokens:          250,
+		CacheWriteTokens:            125,
 		EstimatedCachedPromptTokens: 500,
 		CompletionTokens:            300,
 		Cost:                        0.002,
@@ -56,6 +57,9 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 	}
 	if snapshot.CumulativeCachedTokens != 250 {
 		t.Fatalf("cached tokens = %d, want 250", snapshot.CumulativeCachedTokens)
+	}
+	if snapshot.CumulativeCacheWriteTokens != 125 {
+		t.Fatalf("cache-write tokens = %d, want 125", snapshot.CumulativeCacheWriteTokens)
 	}
 	if snapshot.CumulativeEstimatedCachedTokens != 500 {
 		t.Fatalf("estimated cached tokens = %d, want 500", snapshot.CumulativeEstimatedCachedTokens)

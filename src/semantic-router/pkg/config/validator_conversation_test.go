@@ -24,6 +24,19 @@ func TestValidateConversationRuleContract_ValidRule(t *testing.T) {
 	}
 }
 
+func TestValidateConversationRuleContract_ActiveToolLoopSource(t *testing.T) {
+	rule := ConversationRule{
+		Name: "active_tool_loop",
+		Feature: ConversationFeature{
+			Type:   "exists",
+			Source: ConversationSource{Type: "active_tool_loop"},
+		},
+	}
+	if err := ValidateConversationRuleContract(rule); err != nil {
+		t.Fatalf("expected active_tool_loop source to pass, got: %v", err)
+	}
+}
+
 func TestValidateConversationRuleContract_EmptyName(t *testing.T) {
 	rule := validConversationRule()
 	rule.Name = ""

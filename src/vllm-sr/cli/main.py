@@ -6,8 +6,9 @@ import click
 
 from cli import __version__
 from cli.commands.chat import chat
+from cli.commands.completion import completion
 from cli.commands.eval import eval
-from cli.commands.general import config, model, validate
+from cli.commands.general import config, model, rag, validate
 from cli.commands.runtime import dashboard, logs, serve, status, stop
 
 logo = r"""
@@ -25,12 +26,14 @@ REGISTERED_COMMANDS = (
     config,
     validate,
     model,
+    rag,
     eval,
     status,
     logs,
     stop,
     dashboard,
     chat,
+    completion,
 )
 
 

@@ -20,9 +20,10 @@ $button-border-radius: 8px;
   pointer-events: all;
   border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(20, 30, 58, 0.12);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+  background: var(--wiz-surface-glass);
+  border: 1px solid var(--wiz-border-strong);
+  box-shadow: var(--wiz-shadow);
+  backdrop-filter: blur(16px);
 }
 
 .selected-point-header {
@@ -31,8 +32,10 @@ $button-border-radius: 8px;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.75rem;
-  background: rgba(26, 31, 43, 0.94);
-  color: #ffffff;
+  border-top: 2px solid rgba(227, 27, 35, 0.72);
+  background: linear-gradient(90deg, var(--wiz-brand-soft), transparent 55%),
+    var(--wiz-surface-raised);
+  color: var(--wiz-text-primary);
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -46,12 +49,13 @@ $button-border-radius: 8px;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: inherit;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--wiz-brand-soft);
+    color: var(--wiz-brand-bright);
   }
 }
 
@@ -63,15 +67,15 @@ $button-border-radius: 8px;
 
 .selected-point-label {
   padding: 0.8rem 0.7rem;
-  border-right: 1px solid rgba(20, 30, 58, 0.08);
-  color: $gray-600;
+  border-right: 1px solid var(--wiz-border);
+  color: var(--wiz-text-muted);
   font-size: 0.82rem;
   text-transform: lowercase;
 }
 
 .selected-point-value {
   padding: 0.8rem 0.9rem;
-  color: $gray-900;
+  color: var(--wiz-text-primary);
   line-height: 1.45;
   max-height: 220px;
   overflow: auto;
@@ -113,7 +117,7 @@ $search-bar-gap: 8px;
   position: absolute;
   top: $search-h-margin;
   left: $search-h-margin;
-  color: $gray-600;
+  color: var(--wiz-text-secondary);
 
   display: flex;
   flex-direction: row;
@@ -123,21 +127,22 @@ $search-bar-gap: 8px;
 
   padding: 0 $search-bar-h-padding;
   border-radius: 12px;
-  border: 1px solid rgba(20, 30, 58, 0.08);
-  background-color: change-color($color: white, $alpha: 1);
-  transition: box-shadow 150ms ease-in-out;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--wiz-border-strong);
+  background: var(--wiz-surface-glass);
+  transition: border-color 150ms ease-in-out, box-shadow 150ms ease-in-out;
+  box-shadow: var(--wiz-shadow);
+  backdrop-filter: blur(16px);
 
   &.focused {
-    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
-  }
-
-  &:focus {
-    background-color: red;
+    border-color: rgba(227, 27, 35, 0.62);
+    box-shadow: 0 0 0 3px var(--wiz-brand-soft), var(--wiz-shadow);
   }
 
   #search-bar-input {
     border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wiz-text-primary);
     margin: $search-bar-v-padding 0;
     width: $search-input-width;
     height: $search-input-height;
@@ -148,13 +153,18 @@ $search-bar-gap: 8px;
     }
 
     &::placeholder {
-      color: $gray-700;
+      color: var(--wiz-text-muted);
     }
   }
 
   .logo-icon {
     width: $logo-icon-width;
     height: $logo-icon-width;
+    color: var(--wiz-brand-bright);
+
+    :global(path) {
+      fill: currentColor !important;
+    }
   }
 
   .end-button {
@@ -189,17 +199,17 @@ $search-bar-gap: 8px;
       top: 50%;
       transform: translate(-50%, -50%);
 
-      color: $gray-500;
+      color: var(--wiz-text-muted);
       transition: color 150ms ease-in-out, opacity 150ms ease-in-out;
       opacity: 1;
       cursor: default;
 
       &:hover {
-        color: adjust-color($color: $gray-500, $lightness: -10%);
+        color: var(--wiz-text-primary);
       }
 
       &:active {
-        color: adjust-color($color: $gray-500, $lightness: 10%);
+        color: var(--wiz-brand-bright);
       }
 
       &.hidden {
@@ -218,9 +228,11 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
   display: flex;
   flex-direction: column;
 
-  background: white;
-  box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.2),
-    0 2px 6px 2px hsla(0, 0%, 0%, 0.08);
+  border-right: 1px solid var(--wiz-border);
+  background: rgba(9, 9, 10, 0.96);
+  box-shadow: 20px 0 44px rgba(0, 0, 0, 0.42);
+  color: var(--wiz-text-secondary);
+  backdrop-filter: blur(16px);
 
   height: 100%;
   width: $search-panel-width;
@@ -236,13 +248,40 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
   }
 }
 
+@media (max-width: 360px) {
+  .search-bar {
+    right: $search-h-margin;
+
+    #search-bar-input {
+      width: calc(100vw - 104px);
+      min-width: 0;
+    }
+  }
+
+  .search-list-container {
+    width: 100vw;
+  }
+}
+
+@media (min-width: 521px) and (max-width: 960px) {
+  .selected-point-card {
+    top: 116px;
+  }
+}
+
+@media (max-width: 520px) {
+  .selected-point-card {
+    top: 164px;
+  }
+}
+
 .search-list {
   height: 100%;
   padding: 0;
   margin-top: $search-input-height + $search-bar-v-padding * 2 +
     $search-h-margin;
 
-  background-color: white;
+  background: transparent;
   overflow-y: hidden;
 
   display: flex;
@@ -255,7 +294,7 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
     width: 100%;
     flex-shrink: 0;
 
-    background: $gray-300;
+    background: var(--wiz-border-strong);
     opacity: 1;
     box-shadow: 0 1px 1px hsla(0, 0%, 0%, 0.05), 0 1px 2px hsla(0, 0%, 0%, 0.05);
     transition: opacity 300ms ease-in-out, box-shadow 300ms ease-in-out;
@@ -282,7 +321,7 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       line-height: 1.2;
       width: 100%;
       padding: 5px ($search-h-margin + $search-bar-h-padding);
-      border-bottom: 1px solid $gray-200;
+      border-bottom: 1px solid var(--wiz-border);
       cursor: default;
       padding-bottom: 3px;
 
@@ -296,11 +335,12 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       }
 
       &:hover {
-        background-color: change-color($color: $blue-100, $lightness: 96%);
+        background: var(--wiz-surface-raised);
+        color: var(--wiz-text-primary);
       }
 
       :global(em) {
-        color: $blue-500;
+        color: var(--wiz-brand-bright);
         font-style: normal;
         font-weight: 600;
       }
@@ -311,7 +351,7 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       line-height: 1;
       width: 100%;
       padding: 5px ($search-h-margin + $search-bar-h-padding);
-      color: $gray-500;
+      color: var(--wiz-text-muted);
     }
 
     .add-more-button {
@@ -324,20 +364,20 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
       justify-content: center;
       align-items: center;
 
-      color: $blue-700;
-      background-color: $gray-100;
+      color: var(--wiz-text-primary);
+      background: var(--wiz-surface-raised);
 
       user-select: none;
       -webkit-user-select: none;
       transition: color 150ms ease-in-out, background-color 150ms ease-in-out;
 
       &:hover {
-        background-color: $gray-200;
-        color: $blue-600;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--wiz-brand-bright);
       }
 
       &:active {
-        color: $blue-800;
+        color: #ffffff;
       }
 
       &.hidden {
@@ -363,9 +403,10 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
     align-items: center;
     gap: 5px;
 
-    background-color: white;
-    box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.25),
-      0 1px 3px 1px hsla(0, 0%, 0%, 0.1);
+    border: 1px solid var(--wiz-border-strong);
+    background: var(--wiz-surface-glass);
+    box-shadow: var(--wiz-shadow);
+    color: var(--wiz-text-secondary);
     border-radius: 8px;
     padding: 4px 8px;
     opacity: 1;
@@ -375,7 +416,7 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
     .svg-icon {
       width: 16px;
       height: 16px;
-      color: $gray-700;
+      color: currentColor;
     }
 
     &.hidden {
@@ -384,11 +425,13 @@ $search-panel-width: $search-input-width + $search-bar-gap * 2 +
     }
 
     &:hover {
-      background-color: $gray-100;
+      background: var(--wiz-surface-raised);
+      color: var(--wiz-text-primary);
     }
 
     &:active {
-      background-color: $gray-200;
+      background: var(--wiz-brand-soft);
+      color: var(--wiz-brand-bright);
     }
   }
 }

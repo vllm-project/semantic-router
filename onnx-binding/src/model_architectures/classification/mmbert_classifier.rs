@@ -167,7 +167,7 @@ impl MmBertClassifierConfig {
 /// Execution provider preference
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ClassifierExecutionProvider {
-    /// Automatic selection (ROCm > CUDA > OpenVINO > CPU)
+    /// Automatic selection (ROCm > CUDA > CPU; OpenVINO requires an explicit `OpenVino` request)
     Auto,
     /// Force CPU
     Cpu,
@@ -429,6 +429,49 @@ impl MmBertSequenceClassifier {
                         println!(
                             "WARNING: ROCm requested but 'rocm' feature not enabled, using CPU"
                         );
+                    }
+                }
+
+                // Auto selection priority is ROCm > CUDA > CPU. OpenVINO is not
+                // part of the Auto chain; it is only used for an explicit
+                // `OpenVino` request. On a CUDA build the ROCm block above is
+                // compiled out, so Auto must also try CUDA here before falling
+                // back to CPU. Without this,
+                // Auto silently ran every classifier (PII, jailbreak, intent,
+                // factcheck) on CPU even on NVIDIA GPUs, because the dedicated
+                // CUDA arm below is only reached for an explicit `Cuda` request.
+                // Gated to `Auto` so an explicit `Rocm` request on a CUDA build
+                // still falls through to CPU rather than silently using NVIDIA.
+                #[cfg(feature = "cuda")]
+                {
+                    if matches!(provider, ClassifierExecutionProvider::Auto) {
+                        use crate::core::gpu_memory;
+                        use ort::execution_providers::{
+                            ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
+                        };
+                        let mem_limit = gpu_memory::get_gpu_mem_limit();
+                        match Session::builder()
+                            .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
+                            .with_execution_providers([CUDAExecutionProvider::default()
+                                .with_memory_limit(mem_limit)
+                                .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
+                                .build()
+                                .error_on_failure()])
+                            .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
+                        {
+                            Ok(session) => {
+                                println!(
+                                    "INFO: Using CUDA execution provider (NVIDIA GPU) — verified"
+                                );
+                                return Ok(session);
+                            }
+                            Err(e) => {
+                                println!(
+                                    "WARNING: CUDA EP failed: {}, falling back to CPU",
+                                    e
+                                );
+                            }
+                        }
                     }
                 }
 

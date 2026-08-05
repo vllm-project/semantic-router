@@ -1,3 +1,5 @@
+"""Validate the distributed CLI config template."""
+
 import sys
 import unittest
 from pathlib import Path

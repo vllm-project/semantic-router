@@ -108,16 +108,25 @@ algorithm:
 | `require_descriptions` | bool | `false` | Require all models to have descriptions |
 | `use_capabilities` | bool | `true` | Include capability tags in embedding text |
 
-## Feedback
+## Outcome Feedback
 
-Router-DC supports `UpdateFeedback()` for online affinity updates. When feedback arrives, the query-model affinity matrix is updated to reflect observed preferences:
+Use the Router Learning outcome endpoint to record replay-linked feedback for
+offline analysis and learning diagnostics. The router response includes
+`x-vsr-replay-id`; send that value back with the model outcome:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/feedback \
+curl -X POST http://localhost:8000/v1/router/outcomes \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "Write a Python function to sort a list",
-    "winner_model": "codellama-7b",
-    "decision_name": "coding"
+    "replay_id": "replay_01J...",
+    "source": "user",
+    "target": "model",
+    "target_ref": "codellama-7b",
+    "verdict": "good_fit",
+    "reason": "good_code_response",
+    "score": 1.0,
+    "metadata": {
+      "decision": "coding"
+    }
   }'
 ```

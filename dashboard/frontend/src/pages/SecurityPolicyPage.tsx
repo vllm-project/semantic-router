@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { StringListEditor } from '../components/StringListEditor'
+import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
+import { canManageSecurity } from '../utils/accessControl'
+import styles from './SecurityPolicyPage.module.css'
 
 interface Subject {
   kind: string
@@ -40,13 +45,16 @@ const emptyPolicy: SecurityPolicy = {
 }
 
 const SecurityPolicyPage: React.FC = () => {
+  const { user, isLoading: authLoading } = useAuth()
+  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const permissionsLoading = authLoading || readonlyLoading
+  const canManage = !permissionsLoading && !isReadonly && canManageSecurity(user)
   const [policy, setPolicy] = useState<SecurityPolicy>(emptyPolicy)
   const [fragment, setFragment] = useState<GeneratedFragment | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [modelInputs, setModelInputs] = useState<Record<number, string>>({})
 
   const fetchPolicy = useCallback(async () => {
     try {
@@ -55,11 +63,11 @@ const SecurityPolicyPage: React.FC = () => {
       if (!res.ok) throw new Error(`Failed to load policy: ${res.statusText}`)
       const data = await res.json()
       if (data.rate_tiers) {
-        data.rate_tiers = data.rate_tiers.map((t: RateLimitTier) => ({
-          ...t,
-          group: t.group ?? '',
-          user: t.user ?? '',
-          tpm: t.tpm ?? 0,
+        data.rate_tiers = data.rate_tiers.map((tier: RateLimitTier) => ({
+          ...tier,
+          group: tier.group ?? '',
+          user: tier.user ?? '',
+          tpm: tier.tpm ?? 0,
         }))
       }
       setPolicy(data)
@@ -75,6 +83,7 @@ const SecurityPolicyPage: React.FC = () => {
   }, [fetchPolicy])
 
   const handleSave = async () => {
+    if (!canManage) return
     try {
       setSaving(true)
       setError(null)
@@ -86,9 +95,16 @@ const SecurityPolicyPage: React.FC = () => {
       })
       if (!res.ok) {
         const text = await res.text()
-        let msg = `Failed to save policy (${res.status})`
-        try { msg = JSON.parse(text).error || msg } catch { msg = res.status === 403 ? 'Permission denied. Only admins can modify the security policy.' : msg }
-        throw new Error(msg)
+        let message = `Failed to save policy (${res.status})`
+        try {
+          message = JSON.parse(text).error || message
+        } catch {
+          message =
+            res.status === 403
+              ? 'Permission denied. Only admins can modify the security policy.'
+              : message
+        }
+        throw new Error(message)
       }
       const data = await res.json()
       setPolicy(data.policy)
@@ -102,6 +118,7 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const handlePreview = async () => {
+    if (!canManage) return
     try {
       setError(null)
       const res = await fetch('/api/security/policy/preview', {
@@ -118,44 +135,48 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const addRoleMapping = () => {
-    setPolicy((prev) => ({
-      ...prev,
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
       role_mappings: [
-        ...prev.role_mappings,
+        ...previous.role_mappings,
         {
-          name: `role-mapping-${prev.role_mappings.length + 1}`,
+          name: `role-mapping-${previous.role_mappings.length + 1}`,
           subjects: [{ kind: 'Group', name: '' }],
           role: '',
           model_refs: [],
-          priority: (prev.role_mappings.length + 1) * 10,
+          priority: (previous.role_mappings.length + 1) * 10,
         },
       ],
     }))
   }
 
   const removeRoleMapping = (index: number) => {
-    setPolicy((prev) => ({
-      ...prev,
-      role_mappings: prev.role_mappings.filter((_, i) => i !== index),
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
+      role_mappings: previous.role_mappings.filter((_, itemIndex) => itemIndex !== index),
     }))
   }
 
   const updateRoleMapping = (index: number, field: string, value: unknown) => {
-    setPolicy((prev) => ({
-      ...prev,
-      role_mappings: prev.role_mappings.map((m, i) =>
-        i === index ? { ...m, [field]: value } : m
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
+      role_mappings: previous.role_mappings.map((mapping, itemIndex) =>
+        itemIndex === index ? { ...mapping, [field]: value } : mapping,
       ),
     }))
   }
 
   const addRateTier = () => {
-    setPolicy((prev) => ({
-      ...prev,
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
       rate_tiers: [
-        ...prev.rate_tiers,
+        ...previous.rate_tiers,
         {
-          name: `tier-${prev.rate_tiers.length + 1}`,
+          name: `tier-${previous.rate_tiers.length + 1}`,
           group: '',
           user: '',
           rpm: 60,
@@ -166,261 +187,306 @@ const SecurityPolicyPage: React.FC = () => {
   }
 
   const removeRateTier = (index: number) => {
-    setPolicy((prev) => ({
-      ...prev,
-      rate_tiers: prev.rate_tiers.filter((_, i) => i !== index),
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
+      rate_tiers: previous.rate_tiers.filter((_, itemIndex) => itemIndex !== index),
     }))
   }
 
   const updateRateTier = (index: number, field: string, value: unknown) => {
-    setPolicy((prev) => ({
-      ...prev,
-      rate_tiers: prev.rate_tiers.map((t, i) =>
-        i === index ? { ...t, [field]: value } : t
+    if (!canManage) return
+    setPolicy((previous) => ({
+      ...previous,
+      rate_tiers: previous.rate_tiers.map((tier, itemIndex) =>
+        itemIndex === index ? { ...tier, [field]: value } : tier,
       ),
     }))
   }
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <p style={{ color: 'var(--color-text-secondary)' }}>Loading security policy...</p>
+      <div className={styles.loading} role="status" aria-live="polite">
+        <span className={styles.loadingIndicator} aria-hidden="true" />
+        <p>Loading security policy...</p>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-          Security Policy
-        </h1>
-        <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-          Map RBAC roles and groups to model access policies and rate-limit tiers.
-          Changes here generate router config fragments that must be applied to take effect.
+    <main className={styles.page}>
+      <header className={styles.hero}>
+        <p className={styles.eyebrow}>Access control</p>
+        <h1>Security Policy</h1>
+        <p className={styles.intro}>
+          Map RBAC roles and groups to model access policies and rate-limit tiers. Changes generate
+          router config fragments that must be applied to take effect.
         </p>
-      </div>
+      </header>
 
-      {error && (
-        <div
-          style={{
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            borderRadius: '0.5rem',
-            background: 'rgba(255, 60, 60, 0.1)',
-            border: '1px solid rgba(255, 60, 60, 0.3)',
-            color: '#ff6b6b',
-          }}
-        >
+      {!permissionsLoading && !canManage ? (
+        <div className={styles.readOnlyNotice} role="status">
+          <strong>View-only access.</strong>{' '}
+          {isReadonly ? (
+            <>This dashboard deployment is in read-only mode, so security changes are disabled.</>
+          ) : (
+            <>
+              You can review security policy mappings and rate limits, but the{' '}
+              <code>security.manage</code> permission is required to change them.
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className={`${styles.notice} ${styles.errorNotice}`} role="alert">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {success && (
+      {success ? (
         <div
-          style={{
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            borderRadius: '0.5rem',
-            background: 'rgba(118, 185, 0, 0.1)',
-            border: '1px solid rgba(118, 185, 0, 0.3)',
-            color: '#76b900',
-          }}
+          className={`${styles.notice} ${styles.successNotice}`}
+          role="status"
+          aria-live="polite"
         >
           {success}
         </div>
-      )}
+      ) : null}
 
-      {/* Role Mappings Section */}
-      <section style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Role-to-Model Mappings</h2>
-          <button
-            onClick={addRoleMapping}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              background: 'var(--color-primary)',
-              color: '#081000',
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            + Add Mapping
-          </button>
+      <section className={styles.section} aria-labelledby="role-mappings-heading">
+        <div className={styles.sectionHeader}>
+          <div>
+            <p className={styles.sectionKicker}>Policy routing</p>
+            <h2 id="role-mappings-heading">Role-to-Model Mappings</h2>
+            <p>Bind users or groups to router roles and an explicit model allowlist.</p>
+          </div>
+          {canManage ? (
+            <button type="button" className={styles.primaryButton} onClick={addRoleMapping}>
+              <span aria-hidden="true">+</span> Add Mapping
+            </button>
+          ) : null}
         </div>
 
         {policy.role_mappings.length === 0 ? (
-          <div style={{
-            padding: '2rem',
-            textAlign: 'center',
-            borderRadius: '0.75rem',
-            border: '1px dashed var(--color-border)',
-            color: 'var(--color-text-secondary)',
-          }}>
-            No role mappings configured. Click "Add Mapping" to define role-to-model access policies.
+          <div className={styles.emptyState}>
+            {canManage
+              ? 'No role mappings configured. Add a mapping to define model access.'
+              : 'No role mappings configured.'}
           </div>
         ) : (
-          policy.role_mappings.map((mapping, index) => (
-            <div
-              key={index}
-              style={{
-                padding: '1.25rem',
-                marginBottom: '0.75rem',
-                borderRadius: '0.75rem',
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-bg-secondary)',
-              }}
-            >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Name</label>
-                  <input
-                    value={mapping.name}
-                    onChange={(e) => updateRoleMapping(index, 'name', e.target.value)}
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Router Role</label>
-                  <input
-                    value={mapping.role}
-                    onChange={(e) => updateRoleMapping(index, 'role', e.target.value)}
-                    placeholder="e.g., premium_tier"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Models (comma-separated)</label>
-                  <input
-                    value={modelInputs[index] ?? mapping.model_refs.join(', ')}
-                    onChange={(e) => setModelInputs((prev) => ({ ...prev, [index]: e.target.value }))}
-                    onBlur={(e) => {
-                      updateRoleMapping(
-                        index,
-                        'model_refs',
-                        e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-                      )
-                      setModelInputs((prev) => { const next = { ...prev }; delete next[index]; return next })
-                    }}
-                    placeholder="e.g., gpt-4, claude-3"
-                    style={inputStyle}
-                  />
-                </div>
-                <button
-                  onClick={() => removeRoleMapping(index)}
-                  style={{ padding: '0.5rem', background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '1.1rem' }}
-                  title="Remove"
-                >
-                  x
-                </button>
-              </div>
-              <div style={{ marginTop: '0.5rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-                  Subjects (groups/users)
-                </label>
-                {mapping.subjects.map((subject, si) => (
-                  <div key={si} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                    <select
-                      value={subject.kind}
-                      onChange={(e) => {
-                        const newSubjects = [...mapping.subjects]
-                        newSubjects[si] = { ...subject, kind: e.target.value }
-                        updateRoleMapping(index, 'subjects', newSubjects)
-                      }}
-                      style={{ ...inputStyle, width: '100px' }}
-                    >
-                      <option value="Group">Group</option>
-                      <option value="User">User</option>
-                    </select>
+          <div className={styles.mappingList}>
+            {policy.role_mappings.map((mapping, index) => (
+              <article className={styles.mappingCard} data-testid="role-mapping-card" key={index}>
+                <div className={styles.mappingGrid}>
+                  <div className={styles.field}>
+                    <label htmlFor={`mapping-name-${index}`}>Name</label>
                     <input
-                      value={subject.name}
-                      onChange={(e) => {
-                        const newSubjects = [...mapping.subjects]
-                        newSubjects[si] = { ...subject, name: e.target.value }
-                        updateRoleMapping(index, 'subjects', newSubjects)
-                      }}
-                      placeholder="Group or user name"
-                      style={{ ...inputStyle, flex: 1 }}
+                      id={`mapping-name-${index}`}
+                      className={styles.input}
+                      value={mapping.name}
+                      onChange={(event) => updateRoleMapping(index, 'name', event.target.value)}
+                      readOnly={!canManage}
                     />
                   </div>
-                ))}
-              </div>
-            </div>
-          ))
+                  <div className={styles.field}>
+                    <label htmlFor={`mapping-role-${index}`}>Router Role</label>
+                    <input
+                      id={`mapping-role-${index}`}
+                      className={styles.input}
+                      value={mapping.role}
+                      onChange={(event) => updateRoleMapping(index, 'role', event.target.value)}
+                      placeholder="e.g., premium_tier"
+                      readOnly={!canManage}
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>Models</span>
+                    <StringListEditor
+                      value={mapping.model_refs}
+                      onChange={(value) => updateRoleMapping(index, 'model_refs', value)}
+                      addLabel="Add model"
+                      emptyLabel="No model allowlist configured."
+                      itemLabel="Model reference"
+                      placeholder="e.g., gpt-4"
+                      readOnly={!canManage}
+                    />
+                  </div>
+                  {canManage ? (
+                    <button
+                      type="button"
+                      className={styles.removeButton}
+                      onClick={() => removeRoleMapping(index)}
+                      aria-label={`Remove role mapping ${mapping.name || index + 1}`}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ) : null}
+                </div>
+
+                <fieldset className={styles.subjects}>
+                  <legend>Subjects (groups/users)</legend>
+                  {mapping.subjects.map((subject, subjectIndex) => (
+                    <div className={styles.subjectRow} key={subjectIndex}>
+                      <label
+                        className={styles.visuallyHidden}
+                        htmlFor={`subject-kind-${index}-${subjectIndex}`}
+                      >
+                        Subject type {subjectIndex + 1}
+                      </label>
+                      <select
+                        id={`subject-kind-${index}-${subjectIndex}`}
+                        className={`${styles.input} ${styles.subjectKind}`}
+                        value={subject.kind}
+                        onChange={(event) => {
+                          const newSubjects = [...mapping.subjects]
+                          newSubjects[subjectIndex] = { ...subject, kind: event.target.value }
+                          updateRoleMapping(index, 'subjects', newSubjects)
+                        }}
+                        disabled={!canManage}
+                      >
+                        <option value="Group">Group</option>
+                        <option value="User">User</option>
+                      </select>
+                      <label
+                        className={styles.visuallyHidden}
+                        htmlFor={`subject-name-${index}-${subjectIndex}`}
+                      >
+                        Subject name {subjectIndex + 1}
+                      </label>
+                      <input
+                        id={`subject-name-${index}-${subjectIndex}`}
+                        className={styles.input}
+                        value={subject.name}
+                        onChange={(event) => {
+                          const newSubjects = [...mapping.subjects]
+                          newSubjects[subjectIndex] = { ...subject, name: event.target.value }
+                          updateRoleMapping(index, 'subjects', newSubjects)
+                        }}
+                        placeholder="Group or user name"
+                        readOnly={!canManage}
+                      />
+                    </div>
+                  ))}
+                </fieldset>
+              </article>
+            ))}
+          </div>
         )}
       </section>
 
-      {/* Rate Limit Tiers Section */}
-      <section style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Rate Limit Tiers</h2>
-          <button
-            onClick={addRateTier}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              background: 'var(--color-primary)',
-              color: '#081000',
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            + Add Tier
-          </button>
+      <section className={styles.section} aria-labelledby="rate-tiers-heading">
+        <div className={styles.sectionHeader}>
+          <div>
+            <p className={styles.sectionKicker}>Traffic guardrails</p>
+            <h2 id="rate-tiers-heading">Rate Limit Tiers</h2>
+            <p>Set request and token budgets for a matching group or individual user.</p>
+          </div>
+          {canManage ? (
+            <button type="button" className={styles.primaryButton} onClick={addRateTier}>
+              <span aria-hidden="true">+</span> Add Tier
+            </button>
+          ) : null}
         </div>
 
         {policy.rate_tiers.length === 0 ? (
-          <div style={{
-            padding: '2rem',
-            textAlign: 'center',
-            borderRadius: '0.75rem',
-            border: '1px dashed var(--color-border)',
-            color: 'var(--color-text-secondary)',
-          }}>
-            No rate tiers configured. Click "Add Tier" to set per-role/group rate limits.
+          <div className={styles.emptyState}>
+            {canManage
+              ? 'No rate tiers configured. Add a tier to define traffic limits.'
+              : 'No rate tiers configured.'}
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div
+            className={styles.tableScroller}
+            data-testid="rate-tier-scroller"
+            role="region"
+            aria-label="Rate limit tiers table"
+            tabIndex={0}
+          >
+            <table className={styles.rateTable}>
+              <caption className={styles.visuallyHidden}>Configured rate limit tiers</caption>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Group</th>
-                  <th style={thStyle}>User</th>
-                  <th style={thStyle}>RPM</th>
-                  <th style={thStyle}>TPM</th>
-                  <th style={{ ...thStyle, width: 40 }}></th>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Group</th>
+                  <th scope="col">User</th>
+                  <th scope="col">RPM</th>
+                  <th scope="col">TPM</th>
+                  {canManage ? (
+                    <th scope="col">
+                      <span className={styles.visuallyHidden}>Actions</span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {policy.rate_tiers.map((tier, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={tdStyle}>
-                      <input value={tier.name} onChange={(e) => updateRateTier(index, 'name', e.target.value)} style={inputStyle} />
+                  <tr key={index}>
+                    <td>
+                      <input
+                        className={styles.input}
+                        aria-label={`Rate tier ${index + 1} name`}
+                        value={tier.name}
+                        onChange={(event) => updateRateTier(index, 'name', event.target.value)}
+                        readOnly={!canManage}
+                      />
                     </td>
-                    <td style={tdStyle}>
-                      <input value={tier.group} onChange={(e) => updateRateTier(index, 'group', e.target.value)} placeholder="*" style={inputStyle} />
+                    <td>
+                      <input
+                        className={styles.input}
+                        aria-label={`Rate tier ${index + 1} group`}
+                        value={tier.group}
+                        onChange={(event) => updateRateTier(index, 'group', event.target.value)}
+                        placeholder="*"
+                        readOnly={!canManage}
+                      />
                     </td>
-                    <td style={tdStyle}>
-                      <input value={tier.user} onChange={(e) => updateRateTier(index, 'user', e.target.value)} placeholder="*" style={inputStyle} />
+                    <td>
+                      <input
+                        className={styles.input}
+                        aria-label={`Rate tier ${index + 1} user`}
+                        value={tier.user}
+                        onChange={(event) => updateRateTier(index, 'user', event.target.value)}
+                        placeholder="*"
+                        readOnly={!canManage}
+                      />
                     </td>
-                    <td style={tdStyle}>
-                      <input type="number" value={tier.rpm} onChange={(e) => updateRateTier(index, 'rpm', parseInt(e.target.value) || 0)} style={{ ...inputStyle, width: 80 }} />
+                    <td>
+                      <input
+                        className={`${styles.input} ${styles.numberInput}`}
+                        aria-label={`Rate tier ${index + 1} requests per minute`}
+                        type="number"
+                        value={tier.rpm}
+                        onChange={(event) =>
+                          updateRateTier(index, 'rpm', parseInt(event.target.value) || 0)
+                        }
+                        readOnly={!canManage}
+                      />
                     </td>
-                    <td style={tdStyle}>
-                      <input type="number" value={tier.tpm} onChange={(e) => updateRateTier(index, 'tpm', parseInt(e.target.value) || 0)} style={{ ...inputStyle, width: 80 }} />
+                    <td>
+                      <input
+                        className={`${styles.input} ${styles.numberInput}`}
+                        aria-label={`Rate tier ${index + 1} tokens per minute`}
+                        type="number"
+                        value={tier.tpm}
+                        onChange={(event) =>
+                          updateRateTier(index, 'tpm', parseInt(event.target.value) || 0)
+                        }
+                        readOnly={!canManage}
+                      />
                     </td>
-                    <td style={tdStyle}>
-                      <button
-                        onClick={() => removeRateTier(index)}
-                        style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' }}
-                      >
-                        x
-                      </button>
-                    </td>
+                    {canManage ? (
+                      <td className={styles.actionCell}>
+                        <button
+                          type="button"
+                          className={styles.removeButton}
+                          onClick={() => removeRateTier(index)}
+                          aria-label={`Remove rate tier ${tier.name || index + 1}`}
+                        >
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -429,86 +495,42 @@ const SecurityPolicyPage: React.FC = () => {
         )}
       </section>
 
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem' }}>
-        <button
-          onClick={handlePreview}
-          style={{
-            padding: '0.75rem 1.5rem',
-            borderRadius: '0.5rem',
-            background: 'var(--color-bg-secondary)',
-            color: 'var(--color-text)',
-            fontWeight: 600,
-            border: '1px solid var(--color-border)',
-            cursor: 'pointer',
-          }}
-        >
-          Preview Config Fragment
-        </button>
-        <button
-          onClick={() => void handleSave()}
-          disabled={saving}
-          style={{
-            padding: '0.75rem 1.5rem',
-            borderRadius: '0.5rem',
-            background: 'var(--color-primary)',
-            color: '#081000',
-            fontWeight: 700,
-            border: 'none',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          {saving ? 'Saving...' : 'Save & Generate'}
-        </button>
-      </div>
-
-      {/* Generated Fragment Preview */}
-      {fragment && (
-        <section>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.75rem' }}>
-            Generated Router Config Fragment
-          </h2>
-          <pre
-            style={{
-              padding: '1rem',
-              borderRadius: '0.75rem',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg-secondary)',
-              overflow: 'auto',
-              fontSize: '0.85rem',
-              lineHeight: 1.5,
-              maxHeight: '400px',
-            }}
+      {canManage ? (
+        <div className={styles.actions} aria-label="Security policy actions">
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => void handlePreview()}
           >
-            {JSON.stringify(fragment, null, 2)}
-          </pre>
+            Preview Config Fragment
+          </button>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save & Generate'}
+          </button>
+        </div>
+      ) : null}
+
+      {fragment ? (
+        <section
+          className={`${styles.section} ${styles.fragmentSection}`}
+          aria-labelledby="fragment-heading"
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionKicker}>Generated output</p>
+              <h2 id="fragment-heading">Router Config Fragment</h2>
+            </div>
+          </div>
+          <pre className={styles.fragment}>{JSON.stringify(fragment, null, 2)}</pre>
         </section>
-      )}
-    </div>
+      ) : null}
+    </main>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.375rem',
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-bg)',
-  color: 'var(--color-text)',
-  fontSize: '0.875rem',
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '0.5rem 0.75rem',
-  fontSize: '0.8rem',
-  color: 'var(--color-text-secondary)',
-  fontWeight: 600,
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: '0.5rem 0.75rem',
 }
 
 export default SecurityPolicyPage

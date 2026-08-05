@@ -47,6 +47,8 @@
   <div class="zoom-control">
     <button
       class="zoom-button zoom-button-reset"
+      aria-label="Reset map view"
+      title="Reset map view"
       on:click="{() => {
         myFooter?.zoomResetClicked();
       }}"><div class="svg-icon">{@html iconHome}</div></button
@@ -56,12 +58,16 @@
   <div class="zoom-control">
     <button
       class="zoom-button zoom-button-plus"
+      aria-label="Zoom in"
+      title="Zoom in"
       on:click="{() => {
         myFooter?.zoomInClicked();
       }}"><div class="svg-icon">{@html iconPlus}</div></button
     >
     <button
       class="zoom-button zoom-button-minus"
+      aria-label="Zoom out"
+      title="Zoom out"
       on:click="{() => {
         myFooter?.zoomOutClicked();
       }}"><div class="svg-icon">{@html iconMinus}</div></button

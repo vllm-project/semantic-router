@@ -57,6 +57,49 @@
   gap: var(--spacing-md, 1rem);
 }
 
+.asyncState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+  background: var(--color-bg-secondary, #242424);
+  text-align: center;
+}
+
+.asyncState h2 {
+  margin: 0 0 0.45rem;
+  font-size: 1.15rem;
+}
+
+.asyncState p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--color-text-secondary, #999);
+}
+
+.asyncState button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: var(--color-text, #e8e8e8);
+  cursor: pointer;
+}
+
+.asyncStateError {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.asyncStateError h2,
+.asyncStateError button {
+  color: var(--color-danger, #ef4444);
+}
+
 .backButton {
   align-self: flex-start;
   padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
@@ -69,7 +112,7 @@
 }
 
 .backButton:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 

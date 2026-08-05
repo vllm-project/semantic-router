@@ -27,7 +27,7 @@ sidebar_position: 2
 ### 1. 使用一键安装脚本（macOS/Linux）
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 这个安装器会：
@@ -43,19 +43,19 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 
 ```bash
 # 只安装 CLI
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --mode cli
 
 # 将本地 serve 固定为 Podman
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime podman
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --runtime podman
 
 # 强制首次启动走 AMD / ROCm 路径
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --platform amd
 
 # 安装但不自动启动 serve + dashboard
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --no-launch
 
 # 跳过 runtime bootstrap，只执行用户态安装
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --runtime skip
 ```
 
 如果 `~/.local/bin` 还不在您的 `PATH` 中，安装器会打印需要添加的 `export` 行。
@@ -236,4 +236,4 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 
 - **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **社区**: 加入 vLLM Slack 中的 `#semantic-router` 频道
-- **文档**: [vllm-semantic-router.com](https://vllm-semantic-router.com/)
+- **文档**: [vllm-sr.ai](https://vllm-sr.ai/)

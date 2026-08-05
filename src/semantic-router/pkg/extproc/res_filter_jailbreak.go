@@ -1,10 +1,8 @@
 package extproc
 
 import (
-	"fmt"
 	"time"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -38,13 +36,11 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 	}
 
 	start := time.Now()
-	isJailbreak, jailbreakType, confidence, err := r.Classifier.CheckForJailbreakWithThreshold(assistantContent, threshold)
+	classifier := r.classifierForRequest(ctx)
+	isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreakWithThreshold(assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
-	decisionName := ""
-	if ctx.VSRSelectedDecision != nil {
-		decisionName = ctx.VSRSelectedDecision.Name
-	}
+	decisionName := requestDecisionStateKey(ctx)
 
 	if err != nil {
 		logging.Errorf("Response jailbreak detection failed: %v", err)
@@ -77,7 +73,8 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 // shouldPerformResponseJailbreakDetection checks whether response-level
 // jailbreak detection should run for the current request.
 func (r *OpenAIRouter) shouldPerformResponseJailbreakDetection(ctx *RequestContext) bool {
-	if r.Classifier == nil || !r.Classifier.IsJailbreakEnabled() {
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil || !classifier.IsJailbreakEnabled() {
 		return false
 	}
 
@@ -115,73 +112,17 @@ func (r *OpenAIRouter) getResponseJailbreakAction(decision *config.Decision) str
 	return action
 }
 
-// applyResponseJailbreakWarning applies the response jailbreak warning based
-// on the configured action (header or none). Block is handled earlier via an
-// immediate error response.
-func (r *OpenAIRouter) applyResponseJailbreakWarning(response *ext_proc.ProcessingResponse, ctx *RequestContext, responseBody []byte) ([]byte, *ext_proc.ProcessingResponse) {
+// responseJailbreakWarningCode returns the response-warnings code for a detected
+// response jailbreak, or "" when the configured action suppresses it. The
+// jailbreak type and confidence detail stay in the replay record (#2204); the
+// "block" action is handled earlier via an immediate error response.
+func (r *OpenAIRouter) responseJailbreakWarningCode(ctx *RequestContext) string {
 	if !ctx.ResponseJailbreakDetected {
-		return responseBody, response
+		return ""
 	}
-
-	action := r.getResponseJailbreakAction(ctx.VSRSelectedDecision)
-
-	switch action {
-	case "header":
-		return responseBody, r.addResponseJailbreakWarningHeaders(response, ctx)
-	case "none":
+	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "none" {
 		logging.Infof("Response jailbreak detected but action is 'none', skipping warning")
-		return responseBody, response
-	default:
-		return responseBody, r.addResponseJailbreakWarningHeaders(response, ctx)
+		return ""
 	}
-}
-
-// addResponseJailbreakWarningHeaders adds response jailbreak detection headers.
-func (r *OpenAIRouter) addResponseJailbreakWarningHeaders(response *ext_proc.ProcessingResponse, ctx *RequestContext) *ext_proc.ProcessingResponse {
-	if !ctx.ResponseJailbreakDetected {
-		return response
-	}
-
-	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-	if !ok {
-		return response
-	}
-
-	headerMutation := &ext_proc.HeaderMutation{
-		SetHeaders: []*core.HeaderValueOption{
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.ResponseJailbreakDetected,
-					RawValue: []byte("true"),
-				},
-			},
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.ResponseJailbreakType,
-					RawValue: []byte(ctx.ResponseJailbreakType),
-				},
-			},
-			{
-				Header: &core.HeaderValue{
-					Key:      headers.ResponseJailbreakConfidence,
-					RawValue: []byte(fmt.Sprintf("%.3f", ctx.ResponseJailbreakConfidence)),
-				},
-			},
-		},
-	}
-
-	if bodyResponse.ResponseBody.Response == nil {
-		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
-	}
-
-	if bodyResponse.ResponseBody.Response.HeaderMutation != nil {
-		bodyResponse.ResponseBody.Response.HeaderMutation.SetHeaders = append(
-			bodyResponse.ResponseBody.Response.HeaderMutation.SetHeaders,
-			headerMutation.SetHeaders...,
-		)
-	} else {
-		bodyResponse.ResponseBody.Response.HeaderMutation = headerMutation
-	}
-
-	return response
+	return headers.ResponseWarningJailbreak
 }

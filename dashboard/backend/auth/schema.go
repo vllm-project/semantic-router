@@ -183,4 +183,12 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_users_status_created_at ON users(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_created_at ON user_audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_user_id ON user_audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_user_created_at ON user_audit_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_action_created_at ON user_audit_logs(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_resource_created_at ON user_audit_logs(resource, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_audit_logs_status_created_at ON user_audit_logs(status_code, created_at DESC);
 `

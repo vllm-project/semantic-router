@@ -13,7 +13,7 @@ from cli.deployment_backend import DEFAULT_TARGET, resolve_target
 from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import load_config
 
-DEFAULT_CHAT_MODEL = "MoM"
+DEFAULT_CHAT_MODEL = "vllm-sr/auto"
 CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
 
 

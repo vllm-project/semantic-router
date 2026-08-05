@@ -6,7 +6,7 @@
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
-If `global.model_catalog.modules.classifier.preference.use_contrastive` is omitted, vSR now defaults it to `true`. That means a profile like `deploy/recipes/balance.yaml` can rely on preference signals without adding a separate global classifier block unless it wants to disable contrastive mode explicitly.
+If `global.model_catalog.modules.classifier.preference.use_contrastive` is omitted, vSR now defaults it to `true`. That means a profile like `config/recipes/balance/config.yaml` can rely on preference signals without adding a separate global classifier block unless it wants to disable contrastive mode explicitly.
 
 ## Key Advantages
 

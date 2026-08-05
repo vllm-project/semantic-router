@@ -43,6 +43,9 @@ spec:
         - name: config
           mountPath: /etc/prometheus
           readOnly: true
+        - name: rules
+          mountPath: /etc/prometheus/rules
+          readOnly: true
         - name: storage
           mountPath: /prometheus
         securityContext:
@@ -79,6 +82,9 @@ spec:
       - name: config
         configMap:
           name: prometheus-config
+      - name: rules
+        configMap:
+          name: semantic-router-alert-rules
       - name: storage
         persistentVolumeClaim:
           claimName: prometheus-data

@@ -19,6 +19,11 @@ type localChatCompletionResponse struct {
 	Body       []byte
 }
 
+// sendLocalChatCompletion sends a chat-completion request to the router. It
+// always sets the x-vsr-debug request header: the v0.4 contract demotes the
+// intermediate decision/classification and matched-signal response headers off
+// the default surface (#2205), and every routing/classification test using this
+// helper asserts those demoted headers, so the debug surface is always required.
 func sendLocalChatCompletion(
 	ctx context.Context,
 	localPort string,
@@ -44,6 +49,7 @@ func sendLocalChatCompletion(
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-vsr-debug", "true")
 
 	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {

@@ -364,6 +364,7 @@
             <button
               type="button"
               class="svg-icon"
+              aria-label="Play time animation"
               class:hidden="{myEmbedding ? myEmbedding.playingTimeSlider : false}"
             >
               {@html iconPlay}
@@ -371,6 +372,7 @@
             <button
               type="button"
               class="svg-icon"
+              aria-label="Pause time animation"
               class:hidden="{myEmbedding ? !myEmbedding.playingTimeSlider : true}"
             >
               {@html iconPause}

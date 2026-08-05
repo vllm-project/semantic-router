@@ -162,6 +162,8 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 
 	var analysisResults []PIIAnalysisResult
 	hasPII := false
+	failedCount := 0
+	var lastErr error
 
 	for i, content := range contentList {
 		if content == "" {
@@ -176,6 +178,8 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		tokenResult, err := c.piiInference.ClassifyTokens(content)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
+			failedCount++
+			lastErr = err
 			continue
 		}
 
@@ -198,6 +202,14 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		analysisResults = append(analysisResults, result)
 	}
 
+	// Fail closed: individual inference failures are tolerated as long as some
+	// content was actually classified, but if nothing could be classified the
+	// caller must not receive a benign "no PII" verdict it cannot distinguish
+	// from a clean scan.
+	if failedCount > 0 && len(analysisResults) == 0 {
+		return false, nil, fmt.Errorf("PII classification failed for all %d content item(s): %w", failedCount, lastErr)
+	}
+
 	return hasPII, analysisResults, nil
 }
 
@@ -218,20 +230,22 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string]cachedPIIResult) map[string]bool {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) map[string]bool {
 	entityTypes := make(map[string]bool)
 	for _, content := range ruleContents {
-		cached, ok := piiCache[content]
+		cachedResults, ok := piiCache[content]
 		if !ok {
 			continue
 		}
-		if cached.err != nil {
-			logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
-			continue
-		}
-		for _, entity := range cached.result.Entities {
-			if entity.Confidence >= threshold {
-				entityTypes[c.PIIMapping.TranslatePIIType(entity.EntityType)] = true
+		for _, cached := range cachedResults {
+			if cached.err != nil {
+				logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
+				continue
+			}
+			for _, entity := range cached.result.Entities {
+				if entity.Confidence >= threshold {
+					entityTypes[c.PIIMapping.TranslatePIIType(entity.EntityType)] = true
+				}
 			}
 		}
 	}

@@ -4,7 +4,7 @@ description: v0.3 canonical YAML 配置契约实用指南，覆盖 CLI、控制�
 translation:
   source_commit: "baa07413"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置
@@ -198,15 +198,15 @@ global:
 
 与仓库相关的运行时与测试台资产现位于 `config/` 之外：
 
-- `deploy/examples/runtime/semantic-cache/`
-- `deploy/examples/runtime/response-api/`
-- `deploy/examples/runtime/tools/`
+- `config/runtime/semantic-cache/`
+- `config/runtime/response-api/`
+- `config/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 仅测试用 ONNX 绑定资产位于 `e2e/config/onnx-binding/`。
 
-上述目录为支持资产，**不是**面向用户的主配置契约。手写配置请从 `config/config.yaml` 或上述片段目录开始。本仓库中，详尽参考配置将 `global.integrations.tools.tools_db_path` 指向 `deploy/examples/runtime/tools/tools_db.json` 以供本地开发。
+上述目录为支持资产，**不是**面向用户的主配置契约。手写配置请从 `config/config.yaml` 或上述片段目录开始。本仓库中，详尽参考配置将 `global.integrations.tools.tools_db_path` 指向 `config/runtime/tools/tools_db.json` 以供本地开发。
 
 `config/config.yaml` 不再只是示例。仓库将其作为**详尽公开契约参考**强制执行：
 
@@ -232,8 +232,8 @@ global:
 
 专题教程见 [Projections](../tutorials/projection/overview)。端到端维护示例：
 
-- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+- [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+- [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 ## 如何使用
 

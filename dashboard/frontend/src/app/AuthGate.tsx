@@ -14,6 +14,7 @@ const AuthGate: React.FC = () => {
         title="Authenticating"
         description="Checking session state..."
         actionLabel="Retry"
+        variant="loading"
         onAction={() => {
           window.location.reload()
         }}

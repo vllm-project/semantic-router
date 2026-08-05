@@ -3,33 +3,24 @@
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
-  background: #000;
+  background: #050505;
   display: flex;
   flex-direction: column;
 }
 
 .page::before {
-  content: "";
+  content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(0, 180, 216, 0.08),
-      transparent 24%
-    ),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 30%),
     linear-gradient(
       180deg,
-      rgba(4, 7, 15, 0.44) 0%,
-      rgba(6, 10, 20, 0.56) 34%,
-      rgba(9, 12, 24, 0.74) 100%
+      rgba(5, 5, 5, 0.44) 0%,
+      rgba(8, 8, 9, 0.56) 34%,
+      rgba(5, 5, 5, 0.78) 100%
     );
 }
 
@@ -39,6 +30,21 @@
   z-index: 0;
   pointer-events: none;
   opacity: 0.85;
+}
+
+.backgroundEffect[data-motion='reduced'] {
+  opacity: 0.5;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(227, 27, 35, 0.12), transparent 30%),
+    #050505;
+}
+
+.backgroundFallback {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(227, 27, 35, 0.14), transparent 32%),
+    #050505;
 }
 
 .hero,
@@ -51,20 +57,8 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background:
-    linear-gradient(
-      135deg,
-      rgba(16, 22, 44, 0.58),
-      rgba(9, 12, 24, 0.38) 58%,
-      rgba(4, 8, 18, 0.62)
-    ),
-    rgba(8, 12, 24, 0.24);
-  box-shadow:
-    0 28px 60px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: #101012;
 }
 
 .hero::before,
@@ -74,23 +68,7 @@
 .previewCard::before,
 .presetCard::before,
 .reviewStat::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.08),
-      transparent 30%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.045),
-      rgba(255, 255, 255, 0.015) 32%,
-      transparent 72%
-    );
-  pointer-events: none;
+  content: none;
 }
 
 .content {
@@ -106,7 +84,7 @@
 
 .hero {
   padding: 0.95rem 1.1rem 0.9rem;
-  border-radius: 1rem;
+  border-radius: 8px;
   border-color: rgba(255, 255, 255, 0.18);
 }
 
@@ -121,9 +99,9 @@
   align-items: center;
   padding: 0.26rem 0.58rem;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f7ff;
+  border-radius: 6px;
+  background: #18181b;
+  color: #f5f5f7;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -143,23 +121,15 @@
   width: 3.15rem;
   height: 3.15rem;
   flex-shrink: 0;
-  border-radius: 1rem;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.14),
-      transparent 44%
-    ),
-    linear-gradient(180deg, rgba(0, 180, 216, 0.14), rgba(255, 255, 255, 0.02));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: #18181b;
 }
 
 .heroLogo {
   width: 1.8rem;
   height: 1.8rem;
   object-fit: contain;
-  filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.16));
 }
 
 .heroTitle {
@@ -177,59 +147,68 @@
 }
 
 .stepper {
+  display: block;
+}
+
+.stepList {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepItem {
+  min-width: 0;
 }
 
 .stepButton {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  width: 100%;
+  min-height: 48px;
   padding: 0.74rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.85rem;
-  background: rgba(12, 18, 36, 0.44);
+  border-radius: 6px;
+  background: #101012;
   color: var(--color-text-secondary);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 12px 30px rgba(0, 0, 0, 0.18);
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 
 .stepButton:hover {
   border-color: rgba(255, 255, 255, 0.22);
-  transform: translateY(-1px);
+}
+
+.stepButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.78);
+  outline-offset: 2px;
 }
 
 .stepButtonActive {
-  border-color: rgba(118, 185, 0, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  border-color: rgba(227, 27, 35, 0.36);
+  background: #18181b;
   color: var(--color-text);
-  box-shadow:
-    inset 0 1px 0 rgba(143, 212, 0, 0.12),
-    0 14px 34px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .stepButtonDone {
-  border-color: rgba(0, 180, 216, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #101012;
   color: var(--color-text);
 }
 
-.stepButtonActive .stepNumber,
+.stepButtonActive .stepNumber {
+  background: var(--brand-amd);
+  color: #f5f5f7;
+}
+
 .stepButtonDone .stepNumber {
-  background: rgba(118, 185, 0, 0.2);
-  color: #d9ff8d;
+  background: #27272a;
+  color: #e4e4e7;
 }
 
 .stepNumber {
@@ -238,7 +217,7 @@
   justify-content: center;
   width: 1.72rem;
   height: 1.72rem;
-  border-radius: 999px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   font-size: 0.76rem;
   font-weight: 700;
@@ -251,7 +230,7 @@
 
 .panel {
   padding: 0.95rem 1rem;
-  border-radius: 1rem;
+  border-radius: 8px;
 }
 
 .stepBody {
@@ -300,8 +279,8 @@
   margin-top: 0.48rem;
   padding: 0.38rem 0.7rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  background: #18181b;
 }
 
 .routeSummaryLabel {
@@ -324,10 +303,84 @@
   gap: 0.7rem;
 }
 
+.modelCollectionToolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.72rem 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: #0d0d0f;
+}
+
+.modelSearchField {
+  display: grid;
+  flex: 1 1 24rem;
+  gap: 0.28rem;
+  max-width: 34rem;
+}
+
+.modelCount {
+  flex: 0 0 auto;
+  margin: 0 0 0.65rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.undoNotice,
+.asyncNotice,
+.presetReadyNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.68rem 0.78rem;
+  color: var(--color-text-secondary);
+  background: #0d0d0f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  font-size: 0.78rem;
+}
+
+.undoButton {
+  min-height: 34px;
+  padding: 0 0.72rem;
+  color: #ffffff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  font-weight: 680;
+}
+
+.undoButton:hover {
+  border-color: rgba(227, 27, 35, 0.54);
+  background: rgba(227, 27, 35, 0.08);
+}
+
+.modelEmptyState {
+  padding: 1.2rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: #0d0d0f;
+}
+
+.modelPagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
 .modelCard,
 .reviewCard,
 .previewCard {
-  border-radius: 0.95rem;
+  border-radius: 8px;
   padding: 0.82rem;
 }
 
@@ -455,8 +508,8 @@
   display: inline-flex;
   align-items: center;
   padding: 0.22rem 0.58rem;
-  border-radius: 999px;
-  background: rgba(118, 185, 0, 0.12);
+  border-radius: 6px;
+  background: #18181b;
   color: var(--color-primary-light);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
@@ -466,8 +519,8 @@
 .presetHintCard {
   padding: 0.75rem 0.85rem;
   border: 1px dashed rgba(255, 255, 255, 0.16);
-  border-radius: 0.95rem;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: #18181b;
   color: var(--color-text-secondary);
   font-size: 0.8rem;
 }
@@ -483,13 +536,9 @@
   flex-direction: column;
   gap: 0.72rem;
   padding: 0.82rem;
-  border-radius: 0.95rem;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(9, 12, 24, 0.46)
-  );
+  background: #18181b;
 }
 
 .remoteImportActions {
@@ -499,13 +548,9 @@
 
 .remoteImportSummary {
   padding: 0.75rem 0.82rem;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(118, 185, 0, 0.22);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.12),
-    rgba(9, 12, 24, 0.46)
-  );
+  border-radius: 8px;
+  border: 1px solid rgba(143, 148, 156, 0.22);
+  background: #101012;
 }
 
 .remoteImportSummaryHeader {
@@ -528,27 +573,98 @@
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.82rem;
-  border-radius: 0.9rem;
+  border-radius: 8px;
   color: inherit;
   text-align: left;
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast);
 }
 
 .presetCard:hover {
-  transform: translateY(-1px);
   border-color: rgba(255, 255, 255, 0.22);
 }
 
 .presetCardActive {
-  border-color: rgba(118, 185, 0, 0.36);
-  background: linear-gradient(
-    135deg,
-    rgba(118, 185, 0, 0.16),
-    rgba(9, 12, 24, 0.52) 68%
-  );
+  border-color: rgba(227, 27, 35, 0.4);
+  background: #18181b;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
+}
+
+.presetProgress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin: 0.7rem 0 0.75rem;
+  overflow: hidden;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: #29292d;
+}
+
+.presetProgress::-webkit-progress-bar {
+  background: #29292d;
+}
+
+.presetProgress::-webkit-progress-value {
+  background: var(--brand-amd);
+}
+
+.presetProgress::-moz-progress-bar {
+  background: var(--brand-amd);
+}
+
+.presetModelList {
+  display: grid;
+  gap: 0.32rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.presetModelItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 32px;
+  color: var(--color-text);
+}
+
+.presetModelReadyIcon,
+.presetModelMissingIcon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.presetModelReadyIcon {
+  color: #b9e5c5;
+}
+
+.presetModelMissingIcon {
+  color: #fbc46d;
+}
+
+.presetModelName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presetModelMeta {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+
+.presetChecklistHint {
+  margin-top: 0.7rem;
+}
+
+.presetReadyNotice {
+  justify-content: flex-start;
+  margin-top: 0.75rem;
 }
 
 .presetCardHeader {
@@ -566,11 +682,12 @@
   display: inline-flex;
   align-items: center;
   padding: 0.26rem 0.52rem;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .statusPending {
@@ -579,8 +696,9 @@
 }
 
 .statusSuccess {
-  background: rgba(34, 197, 94, 0.14);
-  color: #86efac;
+  background: #18181b;
+  color: #b9e5c5;
+  border-color: rgba(185, 229, 197, 0.24);
 }
 
 .statusError {
@@ -597,7 +715,7 @@
 
 .reviewStat {
   padding: 0.68rem 0.74rem;
-  border-radius: 0.85rem;
+  border-radius: 8px;
 }
 
 .reviewStatLabel {
@@ -618,10 +736,10 @@
 .previewCode {
   margin-top: 0.7rem;
   padding: 0.75rem 0.82rem;
-  border-radius: 0.85rem;
-  background: #060706;
-  border: 1px solid rgba(118, 185, 0, 0.08);
-  color: #d8f7a5;
+  border-radius: 6px;
+  background: #09090a;
+  border: 1px solid rgba(143, 148, 156, 0.08);
+  color: #e4e4e7;
   font-size: 0.78rem;
   line-height: 1.45;
   overflow: auto;
@@ -632,7 +750,7 @@
 .readonlyPanel {
   margin-top: 0;
   padding: 0.68rem 0.75rem;
-  border-radius: 0.85rem;
+  border-radius: 6px;
 }
 
 .errorPanel {
@@ -677,21 +795,19 @@
   justify-content: center;
   min-height: 2.2rem;
   padding: 0 0.85rem;
-  border-radius: 0.82rem;
+  border-radius: 6px;
   font-weight: 600;
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast);
 }
 
 .primaryButton {
   background: var(--color-primary);
-  color: #081000;
+  color: #09090a;
 }
 
 .primaryButton:hover:not(:disabled) {
-  transform: translateY(-1px);
   background: var(--color-primary-light);
 }
 
@@ -704,7 +820,7 @@
 
 .secondaryButton:hover:not(:disabled),
 .ghostButton:hover:not(:disabled) {
-  border-color: rgba(118, 185, 0, 0.3);
+  border-color: rgba(143, 148, 156, 0.3);
 }
 
 .ghostButton {
@@ -720,8 +836,20 @@
   cursor: not-allowed;
 }
 
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.ghostButton:focus-visible,
+.undoButton:focus-visible,
+.presetCard:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.modelSearchField input:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.78);
+  outline-offset: 2px;
+}
+
 @media (max-width: 960px) {
-  .stepper,
+  .stepList,
   .presetGrid,
   .reviewGrid {
     grid-template-columns: 1fr;
@@ -741,6 +869,19 @@
   .previewHeader {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .modelCollectionToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .modelSearchField {
+    max-width: none;
+  }
+
+  .modelCount {
+    margin: 0;
   }
 
   .routeSummary {
@@ -784,7 +925,7 @@
   .heroLogoWrap {
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 0.8rem;
+    border-radius: 8px;
   }
 
   .heroLogo {
@@ -796,7 +937,30 @@
     padding: 0.72rem 0.8rem;
   }
 
+  .modelPagination {
+    justify-content: space-between;
+  }
+
+  .presetModelItem {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .presetModelMeta {
+    grid-column: 2;
+  }
+
   .stepLabel {
     font-size: 0.82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepButton,
+  .presetCard,
+  .primaryButton,
+  .secondaryButton,
+  .ghostButton,
+  .presetProgress {
+    transition: none;
   }
 }

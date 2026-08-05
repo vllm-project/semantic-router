@@ -45,12 +45,12 @@
 }
 
 .btnEdit {
-  background: rgba(0, 212, 255, 0.15);
+  background: rgba(166, 171, 179, 0.15);
   color: var(--color-accent-cyan);
 }
 
 .btnEdit:hover {
-  background: rgba(0, 212, 255, 0.25);
+  background: rgba(166, 171, 179, 0.25);
 }
 
 .btnDelete {
@@ -144,7 +144,7 @@
 }
 
 .btnAdd:hover {
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(166, 171, 179, 0.05);
   border-color: var(--color-accent-cyan);
 }
 

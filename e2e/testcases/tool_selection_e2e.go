@@ -169,7 +169,9 @@ func runToolSelectionCase(
 	verbose bool,
 ) error {
 	req := buildToolSelectionChatRequest(tc)
-	resp, err := chat.Create(ctx, req, nil)
+	// v0.4 demotes the x-vsr-tools-* observability and injected-system-prompt
+	// headers behind x-vsr-debug (#2205); opt in so the assertions can read them.
+	resp, err := chat.Create(ctx, req, map[string]string{"x-vsr-debug": "true"})
 	if err != nil {
 		return err
 	}

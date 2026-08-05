@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -30,17 +29,6 @@ func findProjectRoot() string {
 		dir = parent
 	}
 	return ""
-}
-
-// createMockBodyResponse creates a mock ProcessingResponse for testing header mutations
-func createMockBodyResponse() *ext_proc.ProcessingResponse {
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ResponseBody{
-			ResponseBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{},
-			},
-		},
-	}
 }
 
 // TestHallucinationExtproc is removed - tests are now part of the main ExtProc Suite in extproc_test.go
@@ -576,48 +564,6 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 			router.checkUnverifiedFactualResponse(ctx)
 
 			Expect(ctx.UnverifiedFactualResponse).To(BeFalse())
-		})
-	})
-
-	Describe("addUnverifiedFactualWarningHeaders", func() {
-		It("should not modify response when not unverified", func() {
-			ctx := &RequestContext{
-				UnverifiedFactualResponse: false,
-			}
-
-			// Create a simple response
-			response := createMockBodyResponse()
-			result := router.addUnverifiedFactualWarningHeaders(response, ctx)
-
-			// Should return same response unchanged
-			Expect(result).To(Equal(response))
-		})
-
-		It("should add headers when unverified factual response", func() {
-			ctx := &RequestContext{
-				UnverifiedFactualResponse: true,
-				FactCheckNeeded:           true,
-			}
-
-			response := createMockBodyResponse()
-			result := router.addUnverifiedFactualWarningHeaders(response, ctx)
-
-			// Should have header mutations
-			bodyResp, ok := result.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-			Expect(ok).To(BeTrue())
-			Expect(bodyResp.ResponseBody.Response).NotTo(BeNil())
-			Expect(bodyResp.ResponseBody.Response.HeaderMutation).NotTo(BeNil())
-			Expect(bodyResp.ResponseBody.Response.HeaderMutation.SetHeaders).To(HaveLen(3))
-
-			// Check header values
-			headerMap := make(map[string]string)
-			for _, h := range bodyResp.ResponseBody.Response.HeaderMutation.SetHeaders {
-				headerMap[h.Header.Key] = string(h.Header.RawValue)
-			}
-
-			Expect(headerMap).To(HaveKeyWithValue("x-vsr-unverified-factual-response", "true"))
-			Expect(headerMap).To(HaveKeyWithValue("x-vsr-fact-check-needed", "true"))
-			Expect(headerMap).To(HaveKeyWithValue("x-vsr-verification-context-missing", "true"))
 		})
 	})
 })

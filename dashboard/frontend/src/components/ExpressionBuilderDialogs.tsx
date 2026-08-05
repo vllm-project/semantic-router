@@ -1,5 +1,6 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { memo, useCallback, useId, useMemo, useState } from 'react'
 
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ExpressionBuilder.module.css'
 import type { RuleNode, SignalDescriptor } from './ExpressionBuilderSupport'
 import { OPERATOR_ORDER } from './ExpressionBuilderNodes'
@@ -17,6 +18,11 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
     const [signalType, setSignalType] = useState(initialType)
     const [signalName, setSignalName] = useState(initialName)
     const [search, setSearch] = useState('')
+    const titleId = useId()
+    const dialogRef = useAccessibleDialog<HTMLDivElement>({
+      isOpen: true,
+      onClose: onCancel,
+    })
 
     const types = useMemo(
       () => Array.from(new Set(availableSignals.map(signal => signal.signalType))).sort(),
@@ -42,22 +48,25 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
       [onSave, signalName, signalType]
     )
 
-    useEffect(() => {
-      const handler = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
-          onCancel()
-        }
-      }
-      window.addEventListener('keydown', handler)
-      return () => window.removeEventListener('keydown', handler)
-    }, [onCancel])
-
     return (
-      <div className={styles.editOverlay} onClick={onCancel}>
-        <div className={styles.editDialog} onClick={event => event.stopPropagation()}>
+      <div className={styles.editOverlay} role="presentation" onMouseDown={onCancel}>
+        <div
+          ref={dialogRef}
+          className={styles.editDialog}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onMouseDown={event => event.stopPropagation()}
+        >
           <div className={styles.editDialogHeader}>
-            <span>Edit Signal</span>
-            <button className={styles.editDialogClose} onClick={onCancel}>
+            <span id={titleId}>Edit Signal</span>
+            <button
+              type="button"
+              className={styles.editDialogClose}
+              aria-label="Close signal editor"
+              onClick={onCancel}
+            >
               ×
             </button>
           </div>
@@ -87,7 +96,7 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                 value={signalName}
                 onChange={event => setSignalName(event.target.value)}
                 placeholder="Enter signal name"
-                autoFocus
+                data-dialog-initial-focus
               />
             </label>
             {filteredSignals.length > 0 ? (
@@ -97,16 +106,18 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   placeholder="Filter signals..."
+                  aria-label="Filter available signals"
                 />
                 <div className={styles.editSignalOptions}>
                   {filteredSignals.map(signal => (
-                    <div
+                    <button
+                      type="button"
                       key={signal.name}
                       className={`${styles.editSignalOption} ${signal.name === signalName ? styles.editSignalOptionActive : ''}`}
                       onClick={() => setSignalName(signal.name)}
                     >
                       {signal.name}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -140,6 +151,11 @@ interface AddChildPickerProps {
 export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
   ({ availableSignals, onPick, onCancel }) => {
     const [search, setSearch] = useState('')
+    const titleId = useId()
+    const dialogRef = useAccessibleDialog<HTMLDivElement>({
+      isOpen: true,
+      onClose: onCancel,
+    })
 
     const groups = useMemo(() => {
       const grouped: Record<string, SignalDescriptor[]> = {}
@@ -169,22 +185,25 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
         .filter(([, signals]) => signals.length > 0)
     }, [groups, search])
 
-    useEffect(() => {
-      const handler = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
-          onCancel()
-        }
-      }
-      window.addEventListener('keydown', handler)
-      return () => window.removeEventListener('keydown', handler)
-    }, [onCancel])
-
     return (
-      <div className={styles.editOverlay} onClick={onCancel}>
-        <div className={styles.addPickerDialog} onClick={event => event.stopPropagation()}>
+      <div className={styles.editOverlay} role="presentation" onMouseDown={onCancel}>
+        <div
+          ref={dialogRef}
+          className={styles.addPickerDialog}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onMouseDown={event => event.stopPropagation()}
+        >
           <div className={styles.editDialogHeader}>
-            <span>Add Child Node</span>
-            <button className={styles.editDialogClose} onClick={onCancel}>
+            <span id={titleId}>Add Child Node</span>
+            <button
+              type="button"
+              className={styles.editDialogClose}
+              aria-label="Close child node picker"
+              onClick={onCancel}
+            >
               ×
             </button>
           </div>
@@ -194,6 +213,7 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
               <div className={styles.addPickerOps}>
                 {OPERATOR_ORDER.map(operator => (
                   <button
+                    type="button"
                     key={operator}
                     className={styles.addPickerOpBtn}
                     onClick={() =>
@@ -216,7 +236,8 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
                 value={search}
                 onChange={event => setSearch(event.target.value)}
                 placeholder="Search signals..."
-                autoFocus
+                aria-label="Search signals"
+                data-dialog-initial-focus
               />
               <div className={styles.addPickerSignalList}>
                 {filteredGroups.map(([type, signals]) => (
@@ -224,7 +245,8 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
                     <div className={styles.addPickerGroupTitle}>{type}</div>
                     <div className={styles.addPickerGroupItems}>
                       {signals.map(signal => (
-                        <div
+                        <button
+                          type="button"
                           key={signal.name}
                           className={styles.addPickerSignalItem}
                           onClick={() =>
@@ -232,7 +254,7 @@ export const AddChildPicker: React.FC<AddChildPickerProps> = memo(
                           }
                         >
                           {signal.name}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>

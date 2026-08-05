@@ -22,34 +22,35 @@
 .highlighted {
   transform: scale(1.08);
   box-shadow:
-    0 0 0 3px #76b900,
-    0 0 25px rgba(118, 185, 0, 0.8),
-    0 0 50px rgba(118, 185, 0, 0.4);
+    0 0 0 3px #8f949c,
+    0 0 25px rgba(143, 148, 156, 0.8),
+    0 0 50px rgba(143, 148, 156, 0.4);
   z-index: 1000;
   animation: highlightPulse 1.5s ease-in-out infinite;
 }
 
 @keyframes highlightPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
-      0 0 0 3px #76b900,
-      0 0 25px rgba(118, 185, 0, 0.8),
-      0 0 50px rgba(118, 185, 0, 0.4);
+      0 0 0 3px #8f949c,
+      0 0 25px rgba(143, 148, 156, 0.8),
+      0 0 50px rgba(143, 148, 156, 0.4);
   }
   50% {
     box-shadow:
-      0 0 0 4px #8fd400,
-      0 0 35px rgba(143, 212, 0, 1),
-      0 0 70px rgba(143, 212, 0, 0.6);
+      0 0 0 4px #c9cbd0,
+      0 0 35px rgba(201, 203, 208, 0.8),
+      0 0 70px rgba(201, 203, 208, 0.32);
   }
 }
 
-/* ============== Client Node (NVIDIA Green) ============== */
+/* ============== Client Node (Graphite Alloy) ============== */
 .clientNode {
   composes: nodeBase;
-  background: #76b900;
+  background: #8f949c;
   color: white;
-  border: 2px solid #5a8f00;
+  border: 2px solid #696d74;
   min-width: 140px;
 }
 
@@ -195,7 +196,7 @@
   right: -4px;
   width: 12px;
   height: 12px;
-  background: #FF9800;
+  background: #ff9800;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.3);
 }
@@ -223,8 +224,8 @@
 
 .decisionNode.focusTarget {
   box-shadow:
-    0 0 0 2px rgba(118, 185, 0, 0.95),
-    0 0 20px rgba(118, 185, 0, 0.55);
+    0 0 0 2px rgba(143, 148, 156, 0.95),
+    0 0 20px rgba(143, 148, 156, 0.55);
 }
 
 .unreachableBanner {
@@ -235,7 +236,7 @@
   border-radius: 4px;
   font-size: 10px;
   text-align: center;
-  color: #FFE082;
+  color: #ffe082;
   font-weight: 500;
 }
 
@@ -281,12 +282,12 @@
 }
 
 .focusDecisionBtn:hover {
-  border-color: rgba(118, 185, 0, 0.9);
+  border-color: rgba(143, 148, 156, 0.9);
 }
 
 .focusDecisionBtnActive {
-  background: rgba(118, 185, 0, 0.26);
-  border-color: rgba(118, 185, 0, 0.95);
+  background: rgba(143, 148, 156, 0.26);
+  border-color: rgba(143, 148, 156, 0.95);
 }
 
 .rulesSection {
@@ -459,9 +460,9 @@
 
 .pluginChain {
   display: flex;
-  flex-direction: column;  /* Changed to vertical layout */
+  flex-direction: column; /* Changed to vertical layout */
   align-items: center;
-  gap: 8px;  /* Increased gap for vertical spacing */
+  gap: 8px; /* Increased gap for vertical spacing */
   margin-top: 8px;
 }
 
@@ -473,7 +474,7 @@
   border-radius: 4px;
   font-size: 10px;
   color: white;
-  width: 100%;  /* Full width for vertical layout */
+  width: 100%; /* Full width for vertical layout */
   justify-content: center;
 }
 
@@ -489,7 +490,7 @@
 }
 
 .chainArrow {
-  font-size: 14px;  /* Slightly larger for vertical arrow */
+  font-size: 14px; /* Slightly larger for vertical arrow */
   opacity: 0.5;
   /* No rotation needed - arrow is already ↓ in the component */
 }
@@ -536,8 +537,8 @@
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: rgba(118, 185, 0, 0.2);
-  border: 1px solid #76b900;
+  background: rgba(143, 148, 156, 0.2);
+  border: 1px solid #8f949c;
   border-radius: 4px;
   font-size: 10px;
   color: white;
@@ -568,7 +569,7 @@
   align-items: center;
   gap: 4px;
   padding: 2px 6px;
-  background: linear-gradient(135deg, #673AB7, #3F51B5);
+  background: linear-gradient(135deg, #673ab7, #3f51b5);
   border-radius: 4px;
   font-size: 10px;
   color: white;
@@ -653,7 +654,7 @@
   composes: decisionNode;
   background: linear-gradient(135deg, #556270, #41505d);
   color: white;
-  border: 2px dashed #90A4AE;
+  border: 2px dashed #90a4ae;
   min-width: 200px;
 }
 
@@ -668,15 +669,15 @@
 /* ============== Fallback Decision Node ============== */
 .fallbackDecisionNode {
   composes: nodeBase;
-  background: linear-gradient(135deg, #FF9800, #F57C00);
+  background: linear-gradient(135deg, #ff9800, #f57c00);
   color: white;
-  border: 2px solid #EF6C00;
+  border: 2px solid #ef6c00;
   min-width: 180px;
 }
 
 .fallbackDecisionNode.highlighted {
   box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
-  border-color: #FFE082;
+  border-color: #ffe082;
 }
 
 .fallbackDecisionHeader {
@@ -735,9 +736,9 @@
   padding: 12px 14px;
   border-radius: 10px;
   min-width: 180px;
-  border: 1px dashed rgba(118, 185, 0, 0.65);
-  background: rgba(20, 30, 20, 0.86);
-  color: #e8efe1;
+  border: 1px dashed rgba(143, 148, 156, 0.65);
+  background: rgba(24, 24, 27, 0.86);
+  color: #e4e4e7;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -751,8 +752,8 @@
 }
 
 .moreDecisionsButton {
-  border: 1px solid rgba(118, 185, 0, 0.75);
-  background: rgba(118, 185, 0, 0.16);
+  border: 1px solid rgba(143, 148, 156, 0.75);
+  background: rgba(143, 148, 156, 0.16);
   color: #f0f6ea;
   border-radius: 8px;
   padding: 4px 8px;
@@ -761,8 +762,8 @@
 }
 
 .moreDecisionsButton:hover {
-  border-color: rgba(118, 185, 0, 0.95);
-  background: rgba(118, 185, 0, 0.25);
+  border-color: rgba(143, 148, 156, 0.95);
+  background: rgba(143, 148, 156, 0.25);
 }
 
 /* Mobile Responsive */

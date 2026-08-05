@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import styles from './MLSetupPage.module.css';
+import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor';
+import { StringListEditor } from '../components/StringListEditor';
 import { useMLPipelineWizard } from '../hooks/useMLPipeline';
 import {
   ML_ALGORITHM_INFO,
@@ -8,6 +10,27 @@ import {
   type SvmKernel,
 } from '../types/mlPipeline';
 import { getDownloadUrl } from '../utils/mlPipelineApi';
+import {
+  getDecisionEntriesError,
+  getMlpHiddenLayersError,
+  parseMlpHiddenLayers,
+  serializeMlpHiddenLayers,
+  type HiddenLayerEntry,
+} from './mlSetupStructuredFieldSupport';
+import MLSetupBenchmarkStep from './MLSetupBenchmarkStep';
+import MLSetupProgressDisplay from './MLSetupProgressDisplay';
+
+const HIDDEN_LAYER_FIELDS: ObjectEditorField<HiddenLayerEntry>[] = [
+  {
+    key: 'size',
+    label: 'Layer width',
+    type: 'number',
+    min: 1,
+    step: 1,
+    required: true,
+    placeholder: '256',
+  },
+];
 
 const MLSetupPage: React.FC = () => {
   const wizard = useMLPipelineWizard();
@@ -68,7 +91,7 @@ const MLSetupPage: React.FC = () => {
       )}
 
       {/* Step content */}
-      {wizard.currentStep === 0 && <BenchmarkStep wizard={wizard} />}
+      {wizard.currentStep === 0 && <MLSetupBenchmarkStep wizard={wizard} />}
       {wizard.currentStep === 1 && <TrainStep wizard={wizard} />}
       {wizard.currentStep === 2 && <ConfigStep wizard={wizard} />}
 
@@ -100,167 +123,10 @@ const MLSetupPage: React.FC = () => {
   );
 };
 
-/* ============================================================
-   Step 0: Benchmark
-   ============================================================ */
 interface StepProps {
   wizard: ReturnType<typeof useMLPipelineWizard>;
 }
 
-const BenchmarkStep: React.FC<StepProps> = ({ wizard }) => {
-  const modelsInputRef = useRef<HTMLInputElement>(null);
-  const queriesInputRef = useRef<HTMLInputElement>(null);
-
-  const jobDone = wizard.benchmarkProgress.completed && wizard.benchmarkProgress.job?.status === 'completed';
-  const jobFailed = wizard.benchmarkProgress.job?.status === 'failed';
-
-  return (
-    <div className={styles.stepContent}>
-      <h2 className={styles.stepTitle}>Step 1: Benchmark Your Models</h2>
-      <p className={styles.stepDescription}>
-        Upload your model configuration (YAML) and benchmark queries (JSONL) to collect embedding
-        data from your models. This data will be used to train the ML classifiers.
-      </p>
-
-      {/* Skip benchmark option */}
-      <div className={styles.skipBanner}>
-        <div className={styles.skipBannerText}>
-          <strong>Already have benchmark data?</strong> You can skip this step and upload your
-          training data JSONL directly in Step 2.
-        </div>
-        <button
-          className={styles.btnSecondary}
-          onClick={() => wizard.goToStep(1)}
-        >
-          Skip to Training
-        </button>
-      </div>
-
-      {/* Models YAML upload */}
-      <div className={styles.formGroup}>
-        <label className={styles.formLabel}>Models Configuration (YAML)</label>
-        <input
-          ref={modelsInputRef}
-          type="file"
-          accept=".yaml,.yml"
-          className={styles.fileInput}
-          onChange={(e) => wizard.setModelsFile(e.target.files?.[0] || null)}
-        />
-        <div
-          className={`${styles.fileDropZone} ${wizard.modelsFile ? styles.fileDropZoneActive : ''}`}
-          onClick={() => modelsInputRef.current?.click()}
-        >
-          {wizard.modelsFile ? (
-            <div className={styles.fileDropName}>{wizard.modelsFile.name}</div>
-          ) : (
-            <>
-              <div className={styles.fileDropIcon}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </div>
-              <div className={styles.fileDropText}>Click to upload models YAML</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Queries JSONL upload */}
-      <div className={styles.formGroup}>
-        <label className={styles.formLabel}>Benchmark Queries (JSONL)</label>
-        <input
-          ref={queriesInputRef}
-          type="file"
-          accept=".jsonl"
-          className={styles.fileInput}
-          onChange={(e) => wizard.setQueriesFile(e.target.files?.[0] || null)}
-        />
-        <div
-          className={`${styles.fileDropZone} ${wizard.queriesFile ? styles.fileDropZoneActive : ''}`}
-          onClick={() => queriesInputRef.current?.click()}
-        >
-          {wizard.queriesFile ? (
-            <div className={styles.fileDropName}>{wizard.queriesFile.name}</div>
-          ) : (
-            <>
-              <div className={styles.fileDropIcon}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </div>
-              <div className={styles.fileDropText}>Click to upload queries JSONL</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Concurrency */}
-      <div className={styles.formGroup}>
-        <label className={styles.formLabel}>Concurrency</label>
-        <input
-          type="number"
-          className={styles.numberInput}
-          min={1}
-          max={32}
-          value={wizard.benchmarkConfig.concurrency}
-          onChange={(e) =>
-            wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, concurrency: parseInt(e.target.value) || 4 })
-          }
-        />
-        <div className={styles.formHint}>Number of concurrent requests during benchmark</div>
-      </div>
-
-      {/* Advanced Benchmark Settings */}
-      <BenchmarkAdvancedSettings wizard={wizard} />
-
-      {/* Run button or progress */}
-      {!wizard.benchmarkJobId && (
-        <button
-          className={styles.btnPrimary}
-          onClick={wizard.startBenchmark}
-          disabled={wizard.actionLoading || !wizard.modelsFile || !wizard.queriesFile}
-        >
-          {wizard.actionLoading ? 'Starting...' : 'Run Benchmark'}
-        </button>
-      )}
-
-      {/* Progress */}
-      {wizard.benchmarkJobId && (
-        <ProgressDisplay
-          progress={wizard.benchmarkProgress.progress}
-          job={wizard.benchmarkProgress.job}
-          completed={wizard.benchmarkProgress.completed}
-        />
-      )}
-
-      {/* Success */}
-      {jobDone && (
-        <div className={styles.successCard}>
-          <div className={styles.successIcon}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="16 8 10 16 7 13" />
-            </svg>
-          </div>
-          <div className={styles.successTitle}>Benchmark Complete</div>
-          <div className={styles.successMessage}>
-            Embedding data has been collected. Proceed to the next step to train ML classifiers.
-          </div>
-        </div>
-      )}
-
-      {jobFailed && (
-        <div className={styles.errorAlert}>
-          <span>Benchmark failed: {wizard.benchmarkProgress.job?.error || 'Unknown error'}</span>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* ============================================================
    Step 1: Train
@@ -272,6 +138,9 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
 
   const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp'];
   const hasDataSource = wizard.benchmarkJobId !== null || wizard.trainingDataFile !== null;
+  const hiddenLayersError = wizard.selectedAlgorithms.includes('mlp')
+    ? getMlpHiddenLayersError(wizard.mlpHiddenSizes)
+    : null;
 
   return (
     <div className={styles.stepContent}>
@@ -373,19 +242,28 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
       {/* Advanced Training Settings */}
       <TrainAdvancedSettings wizard={wizard} />
 
+      {hiddenLayersError && <div className={styles.errorAlert}>{hiddenLayersError}</div>}
+
       {/* Run button or progress */}
       {!wizard.trainJobId && (
         <button
           className={styles.btnPrimary}
-          onClick={wizard.startTraining}
-          disabled={wizard.actionLoading || wizard.selectedAlgorithms.length === 0 || !hasDataSource}
+          onClick={() => {
+            if (!hiddenLayersError) void wizard.startTraining();
+          }}
+          disabled={
+            wizard.actionLoading ||
+            wizard.selectedAlgorithms.length === 0 ||
+            !hasDataSource ||
+            Boolean(hiddenLayersError)
+          }
         >
           {wizard.actionLoading ? 'Starting...' : 'Train Models'}
         </button>
       )}
 
       {wizard.trainJobId && (
-        <ProgressDisplay
+        <MLSetupProgressDisplay
           progress={wizard.trainProgress.progress}
           job={wizard.trainProgress.job}
           completed={wizard.trainProgress.completed}
@@ -432,44 +310,13 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
 };
 
 /* ============================================================
-   Model Names Input — edits raw text, parses on blur
-   ============================================================ */
-const ModelNamesInput: React.FC<{
-  value: string[];
-  onChange: (names: string[]) => void;
-  placeholder?: string;
-}> = ({ value, onChange, placeholder }) => {
-  const valueKey = value.join(',');
-  const [raw, setRaw] = useState(value.join(', '));
-
-  // Sync from parent when value changes externally (e.g. reset)
-  useEffect(() => {
-    setRaw(value.join(', '));
-  }, [valueKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <input
-      type="text"
-      className={styles.textInput}
-      value={raw}
-      onChange={(e) => setRaw(e.target.value)}
-      onBlur={() => {
-        const parsed = raw.split(',').map((s) => s.trim()).filter(Boolean);
-        onChange(parsed);
-        setRaw(parsed.join(', '));
-      }}
-      placeholder={placeholder}
-    />
-  );
-};
-
-/* ============================================================
    Step 2: Config
    ============================================================ */
 const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
   const jobDone = wizard.configProgress.completed && wizard.configProgress.job?.status === 'completed';
   const jobFailed = wizard.configProgress.job?.status === 'failed';
   const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp'];
+  const decisionsError = getDecisionEntriesError(wizard.decisions);
 
   return (
     <div className={styles.stepContent}>
@@ -548,25 +395,25 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
                   />
                 </div>
                 <div className={styles.formGroup}>
-                  <label className={styles.formLabel}>Domains (comma-separated)</label>
-                  <input
-                    type="text"
-                    className={styles.textInput}
-                    value={dec.domains.join(', ')}
-                    onChange={(e) =>
-                      wizard.updateDecision(idx, {
-                        domains: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                      })
-                    }
+                  <span className={styles.formLabel}>Domains</span>
+                  <StringListEditor
+                    value={dec.domains}
+                    onChange={(domains) => wizard.updateDecision(idx, { domains })}
+                    itemLabel="Domain"
+                    addLabel="Add domain"
+                    emptyLabel="No domain constraints."
                     placeholder="e.g. coding, math, general"
                   />
                 </div>
                 <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                  <label className={styles.formLabel}>Model Names (comma-separated)</label>
-                  <ModelNamesInput
+                  <span className={styles.formLabel}>Model Names</span>
+                  <StringListEditor
                     value={dec.model_names}
-                    onChange={(names) => wizard.updateDecision(idx, { model_names: names })}
-                    placeholder="e.g. gpt-4, codellama-34b"
+                    onChange={(model_names) => wizard.updateDecision(idx, { model_names })}
+                    itemLabel="Model"
+                    addLabel="Add model"
+                    emptyLabel="Add at least one model reference."
+                    placeholder="e.g. codellama-34b"
                   />
                 </div>
               </div>
@@ -579,18 +426,21 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
       </div>
 
       {/* Generate button or progress */}
+      {decisionsError && <div className={styles.errorAlert}>{decisionsError}</div>}
       {!wizard.configJobId && (
         <button
           className={styles.btnSuccess}
-          onClick={wizard.startConfigGeneration}
-          disabled={wizard.actionLoading || wizard.decisions.length === 0}
+          onClick={() => {
+            if (!decisionsError) void wizard.startConfigGeneration();
+          }}
+          disabled={wizard.actionLoading || Boolean(decisionsError)}
         >
           {wizard.actionLoading ? 'Generating...' : 'Generate Config'}
         </button>
       )}
 
       {wizard.configJobId && (
-        <ProgressDisplay
+        <MLSetupProgressDisplay
           progress={wizard.configProgress.progress}
           job={wizard.configProgress.job}
           completed={wizard.configProgress.completed}
@@ -633,72 +483,6 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
   );
 };
 
-/* ============================================================
-   Advanced Settings: Benchmark
-   ============================================================ */
-const BenchmarkAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className={styles.advancedSection}>
-      <button className={styles.advancedToggle} onClick={() => setOpen(!open)}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-        Advanced Settings
-      </button>
-      {open && (
-        <div className={styles.advancedContent}>
-          <div className={styles.advancedGrid}>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Max Tokens</label>
-              <input type="number" className={styles.numberInput} min={1} max={8192}
-                value={wizard.benchmarkConfig.max_tokens ?? 1024}
-                onChange={(e) => wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, max_tokens: parseInt(e.target.value) || 1024 })}
-              />
-              <div className={styles.formHint}>Maximum tokens in LLM response</div>
-            </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Temperature</label>
-              <input type="number" className={styles.numberInput} min={0} max={2} step={0.1}
-                value={wizard.benchmarkConfig.temperature ?? 0}
-                onChange={(e) => wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, temperature: parseFloat(e.target.value) || 0 })}
-              />
-              <div className={styles.formHint}>Generation temperature (0 = deterministic)</div>
-            </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Query Limit</label>
-              <input type="number" className={styles.numberInput} min={0}
-                value={wizard.benchmarkConfig.limit ?? 0}
-                onChange={(e) => wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, limit: parseInt(e.target.value) || 0 })}
-              />
-              <div className={styles.formHint}>Limit queries to process (0 = all)</div>
-            </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Concise Prompts</label>
-              <div className={styles.deviceSelector}>
-                <button
-                  className={`${styles.deviceOption} ${wizard.benchmarkConfig.concise ? styles.deviceOptionSelected : ''}`}
-                  onClick={() => wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, concise: true })}
-                >
-                  On
-                </button>
-                <button
-                  className={`${styles.deviceOption} ${!wizard.benchmarkConfig.concise ? styles.deviceOptionSelected : ''}`}
-                  onClick={() => wizard.setBenchmarkConfig({ ...wizard.benchmarkConfig, concise: false })}
-                >
-                  Off
-                </button>
-              </div>
-              <div className={styles.formHint}>Shorter prompts for faster inference</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* ============================================================
    Advanced Settings: Training
@@ -805,13 +589,26 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
               <div className={styles.advancedGroupTitle}>MLP Parameters</div>
               <div className={styles.advancedGrid}>
                 <div className={styles.formGroup}>
-                  <label className={styles.formLabel}>Hidden Sizes</label>
-                  <input type="text" className={styles.textInput}
-                    value={wizard.mlpHiddenSizes}
-                    onChange={(e) => wizard.setMlpHiddenSizes(e.target.value)}
-                    placeholder="256,128"
+                  <span className={styles.formLabel}>Hidden Layers</span>
+                  <ObjectListEditor
+                    value={parseMlpHiddenLayers(wizard.mlpHiddenSizes)}
+                    onChange={(values) =>
+                      wizard.setMlpHiddenSizes(serializeMlpHiddenLayers(values))
+                    }
+                    fields={HIDDEN_LAYER_FIELDS}
+                    createItem={() => ({ size: 128 })}
+                    addLabel="Add hidden layer"
+                    emptyLabel="Add at least one hidden layer."
+                    itemLabel={(item, index) =>
+                      item.size ? `Layer ${index + 1} · ${item.size} units` : `Layer ${index + 1}`
+                    }
+                    validateItem={(item) =>
+                      Number.isInteger(item.size) && (item.size ?? 0) > 0
+                        ? []
+                        : ['Layer width must be a positive integer.']
+                    }
                   />
-                  <div className={styles.formHint}>Comma-separated layer sizes</div>
+                  <div className={styles.formHint}>Layer order follows the list from input to output.</div>
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Epochs</label>
@@ -843,53 +640,5 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
   );
 };
 
-/* ============================================================
-   Progress Display Component
-   ============================================================ */
-interface ProgressDisplayProps {
-  progress: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['progress'];
-  job: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['job'];
-  completed: boolean;
-}
-
-const ProgressDisplay: React.FC<ProgressDisplayProps> = ({ progress, job }) => {
-  const rawPercent = progress?.percent ?? job?.progress ?? 0;
-  const rawStep = progress?.step ?? job?.current_step ?? '';
-  const rawMessage = progress?.message ?? '';
-  const isFailed = job?.status === 'failed';
-  const isComplete = job?.status === 'completed';
-
-  // Never let displayed progress go backwards (prevents flicker during SSE reconnect)
-  const highWaterRef = useRef({ percent: 0, step: '', message: '' });
-  if (rawPercent > highWaterRef.current.percent || isComplete || isFailed) {
-    highWaterRef.current = { percent: rawPercent, step: rawStep, message: rawMessage };
-  }
-  // Reset high water mark when job resets (new job at 0%)
-  if (rawPercent === 0 && highWaterRef.current.percent >= 100) {
-    highWaterRef.current = { percent: 0, step: '', message: '' };
-  }
-
-  const percent = highWaterRef.current.percent;
-  const step = highWaterRef.current.step;
-  const message = highWaterRef.current.message;
-
-  return (
-    <div className={styles.progressContainer}>
-      <div className={styles.progressHeader}>
-        <span className={styles.progressLabel}>{step || 'Processing...'}</span>
-        <span className={styles.progressPercent}>{percent}%</span>
-      </div>
-      <div className={styles.progressBar}>
-        <div
-          className={`${styles.progressFill} ${
-            isComplete ? styles.progressFillComplete : ''
-          } ${isFailed ? styles.progressFillFailed : ''}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      {message && <div className={styles.progressMessage}>{message}</div>}
-    </div>
-  );
-};
 
 export default MLSetupPage;

@@ -80,7 +80,18 @@ func gmtRouterLearningDecision() config.Decision {
 }
 
 func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.T) {
-	got := buildModelSelectionConfig(&config.RouterConfig{})
+	defaults := config.DefaultGlobalConfig()
+	got := buildModelSelectionConfig(&defaults)
+
+	defaultRouterDC := selection.DefaultRouterDCConfig()
+	if !reflect.DeepEqual(got.RouterDC, defaultRouterDC) {
+		t.Fatalf("RouterDC default drift:\n got: %+v\nwant: %+v", got.RouterDC, defaultRouterDC)
+	}
+
+	defaultHybrid := selection.DefaultHybridConfig()
+	if !reflect.DeepEqual(got.Hybrid, defaultHybrid) {
+		t.Fatalf("Hybrid default drift:\n got: %+v\nwant: %+v", got.Hybrid, defaultHybrid)
+	}
 
 	defaultRL := selection.DefaultRLDrivenConfig()
 	if !reflect.DeepEqual(got.RLDriven, defaultRL) {
@@ -93,7 +104,54 @@ func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.
 	}
 }
 
-func TestBuildModelSelectionConfigUsesDecisionScopedMultiFactorConfig(t *testing.T) {
+func TestBuildModelSelectionConfigPreservesExplicitFalseOverrides(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.IntelligentRouting.ModelSelection.RouterDC.UseCapabilities = false
+	cfg.IntelligentRouting.ModelSelection.Hybrid.NormalizeScores = false
+
+	got := buildModelSelectionConfig(&cfg)
+
+	if got.RouterDC == nil {
+		t.Fatal("expected RouterDC config to be built")
+	}
+	if got.RouterDC.UseCapabilities {
+		t.Fatalf("expected explicit router_dc.use_capabilities=false to be preserved, got %+v", got.RouterDC)
+	}
+	if got.RouterDC.Temperature != selection.DefaultRouterDCConfig().Temperature {
+		t.Fatalf("expected router_dc defaults to survive explicit false override, got %+v", got.RouterDC)
+	}
+
+	if got.Hybrid == nil {
+		t.Fatal("expected Hybrid config to be built")
+	}
+	if got.Hybrid.NormalizeScores {
+		t.Fatalf("expected explicit hybrid.normalize_scores=false to be preserved, got %+v", got.Hybrid)
+	}
+	if got.Hybrid.RouterDCWeight != selection.DefaultHybridConfig().RouterDCWeight {
+		t.Fatalf("expected hybrid defaults to survive explicit false override, got %+v", got.Hybrid)
+	}
+}
+
+func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+
+	got := buildHybridSelectionConfig(&cfg, &config.HybridSelectionConfig{
+		ExperienceWeight: 0.6,
+		RouterDCWeight:   0.4,
+	})
+
+	if got == nil {
+		t.Fatal("expected Hybrid config to be built")
+	}
+	if got.ExperienceWeight != 0.6 || got.RouterDCWeight != 0.4 {
+		t.Fatalf("expected decision-scoped hybrid weights, got %+v", got)
+	}
+	if got.AutoMixWeight != selection.DefaultHybridConfig().AutoMixWeight || !got.NormalizeScores {
+		t.Fatalf("expected decision-scoped hybrid config to preserve remaining defaults, got %+v", got)
+	}
+}
+
+func TestBuildModelSelectionConfigDoesNotPromoteDecisionMultiFactorConfig(t *testing.T) {
 	got := buildModelSelectionConfig(&config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
@@ -126,16 +184,17 @@ func TestBuildModelSelectionConfigUsesDecisionScopedMultiFactorConfig(t *testing
 	if got.MultiFactor == nil {
 		t.Fatal("expected MultiFactor config to be built")
 	}
-	assertFloat(t, got.MultiFactor.Weights.Quality, 0.7, "multi_factor.weights.quality")
-	assertFloat(t, got.MultiFactor.Weights.Latency, 0.2, "multi_factor.weights.latency")
-	assertFloat(t, got.MultiFactor.Weights.Cost, 0.1, "multi_factor.weights.cost")
-	assertFloat(t, got.MultiFactor.Weights.Load, 0.0, "multi_factor.weights.load")
-	assertFloat(t, got.MultiFactor.SLO.MaxTPOTMs, 85, "multi_factor.slo.max_tpot_ms")
-	assertFloat(t, got.MultiFactor.SLO.MaxTTFTMs, 550, "multi_factor.slo.max_ttft_ms")
-	assertFloat(t, got.MultiFactor.SLO.MaxCostPer1M, 2.4, "multi_factor.slo.max_cost_per_1m")
-	assertInt(t, got.MultiFactor.SLO.MaxInflight, 32, "multi_factor.slo.max_inflight")
-	assertInt(t, got.MultiFactor.LatencyPercentile, 90, "multi_factor.latency_percentile")
-	assertString(t, got.MultiFactor.OnNoCandidates, "fail", "multi_factor.on_no_candidates")
+	defaults := selection.DefaultMultiFactorConfig()
+	assertFloat(t, got.MultiFactor.Weights.Quality, defaults.Weights.Quality, "multi_factor.weights.quality")
+	assertFloat(t, got.MultiFactor.Weights.Latency, defaults.Weights.Latency, "multi_factor.weights.latency")
+	assertFloat(t, got.MultiFactor.Weights.Cost, defaults.Weights.Cost, "multi_factor.weights.cost")
+	assertFloat(t, got.MultiFactor.Weights.Load, defaults.Weights.Load, "multi_factor.weights.load")
+	assertFloat(t, got.MultiFactor.SLO.MaxTPOTMs, 0, "multi_factor.slo.max_tpot_ms")
+	assertFloat(t, got.MultiFactor.SLO.MaxTTFTMs, 0, "multi_factor.slo.max_ttft_ms")
+	assertFloat(t, got.MultiFactor.SLO.MaxCostPer1M, 0, "multi_factor.slo.max_cost_per_1m")
+	assertInt(t, got.MultiFactor.SLO.MaxInflight, 0, "multi_factor.slo.max_inflight")
+	assertInt(t, got.MultiFactor.LatencyPercentile, defaults.LatencyPercentile, "multi_factor.latency_percentile")
+	assertString(t, got.MultiFactor.OnNoCandidates, defaults.OnNoCandidates, "multi_factor.on_no_candidates")
 }
 
 func assertFloat(t *testing.T, got, want float64, field string) {

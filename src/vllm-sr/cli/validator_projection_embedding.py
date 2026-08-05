@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cli.config_contract import CONDITION_TYPE_PROJECTION, iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -61,7 +62,7 @@ def _projection_deps_from_inputs(
 ) -> list[str]:
     deps: list[str] = []
     for inp in inputs or []:
-        if (getattr(inp, "type", "") or "").lower() != "projection":
+        if (getattr(inp, "type", "") or "").lower() != CONDITION_TYPE_PROJECTION:
             continue
         dep_name = getattr(inp, "name", None)
         if not dep_name:
@@ -92,14 +93,69 @@ def _projection_deps_from_inputs(
     return deps
 
 
-def validate_projection_score_dependencies(
-    config: UserConfig,
+def _register_projection_names(
+    kind: str,
+    collection: list,
+    declared_names: dict[str, set[str]],
+    output_names: set[str],
+    errors: list[ValidationError],
+    profile_name: str,
+) -> None:
+    for projection in collection:
+        name = getattr(projection, "name", "")
+        if name and name in declared_names[kind]:
+            errors.append(
+                ValidationError(
+                    field=f"recipes.{profile_name}.routing.projections.{kind}",
+                    message=(
+                        f'duplicate projection name "{name}" in recipe '
+                        f'"{profile_name}"'
+                    ),
+                )
+            )
+        if name:
+            declared_names[kind].add(name)
+        if kind != "mappings":
+            continue
+        for output in getattr(projection, "outputs", None) or []:
+            output_name = getattr(output, "name", "")
+            if output_name and output_name in output_names:
+                errors.append(
+                    ValidationError(
+                        field=(f"recipes.{profile_name}.routing.projections.mappings"),
+                        message=(
+                            f'duplicate projection output "{output_name}" in recipe '
+                            f'"{profile_name}"'
+                        ),
+                    )
+                )
+            if output_name:
+                output_names.add(output_name)
+
+
+def _validate_projection_profile(
+    projections, profile_name: str
 ) -> list[ValidationError]:
-    """Validate that projection scores have no dependency cycles."""
     errors: list[ValidationError] = []
-    projections = getattr(getattr(config, "routing", None), "projections", None)
-    if not projections:
-        return errors
+    declared_names: dict[str, set[str]] = {
+        "scores": set(),
+        "mappings": set(),
+        "partitions": set(),
+    }
+    output_names: set[str] = set()
+    for kind, collection in (
+        ("scores", getattr(projections, "scores", None) or []),
+        ("mappings", getattr(projections, "mappings", None) or []),
+        ("partitions", getattr(projections, "partitions", None) or []),
+    ):
+        _register_projection_names(
+            kind,
+            collection,
+            declared_names,
+            output_names,
+            errors,
+            profile_name,
+        )
 
     scores = getattr(projections, "scores", None) or []
     score_names = {s.name for s in scores if s.name}
@@ -135,6 +191,16 @@ def validate_projection_score_dependencies(
     return errors
 
 
+def validate_projection_score_dependencies(
+    config: UserConfig,
+) -> list[ValidationError]:
+    """Validate each recipe's projection graph as an isolated namespace."""
+    errors: list[ValidationError] = []
+    for profile_name, routing in iter_routing_profiles(config):
+        errors.extend(_validate_projection_profile(routing.projections, profile_name))
+    return errors
+
+
 def validate_embedding_modality_compatibility(
     config: UserConfig,
 ) -> list[ValidationError]:
@@ -159,7 +225,11 @@ def validate_embedding_modality_compatibility(
         list: List of validation errors
     """
     errors: list[ValidationError] = []
-    embeddings = config.signals.embeddings or []
+    embeddings = [
+        embedding
+        for _, routing in iter_routing_profiles(config)
+        for embedding in routing.signals.embeddings or []
+    ]
     if not embeddings:
         return errors
 

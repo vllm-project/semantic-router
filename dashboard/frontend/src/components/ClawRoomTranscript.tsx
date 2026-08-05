@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+
 import MarkdownRenderer from './MarkdownRenderer'
 import ClawRoomMessageMeta from './ClawRoomMessageMeta'
 import ClawRoomStreamingToolCards from './ClawRoomStreamingToolCards'
@@ -28,6 +30,8 @@ interface ClawRoomTranscriptProps {
   resolveSenderVisual: (message: RoomMessage) => SenderVisual
 }
 
+const TRANSCRIPT_PAGE_SIZE = 100
+
 const ClawRoomTranscript = ({
   selectedRoomId,
   messages,
@@ -37,6 +41,30 @@ const ClawRoomTranscript = ({
   streamingToolTraces,
   resolveSenderVisual,
 }: ClawRoomTranscriptProps) => {
+  const [visibleMessageCount, setVisibleMessageCount] = useState(TRANSCRIPT_PAGE_SIZE)
+  const previousMessageCountRef = useRef(messages.length)
+  const previousRoomIdRef = useRef(selectedRoomId)
+
+  useEffect(() => {
+    if (previousRoomIdRef.current !== selectedRoomId) {
+      previousRoomIdRef.current = selectedRoomId
+      previousMessageCountRef.current = messages.length
+      setVisibleMessageCount(TRANSCRIPT_PAGE_SIZE)
+      return
+    }
+    const addedMessages = Math.max(0, messages.length - previousMessageCountRef.current)
+    if (addedMessages > 0) {
+      setVisibleMessageCount((count) => count + addedMessages)
+    }
+    previousMessageCountRef.current = messages.length
+  }, [messages.length, selectedRoomId])
+
+  const hiddenMessageCount = Math.max(0, messages.length - visibleMessageCount)
+  const visibleMessages = useMemo(
+    () => messages.slice(Math.max(0, messages.length - visibleMessageCount)),
+    [messages, visibleMessageCount],
+  )
+
   if (!selectedRoomId) {
     return <div className={styles.stateHint}>Select a room from the left panel.</div>
   }
@@ -47,16 +75,33 @@ const ClawRoomTranscript = ({
 
   return (
     <>
-      {messages.map(message => {
+      {hiddenMessageCount > 0 ? (
+        <div className={styles.transcriptHistoryControl}>
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleMessageCount((count) =>
+                Math.min(messages.length, count + TRANSCRIPT_PAGE_SIZE),
+              )
+            }
+          >
+            Load earlier messages
+          </button>
+          <span>{hiddenMessageCount} earlier messages</span>
+        </div>
+      ) : null}
+
+      {visibleMessages.map((message) => {
         const isUser = message.senderType === 'user'
         const isSystem = message.senderType === 'system'
         const isLeader = message.senderType === 'leader'
         const isWorker = message.senderType === 'worker'
         const senderVisual = resolveSenderVisual(message)
         const streamingContent = streamingMessages.get(message.id)
-        const displayContent = streamingContent && streamingContent !== message.content
-          ? streamingContent
-          : message.content
+        const displayContent =
+          streamingContent && streamingContent !== message.content
+            ? streamingContent
+            : message.content
         const isStreaming = Boolean(streamingContent && streamingContent !== message.content)
         const liveToolSteps = streamingToolTraces.get(message.id)?.steps || []
         const metadataToolSteps = parseClawRoomToolTraceFromMessageMetadata(message.metadata)
@@ -93,10 +138,8 @@ const ClawRoomTranscript = ({
         )
       })}
       {streamingEntries.map(([messageId, content]) => {
-        const { participantType, displayName, isLeader, isWorker } = resolveStreamingParticipantDisplay(
-          messageId,
-          streamingParticipants
-        )
+        const { participantType, displayName, isLeader, isWorker } =
+          resolveStreamingParticipantDisplay(messageId, streamingParticipants)
         const toolSteps = streamingToolTraces.get(messageId)?.steps || []
         return (
           <div

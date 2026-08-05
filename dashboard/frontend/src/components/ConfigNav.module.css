@@ -1,8 +1,8 @@
 .nav {
   width: 280px;
-  background-color: var(--color-bg-secondary);
+  background-color: #101012;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   overflow: hidden;
   height: fit-content;
   flex-shrink: 0;
@@ -10,7 +10,7 @@
 
 .navHeader {
   padding: 1.25rem 1.5rem;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  background: #18181b;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -38,18 +38,21 @@
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
   text-align: left;
   margin-bottom: 0.25rem;
 }
 
 .navItem:hover {
-  background-color: rgba(99, 102, 241, 0.05);
+  background-color: #18181b;
 }
 
 .navItem.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
-  border-left: 3px solid var(--color-primary);
+  background: #18181b;
+  border-left: 3px solid var(--brand-amd);
   padding-left: calc(1rem - 3px);
 }
 
@@ -76,7 +79,7 @@
 }
 
 .navItem.active .navItemTitle {
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .navItemDesc {
@@ -95,5 +98,5 @@
 }
 
 .navItem.active .navItemDesc {
-  color: rgba(99, 102, 241, 0.8);
+  color: var(--color-text-secondary);
 }

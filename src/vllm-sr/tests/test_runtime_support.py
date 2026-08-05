@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -8,8 +10,25 @@ from cli.commands.runtime_support import (
     configure_runtime_override_env_vars,
     resolve_effective_config_path,
 )
+from cli.container_start import _build_dashboard_runtime_env
+from cli.runtime_stack import resolve_runtime_stack
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_runtime_support_import_does_not_load_optional_cli_dependencies():
+    script = """
+import sys
+
+import cli.commands.runtime_support
+
+assert "cli.commands.config" not in sys.modules
+assert "cli.commands.model" not in sys.modules
+assert "jinja2" not in sys.modules
+assert "requests" not in sys.modules
+"""
+
+    subprocess.run([sys.executable, "-c", script], check=True)
 
 
 def test_apply_runtime_mode_env_vars_sets_dashboard_readonly_when_requested():
@@ -67,6 +86,28 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
     assert env_vars["SR_LOG_ENCODING"] == "console"
 
 
+def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "core@vllm-sr.ai")
+    monkeypatch.setenv("DASHBOARD_ADMIN_PASSWORD", "core")
+    monkeypatch.setenv("DASHBOARD_ADMIN_NAME", "Core")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars)
+
+    assert "DASHBOARD_ADMIN_EMAIL" not in env_vars
+    assert "DASHBOARD_ADMIN_PASSWORD" not in env_vars
+    assert "DASHBOARD_ADMIN_NAME" not in env_vars
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env=env_vars,
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+    assert dashboard_env["DASHBOARD_ADMIN_EMAIL"] == "core@vllm-sr.ai"
+    assert dashboard_env["DASHBOARD_ADMIN_PASSWORD"] == "core"
+    assert dashboard_env["DASHBOARD_ADMIN_NAME"] == "Core"
+
+
 def test_resolve_effective_config_path_enables_amd_gpu_by_default(
     tmp_path: Path, monkeypatch
 ):
@@ -119,6 +160,107 @@ def test_resolve_effective_config_path_enables_amd_gpu_by_default(
             "use_cpu"
         ]
         is False
+    )
+
+
+def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("VLLM_SR_NVIDIA_FORCE_GPU", raising=False)
+    monkeypatch.delenv("VLLM_SR_NVIDIA_PRESERVE_CPU", raising=False)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "global": {
+                    "model_catalog": {
+                        "embeddings": {
+                            "semantic": {
+                                "use_cpu": True,
+                                "embedding_config": {"model_type": "mmbert"},
+                            }
+                        },
+                        "modules": {
+                            "prompt_guard": {"use_cpu": True},
+                            "classifier": {
+                                "domain": {"use_cpu": True},
+                            },
+                        },
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform="nvidia",
+    )
+
+    effective = yaml.safe_load(effective_path.read_text())
+    assert (
+        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
+        is False
+    )
+    assert (
+        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
+        is False
+    )
+    assert (
+        effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
+            "use_cpu"
+        ]
+        is False
+    )
+
+
+def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setenv("VLLM_SR_NVIDIA_PRESERVE_CPU", "1")
+    monkeypatch.delenv("VLLM_SR_NVIDIA_FORCE_GPU", raising=False)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "global": {
+                    "model_catalog": {
+                        "embeddings": {
+                            "semantic": {
+                                "use_cpu": True,
+                                "embedding_config": {"model_type": "mmbert"},
+                            }
+                        },
+                        "modules": {
+                            "prompt_guard": {"use_cpu": True},
+                        },
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform="nvidia",
+    )
+
+    effective = yaml.safe_load(effective_path.read_text())
+    assert (
+        effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
+        is True
+    )
+    assert (
+        effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
+        is True
     )
 
 
@@ -205,14 +347,14 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm="elo",
+        algorithm="multi_factor",
         setup_mode=False,
         platform="amd",
     )
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
+    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
         is False
@@ -289,7 +431,7 @@ def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_defaul
     monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
     monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
     config_path = tmp_path / "config.yaml"
-    balance_recipe = REPO_ROOT / "deploy" / "recipes" / "balance.yaml"
+    balance_recipe = REPO_ROOT / "config" / "recipes" / "balance" / "config.yaml"
     config_path.write_text(balance_recipe.read_text(encoding="utf-8"))
 
     effective_path = resolve_effective_config_path(

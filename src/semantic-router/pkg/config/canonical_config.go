@@ -9,11 +9,13 @@ import (
 
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version   string             `yaml:"version,omitempty"`
-	Listeners []Listener         `yaml:"listeners,omitempty"`
-	Providers CanonicalProviders `yaml:"providers,omitempty"`
-	Routing   CanonicalRouting   `yaml:"routing,omitempty"`
-	Global    *CanonicalGlobal   `yaml:"global,omitempty"`
+	Version     string                `yaml:"version,omitempty"`
+	Listeners   []Listener            `yaml:"listeners,omitempty"`
+	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
+	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
@@ -24,28 +26,31 @@ type CanonicalRouting struct {
 	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
 	Projections CanonicalProjections `yaml:"projections,omitempty"`
 	Decisions   []Decision           `yaml:"decisions,omitempty"`
+	Strategy    RoutingStrategy      `yaml:"strategy,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
-	Domains       []Category         `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
-	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
-	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
-	Language      []LanguageRule     `yaml:"language,omitempty"`
-	Context       []ContextRule      `yaml:"context,omitempty"`
-	Structure     []StructureRule    `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule     `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PII           []PIIRule          `yaml:"pii,omitempty"`
-	KB            []KBSignalRule     `yaml:"kb,omitempty"`
-	Conversation  []ConversationRule `yaml:"conversation,omitempty"`
-	EventRules    []EventRule        `yaml:"events,omitempty"`
+	Keywords      []KeywordRule          `yaml:"keywords,omitempty"`
+	Embeddings    []EmbeddingRule        `yaml:"embeddings,omitempty"`
+	Domains       []Category             `yaml:"domains,omitempty"`
+	FactCheck     []FactCheckRule        `yaml:"fact_check,omitempty"`
+	UserFeedbacks []UserFeedbackRule     `yaml:"user_feedbacks,omitempty"`
+	Reasks        []ReaskRule            `yaml:"reasks,omitempty"`
+	Preferences   []PreferenceRule       `yaml:"preferences,omitempty"`
+	Language      []LanguageRule         `yaml:"language,omitempty"`
+	Context       []ContextRule          `yaml:"context,omitempty"`
+	Structure     []StructureRule        `yaml:"structure,omitempty"`
+	Complexity    []ComplexityRule       `yaml:"complexity,omitempty"`
+	Modality      []ModalityRule         `yaml:"modality,omitempty"`
+	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
+	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	PII           []PIIRule              `yaml:"pii,omitempty"`
+	KB            []KBSignalRule         `yaml:"kb,omitempty"`
+	Conversation  []ConversationRule     `yaml:"conversation,omitempty"`
+	EventRules    []EventRule            `yaml:"events,omitempty"`
+	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
+	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -90,6 +95,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	applyCanonicalRoutingState(&cfg, canonical)
+	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
+		return nil, err
+	}
 	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
 		return nil, err
 	}
@@ -107,6 +115,9 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
+	if canonical.Routing.Strategy != "" {
+		cfg.Strategy = canonical.Routing.Strategy
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -215,18 +226,53 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		}
 	}
 
-	for _, decision := range canonical.Routing.Decisions {
-		for _, modelRef := range decision.ModelRefs {
-			if modelRef.Model == "" || modelRef.LoRAName == "" {
-				continue
+	return validateCanonicalDecisions(canonical.Routing.Decisions, modelsByName, modelCards)
+}
+
+func validateCanonicalDecisions(decisions []Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+	decisionNames := make(map[string]bool, len(decisions))
+	for _, decision := range decisions {
+		if decision.Name != "" {
+			if decisionNames[decision.Name] {
+				return fmt.Errorf("routing.decisions[%s]: duplicate decision name", decision.Name)
 			}
-			card, ok := modelsByName[modelRef.Model]
-			if !ok {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
-			}
-			if !routingModelHasLoRA(card, modelRef.LoRAName) {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
-			}
+			decisionNames[decision.Name] = true
+		}
+
+		if err := validateCanonicalDecisionModelRefs(decision, modelsByName, modelCards); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[string]RoutingModel, modelCards []RoutingModel) error {
+	for _, modelRef := range decision.ModelRefs {
+		if modelRef.Model == "" {
+			continue
+		}
+		// Reject modelRefs that point at a model the config does not define.
+		// Previously this was only checked when a lora_name was also set, so a
+		// plain modelRef to an unknown model slipped through and only failed at
+		// request time with a misleading upstream "401 No api key".
+		//
+		// Only enforced when the config declares a model surface (modelCards).
+		// Partial DSL fragments without modelCards (e.g. config/decision/**
+		// examples) carry no model surface to validate against and are skipped,
+		// mirroring how default_model existence is only checked when set.
+		if len(modelCards) > 0 && !canonicalModelOrLoRAExists(modelsByName, modelCards, modelRef.Model) {
+			return fmt.Errorf("routing.decisions[%s].modelRefs[%s] references unknown model %q", decision.Name, modelRef.Model, modelRef.Model)
+		}
+		if modelRef.LoRAName == "" {
+			continue
+		}
+		card, ok := modelsByName[modelRef.Model]
+		if !ok {
+			continue
+		}
+		if !routingModelHasLoRA(card, modelRef.LoRAName) {
+			return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q not found in routing.modelCards[%s].loras", decision.Name, modelRef.Model, modelRef.LoRAName, modelRef.Model)
 		}
 	}
 
@@ -253,6 +299,8 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		KBRules:           append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
 		EventRules:        append([]EventRule(nil), signals.EventRules...),
+		MetadataRules:     append([]MetadataRule(nil), signals.Metadata...),
+		ClassifierRules:   append([]ClassifierSignalRule(nil), signals.Classifiers...),
 	}
 
 	if len(result.Categories) == 0 {
@@ -301,10 +349,11 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		params.PreferredEndpoints = make([]string, 0, len(backendRefs))
 		for index, backendRef := range backendRefs {
 			endpointName := canonicalEndpointName(model.Name, backendRef, index)
+			backendType := canonicalBackendType(backendRef)
 			endpoint := VLLMEndpoint{
 				Name:     endpointName,
 				Weight:   backendRef.Weight,
-				Type:     backendRef.Type,
+				Type:     backendType,
 				Protocol: defaultProtocol(backendRef.Protocol),
 				Model:    model.Name,
 				APIKey:   resolveBackendAPIKey(backendRef),
@@ -361,14 +410,7 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 
 	result := map[string]string{}
 	for _, backendRef := range canonicalBackendRefs(model) {
-		key := backendRef.Type
-		if key == "" {
-			key = backendRef.Provider
-		}
-		if key == "" {
-			key = "vllm"
-		}
-		result[key] = model.ProviderModelID
+		result[canonicalBackendType(backendRef)] = model.ProviderModelID
 	}
 	// When no backend_refs are defined (metadata-only provider model),
 	// still store the provider_model_id so pricing lookups by provider
@@ -377,6 +419,16 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 		result["default"] = model.ProviderModelID
 	}
 	return result
+}
+
+func canonicalBackendType(backendRef CanonicalBackendRef) string {
+	if backendRef.Type != "" {
+		return backendRef.Type
+	}
+	if backendRef.Provider != "" {
+		return backendRef.Provider
+	}
+	return "vllm"
 }
 
 func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, index int) string {

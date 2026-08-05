@@ -2,9 +2,8 @@
 //!
 //! These exercise the free function in isolation (random `q`/`k`/`v`, no model) and
 //! assert it is numerically identical to a dense reference that materializes the full
-//! `(b, heads, seq, seq)` score matrix. Causal masking is reserved and not yet
-//! implemented; the only causal coverage here asserts the kernel hard-fails when a
-//! caller sets `causal: true` (the implementation lands with the generative migration).
+//! `(b, heads, seq, seq)` score matrix — across global, sliding-window, and causal
+//! masking (and their combinations with padding).
 
 use super::chunked_sdpa::*;
 use candle_core::{DType, Device, Tensor, D};
@@ -17,6 +16,7 @@ fn dense_sdpa_reference(
     v: &Tensor,
     pad_mask: Option<&Tensor>,
     window: Option<usize>,
+    causal: bool,
     scale: f64,
 ) -> Tensor {
     let (_b, _h, seq_len, _hd) = q.dims4().unwrap();
@@ -37,6 +37,13 @@ fn dense_sdpa_reference(
             .to_dtype(att.dtype())
             .unwrap();
         att = att.broadcast_add(&band).unwrap();
+    }
+    if causal {
+        let tri = build_causal_mask(0, seq_len, 0, seq_len, device)
+            .unwrap()
+            .to_dtype(att.dtype())
+            .unwrap();
+        att = att.broadcast_add(&tri).unwrap();
     }
     let att = candle_nn::ops::softmax(&att, D::Minus1).unwrap();
     let v = v.contiguous().unwrap();
@@ -87,7 +94,7 @@ fn test_chunked_sdpa_matches_dense() {
     for window in [None, Some(window_size)] {
         for &seq_len in &[1usize, 5, 16, 40] {
             let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
-            let reference = dense_sdpa_reference(&q, &k, &v, None, window, scale);
+            let reference = dense_sdpa_reference(&q, &k, &v, None, window, false, scale);
 
             for &block in &[0usize, 1, 3, 8, 16, 512] {
                 let cfg = ChunkedSdpaConfig {
@@ -131,7 +138,7 @@ fn test_chunked_sdpa_matches_dense_with_padding() {
     let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
 
     for window in [None, Some(window_size)] {
-        let reference = dense_sdpa_reference(&q, &k, &v, Some(&pad), window, scale);
+        let reference = dense_sdpa_reference(&q, &k, &v, Some(&pad), window, false, scale);
         for &block in &[3usize, 8, 512] {
             let cfg = ChunkedSdpaConfig {
                 block_size: block,
@@ -168,7 +175,7 @@ fn test_chunked_sdpa_matches_dense_f64() {
     let k = Tensor::randn(0f64, 1f64, shape, &device).unwrap();
     let v = Tensor::randn(0f64, 1f64, shape, &device).unwrap();
 
-    let reference = dense_sdpa_reference(&q, &k, &v, None, window, scale);
+    let reference = dense_sdpa_reference(&q, &k, &v, None, window, false, scale);
     for &block in &[3usize, 8, 512] {
         let cfg = ChunkedSdpaConfig {
             block_size: block,
@@ -184,23 +191,106 @@ fn test_chunked_sdpa_matches_dense_f64() {
 }
 
 #[test]
-fn test_chunked_sdpa_rejects_causal() {
-    // `causal` is reserved and not yet implemented: the kernel must hard-fail rather
-    // than silently return non-causal attention. Locks in the guard so a future
-    // caller can't accidentally rely on unsupported semantics.
+fn test_chunked_sdpa_matches_dense_causal() {
     let device = Device::Cpu;
+    let heads = 4;
     let head_dim = 8;
-    let (q, k, v) = random_qkv(2, 5, head_dim, &device);
-    let cfg = ChunkedSdpaConfig {
-        block_size: 512,
-        window: None,
-        causal: true,
-        scale: (head_dim as f64).powf(-0.5),
-    };
-    assert!(
-        chunked_sdpa(&q, &k, &v, None, &cfg).is_err(),
-        "causal=true must return an error until causal masking is implemented"
-    );
+    let scale = (head_dim as f64).powf(-0.5);
+    let window_size = 4;
+
+    // Causal global + causal sliding-window (intersection of the triangle and the
+    // band), across the same block/seq sweep as the non-causal test.
+    for window in [None, Some(window_size)] {
+        for &seq_len in &[1usize, 5, 16, 40] {
+            let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+            let reference = dense_sdpa_reference(&q, &k, &v, None, window, true, scale);
+
+            for &block in &[0usize, 1, 3, 8, 16, 512] {
+                let cfg = ChunkedSdpaConfig {
+                    block_size: block,
+                    window,
+                    causal: true,
+                    scale,
+                };
+                let chunked = chunked_sdpa(&q, &k, &v, None, &cfg).unwrap();
+                let diff = max_abs_diff(&chunked, &reference);
+                assert!(
+                    diff < 1e-4,
+                    "causal window={:?} seq={} block={}: max|Δ|={}",
+                    window,
+                    seq_len,
+                    block,
+                    diff
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_matches_dense_causal_with_padding() {
+    let device = Device::Cpu;
+    let heads = 4;
+    let head_dim = 8;
+    let scale = (head_dim as f64).powf(-0.5);
+    let window_size = 4;
+    let seq_len = 24;
+
+    // Trailing padding: a causal query at a real position still attends to real
+    // earlier keys, so no row is all -inf (no softmax NaN).
+    let mut mask_vec = vec![1u32; seq_len];
+    for m in mask_vec.iter_mut().skip(seq_len - 7) {
+        *m = 0;
+    }
+    let raw_mask = Tensor::from_vec(mask_vec, (1, seq_len), &device).unwrap();
+    let pad = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+
+    let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+
+    for window in [None, Some(window_size)] {
+        let reference = dense_sdpa_reference(&q, &k, &v, Some(&pad), window, true, scale);
+        for &block in &[3usize, 8, 512] {
+            let cfg = ChunkedSdpaConfig {
+                block_size: block,
+                window,
+                causal: true,
+                scale,
+            };
+            let chunked = chunked_sdpa(&q, &k, &v, Some(&pad), &cfg).unwrap();
+            let diff = max_abs_diff(&chunked, &reference);
+            assert!(
+                diff < 1e-4,
+                "causal+padding window={:?} block={}: max|Δ|={}",
+                window,
+                block,
+                diff
+            );
+        }
+    }
+}
+
+#[test]
+fn test_causal_mask_semantics() {
+    let device = Device::Cpu;
+    // Offset block: queries [10,14), keys [6,20).
+    let mask = build_causal_mask(10, 4, 6, 14, &device).unwrap();
+    assert_eq!(mask.dims(), &[4, 14]);
+    let data: Vec<f32> = mask.flatten_all().unwrap().to_vec1().unwrap();
+    for a in 0..4usize {
+        let i = 10 + a as i64;
+        for c in 0..14usize {
+            let j = 6 + c as i64;
+            let v = data[a * 14 + c];
+            if j > i {
+                assert!(
+                    v.is_infinite() && v.is_sign_negative(),
+                    "expected -inf at ({a},{c})"
+                );
+            } else {
+                assert_eq!(v, 0.0, "expected 0 at ({a},{c})");
+            }
+        }
+    }
 }
 
 #[test]

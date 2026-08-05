@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -30,6 +31,7 @@ type ComplexityClassifier struct {
 	modelType          string // Model type for text embeddings ("qwen3" or "gemma")
 	hasImageCandidates bool   // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
+	provider           embedding.Provider
 }
 
 type ComplexityRuleResult struct {
@@ -52,9 +54,14 @@ func NewComplexityClassifier(
 	rules []config.ComplexityRule,
 	modelType string,
 	prototypeCfg config.PrototypeScoringConfig,
+	providers ...embedding.Provider,
 ) (*ComplexityClassifier, error) {
 	if modelType == "" {
 		modelType = "qwen3"
+	}
+	var provider embedding.Provider
+	if len(providers) > 0 {
+		provider = providers[0]
 	}
 
 	c := &ComplexityClassifier{
@@ -70,6 +77,7 @@ func NewComplexityClassifier(
 		modelType:               modelType,
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
+		provider:                provider,
 	}
 
 	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{

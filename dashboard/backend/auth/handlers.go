@@ -23,7 +23,12 @@ type LoginResponse struct {
 }
 
 type ListUsersResponse struct {
-	Users []*User `json:"users"`
+	Users      []*User `json:"users"`
+	Total      int     `json:"total"`
+	Page       int     `json:"page"`
+	Limit      int     `json:"limit"`
+	Active     int     `json:"active"`
+	Privileged int     `json:"privileged"`
 }
 
 type BootstrapStatusResponse struct {

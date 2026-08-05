@@ -11,15 +11,13 @@ import type {
   Signal,
 } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
-import {
-  buildToolTraceFields,
-  renderToolNamesCell,
-} from './insightsPageToolTrace'
+import { buildToolTraceFields, renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
 interface InsightsFilterState {
   searchTerm: string
   filter: InsightsFilterType
+  recipeFilter: string
   decisionFilter: string
   modelFilter: string
 }
@@ -54,6 +52,9 @@ export function filterInsightsRecords(records: InsightsRecord[], filters: Insigh
       return false
     }
     if (filters.filter === 'streamed' && !record.streaming) {
+      return false
+    }
+    if (filters.recipeFilter !== 'all' && record.recipe !== filters.recipeFilter) {
       return false
     }
     if (filters.decisionFilter !== 'all' && record.decision !== filters.decisionFilter) {
@@ -165,6 +166,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       render: (row) => <span className={styles.timestamp}>{formatDate(row.timestamp)}</span>,
     },
     {
+      key: 'recipe',
+      header: 'Recipe',
+      width: '140px',
+      sortable: true,
+      render: (row) => <span className={styles.decision}>{row.recipe || 'default'}</span>,
+    },
+    {
       key: 'decision',
       header: 'Decision',
       width: '180px',
@@ -243,9 +251,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
             <strong className={styles.costValuePositive}>
               {formatCurrency(row.cost_savings ?? 0, row.currency)}
             </strong>
-            <span className={styles.costSubtle}>
-              Baseline: {row.baseline_model}
-            </span>
+            <span className={styles.costSubtle}>Baseline: {row.baseline_model}</span>
           </div>
         )
       },
@@ -273,8 +279,12 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>Cache</span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>Stream</span>
+          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>
+            Cache
+          </span>
+          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>
+            Stream
+          </span>
         </div>
       ),
     },
@@ -290,12 +300,15 @@ export function buildInsightsRecordSections(
   sections.push({
     title: 'Decision Information',
     fields: [
+      { label: 'Recipe', value: record.recipe || 'default' },
       { label: 'Decision name', value: record.decision || '-' },
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
         label: 'Category',
-        value: record.signals?.domain?.length ? record.signals.domain.join(', ') : record.category || '-',
+        value: record.signals?.domain?.length
+          ? record.signals.domain.join(', ')
+          : record.category || '-',
       },
       {
         label: 'Confidence score',
@@ -346,13 +359,17 @@ export function buildInsightsRecordSections(
   sections.push({
     title: 'Usage & Cost',
     fields: [
+      { label: 'Context tokens', value: formatTokenValue(record.context_token_count) },
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
       { label: 'Baseline model', value: record.baseline_model || '-' },
       { label: 'Actual cost', value: formatCurrencyOrNA(record.actual_cost, record.currency) },
       { label: 'Baseline cost', value: formatCurrencyOrNA(record.baseline_cost, record.currency) },
-      { label: 'Saved vs baseline', value: formatCurrencyOrNA(record.cost_savings, record.currency) },
+      {
+        label: 'Saved vs baseline',
+        value: formatCurrencyOrNA(record.cost_savings, record.currency),
+      },
     ],
   })
 
@@ -368,6 +385,7 @@ export function buildInsightsRecordSections(
     title: 'Plugin Status',
     fields: [
       { label: 'Cache', value: record.from_cache ? 'Hit' : 'Miss' },
+      { label: 'Cache similarity', value: formatSimilarityValue(record.cache_similarity) },
       { label: 'Streaming', value: record.streaming ? 'On' : 'Off' },
       { label: 'Guardrails', value: buildGuardrailsValue(record) },
       { label: 'RAG', value: buildRagValue(record) },
@@ -450,10 +468,7 @@ function buildSignalFields(signals: Signal): ViewField[] {
         value: (
           <div className={styles.modalSignalList}>
             {values.map((value) => (
-              <span
-                key={`${label}-${value}`}
-                className={styles.modalSignalPill}
-              >
+              <span key={`${label}-${value}`} className={styles.modalSignalPill}>
                 {value}
               </span>
             ))}
@@ -484,19 +499,24 @@ function buildGuardrailsValue(record: InsightsRecord) {
       <div className={styles.alertList}>
         {record.jailbreak_detected ? (
           <span className={styles.alertDanger}>
-            Jailbreak: {record.jailbreak_type || 'detected'} ({((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
+            Jailbreak: {record.jailbreak_type || 'detected'} (
+            {((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
           </span>
         ) : null}
         {record.pii_detected ? (
           <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
-            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}: {record.pii_entities?.join(', ') || 'detected'}
+            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}:{' '}
+            {record.pii_entities?.join(', ') || 'detected'}
           </span>
         ) : null}
       </div>
     )
   }
 
-  const enabledChecks = [record.jailbreak_enabled ? 'Jailbreak' : null, record.pii_enabled ? 'PII' : null]
+  const enabledChecks = [
+    record.jailbreak_enabled ? 'Jailbreak' : null,
+    record.pii_enabled ? 'PII' : null,
+  ]
     .filter(Boolean)
     .join(', ')
 
@@ -512,8 +532,8 @@ function buildRagValue(record: InsightsRecord) {
     <div className={styles.pluginStack}>
       <span className={styles.alertInfo}>Context Retrieved</span>
       <span className={styles.costSubtle}>
-        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars | Score:{' '}
-        {record.rag_similarity_score?.toFixed(3) || '-'}
+        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars
+        | Score: {record.rag_similarity_score?.toFixed(3) || '-'}
       </span>
     </div>
   )
@@ -536,7 +556,9 @@ function buildHallucinationValue(record: InsightsRecord) {
       {record.hallucination_spans?.length ? (
         <span className={styles.costSubtle}>
           Unsupported spans: {record.hallucination_spans.slice(0, 2).join(' | ')}
-          {record.hallucination_spans.length > 2 ? ` (+${record.hallucination_spans.length - 2})` : ''}
+          {record.hallucination_spans.length > 2
+            ? ` (+${record.hallucination_spans.length - 2})`
+            : ''}
         </span>
       ) : null}
     </div>
@@ -565,14 +587,24 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
   if (record.request_body) {
     fields.push({
       label: 'Request body',
-      value: renderBodyField(`request-${record.id}`, 'request body', record.request_body, record.request_body_truncated || false),
+      value: renderBodyField(
+        `request-${record.id}`,
+        'request body',
+        record.request_body,
+        record.request_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
   if (record.response_body) {
     fields.push({
       label: 'Response body',
-      value: renderBodyField(`response-${record.id}`, 'response body', record.response_body, record.response_body_truncated || false),
+      value: renderBodyField(
+        `response-${record.id}`,
+        'response body',
+        record.response_body,
+        record.response_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
@@ -601,10 +633,7 @@ function renderReadonlyLock() {
   )
 }
 
-function buildTagField(
-  label: string,
-  values: string[] | undefined,
-): ViewField | null {
+function buildTagField(label: string, values: string[] | undefined): ViewField | null {
   if (!values?.length) {
     return null
   }
@@ -614,10 +643,7 @@ function buildTagField(
     value: (
       <div className={styles.modalSignalList}>
         {values.map((value) => (
-          <span
-            key={`${label}-${value}`}
-            className={styles.modalSignalPill}
-          >
+          <span key={`${label}-${value}`} className={styles.modalSignalPill}>
             {value}
           </span>
         ))}
@@ -707,4 +733,8 @@ function formatCurrencyOrNA(value?: number, currency?: string) {
 
 function formatTokenValue(value?: number) {
   return typeof value === 'number' ? value.toLocaleString('en-US') : '-'
+}
+
+function formatSimilarityValue(value?: number) {
+  return typeof value === 'number' ? value.toFixed(3) : '-'
 }

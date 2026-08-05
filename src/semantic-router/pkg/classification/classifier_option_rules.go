@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -50,7 +51,11 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 			})
 		}
 	}
-	keywordEmbeddingClassifier, err := NewEmbeddingClassifier(b.cfg.EmbeddingRules, optConfig)
+	provider, err := b.embeddingProviderForRules()
+	if err != nil {
+		return nil, err
+	}
+	keywordEmbeddingClassifier, err := NewEmbeddingClassifierWithProvider(b.cfg.EmbeddingRules, optConfig, provider)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "embedding_classifier_create_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -58,6 +63,22 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 		return nil, err
 	}
 	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
+}
+
+func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
+	if b.cfg == nil || !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return nil, nil
+	}
+	b.providerInitOnce.Do(func() {
+		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
+		if b.providerErr != nil {
+			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
+				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
+				"error":   b.providerErr.Error(),
+			})
+		}
+	})
+	return b.provider, b.providerErr
 }
 
 func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error) {
@@ -93,7 +114,11 @@ func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
 		return nil, nil
 	}
-	reaskClassifier, err := NewReaskClassifier(b.cfg.ReaskRules, b.defaultEmbeddingModelType())
+	provider, err := b.embeddingProviderForRules()
+	if err != nil {
+		return nil, err
+	}
+	reaskClassifier, err := NewReaskClassifierWithProvider(b.cfg.ReaskRules, b.defaultEmbeddingModelType(), provider)
 	if err != nil {
 		logging.Errorf("Failed to create reask classifier: %v", err)
 		return nil, err
@@ -116,10 +141,15 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 			return nil, err
 		}
 	}
+	provider, err := b.embeddingProviderForRules()
+	if err != nil {
+		return nil, err
+	}
 	complexityClassifier, err := NewComplexityClassifier(
 		b.cfg.ComplexityRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
+		provider,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "complexity_classifier_create_failed", map[string]interface{}{
@@ -149,7 +179,11 @@ func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (
 			continue
 		}
 		group.Go(func() error {
-			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
+			provider, err := b.embeddingProviderForRules()
+			if err != nil {
+				return err
+			}
+			cjc, err := NewContrastiveJailbreakClassifierWithProvider(rule, defaultModelType, provider)
 			if err != nil {
 				logging.ComponentErrorEvent("classifier", "contrastive_jailbreak_classifier_create_failed", map[string]interface{}{
 					"rule":       rule.Name,
@@ -208,7 +242,11 @@ func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 
 	for _, kb := range b.cfg.KnowledgeBases {
 		group.Go(func() error {
-			classifier, err := NewKnowledgeBaseClassifier(kb, modelType, b.cfg.ConfigBaseDir)
+			provider, err := b.embeddingProviderForRules()
+			if err != nil {
+				return err
+			}
+			classifier, err := NewKnowledgeBaseClassifierWithProvider(kb, modelType, b.cfg.ConfigBaseDir, provider)
 			if err != nil {
 				logging.ComponentWarnEvent("classifier", "knowledge_base_classifier_create_failed", map[string]interface{}{
 					"knowledge_base":     kb.Name,

@@ -10,7 +10,8 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-NAMESPACE="vllm-semantic-router-system"
+DEFAULT_NAMESPACE="vllm-semantic-router-system"
+NAMESPACE="$DEFAULT_NAMESPACE"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_OBSERVABILITY=true
 USE_SIMULATOR=false
@@ -36,6 +37,10 @@ while [[ $# -gt 0 ]]; do
             USE_CLASSIFIER_GPU=true
             shift
             ;;
+        --namespace|-n)
+            NAMESPACE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -44,6 +49,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --kserve              Deploy semantic-router with a KServe backend (use --simulator for KServe sim)"
             echo "  --classifier-gpu      Run semantic router classifier on GPU"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
+            echo "  --namespace, -n NS    Target namespace (default: vllm-semantic-router-system)"
             echo "  --help, -h            Show this help message"
             echo ""
             echo "By default, deploys the full stack with llm-katan (requires GPU)."
@@ -73,6 +79,16 @@ warn() {
 
 error() {
     echo -e "${RED}[ERROR]${NC} $*"
+}
+
+# Apply a manifest file, rewriting the default namespace token to the target
+# namespace so that both metadata.namespace and the in-cluster image-registry
+# paths (image-registry.../<namespace>/...) resolve to $NAMESPACE. The static
+# manifests hardcode the default namespace, so without this rewrite
+# "oc apply -n $NAMESPACE" fails with a namespace mismatch whenever a
+# non-default namespace is used.
+apply_with_namespace() {
+    sed "s/${DEFAULT_NAMESPACE}/${NAMESPACE}/g" "$1" | oc apply -n "$NAMESPACE" -f -
 }
 
 # Check if logged in to OpenShift
@@ -377,9 +393,9 @@ log "Deploying vLLM model services and deployments..."
 
 if [[ "$USE_SIMULATOR" == "true" ]]; then
     log "Simulator mode: Using deployment-simulator.yaml (mock-vllm, no GPU required)..."
-    oc apply -f "$SCRIPT_DIR/deployment-simulator.yaml" -n "$NAMESPACE"
+    apply_with_namespace "$SCRIPT_DIR/deployment-simulator.yaml"
 else
-    oc apply -f "$SCRIPT_DIR/deployment.yaml" -n "$NAMESPACE"
+    apply_with_namespace "$SCRIPT_DIR/deployment.yaml"
 fi
 
 if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
@@ -550,9 +566,9 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     # Deploy Jaeger for tracing
     log "Deploying Jaeger for distributed tracing..."
     if [[ -d "$SCRIPT_DIR/observability/jaeger" ]]; then
-        oc apply -f "$SCRIPT_DIR/observability/jaeger/deployment.yaml" -n "$NAMESPACE"
-        oc apply -f "$SCRIPT_DIR/observability/jaeger/service.yaml" -n "$NAMESPACE"
-        oc apply -f "$SCRIPT_DIR/observability/jaeger/route.yaml" -n "$NAMESPACE"
+        apply_with_namespace "$SCRIPT_DIR/observability/jaeger/deployment.yaml"
+        apply_with_namespace "$SCRIPT_DIR/observability/jaeger/service.yaml"
+        apply_with_namespace "$SCRIPT_DIR/observability/jaeger/route.yaml"
         success "Jaeger deployed"
     else
         warn "Jaeger deployment files not found at $SCRIPT_DIR/observability/jaeger, skipping..."
@@ -562,12 +578,12 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     log "Deploying Grafana..."
 
     # First apply Grafana resources to create the route
-    oc apply -f "$SCRIPT_DIR/observability/grafana/pvc.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/service.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/route.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-dashboard.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-datasource.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-provisioning.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/pvc.yaml" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/service.yaml" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/route.yaml" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/configmap-dashboard.yaml" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/configmap-datasource.yaml" 2>/dev/null || true
+    apply_with_namespace "$SCRIPT_DIR/observability/grafana/configmap-provisioning.yaml" 2>/dev/null || true
 
     # Wait for route to be created and get its URL
     log "Waiting for Grafana route to be created..."
@@ -591,7 +607,8 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     # Generate Grafana deployment with dynamic route URL
     log "Generating Grafana deployment with dynamic route URL..."
     TEMP_GRAFANA_DEPLOYMENT="/tmp/grafana-deployment-dynamic.yaml"
-    sed "s|DYNAMIC_GRAFANA_ROUTE_URL|$GRAFANA_ROUTE_URL|g" \
+    sed -e "s|DYNAMIC_GRAFANA_ROUTE_URL|$GRAFANA_ROUTE_URL|g" \
+        -e "s/${DEFAULT_NAMESPACE}/${NAMESPACE}/g" \
         "$SCRIPT_DIR/observability/grafana/deployment.yaml" > "$TEMP_GRAFANA_DEPLOYMENT"
 
     # Verify the URL was substituted
@@ -608,7 +625,9 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
 
     # Deploy Prometheus
     log "Deploying Prometheus..."
-    oc apply -f "$SCRIPT_DIR/observability/prometheus/" -n "$NAMESPACE"
+    for prometheus_manifest in "$SCRIPT_DIR/observability/prometheus/"*.yaml; do
+        apply_with_namespace "$prometheus_manifest"
+    done
     success "Prometheus deployed"
 
     # Build and deploy Dashboard using binary build
@@ -640,7 +659,7 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
 
     # Deploy dashboard
     log "Deploying dashboard..."
-    oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
+    apply_with_namespace "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml"
     success "Dashboard deployed"
 
     # Wait for observability deployments
@@ -649,9 +668,9 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
 
     success "Observability components deployed!"
     echo ""
-    echo "  Dashboard: https://$(oc get route dashboard -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
-    echo "  Grafana:   https://$(oc get route grafana -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
-    echo "  Prometheus: https://$(oc get route prometheus -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  Dashboard: https://$(oc get route dashboard -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  Grafana:   https://$(oc get route grafana -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  Prometheus: https://$(oc get route prometheus -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
     echo ""
 else
     log "Skipping observability components (--no-observability flag provided)"

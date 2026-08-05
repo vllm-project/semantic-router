@@ -2,8 +2,6 @@ package auth
 
 import (
 	"context"
-	"database/sql"
-	"strings"
 )
 
 type AuditLog struct {
@@ -21,10 +19,14 @@ type AuditLog struct {
 }
 
 func (s *Store) AddAuditLog(ctx context.Context, logRow AuditLog) error {
+	createdAt := logRow.CreatedAt
+	if createdAt <= 0 {
+		createdAt = nowUnix()
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO user_audit_logs(user_id, action, resource, method, path, ip, user_agent, status_code, created_at, extra_json)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		nilOrString(logRow.UserID), logRow.Action, logRow.Resource, logRow.Method, logRow.Path, logRow.IP, logRow.UserAgent, logRow.StatusCode, nowUnix(), logRow.ExtraJSON)
+		nilOrString(logRow.UserID), logRow.Action, logRow.Resource, logRow.Method, logRow.Path, logRow.IP, logRow.UserAgent, logRow.StatusCode, createdAt, logRow.ExtraJSON)
 	return err
 }
 
@@ -32,51 +34,16 @@ func (s *Store) ListAuditLogs(ctx context.Context, userID, action, resource stri
 	if limit <= 0 || limit > 200 {
 		limit = defaultPageSize
 	}
-	q := `SELECT id, user_id, action, resource, method, path, ip, user_agent, status_code, created_at, extra_json FROM user_audit_logs`
-	args := []interface{}{}
-	predicates := []string{}
-	if userID != "" {
-		predicates = append(predicates, "user_id = ?")
-		args = append(args, userID)
-	}
-	if action != "" {
-		predicates = append(predicates, "action = ?")
-		args = append(args, action)
-	}
-	if resource != "" {
-		predicates = append(predicates, "resource = ?")
-		args = append(args, resource)
-	}
-	if len(predicates) > 0 {
-		q += " WHERE " + strings.Join(predicates, " AND ")
-	}
-	q += " ORDER BY id DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
-
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	var out []AuditLog
-	for rows.Next() {
-		var row AuditLog
-		var uid sql.NullString
-		if err := rows.Scan(&row.ID, &uid, &row.Action, &row.Resource, &row.Method, &row.Path, &row.IP, &row.UserAgent, &row.StatusCode, &row.CreatedAt, &row.ExtraJSON); err != nil {
-			return nil, err
-		}
-		if uid.Valid {
-			row.UserID = uid.String
-		}
-		out = append(out, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
+	logs, _, err := s.QueryAuditLogs(ctx, AuditLogListOptions{
+		UserID:   userID,
+		Action:   action,
+		Resource: resource,
+		Sort:     "id",
+		Order:    "desc",
+		Limit:    limit,
+		Offset:   offset,
+	})
+	return logs, err
 }
 
 func nilOrString(v string) interface{} {

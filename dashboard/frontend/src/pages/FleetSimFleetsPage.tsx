@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import FleetSimSurfaceLayout from './FleetSimSurfaceLayout'
@@ -20,6 +21,7 @@ import {
   formatNumber,
   formatRouterType,
 } from './fleetSimPageSupport'
+import { matchesFleetSimSearch } from './fleetSimListSupport'
 
 const GPU_OPTIONS = ['a100', 'h100', 'a10g']
 const ROUTER_OPTIONS = [
@@ -44,6 +46,9 @@ export default function FleetSimFleetsPage() {
   const [pools, setPools] = useState<PoolConfig[]>(DEFAULT_POOLS)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [fleetPendingDelete, setFleetPendingDelete] = useState<FleetConfig | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
 
   const load = async () => {
     const [profilesData, fleetsData] = await Promise.all([listGpuProfiles(), listFleets()])
@@ -96,14 +101,19 @@ export default function FleetSimFleetsPage() {
     }
   }
 
-  const handleDeleteFleet = async (fleet: FleetConfig) => {
+  const handleDeleteFleet = async () => {
+    if (!fleetPendingDelete) return
     try {
-      await deleteFleet(fleet.id)
-      setMessage(`Deleted ${fleet.name}`)
+      setDeletePending(true)
+      await deleteFleet(fleetPendingDelete.id)
+      setMessage(`Deleted ${fleetPendingDelete.name}`)
       setError('')
-      await load()
+      setFleets((current) => current.filter((fleet) => fleet.id !== fleetPendingDelete.id))
+      setFleetPendingDelete(null)
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete fleet')
+    } finally {
+      setDeletePending(false)
     }
   }
 
@@ -115,6 +125,20 @@ export default function FleetSimFleetsPage() {
   }, 0)
   const draftAnnualCostKusd = draftCostPerHour * 24 * 365 / 1000
   const largestContext = pools.reduce((current, pool) => Math.max(current, pool.max_ctx), 0)
+  const filteredFleets = useMemo(
+    () =>
+      fleets.filter((fleet) =>
+        matchesFleetSimSearch(search, [
+          fleet.id,
+          fleet.name,
+          fleet.router,
+          formatRouterType(fleet.router),
+          fleet.total_gpus,
+          ...fleet.pools.flatMap((pool) => [pool.pool_id, pool.gpu]),
+        ]),
+      ),
+    [fleets, search],
+  )
 
   const fleetColumns: Column<FleetConfig>[] = [
     {
@@ -338,12 +362,20 @@ export default function FleetSimFleetsPage() {
       </div>
 
       <section className={styles.sectionCard}>
-        <TableHeader title="Saved Fleets" count={fleets.length} variant="embedded" />
+        <TableHeader
+          title="Saved Fleets"
+          count={filteredFleets.length}
+          searchPlaceholder="Search fleets..."
+          searchValue={search}
+          onSearchChange={setSearch}
+          variant="embedded"
+        />
         <DataTable
           columns={fleetColumns}
-          data={fleets}
+          data={filteredFleets}
           keyExtractor={(row) => row.id}
-          onDelete={(row) => void handleDeleteFleet(row)}
+          onDelete={setFleetPendingDelete}
+          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'fleets', resetKey: search }}
           expandable
           isRowExpanded={(row) => expandedFleetIDs.has(row.id)}
           onToggleExpand={(row) => {
@@ -385,6 +417,17 @@ export default function FleetSimFleetsPage() {
           emptyMessage="No fleets saved yet."
         />
       </section>
+      <ConfirmDialog
+        isOpen={Boolean(fleetPendingDelete)}
+        title="Delete saved fleet?"
+        description="This removes the reusable fleet definition. Existing run history remains available."
+        details={fleetPendingDelete ? `${fleetPendingDelete.name} · ${formatNumber(fleetPendingDelete.total_gpus)} GPUs` : undefined}
+        confirmLabel="Delete fleet"
+        pending={deletePending}
+        tone="danger"
+        onCancel={() => setFleetPendingDelete(null)}
+        onConfirm={handleDeleteFleet}
+      />
     </FleetSimSurfaceLayout>
   )
 }

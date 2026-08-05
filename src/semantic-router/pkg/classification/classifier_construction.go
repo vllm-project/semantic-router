@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -16,6 +17,9 @@ type classifierOptionBuilder struct {
 	options            []option
 	multiModalInitOnce sync.Once
 	multiModalInitErr  error
+	providerInitOnce   sync.Once
+	provider           embedding.Provider
+	providerErr        error
 }
 
 func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *classifierOptionBuilder {
@@ -34,6 +38,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
+		b.buildGenericClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {

@@ -2,7 +2,7 @@ blank_issues_enabled: true
 
 contact_links:
   - name: Have you read the tutorials?
-    url: https://vllm-semantic-router.com
+    url: https://vllm-sr.ai
     about: Much help can be found in the docs
   - name: Chat on Slack
     url: https://slack.vllm.ai/

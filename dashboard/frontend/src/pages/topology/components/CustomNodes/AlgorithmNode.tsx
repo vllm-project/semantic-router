@@ -39,10 +39,6 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
       const latencyPercentile = algorithm.multi_factor.latency_percentile
       return typeof latencyPercentile === 'number' ? `P${latencyPercentile} latency` : null
     }
-    if (algorithm.type === 'session_aware' && algorithm.session_aware) {
-      const baseMethod = algorithm.session_aware.base_method
-      return typeof baseMethod === 'string' && baseMethod ? `base: ${baseMethod}` : null
-    }
     return null
   }
 
@@ -63,11 +59,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
         <span className={styles.algorithmType}>{algorithm.type}</span>
       </div>
 
-      {configDisplay && (
-        <div className={styles.algorithmConfig}>
-          {configDisplay}
-        </div>
-      )}
+      {configDisplay && <div className={styles.algorithmConfig}>{configDisplay}</div>}
 
       <Handle type="source" position={Position.Right} />
     </div>

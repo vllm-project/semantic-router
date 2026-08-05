@@ -13,28 +13,66 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+)
+
+const (
+	apiReadTimeout  = 30 * time.Second
+	apiWriteTimeout = 2 * time.Minute
+	apiIdleTimeout  = 60 * time.Second
 )
 
 // Init starts the API server.
 func Init(configPath string, port int) error {
-	return InitWithRuntime(configPath, port, nil)
+	return InitWithOptions(InitOptions{
+		ConfigPath: configPath,
+		Port:       port,
+	})
+}
+
+// InitOptions carries management listener startup overrides.
+type InitOptions struct {
+	ConfigPath      string
+	Port            int
+	BindAddress     string
+	RemoteExposure  *bool
+	AuthMode        string
+	RuntimeRegistry *routerruntime.Registry
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
 // one is available. Legacy callers can continue using Init and fall back to the
 // compatibility globals.
 func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
+	return InitWithOptions(InitOptions{
+		ConfigPath:      configPath,
+		Port:            port,
+		RuntimeRegistry: runtimeRegistry,
+	})
+}
+
+// InitWithOptions starts the API server with explicit management listener policy.
+func InitWithOptions(opts InitOptions) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
-	cfg := resolveAPIServerConfig(runtimeRegistry)
+	cfg := resolveAPIServerConfig(opts.RuntimeRegistry)
 	if cfg == nil {
 		return fmt.Errorf("configuration not initialized")
 	}
 
-	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
-	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
+	managementCfg, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
+		Port:           opts.Port,
+		BindAddress:    opts.BindAddress,
+		RemoteExposure: opts.RemoteExposure,
+		AuthMode:       opts.AuthMode,
+	})
+	if err != nil {
+		return fmt.Errorf("invalid management API configuration: %w", err)
+	}
+	cfg.ManagementAPI = managementCfg
+
+	classificationSvc := resolveClassificationService(cfg, opts.RuntimeRegistry)
+	classificationSvc = ensureClassificationService(cfg, opts.RuntimeRegistry, classificationSvc)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -53,7 +91,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 	// Get memory store if available (set by ExtProc router during init)
 	var memoryStore memory.Store
 	if shouldInitMemoryStore(cfg) {
-		memoryStore = resolveMemoryStore(cfg, runtimeRegistry)
+		memoryStore = resolveMemoryStore(cfg, opts.RuntimeRegistry)
 		if memoryStore != nil {
 			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
 		} else {
@@ -70,37 +108,37 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
-		func() classificationService {
-			if runtimeRegistry != nil {
-				return runtimeRegistry.ClassificationService()
-			}
-			return services.GetGlobalClassificationService()
-		},
+		buildClassificationResolver(opts.RuntimeRegistry),
 	)
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(runtimeRegistry), buildConfigUpdater(runtimeRegistry, liveClassificationSvc)),
-		runtimeRegistry:       runtimeRegistry,
-		configPath:            configPath,
+		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
+		runtimeRegistry:       opts.RuntimeRegistry,
+		configPath:            opts.ConfigPath,
 		memoryStore:           memoryStore,
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
+		startupStatusConfig:   &cfg.StartupStatus,
 	}
 
 	// Create HTTP server with routes
 	mux := apiServer.setupRoutes()
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
+		Addr:         managementCfg.ListenAddress(),
 		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  apiReadTimeout,
+		WriteTimeout: apiWriteTimeout,
+		IdleTimeout:  apiIdleTimeout,
 	}
 
 	logging.ComponentEvent("apiserver", "server_listening", map[string]interface{}{
-		"port": port,
+		"address":         managementCfg.ListenAddress(),
+		"bind_address":    managementCfg.BindAddress,
+		"port":            managementCfg.Port,
+		"remote_exposure": managementCfg.RemoteExposure,
+		"auth_mode":       managementCfg.Auth.Mode,
 	})
 	return server.ListenAndServe()
 }
@@ -158,6 +196,29 @@ func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime
 		return runtimeRegistry.MemoryStore()
 	}
 	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+// buildClassificationResolver returns the resolver used by the live
+// classification service. Both sources return a concrete
+// *services.ClassificationService which is nil until the runtime finishes
+// initializing; returning that nil pointer directly would wrap it into a
+// non-nil interface value, defeat the nil check in
+// liveClassificationService.current(), and panic with a nil receiver on the
+// first request. Return an untyped nil instead so current() falls back to
+// the placeholder service.
+func buildClassificationResolver(runtimeRegistry *routerruntime.Registry) func() classificationService {
+	return func() classificationService {
+		if runtimeRegistry != nil {
+			if svc := runtimeRegistry.ClassificationService(); svc != nil {
+				return svc
+			}
+			return nil
+		}
+		if svc := services.GetGlobalClassificationService(); svc != nil {
+			return svc
+		}
+		return nil
+	}
 }
 
 func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
@@ -339,41 +400,10 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	errorResponse := map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":      errorCode,
-			"message":   message,
+			"message":   scrubSecretsInErrorMessage(message),
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		},
 	}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
-}
-
-// handleRLState returns the current state of RL-based selectors for debugging
-func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
-
-	state := map[string]interface{}{
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	registry := s.currentSelectionRegistry()
-	if registry == nil {
-		s.writeJSONResponse(w, http.StatusOK, state)
-		return
-	}
-
-	// Get RLDriven selector state
-	if rlSelector, ok := registry.Get(selection.MethodRLDriven); ok {
-		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
-			state["rl_driven"] = rlDriven.GetDebugState(userID)
-		}
-	}
-
-	// Get GMTRouter selector state
-	if gmtSelector, ok := registry.Get(selection.MethodGMTRouter); ok {
-		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
-			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
-		}
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, state)
 }

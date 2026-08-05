@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const WorkspaceModelsNodeMountPath = "/mnt/workspace-models"
+const (
+	kindStorageNodeMountPath     = "/mnt"
+	WorkspaceModelsNodeMountPath = "/opt/semantic-router/workspace-models"
+)
 
 // KindCluster manages Kind cluster lifecycle
 type KindCluster struct {
@@ -326,9 +329,9 @@ nodes:
   - role: control-plane
     extraMounts:
       - hostPath: %s
-        containerPath: /mnt
+        containerPath: %s
       - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models%s`, k.Name, hostPath, workspaceModelsMount)
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -336,21 +339,21 @@ nodes:
   - role: worker
     extraMounts:
       - hostPath: %s
-        containerPath: /mnt
+        containerPath: %s
       - hostPath: /tmp/kind-ml-models
         containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
       - hostPath: %s
-        containerPath: /mnt
+        containerPath: %s
       - hostPath: /tmp/kind-ml-models
         containerPath: /tmp/ml-models%s
-`, hostPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")

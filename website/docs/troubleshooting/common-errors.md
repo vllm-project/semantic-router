@@ -223,7 +223,7 @@ decisions:
       - model: "internal-model"
 ```
 
-> See code: [pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go) AND [req_filter_jailbreak.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/extproc/req_filter_jailbreak.go).
+> See code: [pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go) AND [classifier_signal_jailbreak.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/classification/classifier_signal_jailbreak.go).
 
 ---
 

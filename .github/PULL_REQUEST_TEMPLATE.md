@@ -2,6 +2,7 @@
 PLEASE FILL IN THE PR DESCRIPTION BELOW AND CONFIRM THE CHECKLIST ITEMS.
 
 Closes #xxxx
+<!-- For split PRs that should not auto-close the issue on merge, use: Related #xxxx -->
 
 ## Purpose
 

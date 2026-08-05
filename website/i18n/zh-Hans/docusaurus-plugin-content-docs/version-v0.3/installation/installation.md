@@ -27,7 +27,7 @@ translation:
 ### 1. 一行安装脚本（macOS/Linux）
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 安装脚本会：
@@ -44,7 +44,7 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 若您需要最新稳定版，请运行：
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 ```
 
 Windows 用户请使用下文手动 PyPI 流程。
@@ -187,4 +187,4 @@ vllm-sr serve --image-pull-policy always
 
 - **Issue**：[GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **社区**：加入 vLLM Slack 的 `#semantic-router` 频道
-- **文档**：[vllm-semantic-router.com](https://vllm-semantic-router.com/)
+- **文档**：[vllm-sr.ai](https://vllm-sr.ai/)

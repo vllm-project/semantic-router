@@ -154,7 +154,7 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		scope.UserID, scope.ProjectID, scope.Types)
 
 	// Build filter expression
-	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
+	filterExpr := milvusUserScopeFilter(scope.UserID)
 
 	// Add project filter if specified
 	if scope.ProjectID != "" {
@@ -193,7 +193,7 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 
 func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemoryScope) error {
 	// Query all memories for the user
-	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
+	filterExpr := milvusUserScopeFilter(scope.UserID)
 
 	// Add type filter if specified
 	if tf := buildTypeFilter(scope.Types); tf != "" {

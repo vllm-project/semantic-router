@@ -1,7 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { getPageWindow, paginateRows } from '../dataTableSupport';
 import type { EvaluationResult, TaskResults, TestCaseDetail, EvaluationMetadata } from '../../types/evaluation';
-import { DIMENSION_INFO, LEVEL_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
+import { DIMENSION_INFO, LEVEL_INFO, STATUS_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
 import { downloadExport } from '../../utils/evaluationApi';
+import EvaluationPagination from './EvaluationPagination';
+import {
+  EVALUATION_RESULT_PAGE_SIZE,
+  filterAndSortEvaluationResults,
+  formatEvaluationResultCount,
+  type EvaluationResultSort,
+} from './evaluationListSupport';
 import styles from './ReportViewer.module.css';
 
 interface ReportViewerProps {
@@ -11,16 +19,28 @@ interface ReportViewerProps {
 
 export function ReportViewer({ results, onBack }: ReportViewerProps) {
   const { task, results: evaluationResults } = results;
+  const [search, setSearch] = useState('');
+  const [dimensionFilter, setDimensionFilter] = useState<EvaluationResult['dimension'] | 'all'>('all');
+  const [sortBy, setSortBy] = useState<EvaluationResultSort>('dataset-asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const deferredSearch = useDeferredValue(search);
+  const taskStatus = STATUS_INFO[task.status];
 
   const handleExport = useCallback(async (format: 'json' | 'csv') => {
+    setExporting(format);
+    setExportError(null);
     try {
       await downloadExport(task.id, format);
     } catch (err) {
-      console.error('Export failed:', err);
+      setExportError(err instanceof Error ? err.message : 'Failed to export evaluation results');
+    } finally {
+      setExporting(null);
     }
   }, [task.id]);
 
-  const getOverallScore = useCallback(() => {
+  const overallScore = useMemo(() => {
     // Calculate an overall score based on available metrics
     let totalScore = 0;
     let count = 0;
@@ -40,15 +60,33 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
 
     return count > 0 ? totalScore / count : null;
   }, [evaluationResults]);
+  const dimensions = useMemo(
+    () => [...new Set(evaluationResults.map((result) => result.dimension))].sort(),
+    [evaluationResults],
+  );
+  const filteredResults = useMemo(
+    () =>
+      filterAndSortEvaluationResults(evaluationResults, {
+        search: deferredSearch,
+        dimension: dimensionFilter,
+        sort: sortBy,
+      }),
+    [deferredSearch, dimensionFilter, evaluationResults, sortBy],
+  );
+  const pageWindow = getPageWindow(filteredResults.length, currentPage, EVALUATION_RESULT_PAGE_SIZE);
+  const visibleResults = paginateRows(filteredResults, pageWindow);
 
-  const overallScore = getOverallScore();
+  useEffect(() => setCurrentPage(1), [deferredSearch, dimensionFilter, sortBy]);
+  useEffect(() => {
+    if (currentPage !== pageWindow.page) setCurrentPage(pageWindow.page);
+  }, [currentPage, pageWindow.page]);
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           {onBack && (
-            <button className={styles.backButton} onClick={onBack}>
+            <button type="button" className={styles.backButton} onClick={onBack}>
               Back
             </button>
           )}
@@ -58,20 +96,32 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <button className={styles.exportButton} onClick={() => handleExport('json')}>
-            Export JSON
+          <button
+            type="button"
+            className={styles.exportButton}
+            onClick={() => void handleExport('json')}
+            disabled={exporting !== null}
+          >
+            {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
           </button>
-          <button className={styles.exportButton} onClick={() => handleExport('csv')}>
-            Export CSV
+          <button
+            type="button"
+            className={styles.exportButton}
+            onClick={() => void handleExport('csv')}
+            disabled={exporting !== null}
+          >
+            {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
 
+      {exportError ? <div className={styles.exportError} role="alert">Export failed: {exportError}</div> : null}
+
       <div className={styles.summary}>
         <div className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Status</span>
-          <span className={styles.summaryValue} style={{ color: task.status === 'completed' ? '#22c55e' : '#ef4444' }}>
-            {task.status === 'completed' ? 'Completed' : 'Failed'}
+          <span className={styles.summaryValue} style={{ color: taskStatus.color }}>
+            {taskStatus.label}
           </span>
         </div>
         <div className={styles.summaryCard}>
@@ -94,11 +144,77 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         )}
       </div>
 
-      <div className={styles.results}>
-        {evaluationResults.map((result) => (
-          <ResultCard key={result.id} result={result} />
-        ))}
-      </div>
+      {evaluationResults.length > 0 ? (
+        <>
+          <div className={styles.resultToolbar}>
+            <input
+              type="search"
+              className={styles.searchInput}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search dataset, result ID, metadata…"
+              aria-label="Search evaluation results"
+            />
+            <select
+              className={styles.filterSelect}
+              value={dimensionFilter}
+              onChange={(event) =>
+                setDimensionFilter(event.target.value as EvaluationResult['dimension'] | 'all')
+              }
+              aria-label="Filter results by dimension"
+            >
+              <option value="all">All dimensions</option>
+              {dimensions.map((dimension) => (
+                <option key={dimension} value={dimension}>
+                  {DIMENSION_INFO[dimension]?.label || dimension}
+                </option>
+              ))}
+            </select>
+            <select
+              className={styles.filterSelect}
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as EvaluationResultSort)}
+              aria-label="Sort evaluation results"
+            >
+              <option value="dataset-asc">Dataset A–Z</option>
+              <option value="dimension-asc">Dimension A–Z</option>
+              <option value="score-desc">Score high–low</option>
+            </select>
+            <span className={styles.resultCount}>
+              {formatEvaluationResultCount(filteredResults.length, evaluationResults.length, 'results')}
+            </span>
+            <span className={styles.clientPagingNote}>Client view · {EVALUATION_RESULT_PAGE_SIZE}/page</span>
+          </div>
+
+          {visibleResults.length > 0 ? (
+            <div className={styles.results}>
+              {visibleResults.map((result) => (
+                <ResultCard key={result.id} result={result} />
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptyResults}>
+              <h3>No result cards match this view</h3>
+              <p>Adjust the search or dimension filter.</p>
+            </div>
+          )}
+
+          <EvaluationPagination
+            page={pageWindow.page}
+            totalPages={pageWindow.totalPages}
+            start={pageWindow.start}
+            end={pageWindow.end}
+            total={filteredResults.length}
+            itemLabel="results"
+            onPageChange={setCurrentPage}
+          />
+        </>
+      ) : (
+        <div className={styles.emptyResults}>
+          <h3>No evaluation results were recorded</h3>
+          <p>The run completed without dataset result records.</p>
+        </div>
+      )}
 
       <div className={styles.metadata}>
         <h3>Evaluation Details</h3>
@@ -243,8 +359,13 @@ function ResultCard({ result }: ResultCardProps) {
         return (
           <div className={styles.testCaseSection}>
             <button
+              type="button"
               className={styles.toggleDetailsButton}
-              onClick={() => setShowDetails(!showDetails)}
+              onClick={() => {
+                setShowDetails((visible) => !visible);
+                setCurrentPage(1);
+              }}
+              aria-expanded={showDetails}
             >
               {showDetails ? '▼' : '▶'} Test Cases ({details.length})
             </button>
@@ -290,6 +411,7 @@ function ResultCard({ result }: ResultCardProps) {
                     </span>
                     <div className={styles.paginationButtons}>
                       <button
+                        type="button"
                         className={styles.paginationButton}
                         onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                         disabled={currentPage === 1}
@@ -297,6 +419,7 @@ function ResultCard({ result }: ResultCardProps) {
                         ← Previous
                       </button>
                       <button
+                        type="button"
                         className={styles.paginationButton}
                         onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                         disabled={currentPage === totalPages}

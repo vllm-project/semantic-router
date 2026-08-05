@@ -2,8 +2,8 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strconv"
 )
 
 func adminPermissionsHandler(svc *Service) http.HandlerFunc {
@@ -40,27 +40,37 @@ func adminAuditLogsHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		limit := 100
-		if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
-			if parsedLimit, err := strconv.Atoi(rawLimit); err == nil {
-				limit = parsedLimit
-			}
+		legacyResponse := usesLegacyAuditLogResponse(r)
+		options, page, err := auditLogOptionsFromRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if legacyResponse {
+			applyLegacyAuditLogDefaults(r, &options)
 		}
 
-		logs, err := svc.store.ListAuditLogs(
-			r.Context(),
-			r.URL.Query().Get("userId"),
-			r.URL.Query().Get("action"),
-			r.URL.Query().Get("resource"),
-			limit,
-			0,
-		)
+		logs, total, err := svc.store.QueryAuditLogs(r.Context(), options)
 		if err != nil {
+			if errors.Is(err, ErrInvalidAuditLogFilter) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		respondJSON(w, logs)
+		if legacyResponse {
+			respondJSON(w, logs)
+			return
+		}
+
+		respondJSON(w, AuditLogPageResponse{
+			Logs:  logs,
+			Total: total,
+			Page:  page,
+			Limit: options.Limit,
+		})
 	}
 }
 

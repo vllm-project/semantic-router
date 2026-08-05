@@ -12,7 +12,7 @@ The vLLM Semantic Router is an intelligent Mixture-of-Models (MoM) router that o
 - **Architecture**: Tight Envoy ExtProc integration; dual Go and Python implementations; production-ready and scalable.
 - **Monitoring**: Grafana dashboards, Prometheus metrics, and tracing for full visibility.
 
-Learn more: [vLLM Semantic Router](https://vllm-semantic-router.com/docs/intro)
+Learn more: [vLLM Semantic Router](https://vllm-sr.ai/docs/intro)
 
 ## What are the benefits of integration?
 
@@ -93,7 +93,7 @@ kubectl get svc vllm-router-service
 
 ## Step 2: Deploy vLLM Semantic Router and point it at your vLLM router Service
 
-Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway).
+Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-sr.ai/docs/installation/k8s/ai-gateway).
 
 Deploy using Helm with custom values:
 

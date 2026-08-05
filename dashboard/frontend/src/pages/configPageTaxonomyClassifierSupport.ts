@@ -62,7 +62,7 @@ export interface TaxonomyClassifierDraft {
   labels: TaxonomyClassifierCategory[]
   groups: Array<{
     name: string
-    labels: string
+    labels: string[]
   }>
   metrics: TaxonomyClassifierMetric[]
   label_thresholds: Array<{
@@ -78,7 +78,7 @@ export interface TaxonomyTierDraft {
 export interface TaxonomyCategoryDraft {
   name: string
   description: string
-  exemplars: string
+  exemplars: string[]
 }
 
 export function emptyTaxonomyClassifierDraft(): TaxonomyClassifierDraft {
@@ -109,7 +109,7 @@ export function emptyTaxonomyCategoryDraft(): TaxonomyCategoryDraft {
   return {
     name: '',
     description: '',
-    exemplars: '',
+    exemplars: [],
   }
 }
 
@@ -125,7 +125,7 @@ export function classifierDraftFromRecord(record: TaxonomyClassifierRecord): Tax
     })),
     groups: Object.entries(record.groups ?? {}).map(([name, labels]) => ({
       name,
-      labels: labels.join(', '),
+      labels: [...labels],
     })),
     metrics: (record.metrics ?? []).map((metric) => ({
       name: metric.name,
@@ -150,25 +150,60 @@ export function categoryDraftFromCategory(category: TaxonomyClassifierCategory):
   return {
     name: category.name,
     description: category.description ?? '',
-    exemplars: category.exemplars.join('\n'),
+    exemplars: [...category.exemplars],
   }
 }
 
+function normalizeDraftStringList(value: readonly string[], label: string, required = false): string[] {
+  if (value.some((item) => !item.trim())) {
+    throw new Error(`${label} cannot contain empty values.`)
+  }
+  const normalized = value.map((item) => item.trim())
+  if (required && normalized.length === 0) {
+    throw new Error(`${label} requires at least one value.`)
+  }
+  const keys = normalized.map((item) => item.toLocaleLowerCase())
+  if (new Set(keys).size !== keys.length) {
+    throw new Error(`${label} must contain unique values.`)
+  }
+  return normalized
+}
+
 export function payloadFromDraft(draft: TaxonomyClassifierDraft) {
+  const name = draft.name.trim()
+  if (!name) throw new Error('Knowledge base name is required.')
+  if (!Number.isFinite(draft.threshold) || draft.threshold < 0 || draft.threshold > 1) {
+    throw new Error('Knowledge base threshold must be between 0 and 1.')
+  }
+
+  const labels = draft.labels.map((label, index) => {
+    const labelName = label.name.trim()
+    if (!labelName) throw new Error(`Label ${index + 1} needs a name.`)
+    return {
+      name: labelName,
+      description: label.description?.trim() || '',
+      exemplars: normalizeDraftStringList(label.exemplars, `Label "${labelName}" exemplars`, true),
+    }
+  })
+  const labelNames = labels.map((label) => label.name)
+  if (labels.length === 0) throw new Error('A knowledge base needs at least one label.')
+  if (new Set(labelNames.map((label) => label.toLocaleLowerCase())).size !== labelNames.length) {
+    throw new Error('Knowledge base label names must be unique.')
+  }
+  const knownLabels = new Set(labelNames)
+
   const groups = draft.groups.reduce<Record<string, string[]>>((acc, group) => {
     const name = group.name.trim()
     if (!name) {
-      return acc
+      throw new Error('Every knowledge base group needs a name.')
     }
 
-    const labels = group.labels
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
+    if (acc[name]) throw new Error(`Knowledge base group "${name}" is duplicated.`)
+    const labels = normalizeDraftStringList(group.labels, `Group "${name}" labels`, true)
+    const unknownLabel = labels.find((label) => !knownLabels.has(label))
+    if (unknownLabel) throw new Error(`Group "${name}" references unknown label "${unknownLabel}".`)
 
-    if (labels.length > 0) {
-      acc[name] = labels
-    }
+    acc[name] = labels
 
     return acc
   }, {})
@@ -183,16 +218,10 @@ export function payloadFromDraft(draft: TaxonomyClassifierDraft) {
   }, {})
 
   return {
-    name: draft.name.trim(),
+    name,
     threshold: draft.threshold,
     description: draft.description.trim(),
-    labels: draft.labels.map((label) => ({
-      name: label.name.trim(),
-      description: label.description?.trim() || '',
-      exemplars: label.exemplars
-        .map((exemplar) => exemplar.trim())
-        .filter(Boolean),
-    })),
+    labels,
     groups,
     metrics: draft.metrics
       .map((metric) => ({
@@ -345,11 +374,9 @@ function rewriteGroupsOnLabelRename(
   return groups.map((group) => ({
     ...group,
     labels: group.labels
-      .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
-      .map((item) => (item === originalName ? nextName : item))
-      .join(', '),
+      .map((item) => (item === originalName ? nextName : item)),
   }))
 }
 
@@ -361,10 +388,8 @@ function rewriteGroupsOnLabelDelete(
     .map((group) => ({
       ...group,
       labels: group.labels
-        .split(',')
         .map((item) => item.trim())
-        .filter((item) => item && item !== labelName)
-        .join(', '),
+        .filter((item) => item && item !== labelName),
     }))
     .filter((group) => group.name.trim())
 }
@@ -425,7 +450,7 @@ export function addTierToDraft(
       ...draft.groups,
       {
         name: nextTier.name.trim(),
-        labels: '',
+        labels: [],
       },
     ],
   }
@@ -454,10 +479,7 @@ export function renameCategoryInDraft(
         ? {
             name: nextName,
             description: nextCategory.description.trim(),
-            exemplars: nextCategory.exemplars
-              .split('\n')
-              .map((item) => item.trim())
-              .filter(Boolean),
+            exemplars: nextCategory.exemplars.map((item) => item.trim()).filter(Boolean),
           }
         : label
     ),
@@ -477,10 +499,7 @@ export function addCategoryToDraft(
       {
         name: nextCategory.name.trim(),
         description: nextCategory.description.trim(),
-        exemplars: nextCategory.exemplars
-          .split('\n')
-          .map((item) => item.trim())
-          .filter(Boolean),
+        exemplars: nextCategory.exemplars.map((item) => item.trim()).filter(Boolean),
       },
     ],
   }

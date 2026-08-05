@@ -271,6 +271,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `cacheWriteTokenPrice` _float_ | CacheWriteTokenPrice is the cost per input token written to prompt cache |  | Minimum: 0 <br /> |
+| `cachedInputTokenPrice` _float_ | CachedInputTokenPrice is the cost per cached input token |  | Minimum: 0 <br /> |
+| `currency` _string_ | Currency is the unit for all configured token prices |  |  |
 | `inputTokenPrice` _float_ | InputTokenPrice is the cost per input token |  | Minimum: 0 <br /> |
 | `outputTokenPrice` _float_ | OutputTokenPrice is the cost per output token |  | Minimum: 0 <br /> |
 

@@ -1,0 +1,265 @@
+.modelIdentity {
+  display: grid;
+  min-width: 220px;
+  gap: 0.32rem;
+}
+
+.modelIdentityPrimary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.modelName {
+  overflow: hidden;
+  color: #f5f5f7;
+  font-weight: 660;
+  letter-spacing: -0.012em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelPhysicalId {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.43);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defaultBadge,
+.referenceBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.64rem;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.defaultBadge {
+  flex: 0 0 auto;
+  padding: 0.28rem 0.42rem;
+  border-color: rgba(227, 27, 35, 0.28);
+  background: rgba(227, 27, 35, 0.08);
+  color: #ffb4b7;
+  text-transform: uppercase;
+}
+
+.referenceBadge {
+  padding: 0.34rem 0.52rem;
+}
+
+.unusedLabel {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.72rem;
+}
+
+.inventoryToolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto auto;
+  align-items: end;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: #0d0d0f;
+}
+
+.filterControl {
+  display: grid;
+  min-width: 0;
+  gap: 0.38rem;
+}
+
+.filterControl > span {
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 0.65rem;
+  font-weight: 690;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.filterControl select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background-color: #18181b;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+}
+
+.inventorySummary {
+  display: grid;
+  min-width: 78px;
+  gap: 0.08rem;
+  padding: 0.28rem 0.2rem;
+  text-align: right;
+}
+
+.inventorySummary strong {
+  color: #f5f5f7;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventorySummary span {
+  color: rgba(255, 255, 255, 0.39);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.clearFiltersButton,
+.clearSelectionButton,
+.bulkDeleteButton,
+.operationError button {
+  min-height: 38px;
+  padding: 0.48rem 0.72rem;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.clearFiltersButton,
+.clearSelectionButton {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.clearFiltersButton:hover,
+.clearSelectionButton:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.bulkBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.68rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-bottom: 0;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.bulkCopy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.bulkCopy strong {
+  color: #f5f5f7;
+  font-size: 0.8rem;
+}
+
+.bulkCopy span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.69rem;
+}
+
+.bulkActions {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.bulkDeleteButton {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(185, 28, 28, 0.82);
+  color: #ffffff;
+}
+
+.bulkDeleteButton:hover {
+  background: #b91c1c;
+}
+
+.operationError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.68rem 0.8rem;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-bottom: 0;
+  background: rgba(127, 29, 29, 0.2);
+  color: #fecaca;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.operationError button {
+  min-height: auto;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(254, 202, 202, 0.2);
+  background: transparent;
+  color: #fecaca;
+}
+
+.inventoryToolbar + .bulkBar,
+.inventoryToolbar + .operationError,
+.bulkBar + .operationError {
+  border-top-color: rgba(255, 255, 255, 0.055);
+}
+
+@media (max-width: 1100px) {
+  .inventoryToolbar {
+    grid-template-columns: repeat(3, minmax(130px, 1fr));
+  }
+
+  .inventorySummary {
+    text-align: left;
+  }
+}
+
+@media (max-width: 760px) {
+  .inventoryToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .inventorySummary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+
+  .clearFiltersButton {
+    width: 100%;
+  }
+
+  .bulkBar,
+  .operationError {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulkActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .operationError button {
+    align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clearFiltersButton,
+  .clearSelectionButton,
+  .bulkDeleteButton {
+    transition: none;
+  }
+}

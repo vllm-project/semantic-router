@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/openai/openai-go/packages/param"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // toolEmbeddingText builds a phrase for embedding from an OpenAI-format tool (name + optional description).
@@ -51,6 +53,7 @@ func filterRequestToolsAgainstQuerySemantic(
 	requestTools []openai.ChatCompletionToolParam,
 	modelType string,
 	targetDim int,
+	provider embedding.Provider,
 	relevanceThreshold float32,
 	preserveCount int,
 ) ([]openai.ChatCompletionToolParam, float32, error) {
@@ -63,12 +66,12 @@ func filterRequestToolsAgainstQuerySemantic(
 		copy(out, requestTools)
 		return out, 0, nil
 	}
-	qOut, err := candle_binding.GetEmbeddingWithModelType(trimmedQuery, modelType, targetDim)
+	queryEmbedding, err := embedToolSelectionText(provider, trimmedQuery, modelType, targetDim)
 	if err != nil {
 		return nil, 0, fmt.Errorf("tool_selection filter: query embedding: %w", err)
 	}
 
-	scored, err := scoreToolsBySemanticSimilarity(requestTools, qOut.Embedding, modelType, targetDim)
+	scored, err := scoreToolsBySemanticSimilarity(requestTools, queryEmbedding, modelType, targetDim, provider)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -99,6 +102,7 @@ func scoreToolsBySemanticSimilarity(
 	queryEmbedding []float32,
 	modelType string,
 	targetDim int,
+	provider embedding.Provider,
 ) ([]scoredRequestTool, error) {
 	scored := make([]scoredRequestTool, 0, len(requestTools))
 	for i, tool := range requestTools {
@@ -106,17 +110,28 @@ func scoreToolsBySemanticSimilarity(
 		if embeddingText == "" {
 			embeddingText = tool.Function.Name
 		}
-		tOut, err := candle_binding.GetEmbeddingWithModelType(embeddingText, modelType, targetDim)
+		toolEmbedding, err := embedToolSelectionText(provider, embeddingText, modelType, targetDim)
 		if err != nil {
 			return nil, fmt.Errorf("tool_selection filter: embedding tool %q: %w", tool.Function.Name, err)
 		}
 		scored = append(scored, scoredRequestTool{
 			tool:  tool,
-			score: dotProductFloat32(queryEmbedding, tOut.Embedding),
+			score: dotProductFloat32(queryEmbedding, toolEmbedding),
 			order: i,
 		})
 	}
 	return scored, nil
+}
+
+func embedToolSelectionText(provider embedding.Provider, text string, modelType string, targetDim int) ([]float32, error) {
+	if provider != nil {
+		return provider.Embed(context.Background(), text)
+	}
+	output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 func keepByRelevanceThreshold(scored []scoredRequestTool, relevanceThreshold float32) []openai.ChatCompletionToolParam {

@@ -16,6 +16,9 @@ data:
         cluster: 'openshift'
         namespace: 'vllm-semantic-router-system'
 
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
     scrape_configs:
       # Prometheus self-monitoring
       - job_name: prometheus

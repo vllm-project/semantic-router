@@ -25,6 +25,8 @@ var (
 )
 
 // initClassifier initializes the global unified classifier once
+var benchClassifier *classification.UnifiedClassifier
+
 func initClassifier(b *testing.B) {
 	classifierOnce.Do(func() {
 		// Find the project root (semantic-router-fork)
@@ -39,11 +41,12 @@ func initClassifier(b *testing.B) {
 
 		// Use auto-discovery to initialize classifier
 		modelsDir := filepath.Join(projectRoot, "models")
-		_, err = classification.AutoInitializeUnifiedClassifier(modelsDir)
+		c, err := classification.AutoInitializeUnifiedClassifier(modelsDir)
 		if err != nil {
 			classifierErr = err
 			return
 		}
+		benchClassifier = c
 	})
 
 	if classifierErr != nil {
@@ -54,7 +57,7 @@ func initClassifier(b *testing.B) {
 // BenchmarkClassifyBatch_Size1 benchmarks single text classification
 func BenchmarkClassifyBatch_Size1(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -71,7 +74,7 @@ func BenchmarkClassifyBatch_Size1(b *testing.B) {
 // BenchmarkClassifyBatch_Size10 benchmarks batch of 10 texts
 func BenchmarkClassifyBatch_Size10(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	// Prepare batch
 	batch := make([]string, 10)
@@ -93,7 +96,7 @@ func BenchmarkClassifyBatch_Size10(b *testing.B) {
 // BenchmarkClassifyBatch_Size50 benchmarks batch of 50 texts
 func BenchmarkClassifyBatch_Size50(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	// Prepare batch
 	batch := make([]string, 50)
@@ -115,7 +118,7 @@ func BenchmarkClassifyBatch_Size50(b *testing.B) {
 // BenchmarkClassifyBatch_Size100 benchmarks batch of 100 texts
 func BenchmarkClassifyBatch_Size100(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	// Prepare batch
 	batch := make([]string, 100)
@@ -137,7 +140,7 @@ func BenchmarkClassifyBatch_Size100(b *testing.B) {
 // BenchmarkClassifyBatch_Parallel benchmarks parallel classification
 func BenchmarkClassifyBatch_Parallel(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -156,7 +159,7 @@ func BenchmarkClassifyBatch_Parallel(b *testing.B) {
 // BenchmarkCGOOverhead measures the overhead of CGO calls
 func BenchmarkCGOOverhead(b *testing.B) {
 	initClassifier(b)
-	classifier := classification.GetGlobalUnifiedClassifier()
+	classifier := benchClassifier
 
 	texts := []string{"Simple test text"}
 

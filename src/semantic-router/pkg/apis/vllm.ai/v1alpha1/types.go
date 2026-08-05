@@ -77,10 +77,24 @@ type ModelConfig struct {
 
 // ModelPricing defines the pricing structure for a model
 type ModelPricing struct {
+	// Currency is the unit for all configured token prices
+	// +optional
+	Currency string `json:"currency,omitempty" yaml:"currency,omitempty"`
+
 	// InputTokenPrice is the cost per input token
 	// +optional
 	// +kubebuilder:validation:Minimum=0
 	InputTokenPrice float64 `json:"inputTokenPrice,omitempty" yaml:"inputTokenPrice,omitempty"`
+
+	// CachedInputTokenPrice is the cost per cached input token
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	CachedInputTokenPrice *float64 `json:"cachedInputTokenPrice,omitempty" yaml:"cachedInputTokenPrice,omitempty"`
+
+	// CacheWriteTokenPrice is the cost per input token written to prompt cache
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	CacheWriteTokenPrice *float64 `json:"cacheWriteTokenPrice,omitempty" yaml:"cacheWriteTokenPrice,omitempty"`
 
 	// OutputTokenPrice is the cost per output token
 	// +optional

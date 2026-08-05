@@ -58,8 +58,11 @@ This deploys only the core components without Dashboard, OpenWebUI, Grafana, and
 | `--kserve` | Deploy semantic-router with a KServe backend (add `--simulator` for KServe simulator) |
 | `--simulator` | Use mock-vllm or KServe simulator backends (CPU) |
 | `--classifier-gpu` | Run semantic-router classifier on GPU |
+| `--namespace`, `-n NS` | Target namespace (default: `vllm-semantic-router-system`) |
 | *(auto)* | If the KServe CRD is missing, the script installs upstream KServe and cert-manager |
 | `--help`, `-h` | Show help message |
+
+> The bundled manifests hardcode the default namespace in `metadata.namespace` and in the in-cluster image-registry image paths. The deploy script rewrites that token to the target namespace at apply time, so `--namespace`/`-n` deploys cleanly into any namespace.
 
 **GPU Classifier**
 

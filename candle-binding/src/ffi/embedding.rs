@@ -39,6 +39,43 @@ use tokenizers::Tokenizer as MmTokenizer;
 static STANDALONE_MULTIMODAL: OnceLock<(MultiModalEmbeddingModel, MmTokenizer, String)> =
     OnceLock::new();
 
+pub(crate) fn truncate_embedding_to_dimension(
+    embedding: Vec<f32>,
+    target_dim: Option<usize>,
+) -> Vec<f32> {
+    let Some(dim) = target_dim else {
+        return embedding;
+    };
+
+    let actual_dim = if dim > embedding.len() {
+        eprintln!(
+            "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
+            dim,
+            embedding.len()
+        );
+        embedding.len()
+    } else {
+        dim
+    };
+
+    if actual_dim >= embedding.len() {
+        return embedding;
+    }
+
+    let mut truncated = embedding[..actual_dim].to_vec();
+    let norm = truncated
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    if norm > 0.0 {
+        for value in &mut truncated {
+            *value /= norm;
+        }
+    }
+    truncated
+}
+
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
 fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
@@ -100,25 +137,7 @@ where
         .to_vec1::<f32>()
         .map_err(|e| format!("Failed to convert embedding to vec: {:?}", e))?;
 
-    // Apply Matryoshka truncation if requested
-    let result = if let Some(dim) = target_dim {
-        // Gracefully degrade to model's max dimension if requested dimension is too large
-        let actual_dim = if dim > embedding_vec.len() {
-            eprintln!(
-                "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
-                dim,
-                embedding_vec.len()
-            );
-            embedding_vec.len()
-        } else {
-            dim
-        };
-        embedding_vec[..actual_dim].to_vec()
-    } else {
-        embedding_vec
-    };
-
-    Ok(result)
+    Ok(truncate_embedding_to_dimension(embedding_vec, target_dim))
 }
 
 /// Generic internal helper for batch embedding generation
@@ -203,36 +222,29 @@ where
     // 3. Calling model.embedding_forward with the correct signature
     let embeddings = forward_fn(flat_ids, flat_mask, batch_size, max_len)?;
 
-    // Extract embeddings for each text
-    let embedding_dim = embeddings
-        .dim(1)
-        .map_err(|e| format!("Failed to get embedding dimension: {:?}", e))?;
-
     let embeddings_data = embeddings
         .to_vec2::<f32>()
         .map_err(|e| format!("Failed to convert embeddings to vec: {:?}", e))?;
 
-    // Apply Matryoshka truncation if requested
-    let result_embeddings = if let Some(dim) = target_dim {
-        // Gracefully degrade to model's max dimension if requested dimension is too large
-        let actual_dim = if dim > embedding_dim {
+    let target_dim = if let Some(dim) = target_dim {
+        let embedding_dim = embeddings_data.first().map_or(0, Vec::len);
+        if dim > embedding_dim {
             eprintln!(
                 "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
                 dim, embedding_dim
             );
-            embedding_dim
+            Some(embedding_dim)
         } else {
-            dim
-        };
-        embeddings_data
-            .into_iter()
-            .map(|emb| emb[..actual_dim].to_vec())
-            .collect()
+            Some(dim)
+        }
     } else {
-        embeddings_data
+        None
     };
 
-    Ok(result_embeddings)
+    Ok(embeddings_data
+        .into_iter()
+        .map(|emb| truncate_embedding_to_dimension(emb, target_dim))
+        .collect())
 }
 
 /// Initialize mmBERT embedding model with 2D Matryoshka support
@@ -2138,12 +2150,12 @@ pub extern "C" fn get_embedding_batched(
         }
     };
 
-    // Apply target dimension if specified
-    let final_embedding = if target_dim > 0 && (target_dim as usize) < embedding_vec.len() {
-        embedding_vec[..(target_dim as usize)].to_vec()
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
     } else {
-        embedding_vec
+        None
     };
+    let final_embedding = truncate_embedding_to_dimension(embedding_vec, target_dimension);
 
     let length = final_embedding.len() as i32;
     let data = Box::into_raw(final_embedding.into_boxed_slice()) as *mut f32;
@@ -2412,9 +2424,9 @@ pub extern "C" fn multimodal_encode_text(
 /// Filter: `image::imageops::FilterType::CatmullRom` (cubic B-spline, B=0, C=0.5),
 /// applied via `image::imageops::resize` which is support-window-weighted -
 /// approximates PIL's `Image.BICUBIC` resampling with similar antialias
-/// behavior on downscale. Empirical equivalence against PIL bicubic+antialias=True
-/// is validated end-to-end in `docs/probe-2026-05-25-image-drift-isolation/`
-/// (cosine >= 0.999 vs PyTorch reference across a 20-image corpus).
+/// behavior on downscale. Keep preprocessing equivalence covered by the
+/// multimodal embedding regression tests instead of relying on generated
+/// one-off probe artifacts.
 ///
 /// Known limitations: RGBA inputs have alpha discarded via `to_rgb8` (not
 /// composited against any background; PIL's `convert("RGB")` composites against
@@ -2479,10 +2491,9 @@ fn decode_resize_to_chw_f32(
 /// Preferred entry point for image embedding from raw JPEG/PNG bytes. All
 /// preprocessing happens in Rust via `decode_resize_to_chw_f32`, which
 /// approximates PIL's `Image.BICUBIC` + `antialias=True` behavior used by
-/// `SiglipProcessor`. Validated end-to-end against the PyTorch reference in
-/// `docs/probe-2026-05-25-image-drift-isolation/`: cosine >= 0.999 across a
-/// 20-image corpus; the prior Go-side 4-tap bilinear path averaged cosine
-/// 0.99 on the same fixtures.
+/// `SiglipProcessor`. The multimodal embedding regression suite owns the
+/// cross-runtime equivalence contract; generated experiment reports are not a
+/// source dependency.
 ///
 /// See `decode_resize_to_chw_f32` for the resize-filter discussion, known
 /// limitations (RGBA alpha discard, no EXIF auto-apply), and rationale.

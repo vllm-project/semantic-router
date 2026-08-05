@@ -38,17 +38,20 @@ Test datasets are available on HuggingFace:
 
 ### 1. Generate Training Data
 
+First prepare an unlabeled queries file (JSONL, one `{"query": "..."}` per line) — see [Prepare Your Data](domains/README.md#1-prepare-your-data). Then:
+
 ```bash
-python3 src/training/cache_embeddings/generate_training_data.py \
+python3 src/training/model_embeddings/cache_embeddings/generate_training_data.py \
+  --input data/cache_embeddings/medical/unlabeled_queries.jsonl \
   --domain medical \
   --output data/cache_embeddings/medical/triplets.jsonl \
-  --num-samples 10000
+  --max-queries 10000
 ```
 
 ### 2. Train Domain-Specific LoRA
 
 ```bash
-python3 src/training/cache_embeddings/lora_trainer.py \
+python3 src/training/model_embeddings/cache_embeddings/lora_trainer.py \
   --train-data data/cache_embeddings/medical/triplets.jsonl \
   --base-model sentence-transformers/all-MiniLM-L12-v2 \
   --output models/cache/medical-cache-lora \
@@ -66,7 +69,7 @@ cat data/cache_embeddings/medical/triplets.jsonl \
     > data/cache_embeddings/multi-domain/triplets.jsonl
 
 # Train on combined data
-python3 src/training/cache_embeddings/lora_trainer.py \
+python3 src/training/model_embeddings/cache_embeddings/lora_trainer.py \
   --train-data data/cache_embeddings/multi-domain/triplets.jsonl \
   --base-model sentence-transformers/all-MiniLM-L12-v2 \
   --output models/multi-domain-cache-lora-L12 \
@@ -76,11 +79,9 @@ python3 src/training/cache_embeddings/lora_trainer.py \
 ### 4. Evaluate Model
 
 ```bash
-python3 src/training/cache_embeddings/evaluate_multi_domain.py \
-  --base-model sentence-transformers/all-MiniLM-L12-v2 \
-  --lora-model models/multi-domain-cache-lora-L12 \
-  --test-file data/cache_embeddings/medical/test_set.jsonl \
-  --output results.json
+python3 src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py \
+  --lora-path models/multi-domain-cache-lora-L12 \
+  --sample-size 2000
 ```
 
 ## Using Pre-trained Models
@@ -140,17 +141,6 @@ semantic_cache:
   # LoRA model (requires base model: sentence-transformers/all-MiniLM-L12-v2)
   # This feature requires implementation of LoRA loading in the semantic cache module
   lora_model: "llm-semantic-router/multi-domain-cache-lora-L12"
-```
-
-## Training on AWS
-
-See [aws/README.md](aws/README.md) for instructions on launching GPU instances and training at scale.
-
-### Quick AWS Launch
-
-```bash
-# Launch g5.12xlarge instance (4x A10G GPUs)
-src/training/cache_embeddings/aws/deploy-vllm.sh
 ```
 
 ## Scripts

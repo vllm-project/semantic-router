@@ -113,6 +113,23 @@
   filter: brightness(1.08);
 }
 
+.editorHelp {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.pluginConfigurationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #101012;
+}
+
 .viewStack {
   display: flex;
   flex-direction: column;
@@ -125,8 +142,8 @@
   gap: 0.5rem;
   padding: 0.7rem 0.8rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(0, 212, 255, 0.14);
-  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(166, 171, 179, 0.14);
+  background: rgba(166, 171, 179, 0.08);
 }
 
 .viewHeading {
@@ -156,8 +173,8 @@
   min-height: 28px;
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
-  border: 1px solid rgba(0, 212, 255, 0.18);
-  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(166, 171, 179, 0.18);
+  background: rgba(166, 171, 179, 0.08);
   color: var(--color-accent-cyan);
   font-size: 0.74rem;
   font-weight: 700;
@@ -195,6 +212,7 @@
 @media (max-width: 760px) {
   .editorGridConditions,
   .editorGridTwo,
+  .pluginConfigurationGrid,
   .viewMeta {
     grid-template-columns: 1fr;
   }

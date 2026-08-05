@@ -8,21 +8,24 @@ import type { RegisteredTool } from '../tools'
 import type {
   BuiltInTool,
   ServerFilter,
+  ServerSort,
+  ToolSort,
+  ToolSourceFilter,
   UnifiedTool,
   UnifiedToolParameter,
 } from './mcpConfigPanelTypes'
 
 const DEFAULT_TIMEOUT_MS = 30000
 
-interface ServerFormValues {
+export interface ServerFormValues {
   name: string
   description: string
   transport: MCPTransportType
   enabled: boolean
   command: string
-  args: string
+  args: string[]
   url: string
-  headers: string
+  headers: Record<string, string>
   timeout: string
   autoReconnect: boolean
 }
@@ -39,66 +42,155 @@ export function buildUnifiedTools(
   toolsDbTools: BuiltInTool[],
 ): UnifiedTool[] {
   const mcpTools = servers
-    .filter(server => server.status === 'connected')
-    .flatMap(server =>
-      (server.tools || []).map(tool => ({
-        id: `mcp-${server.config.id}-${tool.name}`,
-        name: tool.name,
-        description: tool.description || '',
-        source: server.config.name,
-        sourceType: 'mcp' as const,
-        parameters: extractMCPToolParameters(tool),
-        rawTool: tool,
-      })),
-    )
+    .filter((server) => server.status === 'connected')
+    .flatMap((server) => (server.tools || []).map((tool) => toUnifiedMCPTool(server, tool)))
 
-  const frontendTools = registryTools.map(tool => ({
-    id: `frontend-${tool.metadata.id}`,
-    name: tool.metadata.displayName,
-    description: tool.definition.function.description,
-    source: 'Built-in',
-    sourceType: 'frontend' as const,
-    parameters: extractRegisteredToolParameters(tool),
-    rawTool: tool,
-  }))
+  const frontendTools = registryTools.map(toUnifiedRegisteredTool)
 
-  const backendTools = toolsDbTools.map(tool => ({
-    id: `backend-${tool.tool.function.name}`,
-    name: tool.tool.function.name,
-    description: tool.tool.function.description,
-    source: 'Semantic Router',
-    sourceType: 'backend' as const,
-    parameters: extractBuiltInToolParameters(tool),
-    rawTool: tool,
-  }))
+  const backendTools = toolsDbTools.map(toUnifiedBuiltInTool)
 
   return [...mcpTools, ...frontendTools, ...backendTools]
 }
 
-export function filterUnifiedTools(tools: UnifiedTool[], searchValue: string): UnifiedTool[] {
-  const search = searchValue.trim().toLowerCase()
-  if (!search) {
-    return tools
+export function toUnifiedMCPTool(server: MCPServerState, tool: MCPToolDefinition): UnifiedTool {
+  return {
+    id: `mcp-${server.config.id}-${tool.name}`,
+    name: tool.name,
+    description: tool.description || '',
+    source: server.config.name,
+    sourceType: 'mcp',
+    parameters: extractMCPToolParameters(tool),
+    rawTool: tool,
   }
-
-  return tools.filter(tool =>
-    tool.name.toLowerCase().includes(search) ||
-    tool.description.toLowerCase().includes(search) ||
-    tool.source.toLowerCase().includes(search),
-  )
 }
 
-export function filterServers(
+export function toUnifiedRegisteredTool(tool: RegisteredTool): UnifiedTool {
+  return {
+    id: `frontend-${tool.metadata.id}`,
+    name: tool.metadata.displayName,
+    description: tool.definition.function.description,
+    source: 'Built-in',
+    sourceType: 'frontend',
+    parameters: extractRegisteredToolParameters(tool),
+    rawTool: tool,
+  }
+}
+
+export function toUnifiedBuiltInTool(tool: BuiltInTool): UnifiedTool {
+  return {
+    id: `backend-${tool.tool.function.name}`,
+    name: tool.tool.function.name,
+    description: tool.tool.function.description,
+    source: 'Semantic Router',
+    sourceType: 'backend',
+    parameters: extractBuiltInToolParameters(tool),
+    rawTool: tool,
+  }
+}
+
+export function filterAndSortUnifiedTools(
+  tools: UnifiedTool[],
+  searchValue: string,
+  sourceFilter: ToolSourceFilter,
+  sort: ToolSort,
+): UnifiedTool[] {
+  const search = searchValue.trim().toLowerCase()
+  return tools
+    .filter((tool) => sourceFilter === 'all' || tool.sourceType === sourceFilter)
+    .filter((tool) => {
+      if (!search) return true
+      return [
+        tool.name,
+        tool.description,
+        tool.source,
+        tool.sourceType,
+        ...tool.parameters.flatMap((parameter) => [parameter.name, parameter.description || '']),
+      ].some((value) => value.toLowerCase().includes(search))
+    })
+    .sort((left, right) => {
+      if (sort === 'source-asc') {
+        return (
+          left.source.localeCompare(right.source, undefined, { sensitivity: 'base' }) ||
+          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+        )
+      }
+      if (sort === 'parameters-desc') {
+        return (
+          right.parameters.length - left.parameters.length ||
+          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+        )
+      }
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+    })
+}
+
+export function filterAndSortServers(
   servers: MCPServerState[],
   filter: ServerFilter,
+  searchValue: string,
+  sort: ServerSort,
 ): MCPServerState[] {
-  if (filter === 'all') {
-    return servers
+  const search = searchValue.trim().toLowerCase()
+  const statusRank: Record<MCPServerState['status'], number> = {
+    connected: 0,
+    connecting: 1,
+    error: 2,
+    disconnected: 3,
   }
-  if (filter === 'connected') {
-    return servers.filter(server => server.status === 'connected')
-  }
-  return servers.filter(server => server.status !== 'connected')
+
+  return servers
+    .filter((server) => {
+      if (filter === 'all') return true
+      if (filter === 'connected') return server.status === 'connected'
+      return server.status !== 'connected'
+    })
+    .filter((server) => {
+      if (!search) return true
+      const connection = server.config.connection
+      return [
+        server.config.name,
+        server.config.description || '',
+        server.config.transport,
+        server.status,
+        connection.command || '',
+        connection.url || '',
+        ...(server.tools || []).flatMap((tool) => [tool.name, tool.description || '']),
+      ].some((value) => value.toLowerCase().includes(search))
+    })
+    .sort((left, right) => {
+      if (sort === 'status') {
+        return (
+          statusRank[left.status] - statusRank[right.status] ||
+          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
+        )
+      }
+      if (sort === 'tools-desc') {
+        return (
+          (right.tools?.length || 0) - (left.tools?.length || 0) ||
+          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
+        )
+      }
+      return left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
+    })
+}
+
+export function paginateMCPItems<T>(items: readonly T[], page: number, pageSize: number): T[] {
+  const safePage = Math.max(1, page)
+  return items.slice((safePage - 1) * pageSize, safePage * pageSize)
+}
+
+export function getMCPPageCount(itemCount: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(itemCount / pageSize))
+}
+
+export function getMCPVisibleRange(
+  itemCount: number,
+  page: number,
+  pageSize: number,
+): { start: number; end: number } {
+  if (itemCount === 0) return { start: 0, end: 0 }
+  const start = (Math.max(1, page) - 1) * pageSize + 1
+  return { start, end: Math.min(itemCount, start + pageSize - 1) }
 }
 
 export function getTransportLabel(transport: MCPTransportType): string {
@@ -112,31 +204,18 @@ export function getTransportLabel(transport: MCPTransportType): string {
   }
 }
 
-export function parseHeaders(headersStr: string): Record<string, string> | undefined {
-  if (!headersStr.trim()) {
-    return undefined
-  }
+function normalizeArgs(args: readonly string[]): string[] | undefined {
+  const normalized = args.map((argument) => argument.trim()).filter(Boolean)
+  return normalized.length > 0 ? normalized : undefined
+}
 
-  const headers: Record<string, string> = {}
-  for (const line of headersStr.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) {
-      continue
-    }
-
-    const colonIndex = trimmed.indexOf(':')
-    if (colonIndex === -1) {
-      continue
-    }
-
-    const key = trimmed.slice(0, colonIndex).trim()
-    const value = trimmed.slice(colonIndex + 1).trim()
-    if (key && value) {
-      headers[key] = value
-    }
-  }
-
-  return Object.keys(headers).length > 0 ? headers : undefined
+function normalizeHeaders(
+  headers: Readonly<Record<string, string>>,
+): Record<string, string> | undefined {
+  const normalized = Object.entries(headers)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => Boolean(key && value))
+  return normalized.length > 0 ? Object.fromEntries(normalized) : undefined
 }
 
 export function buildServerConfig(values: ServerFormValues): Omit<MCPServerConfig, 'id'> {
@@ -145,15 +224,16 @@ export function buildServerConfig(values: ServerFormValues): Omit<MCPServerConfi
     description: values.description || undefined,
     transport: values.transport,
     enabled: values.enabled,
-    connection: values.transport === 'stdio'
-      ? {
-          command: values.command,
-          args: values.args.split('\n').filter(arg => arg.trim()),
-        }
-      : {
-          url: values.url,
-          headers: parseHeaders(values.headers),
-        },
+    connection:
+      values.transport === 'stdio'
+        ? {
+            command: values.command,
+            args: normalizeArgs(values.args),
+          }
+        : {
+            url: values.url,
+            headers: normalizeHeaders(values.headers),
+          },
     options: {
       timeout: parseInt(values.timeout, 10) || DEFAULT_TIMEOUT_MS,
       autoReconnect: values.autoReconnect,
@@ -171,28 +251,20 @@ export function buildTestServerConfig(
     description: values.description || undefined,
     transport: values.transport,
     enabled: values.enabled,
-    connection: values.transport === 'stdio'
-      ? {
-          command: values.command,
-          args: values.args.split('\n').filter(arg => arg.trim()),
-        }
-      : {
-          url: values.url,
-          headers: parseHeaders(values.headers),
-        },
+    connection:
+      values.transport === 'stdio'
+        ? {
+            command: values.command,
+            args: normalizeArgs(values.args),
+          }
+        : {
+            url: values.url,
+            headers: normalizeHeaders(values.headers),
+          },
     options: {
       timeout: parseInt(values.timeout, 10) || DEFAULT_TIMEOUT_MS,
     },
   }
-}
-
-export function toHeaderLines(headers?: Record<string, string>): string {
-  if (!headers || Object.keys(headers).length === 0) {
-    return ''
-  }
-  return Object.entries(headers)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join('\n')
 }
 
 export function extractMCPToolParameters(tool: MCPToolDefinition): UnifiedToolParameter[] {

@@ -8,6 +8,7 @@ import {
   DSL_LANGUAGE_ID,
   diagnosticsToMarkers,
 } from '@/lib/dslLanguage'
+import { DslImportModal } from './DslImportModal'
 import styles from './DslEditorPage.module.css'
 
 type OutputTab = 'yaml' | 'crd'
@@ -343,7 +344,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   const isValid = errorCount === 0 && wasmReady
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
       {/* Toolbar — hidden when embedded in BuilderPage (parent provides toolbar) */}
       {!embedded && (
       <div className={styles.toolbar}>
@@ -594,7 +595,11 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
               <pre className={styles.outputCode}>{crdOutput}</pre>
             ) : (
               <div className={styles.emptyState}>
-                <div className={styles.emptyIcon}>⚡</div>
+                <div className={styles.emptyIcon} aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M13 2L5 14h6l-1 8 9-13h-6V2Z" strokeLinejoin="round" />
+                  </svg>
+                </div>
                 <div>Write DSL and press <strong>Compile</strong> to see output</div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                   Ctrl+Enter to compile · Ctrl+Shift+F to format
@@ -638,86 +643,25 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
 
       {/* Import YAML Modal */}
       {showImportModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowImportModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>Import YAML Config</h3>
-              <button className={styles.modalClose} onClick={() => setShowImportModal(false)}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <p className={styles.modalHint}>
-                Paste a full router config YAML or routing fragment below, load from a file, or fetch from a URL. Only the routing section will be decompiled into DSL.
-              </p>
-              <div className={styles.importUrlRow}>
-                <input
-                  className={styles.importUrlInput}
-                  type="url"
-                  value={importUrl}
-                  onChange={(e) => { setImportUrl(e.target.value); setImportError(null) }}
-                  placeholder="https://example.com/config.yaml"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleImportUrl() }}
-                />
-                <button
-                  className={styles.toolbarBtn}
-                  onClick={handleImportUrl}
-                  disabled={importUrlLoading || !importUrl.trim()}
-                >
-                  {importUrlLoading ? (
-                    <>
-                      <span className={styles.dotPulse} />
-                      Fetching…
-                    </>
-                  ) : (
-                    <>
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M6 2a4 4 0 100 8 4 4 0 000-8z" />
-                        <path d="M2 6h8M6 2v8" strokeLinecap="round" />
-                        <path d="M14 14l-3.5-3.5" strokeLinecap="round" />
-                      </svg>
-                      Fetch
-                    </>
-                  )}
-                </button>
-              </div>
-              <textarea
-                ref={importTextareaRef}
-                className={styles.importTextarea}
-                value={importText}
-                onChange={(e) => { setImportText(e.target.value); setImportError(null) }}
-                placeholder="Paste YAML config here..."
-                spellCheck={false}
-              />
-              {importError && <div className={styles.importError}>{importError}</div>}
-            </div>
-            <div className={styles.modalFooter}>
-              <button
-                className={styles.toolbarBtn}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M2 14h12M8 2v9M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Load File
-              </button>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--spacing-sm)' }}>
-                <button className={styles.toolbarBtn} onClick={() => setShowImportModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  className={styles.toolbarBtnPrimary}
-                  onClick={handleImportConfirm}
-                  disabled={!importText.trim()}
-                >
-                  Import
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DslImportModal
+          importText={importText}
+          importError={importError}
+          importUrl={importUrl}
+          importUrlLoading={importUrlLoading}
+          textareaRef={importTextareaRef}
+          onClose={() => setShowImportModal(false)}
+          onUrlChange={(value) => {
+            setImportUrl(value)
+            setImportError(null)
+          }}
+          onFetchUrl={handleImportUrl}
+          onTextChange={(value) => {
+            setImportText(value)
+            setImportError(null)
+          }}
+          onLoadFile={() => fileInputRef.current?.click()}
+          onImport={handleImportConfirm}
+        />
       )}
     </div>
   )

@@ -218,6 +218,72 @@ routing:
     assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
 
 
+def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      provider_model_id: "openai/gpt-4o-mini"
+      backend_refs:
+        - name: "openrouter"
+          base_url: "https://openrouter.ai/api/v1"
+          provider: "openai"
+          auth_header: "Authorization"
+          auth_prefix: "Bearer"
+          api_key_env: "OPENROUTER_API_KEY"
+          extra_headers:
+            X-Test-Trace: "router-flow"
+            X-Test-Tenant: "eval"
+          weight: 1
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["type"] == "LOGICAL_DNS"
+    assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
+
+    route = _model_route(rendered, "test-model")
+    route_action = route["route"]
+    assert route_action["host_rewrite_literal"] == "openrouter.ai"
+    assert route_action["regex_rewrite"]["substitution"] == "/api/v1\\1"
+
+    headers = {
+        item["header"]["key"]: item["header"]["value"]
+        for item in route["request_headers_to_add"]
+    }
+    assert headers["Authorization"] == "Bearer sk-test-openrouter"
+    assert headers["X-Test-Trace"] == "router-flow"
+    assert headers["X-Test-Tenant"] == "eval"
+
+
 def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(
     tmp_path, monkeypatch
 ):

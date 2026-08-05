@@ -11,6 +11,7 @@ from cli.commands.config import (
     migrate_config_command,
 )
 from cli.commands.model import model_list_command
+from cli.commands.rag import rag_list_command
 from cli.commands.validate import validate_command
 from cli.utils import get_logger
 
@@ -175,3 +176,41 @@ def model_list(config_path: str) -> None:
     """Print provider models and routing model cards from the config."""
 
     model_list_command(config_path)
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+@exit_with_logged_error(log)
+def rag(ctx: click.Context) -> None:
+    """
+    Inspect the RAG ingestion pipeline's vector stores.
+
+    Examples:
+        vllm-sr rag list
+        vllm-sr rag list --endpoint http://localhost:8080
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    click.echo(ctx.get_help())
+
+
+@rag.command("list")
+@click.option(
+    "--endpoint",
+    default=None,
+    help=(
+        "Router base URL or full /v1/vector_stores endpoint. "
+        "Defaults to the local router API port (8080 + VLLM_SR_PORT_OFFSET)."
+    ),
+)
+@click.option(
+    "--timeout",
+    default=15,
+    show_default=True,
+    help="HTTP request timeout in seconds.",
+)
+@exit_with_logged_error(log)
+def rag_list(endpoint: str | None, timeout: int) -> None:
+    """List the vector stores created through the RAG ingestion pipeline."""
+
+    rag_list_command(endpoint=endpoint, timeout=timeout)

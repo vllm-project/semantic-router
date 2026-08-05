@@ -2,7 +2,7 @@
 translation:
   source_commit: "0ee41b5f"
   source_file: "docs/tutorials/global/stores-and-tools.md"
-  outdated: false
+  outdated: true
 ---
 
 # 存储与工具
@@ -81,5 +81,5 @@ global:
     tools:
       enabled: true
       top_k: 3
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
 ```

@@ -1,6 +1,6 @@
 import styles from './PlaygroundPage.module.css'
-import ChatComponent from '../components/ChatComponent'
 import AnimatedBackground from '../components/AnimatedBackground'
+import ChatComponent from '../components/ChatComponent'
 
 const PlaygroundPage = () => {
   return (

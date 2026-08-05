@@ -289,7 +289,7 @@ The following sequence illustrates the end‑to‑end flow for a chat completion
 7. **Semantic Cache Update** – Upon receiving the response, the Semantic Router stores the query embedding and response in Milvus with TTL for future cache hits.
 8. **Response to Client** – The gateway returns the response to the client, optionally including observability headers (`X‑VSR‑Model‑Used`, `X‑VSR‑Cache‑Hit`, etc.).
 
-### 4.5 Implementation Plan (Adapted from [Dynamo Proposal](https://vllm-semantic-router.com/docs/proposals/nvidia-dynamo-integration))
+### 4.5 Implementation Plan (Adapted from [Dynamo Proposal](https://vllm-sr.ai/docs/proposals/nvidia-dynamo-integration))
 
 The integration will be delivered in four phases:
 
@@ -488,4 +488,4 @@ Enterprises often require isolated routing policies and model pools per tenant. 
 
 1. [vLLM Production Stack](https://github.com/vllm-project/production-stack)
 2. [vLLM Semantic Router](https://github.com/vllm-project/semantic-router)
-3. [Semantic Intelligence Layer for NVIDIA Dynamo](https://vllm-semantic-router.com/docs/proposals/nvidia-dynamo-integration#46-implementation-plan)
+3. [Semantic Intelligence Layer for NVIDIA Dynamo](https://vllm-sr.ai/docs/proposals/nvidia-dynamo-integration#46-implementation-plan)

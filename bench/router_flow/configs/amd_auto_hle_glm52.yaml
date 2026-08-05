@@ -1,0 +1,401 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1800s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1800
+
+providers:
+  defaults:
+    default_model: glm52-finalizer
+    default_reasoning_effort: high
+    reasoning_families:
+      openrouter:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: glm52-solver-a
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-solver-b
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-solver-c
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-finalizer
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt55-judge
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 5
+        cached_input_per_1m: 0
+        completion_per_1m: 30
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: glm52-solver-a
+      context_window_size: 1048576
+      description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
+    - name: glm52-solver-b
+      context_window_size: 1048576
+      description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
+    - name: glm52-solver-c
+      context_window_size: 1048576
+      description: GLM 5.2 HLE solver alias for independent high-reasoning samples.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:worker, base:glm52]
+    - name: glm52-finalizer
+      context_window_size: 1048576
+      description: GLM 5.2 final synthesis alias for HLE answer-contract enforcement.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:synthesis, base:glm52]
+    - name: gpt55-judge
+      context_window_size: 1048576
+      description: External GPT-5.5 judge endpoint for EvalScope HLE scoring only.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:judge, pool:closed]
+
+  signals:
+    keywords:
+      - name: hle_any
+        operator: OR
+        keywords:
+          - "Humanity's Last Exam"
+          - "Question:"
+          - "Answer:"
+          - "Exact Answer:"
+          - "Confidence:"
+          - "Your response should be in the following format"
+      - name: hle_formal_reasoning
+        operator: OR
+        keywords:
+          - "prove"
+          - "theorem"
+          - "derive"
+          - "calculate"
+          - "equation"
+          - "integral"
+          - "probability"
+          - "matrix"
+          - "physics"
+          - "chemistry"
+          - "biology"
+          - "genetics"
+          - "astronomy"
+          - "law"
+          - "philosophy"
+      - name: hle_exact_answer_contract
+        operator: OR
+        keywords:
+          - "Explanation:"
+          - "Exact Answer:"
+          - "Confidence:"
+          - "succinct, final answer"
+      - name: hle_multiple_choice_or_short_answer
+        operator: OR
+        keywords:
+          - "A)"
+          - "B)"
+          - "C)"
+          - "D)"
+          - "which of the following"
+          - "select"
+          - "answer in"
+    context:
+      - name: hle_long_prompt
+        min_tokens: 4K
+        max_tokens: 1M
+        description: Long text-only HLE prompt or reference-heavy question.
+
+  projections:
+    scores:
+      - name: hle_risk_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: hle_formal_reasoning
+            weight: 0.35
+          - type: keyword
+            name: hle_exact_answer_contract
+            weight: 0.25
+          - type: context
+            name: hle_long_prompt
+            weight: 0.25
+          - type: keyword
+            name: hle_multiple_choice_or_short_answer
+            weight: 0.15
+    mappings:
+      - name: hle_risk_band
+        source: hle_risk_score
+        method: threshold_bands
+        outputs:
+          - name: hle_low_risk
+            lt: 0.35
+          - name: hle_medium_risk
+            gte: 0.35
+            lt: 0.65
+          - name: hle_high_risk
+            gte: 0.65
+
+  decisions:
+    - name: hle_high_risk_remom
+      description: High-risk HLE questions use three GLM 5.2 reasoning samples and GLM 5.2 synthesis.
+      priority: 320
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: hle_high_risk
+      output_contract: >-
+        Return exactly: Explanation: {reasoning for the final answer}
+        Exact Answer: {succinct final answer}
+        Confidence: {0%-100% confidence}. Do not add extra sections.
+      modelRefs:
+        - model: glm52-solver-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-solver-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-solver-c
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3]
+          model_distribution: round_robin
+          temperature: 1.0
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 12000
+          synthesis_model: glm52-finalizer
+          max_concurrent: 2
+          round_timeout_seconds: 1200
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final HLE text-only answer synthesizer.
+
+            Original question:
+            {{.OriginalContent}}
+
+            Independent GLM-5.2 attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Resolve disagreements by checking the original question, not by
+            averaging confidence. Return exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}
+
+    - name: hle_medium_risk_remom
+      description: Medium-risk HLE questions use a two-sample self-consistency loop.
+      priority: 220
+      rules:
+        operator: OR
+        conditions:
+          - type: projection
+            name: hle_medium_risk
+          - type: keyword
+            name: hle_exact_answer_contract
+      output_contract: >-
+        Return exactly: Explanation: {reasoning for the final answer}
+        Exact Answer: {succinct final answer}
+        Confidence: {0%-100% confidence}. Do not add extra sections.
+      modelRefs:
+        - model: glm52-solver-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-solver-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 1.0
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 8000
+          synthesis_model: glm52-finalizer
+          max_concurrent: 2
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are answering HLE text-only questions. Compare the attempts
+            against the original question and preserve the required format.
+
+            Original question:
+            {{.OriginalContent}}
+
+            Attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}
+
+    - name: hle_fallback_remom
+      description: Catch-all GLM 5.2 HLE fallback; no direct single-model decision is exposed.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Preserve the HLE output contract exactly. Return Explanation, Exact
+        Answer, and Confidence only.
+      modelRefs:
+        - model: glm52-solver-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-solver-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [2]
+          model_distribution: round_robin
+          temperature: 1.0
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 8000
+          synthesis_model: glm52-finalizer
+          max_concurrent: 2
+          round_timeout_seconds: 900
+          min_successful_responses: 1
+          max_responses_per_round: 2
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            Produce a final HLE answer from the GLM-5.2 attempts.
+
+            Original question:
+            {{.OriginalContent}}
+
+            Attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}

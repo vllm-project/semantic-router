@@ -45,7 +45,7 @@ var builtinPresets = []PresetInfo{
 			{Name: "openai/gpt5.4", Role: "reasoning"},
 			{Name: "anthropic/claude-opus-4.6", Role: "premium"},
 		},
-		RecipeURL: "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml",
+		RecipeURL: "https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml",
 	},
 	{
 		ID:      "security",
@@ -55,7 +55,7 @@ var builtinPresets = []PresetInfo{
 			{Name: "local/private-qwen", Role: "local-private"},
 			{Name: "cloud/frontier-reasoning", Role: "cloud-reasoning"},
 		},
-		RecipeURL: "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/privacy/privacy-router.yaml",
+		RecipeURL: "https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/privacy/config.yaml",
 	},
 }
 

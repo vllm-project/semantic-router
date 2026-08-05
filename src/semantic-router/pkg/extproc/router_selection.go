@@ -2,19 +2,40 @@ package extproc
 
 import (
 	"context"
-	"os"
-	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+	lt, cancel := buildLookupTable(cfg, replayReader)
+	embed := resolveSelectionEmbeddingFunc(cfg)
+	registries := make(map[config.RecipeName]*selection.Registry)
+
+	if len(cfg.Recipes) == 0 {
+		registry := createModelSelectorRegistry(cfg, lt, embed)
+		registries[config.DefaultRecipeName] = registry
+		selection.GlobalRegistry = registry
+		return registries, registry, lt, cancel
+	}
+
+	for i := range cfg.Recipes {
+		recipe := &cfg.Recipes[i]
+		scopedConfig := cfg.ConfigForRecipe(recipe)
+		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
+	}
+	defaultRegistry := registries[config.DefaultRecipeName]
+	selection.GlobalRegistry = defaultRegistry
+	return registries, defaultRegistry, lt, cancel
+}
+
+func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage, embed func(string) ([]float32, error)) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -25,15 +46,12 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
-
-	lt, cancel := buildLookupTable(cfg, replayReader)
+	selectionFactory = selectionFactory.WithEmbeddingFunc(embed)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
 	registry := selectionFactory.CreateAll()
-	selection.GlobalRegistry = registry
 
 	// Collect algorithm methods actually configured in decisions
 	configuredMethods := collectConfiguredAlgorithmMethods(cfg)
@@ -45,42 +63,81 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
-	return registry, lt, cancel
+	return registry
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend == "" {
-		backend = strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.Backend))
+	provider, err := resolveSelectionEmbeddingProvider(cfg)
+	if err != nil {
+		return func(string) ([]float32, error) {
+			return nil, err
+		}
 	}
+	return func(text string) ([]float32, error) {
+		return provider.Embed(context.Background(), text)
+	}
+}
+
+func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
-		backend = "candle"
+		backend = cfg.EmbeddingModels.EmbeddingBackend()
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
 	}
 
-	modelType := strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.ModelType))
-	if modelType == "" {
-		modelType = "qwen3"
-	}
-
+	modelType := selectionEmbeddingModelType(cfg, backend)
 	switch backend {
-	case "openvino":
-		return openvinoEmbeddingFunc(modelType)
+	case config.EmbeddingBackendOpenVINO:
+		openvinoEmbed := openvinoEmbeddingFunc(modelType)
+		return embedding.NewFuncProvider(backend, 0, func(_ context.Context, text string) ([]float32, error) {
+			return openvinoEmbed(text)
+		})
 	default:
-		return func(text string) ([]float32, error) {
-			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+		return embedding.NewFuncProvider(config.EmbeddingBackendCandle, selectionEmbeddingDimension(cfg, modelType), func(_ context.Context, text string) ([]float32, error) {
+			if modelType == config.EmbeddingModelTypeQwen3 {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, selectionEmbeddingDimension(cfg, modelType))
+				if err != nil {
+					return nil, err
+				}
+				return output.Embedding, nil
+			}
+			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
-		}
+		})
 	}
+}
+
+func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) string {
+	modelType := cfg.EmbeddingConfig.ModelType
+	if modelType != "" {
+		return modelType
+	}
+	if backend == config.EmbeddingBackendOpenAICompatible {
+		return config.EmbeddingModelTypeRemote
+	}
+	return config.EmbeddingModelTypeQwen3
+}
+
+func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
+	if cfg.EmbeddingConfig.TargetDimension > 0 {
+		return cfg.EmbeddingConfig.TargetDimension
+	}
+	if modelType == config.EmbeddingModelTypeQwen3 {
+		return 1024
+	}
+	return 0
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
 	seen := make(map[string]bool)
 	var methods []selection.SelectionMethod
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
 			continue
 		}
@@ -102,29 +159,25 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, decisionCfgs.elo)
 	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
-	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
-	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, decisionCfgs.sessionAware)
+	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
-	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
+	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(nil)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
 	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
 	return modelSelectionCfg
 }
 
 type decisionScopedSelectionConfigs struct {
-	elo          *config.EloSelectionConfig
-	routerDC     *config.RouterDCSelectionConfig
-	rlDriven     *config.RLDrivenSelectionConfig
-	gmtRouter    *config.GMTRouterSelectionConfig
-	multiFactor  *config.MultiFactorSelectionConfig
-	sessionAware *config.SessionAwareSelectionConfig
+	elo       *config.EloSelectionConfig
+	routerDC  *config.RouterDCSelectionConfig
+	rlDriven  *config.RLDrivenSelectionConfig
+	gmtRouter *config.GMTRouterSelectionConfig
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
-	intelligentRouting := cfg.IntelligentRouting
 	var result decisionScopedSelectionConfigs
 
-	for _, decision := range intelligentRouting.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil {
 			continue
 		}
@@ -147,16 +200,6 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.GMTRouter != nil &&
 			result.gmtRouter == nil {
 			result.gmtRouter = decision.Algorithm.GMTRouter
-		}
-		if decision.Algorithm.Type == "multi_factor" &&
-			decision.Algorithm.MultiFactor != nil &&
-			result.multiFactor == nil {
-			result.multiFactor = decision.Algorithm.MultiFactor
-		}
-		if decision.Algorithm.Type == "session_aware" &&
-			decision.Algorithm.SessionAware != nil &&
-			result.sessionAware == nil {
-			result.sessionAware = decision.Algorithm.SessionAware
 		}
 	}
 
@@ -241,87 +284,43 @@ func buildAutoMixSelectionConfig(cfg *config.RouterConfig) *selection.AutoMixCon
 	}
 }
 
-func buildHybridSelectionConfig(cfg *config.RouterConfig) *selection.HybridConfig {
+func buildHybridSelectionConfig(
+	cfg *config.RouterConfig,
+	decisionCfg *config.HybridSelectionConfig,
+) *selection.HybridConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	hybridCfg := intelligentRouting.ModelSelection.Hybrid
-	return &selection.HybridConfig{
-		EloWeight:           hybridCfg.EloWeight,
+	result := &selection.HybridConfig{
+		ExperienceWeight:    hybridCfg.ExperienceWeight,
 		RouterDCWeight:      hybridCfg.RouterDCWeight,
 		AutoMixWeight:       hybridCfg.AutoMixWeight,
 		CostWeight:          hybridCfg.CostWeight,
 		QualityGapThreshold: hybridCfg.QualityGapThreshold,
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
-}
 
-func buildSessionAwareSelectionConfig(
-	cfg *config.RouterConfig,
-	decisionCfg *config.SessionAwareSelectionConfig,
-) *selection.SessionAwareConfig {
-	global := cfg.IntelligentRouting.ModelSelection.SessionAware
-	result := selection.DefaultSessionAwareConfig()
-	applySessionAwareSelectionConfig(result, global)
-	if decisionCfg != nil {
-		applySessionAwareSelectionConfig(result, *decisionCfg)
+	if decisionCfg == nil {
+		return result
+	}
+	if decisionCfg.ExperienceWeight != 0 {
+		result.ExperienceWeight = decisionCfg.ExperienceWeight
+	}
+	if decisionCfg.RouterDCWeight != 0 {
+		result.RouterDCWeight = decisionCfg.RouterDCWeight
+	}
+	if decisionCfg.AutoMixWeight != 0 {
+		result.AutoMixWeight = decisionCfg.AutoMixWeight
+	}
+	if decisionCfg.CostWeight != 0 {
+		result.CostWeight = decisionCfg.CostWeight
+	}
+	if decisionCfg.QualityGapThreshold != 0 {
+		result.QualityGapThreshold = decisionCfg.QualityGapThreshold
+	}
+	if decisionCfg.NormalizeScores {
+		result.NormalizeScores = true
 	}
 	return result
-}
-
-func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg config.SessionAwareSelectionConfig) {
-	if cfg.BaseMethod != "" {
-		result.BaseMethod = selection.SelectionMethod(cfg.BaseMethod)
-	}
-	if cfg.IdleTimeoutSeconds != nil {
-		result.IdleTimeoutSeconds = *cfg.IdleTimeoutSeconds
-	}
-	if cfg.MinTurnsBeforeSwitch != nil {
-		result.MinTurnsBeforeSwitch = *cfg.MinTurnsBeforeSwitch
-	}
-	if cfg.SwitchMargin != nil {
-		result.SwitchMargin = *cfg.SwitchMargin
-	}
-	if cfg.StayBias != nil {
-		result.StayBias = *cfg.StayBias
-	}
-	if cfg.ToolLoopHardLock != nil {
-		result.ToolLoopHardLock = *cfg.ToolLoopHardLock
-	}
-	if cfg.ContextPortabilityHardLock != nil {
-		result.ContextPortabilityHardLock = *cfg.ContextPortabilityHardLock
-	}
-	if cfg.DecisionDriftReset != nil {
-		result.DecisionDriftReset = *cfg.DecisionDriftReset
-	}
-	if cfg.ToolLoopStayBias != nil {
-		result.ToolLoopStayBias = *cfg.ToolLoopStayBias
-	}
-	if cfg.PrefixCacheWeight != nil {
-		result.PrefixCacheWeight = *cfg.PrefixCacheWeight
-	}
-	if cfg.HandoffPenaltyWeight != nil {
-		result.HandoffPenaltyWeight = *cfg.HandoffPenaltyWeight
-	}
-	if cfg.DefaultHandoffPenalty != nil {
-		result.DefaultHandoffPenalty = *cfg.DefaultHandoffPenalty
-	}
-	if cfg.QualityGapMultiplier != nil {
-		result.QualityGapMultiplier = *cfg.QualityGapMultiplier
-	}
-	if cfg.MaxCacheCostMultiplier != nil {
-		result.MaxCacheCostMultiplier = *cfg.MaxCacheCostMultiplier
-	}
-	if cfg.SwitchHistoryWeight != nil {
-		result.SwitchHistoryWeight = *cfg.SwitchHistoryWeight
-	}
-	if cfg.RemainingTurnPriorWeight != nil {
-		result.RemainingTurnPriorWeight = *cfg.RemainingTurnPriorWeight
-	}
-	if cfg.RemainingTurnPriorHorizon != nil {
-		result.RemainingTurnPriorHorizon = *cfg.RemainingTurnPriorHorizon
-	}
-	if cfg.MinRemainingTurnPriorSamples != nil {
-		result.MinRemainingTurnPriorSamples = *cfg.MinRemainingTurnPriorSamples
-	}
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
@@ -557,7 +556,7 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 
 	cancel := func() { _ = fs.Close() }
 	if ltCfg.AutoSaveInterval != "" {
-		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+		if interval, err := config.ParsePeriodicInterval(ltCfg.AutoSaveInterval, 0); err == nil {
 			fs.StartAutoSave(interval)
 		} else {
 			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
@@ -577,12 +576,17 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	go populateFromReplay(storage, reader)
+	// Same #1843 exposure as the periodic populator below: this one-shot
+	// call also parses replay-store entries, and it runs on every router
+	// build, including config reloads of a live router.
+	goSafely("lookup_table_populator_initial", func() {
+		populateFromReplay(storage, reader)
+	})
 
 	if ltCfg.PopulateInterval == "" {
 		return
 	}
-	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
 	if err != nil {
 		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
 		return
@@ -630,10 +634,22 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
+// defaultPopulateInterval is the fallback cadence used when
+// startLookupTablePopulator is given a non-positive interval, so a
+// misconfigured value can neither panic time.NewTicker nor silently disable
+// periodic replay re-derivation.
+const defaultPopulateInterval = 15 * time.Minute
+
 // startLookupTablePopulator launches a background goroutine that periodically
 // re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine.
+// The returned cancel function stops the goroutine. A non-positive interval is
+// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
+// non-positive duration).
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	if interval <= 0 {
+		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
+		interval = defaultPopulateInterval
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	// goSafely so a panic in populateFromReplay (e.g. malformed
 	// replay-store entry) is logged instead of crashing the whole

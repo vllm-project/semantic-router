@@ -3,9 +3,12 @@
 package apiserver
 
 import (
+	"sync"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -13,6 +16,7 @@ import (
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     classificationService
+	configMu              sync.RWMutex
 	config                *config.RouterConfig
 	runtimeConfig         *liveRuntimeConfig
 	runtimeRegistry       *routerruntime.Registry
@@ -20,6 +24,13 @@ type ClassificationAPIServer struct {
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State
+	// The startup-status writer is created once during process bootstrap. Keep
+	// its storage contract stable across live config swaps so /ready does not
+	// start reading from a different backend after a successful reload.
+	startupStatusConfig *config.StartupStatusConfig
+	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
+	learningOutcomePolicyOnce sync.Once
+	learningOutcomePolicy     *learningOutcomeIngestPolicy
 }
 
 type (
@@ -28,24 +39,9 @@ type (
 	ModelInfo          = modelinventory.ModelInfo
 	ModelRegistryInfo  = config.ModelRegistryInfo
 	SystemInfo         = modelinventory.SystemInfo
+	OpenAIModel        = publicmodels.OpenAIModel
+	OpenAIModelList    = publicmodels.OpenAIModelList
 )
-
-// OpenAIModel represents a single model in the OpenAI /v1/models response
-type OpenAIModel struct {
-	ID          string `json:"id"`
-	Object      string `json:"object"`
-	Created     int64  `json:"created"`
-	OwnedBy     string `json:"owned_by"`
-	Description string `json:"description,omitempty"` // Optional description for Chat UI
-	LogoURL     string `json:"logo_url,omitempty"`    // Optional logo URL for Chat UI
-	// Keeping the structure minimal; additional fields like permissions can be added later
-}
-
-// OpenAIModelList is the container for the models list response
-type OpenAIModelList struct {
-	Object string        `json:"object"`
-	Data   []OpenAIModel `json:"data"`
-}
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
@@ -87,6 +83,7 @@ type ClassificationOptions struct {
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
 	Texts           []string `json:"texts"`
+	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
 	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
 	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
@@ -98,6 +95,7 @@ type EmbeddingRequest struct {
 // EmbeddingResult represents a single embedding result
 type EmbeddingResult struct {
 	Text             string    `json:"text"`
+	Modality         string    `json:"modality,omitempty"` // "image" for image inputs; empty for text (backward compatible)
 	Embedding        []float32 `json:"embedding"`
 	Dimension        int       `json:"dimension"`
 	ModelUsed        string    `json:"model_used"`

@@ -4,6 +4,8 @@
 
 `multi_factor` is a selection algorithm that composes four raw runtime signals — **quality**, **latency**, **cost**, and **load** — into a single weighted score per candidate, with optional SLO hard ceilings that prune candidates before scoring.
 
+The configuration belongs to the decision that declares it. If multiple decisions use `multi_factor`, each matched decision is evaluated with its own weights, SLOs, percentile, and no-candidate policy.
+
 It aligns to `config/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
 
 ## Key Advantages
@@ -27,7 +29,9 @@ Real routes care about more than one dimension at once: a faster cheaper model a
 ## Sibling Algorithms
 
 - `latency_aware` is a special case of this — latency-only scoring. Use it when the other dimensions truly do not matter.
-- `hybrid` composes *other selectors* (Elo + RouterDC + AutoMix) into one. `multi_factor` composes *raw signals* directly. Both are useful and complementary.
+- `hybrid` composes request-time selectors and read-only learning evidence into
+  one score. `multi_factor` composes raw runtime signals directly. Both are
+  useful and complementary.
 
 ## Algorithm Principle
 

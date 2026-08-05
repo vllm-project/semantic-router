@@ -27,6 +27,7 @@ limitations under the License.
 //
 //	quality_gap::<task_family>::<current_model>::<candidate_model>
 //	handoff_penalty::<from_model>::<to_model>
+//	handoff_penalty::<recipe>::<from_model>::<to_model>
 //	remaining_turn_prior::<intent_or_domain>
 package lookuptable
 
@@ -58,6 +59,7 @@ const (
 // the canonical wire format used for storage.
 type Key struct {
 	Table TableType
+	Scope string
 
 	// Quality-gap fields
 	TaskFamily     string
@@ -82,8 +84,15 @@ func QualityGapKey(taskFamily, currentModel, candidateModel string) Key {
 
 // HandoffPenaltyKey returns a Key for the handoff_penalty table.
 func HandoffPenaltyKey(fromModel, toModel string) Key {
+	return ScopedHandoffPenaltyKey("", fromModel, toModel)
+}
+
+// ScopedHandoffPenaltyKey returns a recipe-local handoff key. An empty scope
+// preserves the default-recipe wire format.
+func ScopedHandoffPenaltyKey(scope, fromModel, toModel string) Key {
 	return Key{
 		Table:          TableHandoffPenalty,
+		Scope:          scope,
 		CurrentModel:   fromModel,
 		CandidateModel: toModel,
 	}
@@ -107,6 +116,9 @@ func (k Key) String() string {
 	case TableQualityGap:
 		return strings.Join([]string{string(k.Table), k.TaskFamily, k.CurrentModel, k.CandidateModel}, keySep)
 	case TableHandoffPenalty:
+		if k.Scope != "" {
+			return strings.Join([]string{string(k.Table), k.Scope, k.CurrentModel, k.CandidateModel}, keySep)
+		}
 		return strings.Join([]string{string(k.Table), k.CurrentModel, k.CandidateModel}, keySep)
 	case TableRemainingTurnPrior:
 		return strings.Join([]string{string(k.Table), k.IntentOrDomain}, keySep)
@@ -131,8 +143,11 @@ func ParseKey(s string) (Key, error) {
 		return QualityGapKey(parts[1], parts[2], parts[3]), nil
 
 	case TableHandoffPenalty:
+		if len(parts) == 4 {
+			return ScopedHandoffPenaltyKey(parts[1], parts[2], parts[3]), nil
+		}
 		if len(parts) != 3 {
-			return Key{}, fmt.Errorf("lookuptable: handoff_penalty key requires 3 segments, got %d in %q", len(parts), s)
+			return Key{}, fmt.Errorf("lookuptable: handoff_penalty key requires 3 or 4 segments, got %d in %q", len(parts), s)
 		}
 		return HandoffPenaltyKey(parts[1], parts[2]), nil
 

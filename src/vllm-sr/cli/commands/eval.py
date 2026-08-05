@@ -16,6 +16,7 @@ import click
 import requests
 
 from cli.commands.common import exit_with_logged_error
+from cli.commands.recipe_learning import recipe_learning
 from cli.consts import DEFAULT_API_PORT
 from cli.utils import get_logger
 
@@ -31,14 +32,18 @@ class EvalRequest:
     """Request payload for /api/v1/eval."""
 
     messages: list[dict[str, Any]]
+    model: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         # The API endpoint forces evaluate_all_signals=true server-side, but it
         # does not hurt to be explicit.
-        return {
+        payload = {
             "messages": self.messages,
             "evaluate_all_signals": True,
         }
+        if self.model:
+            payload["model"] = self.model
+        return payload
 
 
 def _default_endpoint() -> str:
@@ -195,7 +200,15 @@ def _summarize_decision_result(
 ) -> list[str]:
     """Build summary lines for the decision_result (current EvalResponse format)."""
     lines: list[str] = []
+    if requested_model := payload.get("requested_model"):
+        lines.append(f"model: {requested_model}")
+    if recipe := payload.get("recipe"):
+        lines.append(f"recipe: {recipe}")
     lines.append(f"decision: {decision_result.get('decision_name') or '(none)'}")
+    if algorithm := decision_result.get("algorithm"):
+        lines.append(f"algorithm: {algorithm}")
+    if plugins := decision_result.get("plugins"):
+        lines.append(f"plugins: {', '.join(str(plugin) for plugin in plugins)}")
 
     used_signals = decision_result.get("used_signals", {})
     if used_signals:
@@ -286,7 +299,7 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
-@click.command()
+@click.group(invoke_without_command=True)
 @click.option(
     "--prompt",
     default=None,
@@ -299,11 +312,14 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     help="OpenAI-style messages JSON array string.",
 )
 @click.option(
+    "--model",
+    default=None,
+    help="Routing model or entrypoint whose recipe should be evaluated.",
+)
+@click.option(
     "--endpoint",
     default=None,
-    help=(
-        "Router base URL or full eval endpoint. " f"Defaults to {_default_endpoint()}."
-    ),
+    help=(f"Router base URL or full eval endpoint. Defaults to {_default_endpoint()}."),
 )
 @click.option(
     "--json",
@@ -318,15 +334,21 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     show_default=True,
     help="HTTP request timeout in seconds.",
 )
+@click.pass_context
 @exit_with_logged_error(log)
 def eval(
+    ctx: click.Context,
     prompt: str | None,
     messages_json: str | None,
+    model: str | None,
     endpoint: str | None,
     output_json: bool,
     timeout: int,
 ) -> None:
     """Evaluate a prompt/messages against the router /api/v1/eval endpoint."""
+
+    if ctx.invoked_subcommand is not None:
+        return
 
     if (prompt is None and messages_json is None) or (
         prompt is not None and messages_json is not None
@@ -340,7 +362,7 @@ def eval(
 
     url = _normalize_endpoint(endpoint or "")
 
-    req = EvalRequest(messages=messages)
+    req = EvalRequest(messages=messages, model=(model or "").strip() or None)
 
     try:
         resp = requests.post(url, json=req.to_json(), timeout=timeout)
@@ -368,3 +390,6 @@ def eval(
         return
 
     click.echo(_summarize_response(payload))
+
+
+eval.add_command(recipe_learning)

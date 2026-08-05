@@ -20,6 +20,28 @@ spec:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
 ---
+# Headless per-pod DNS for gRPC ext_proc client-side load balancing (issue #2417).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-headless
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    service: headless
+spec:
+  # ClusterIP is required for headless; do not inherit .Values.service.type.
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: {{ .Values.service.grpc.port }}
+    targetPort: {{ .Values.service.grpc.targetPort }}
+    protocol: {{ .Values.service.grpc.protocol }}
+    name: grpc
+  selector:
+    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+---
 {{- if .Values.service.metrics.enabled }}
 apiVersion: v1
 kind: Service

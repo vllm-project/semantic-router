@@ -85,11 +85,6 @@ func resolveRLDrivenSelector(selectorRegistry *selection.Registry) *selection.RL
 	return nil
 }
 
-// SetEndpointOverrides sets per-model endpoint URL overrides on the underlying client.
-func (l *RLDrivenLooper) SetEndpointOverrides(overrides map[string]string) {
-	l.client.SetEndpointOverrides(overrides)
-}
-
 // Execute implements the RL-driven multi-round routing algorithm.
 // It uses Thompson Sampling to select models and aggregates their responses.
 func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
@@ -131,6 +126,7 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 	responses := make(map[string]string)
 	scores := make(map[string]float64)
 	var modelsUsed []string
+	var usage TokenUsage
 	iteration := 0
 
 	for _, modelName := range multiRoundResult.SelectedModels {
@@ -197,6 +193,7 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 
 		responses[modelName] = resp.Content
 		scores[modelName] = score
+		usage = usage.Add(resp)
 		modelsUsed = append(modelsUsed, displayName)
 	}
 
@@ -233,9 +230,9 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 
 	// Format output
 	if req.IsStreaming {
-		return l.formatStreamingResponse(aggregatedContent, bestModel, modelsUsed, iteration)
+		return l.formatStreamingResponse(aggregatedContent, bestModel, modelsUsed, iteration, usage)
 	}
-	return l.formatJSONResponse(aggregatedContent, bestModel, modelsUsed, iteration)
+	return l.formatJSONResponse(aggregatedContent, bestModel, modelsUsed, iteration, usage)
 }
 
 // buildSelectionContext creates a SelectionContext from the looper Request
@@ -309,14 +306,15 @@ func (l *RLDrivenLooper) executeAllModels(ctx context.Context, req *Request) (*R
 		content += fmt.Sprintf("**[%s]:**\n%s", modelsUsed[i], resp.Content)
 	}
 
+	usage := SumUsage(responses...)
 	if req.IsStreaming {
-		return l.formatStreamingResponse(content, modelsUsed[len(modelsUsed)-1], modelsUsed, iteration)
+		return l.formatStreamingResponse(content, modelsUsed[len(modelsUsed)-1], modelsUsed, iteration, usage)
 	}
-	return l.formatJSONResponse(content, modelsUsed[len(modelsUsed)-1], modelsUsed, iteration)
+	return l.formatJSONResponse(content, modelsUsed[len(modelsUsed)-1], modelsUsed, iteration, usage)
 }
 
 // formatJSONResponse creates a JSON ChatCompletion response
-func (l *RLDrivenLooper) formatJSONResponse(content, model string, modelsUsed []string, iterations int) (*Response, error) {
+func (l *RLDrivenLooper) formatJSONResponse(content, model string, modelsUsed []string, iterations int, usage TokenUsage) (*Response, error) {
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-rl-%d", time.Now().UnixNano()),
 		"object":  "chat.completion",
@@ -332,11 +330,7 @@ func (l *RLDrivenLooper) formatJSONResponse(content, model string, modelsUsed []
 				"finish_reason": "stop",
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
-		},
+		"usage": usage.Map(),
 	}
 
 	body, err := json.Marshal(completion)
@@ -351,11 +345,12 @@ func (l *RLDrivenLooper) formatJSONResponse(content, model string, modelsUsed []
 		ModelsUsed:    modelsUsed,
 		Iterations:    iterations,
 		AlgorithmType: "rl_driven",
+		Usage:         usage,
 	}, nil
 }
 
 // formatStreamingResponse creates an SSE streaming response
-func (l *RLDrivenLooper) formatStreamingResponse(content, model string, modelsUsed []string, iterations int) (*Response, error) {
+func (l *RLDrivenLooper) formatStreamingResponse(content, model string, modelsUsed []string, iterations int, usage TokenUsage) (*Response, error) {
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-rl-%d", timestamp)
 
@@ -427,5 +422,6 @@ func (l *RLDrivenLooper) formatStreamingResponse(content, model string, modelsUs
 		ModelsUsed:    modelsUsed,
 		Iterations:    iterations,
 		AlgorithmType: "rl_driven",
+		Usage:         usage,
 	}, nil
 }

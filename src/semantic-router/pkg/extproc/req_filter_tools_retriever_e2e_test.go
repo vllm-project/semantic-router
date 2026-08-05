@@ -8,8 +8,16 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
+
+// debugReqCtxHeaders opts a test RequestContext into the x-vsr-debug surface so
+// the demoted x-vsr-tools-* observability headers (#2205) are emitted inline for
+// assertion.
+func debugReqCtxHeaders() map[string]string {
+	return map[string]string{headers.VSRDebug: "true"}
+}
 
 // stubRetriever is a test double that returns a fixed RetrievalResult.
 type stubRetriever struct {
@@ -122,6 +130,7 @@ func TestRetrieverE2E_UnknownStrategyFallsBackToDBWithSuffix(t *testing.T) {
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "some query", nil, &resp, &RequestContext{
+		Headers: debugReqCtxHeaders(),
 		VSRSelectedDecision: &config.Decision{
 			Name: "test-decision",
 			Plugins: []config.DecisionPlugin{
@@ -148,6 +157,7 @@ func TestRetrieverE2E_NilRegistryFallsBackWithSuffix(t *testing.T) {
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "some query", nil, &resp, &RequestContext{
+		Headers: debugReqCtxHeaders(),
 		VSRSelectedDecision: &config.Decision{
 			Name: "test-decision",
 			Plugins: []config.DecisionPlugin{
@@ -180,6 +190,7 @@ func TestToolSelectionAddModeE2E_InjectsToolsFromRetriever(t *testing.T) {
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "Will it rain in Seattle tomorrow?", nil, &resp, &RequestContext{
+		Headers: debugReqCtxHeaders(),
 		VSRSelectedDecision: &config.Decision{
 			Name: "tool-selection-add",
 			Plugins: []config.DecisionPlugin{
@@ -224,7 +235,10 @@ func TestToolSelectionFilterModeE2E_KeepsToolsForEmptyQuery(t *testing.T) {
 		req,
 		"",
 		&resp,
-		&RequestContext{VSRSelectedDecision: &config.Decision{Name: "tool-selection-filter"}},
+		&RequestContext{
+			Headers:             debugReqCtxHeaders(),
+			VSRSelectedDecision: &config.Decision{Name: "tool-selection-filter"},
+		},
 		&config.ToolSelectionPluginConfig{
 			Enabled:            true,
 			Mode:               config.ToolSelectionModeFilter,

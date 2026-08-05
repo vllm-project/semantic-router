@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -10,8 +12,13 @@ import (
 )
 
 var maintainedFullConfigAssets = []string{
-	"deploy/recipes/balance.yaml",
-	"deploy/recipes/feedback/feedback-router.yaml",
+	"config/recipes/accuracy/config.yaml",
+	"config/recipes/agent/config.yaml",
+	"config/recipes/balance/config.yaml",
+	"config/recipes/feedback/config.yaml",
+	"config/recipes/knowledge/config.yaml",
+	"config/recipes/multi-objective/config.yaml",
+	"config/recipes/privacy/config.yaml",
 	"deploy/kubernetes/istio/config.yaml",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",
@@ -36,6 +43,23 @@ var maintainedFullConfigAssets = []string{
 	repoRel("e2e", "profiles", "routing-strategies", "config-with-embedding.yaml"),
 	repoRel("bench", "hallucination", "config.yaml"),
 	repoRel("bench", "hallucination", "config-7b.yaml"),
+}
+
+var maintainedRecipeNames = []string{
+	"accuracy",
+	"agent",
+	"balance",
+	"feedback",
+	"knowledge",
+	"multi-objective",
+	"privacy",
+}
+
+var maintainedRecipeFiles = []string{
+	"README.md",
+	"config.yaml",
+	"probes.yaml",
+	"recipe.dsl",
 }
 
 var maintainedEmbeddedConfigAssets = []string{
@@ -114,6 +138,75 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 		t.Run(asset.rel, func(t *testing.T) {
 			validateMaintainedConfigAsset(t, asset.rel, readTemplatedConfigAsset(t, asset))
 		})
+	}
+}
+
+func TestMaintainedRecipeDirectoriesAreCompleteAndSymmetric(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read recipe catalog: %v", err)
+	}
+
+	var actualDirectories []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			actualDirectories = append(actualDirectories, entry.Name())
+			continue
+		}
+		if entry.Name() != "README.md" {
+			t.Errorf("recipe catalog root contains non-catalog file %q", entry.Name())
+		}
+	}
+	sort.Strings(actualDirectories)
+	if !reflect.DeepEqual(actualDirectories, maintainedRecipeNames) {
+		t.Fatalf("recipe directories = %v, want %v", actualDirectories, maintainedRecipeNames)
+	}
+
+	for _, name := range maintainedRecipeNames {
+		t.Run(name, func(t *testing.T) {
+			assertRecipeDirectoryContract(t, root, name)
+		})
+	}
+}
+
+func assertRecipeDirectoryContract(t *testing.T, root, name string) {
+	t.Helper()
+	directory := filepath.Join(root, name)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("read %s: %v", directory, err)
+	}
+	actual := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			t.Fatalf("%s contains unexpected nested directory %q", directory, entry.Name())
+		}
+		actual = append(actual, entry.Name())
+	}
+	sort.Strings(actual)
+	if !reflect.DeepEqual(actual, maintainedRecipeFiles) {
+		t.Fatalf("%s files = %v, want exactly %v", directory, actual, maintainedRecipeFiles)
+	}
+
+	configRel := filepath.ToSlash(filepath.Join("config", "recipes", name, "config.yaml"))
+	validateMaintainedConfigAsset(t, configRel, readMaintainedConfigAsset(t, configRel))
+	assertRecipeProbeManifest(t, name)
+}
+
+func assertRecipeProbeManifest(t *testing.T, name string) {
+	t.Helper()
+	rel := filepath.ToSlash(filepath.Join("config", "recipes", name, "probes.yaml"))
+	manifest := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
+	assets := mustAssetMapValue(t, manifest, "routing_assets", rel)
+	wantYAML := filepath.ToSlash(filepath.Join("config", "recipes", name, "config.yaml"))
+	wantDSL := filepath.ToSlash(filepath.Join("config", "recipes", name, "recipe.dsl"))
+	if assets["yaml"] != wantYAML || assets["dsl"] != wantDSL {
+		t.Fatalf("%s routing_assets = %+v, want yaml=%q dsl=%q", rel, assets, wantYAML, wantDSL)
+	}
+	decisions, ok := manifest["decisions"].([]interface{})
+	if !ok || len(decisions) == 0 {
+		t.Fatalf("%s must contain a non-empty decisions list", rel)
 	}
 }
 

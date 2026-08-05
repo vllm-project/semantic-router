@@ -30,11 +30,13 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
 
     def _mock_statuses(self, statuses_by_name: dict[str, str]):
         def side_effect(command, *, timeout, **_kwargs):
-            if command[1:4] == ["ps", "-a", "--filter"]:
-                name = command[4].split("=", 1)[1]
-                status = statuses_by_name.get(name, "")
-                return _completed_process(stdout=status)
             if command[1] == "inspect":
+                if command[2:4] == ["--format", "{{.State.Status}}"]:
+                    name = command[-1]
+                    status = statuses_by_name.get(name)
+                    if status is None:
+                        return _completed_process(returncode=1)
+                    return _completed_process(stdout=status)
                 return _completed_process(stdout=command[-1])
             raise AssertionError(f"unexpected command: {command}")
 
@@ -44,9 +46,9 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_container_status_defaults_to_split_runtime(self, run_subprocess):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Up 5 seconds",
-                self.base.ENVOY_CONTAINER_NAME: "Up 5 seconds",
-                self.base.DASHBOARD_CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "running",
+                self.base.ENVOY_CONTAINER_NAME: "running",
+                self.base.DASHBOARD_CONTAINER_NAME: "running",
             }
         )
 
@@ -56,9 +58,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_container_status_reports_split_runtime_exited(self, run_subprocess):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Exited (1) 5 seconds ago",
-                self.base.ENVOY_CONTAINER_NAME: "",
-                self.base.DASHBOARD_CONTAINER_NAME: "",
+                self.base.ROUTER_CONTAINER_NAME: "exited",
             }
         )
 
@@ -70,9 +70,9 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     ):
         run_subprocess.side_effect = self._mock_statuses(
             {
-                self.base.ROUTER_CONTAINER_NAME: "Up 5 seconds",
-                self.base.ENVOY_CONTAINER_NAME: "Up 5 seconds",
-                self.base.DASHBOARD_CONTAINER_NAME: "Up 5 seconds",
+                self.base.ROUTER_CONTAINER_NAME: "running",
+                self.base.ENVOY_CONTAINER_NAME: "running",
+                self.base.DASHBOARD_CONTAINER_NAME: "running",
             }
         )
 
@@ -86,13 +86,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def test_inspect_defaults_to_router_container_when_runtime_absent(
         self, run_subprocess
     ):
-        run_subprocess.side_effect = self._mock_statuses(
-            {
-                self.base.ROUTER_CONTAINER_NAME: "",
-                self.base.ENVOY_CONTAINER_NAME: "",
-                self.base.DASHBOARD_CONTAINER_NAME: "",
-            }
-        )
+        run_subprocess.side_effect = self._mock_statuses({})
 
         return_code, stdout, stderr = self.base.inspect_container("{{.Name}}")
 
@@ -124,22 +118,65 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
         ):
             self.assertIn(container_name, removed_container_names)
 
+    @mock.patch.dict(
+        os.environ,
+        {
+            "VLLM_SR_STACK_NAME": "isolated-test",
+            "VLLM_SR_PORT_OFFSET": "4200",
+        },
+        clear=False,
+    )
+    @mock.patch.object(CLITestBase, "_cleanup_container")
+    @mock.patch.object(CLITestBase, "_detect_container_runtime", return_value="docker")
+    def test_set_up_class_scopes_container_names(
+        self,
+        _detect_runtime,
+        _cleanup_container,
+    ):
+        class IsolatedCLITestBase(CLITestBase):
+            pass
+
+        IsolatedCLITestBase.setUpClass()
+
+        self.assertEqual(
+            IsolatedCLITestBase.ROUTER_CONTAINER_NAME,
+            "isolated-test-vllm-sr-router-container",
+        )
+        self.assertEqual(
+            IsolatedCLITestBase.SIM_CONTAINER_NAME,
+            "isolated-test-vllm-sr-sim",
+        )
+        self.assertEqual(IsolatedCLITestBase.runtime_stack.port_offset, 4200)
+
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
-    def test_cli_test_base_rejects_podman_env_override(self):
+    def test_cli_test_base_accepts_podman_env_override(self):
         with mock.patch.object(
             cli_test_base.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
-        ), self.assertRaisesRegex(RuntimeError, "require Docker"):
-            CLITestBase._detect_container_runtime()
+        ):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
 
     @mock.patch.dict(os.environ, {}, clear=True)
-    def test_cli_test_base_rejects_podman_only_hosts(self):
+    def test_cli_test_base_falls_back_to_podman(self):
         with mock.patch.object(
             cli_test_base.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
-        ), self.assertRaisesRegex(RuntimeError, "Podman is installed but unsupported"):
+        ):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "podman")
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "false"}, clear=True)
+    def test_cli_test_base_uses_stub_runtime_for_unit_only_suite(self):
+        with mock.patch.object(cli_test_base.shutil, "which", return_value=None):
+            self.assertEqual(CLITestBase._detect_container_runtime(), "docker")
+
+    @mock.patch.dict(os.environ, {"RUN_INTEGRATION_TESTS": "true"}, clear=True)
+    def test_cli_test_base_requires_runtime_for_integration_suite(self):
+        with (
+            mock.patch.object(cli_test_base.shutil, "which", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "Neither docker nor podman"),
+        ):
             CLITestBase._detect_container_runtime()
 
     @mock.patch.object(CLITestBase, "_run_subprocess")
@@ -163,13 +200,13 @@ class TestCLITestRunnerRuntimeDetection(unittest.TestCase):
     """Verify the standalone CLI test runner matches Docker-only runtime rules."""
 
     @mock.patch.dict(os.environ, {"CONTAINER_RUNTIME": "podman"}, clear=False)
-    def test_runner_rejects_podman_env_override(self):
+    def test_runner_accepts_podman_env_override(self):
         with mock.patch.object(
             run_cli_tests.shutil,
             "which",
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
         ):
-            self.assertIsNone(run_cli_tests.detect_container_runtime())
+            self.assertEqual(run_cli_tests.detect_container_runtime(), "podman")
 
     @mock.patch.dict(os.environ, {}, clear=True)
     def test_runner_accepts_docker(self):

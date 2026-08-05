@@ -11,11 +11,19 @@ import {
 } from 'react'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  createLatestOpenClawRequest,
+  fetchOpenClawJSON,
+  getOpenClawErrorMessage,
+  type LatestOpenClawRequest,
+} from '../utils/openClawRequestSupport'
 import ClawRoomMentionMenu from './ClawRoomMentionMenu'
 import ClawRoomSidebar from './ClawRoomSidebar'
 import ClawRoomTranscript from './ClawRoomTranscript'
 import ClawRoomTransportStatus from './ClawRoomTransportStatus'
+import ConfirmDialog from './ConfirmDialog'
 import { buildStreamingEntries } from './clawRoomStreamingUi'
+import { buildClawRoomTeamView } from './clawRoomTeamViewSupport'
 import {
   compareByCreatedAt,
   compareByName,
@@ -23,7 +31,6 @@ import {
   type MentionAutocompleteState,
   type MentionOption,
   parseJSON,
-  roleLabel,
   sanitizeLookupKey,
   type SenderVisual,
   type TeamProfile,
@@ -49,6 +56,8 @@ const ClawRoomChat = ({
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
   const [rooms, setRooms] = useState<RoomEntry[]>([])
+  const [roomsLoading, setRoomsLoading] = useState(false)
+  const [roomsError, setRoomsError] = useState<string | null>(null)
   const [messages, setMessages] = useState<RoomMessage[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [selectedRoomId, setSelectedRoomId] = useState('')
@@ -57,121 +66,39 @@ const ClawRoomChat = ({
   const [posting, setPosting] = useState(false)
   const [creatingRoom, setCreatingRoom] = useState(false)
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
+  const [roomPendingDelete, setRoomPendingDelete] = useState<Pick<RoomEntry, 'id' | 'name'> | null>(
+    null,
+  )
   const [newRoomName, setNewRoomName] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [mentionAutocomplete, setMentionAutocomplete] = useState<MentionAutocompleteState | null>(null)
+  const [mentionAutocomplete, setMentionAutocomplete] = useState<MentionAutocompleteState | null>(
+    null,
+  )
 
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const lastCreateRoomRequestTokenRef = useRef(0)
+  const roomsRequestRef = useRef<LatestOpenClawRequest | null>(null)
+  if (!roomsRequestRef.current) roomsRequestRef.current = createLatestOpenClawRequest()
 
-  const selectedTeam = useMemo(() => teams.find(team => team.id === selectedTeamId) || null, [teams, selectedTeamId])
-  const selectedRoom = useMemo(() => rooms.find(room => room.id === selectedRoomId) || null, [rooms, selectedRoomId])
+  const selectedTeam = useMemo(
+    () => teams.find((team) => team.id === selectedTeamId) || null,
+    [teams, selectedTeamId],
+  )
+  const selectedRoom = useMemo(
+    () => rooms.find((room) => room.id === selectedRoomId) || null,
+    [rooms, selectedRoomId],
+  )
   const managementDisabled = readonlyLoading || isReadonly
 
-  const teamWorkers = useMemo(() => {
-    return workers
-      .filter(worker => worker.teamId === selectedTeamId)
-      .sort(compareByName)
-  }, [workers, selectedTeamId])
-
-  const leaderWorker = useMemo(() => {
-    if (selectedTeam?.leaderId) {
-      const explicitLeader = teamWorkers.find(worker => worker.name === selectedTeam.leaderId)
-      if (explicitLeader) {
-        return explicitLeader
-      }
-    }
-    return teamWorkers.find(worker => roleLabel(worker.roleKind) === 'leader') || null
-  }, [selectedTeam?.leaderId, teamWorkers])
-
-  const workerLookup = useMemo(() => {
-    const map = new Map<string, WorkerProfile>()
-    for (const worker of teamWorkers) {
-      const keys = [worker.name, worker.agentName]
-      for (const key of keys) {
-        const normalized = sanitizeLookupKey(key)
-        if (!normalized || map.has(normalized)) {
-          continue
-        }
-        map.set(normalized, worker)
-      }
-    }
-    return map
-  }, [teamWorkers])
-
-  const mentionOptions = useMemo<MentionOption[]>(() => {
-    const entries: MentionOption[] = []
-    const seen = new Set<string>()
-
-    const allDesc =
-      teamWorkers.length > 0
-        ? `All claws in this team (${teamWorkers.length})`
-        : 'All claws in this team'
-    entries.push({ token: '@all', description: allDesc })
-    seen.add('@all')
-
-    const leaderDesc = leaderWorker
-      ? `Leader alias (${leaderWorker.agentName || leaderWorker.name})`
-      : 'Leader alias'
-    entries.push({ token: '@leader', description: leaderDesc })
-    seen.add('@leader')
-
-    for (const worker of teamWorkers) {
-      if (leaderWorker && worker.name === leaderWorker.name) {
-        continue
-      }
-      const token = `@${worker.name}`
-      if (seen.has(token)) {
-        continue
-      }
-      seen.add(token)
-      entries.push({
-        token,
-        description: worker.agentName || roleLabel(worker.roleKind),
-      })
-    }
-    return entries
-  }, [leaderWorker, teamWorkers])
-
-  const leaderRoleText = leaderWorker?.agentRole || selectedTeam?.role || 'Team Leader'
-  const memberResumeProfiles = useMemo(() => {
-    const profiles = teamWorkers.map(worker => {
-      const isLeader = selectedTeam?.leaderId === worker.name || roleLabel(worker.roleKind) === 'leader'
-      return {
-        id: worker.name,
-        isLeader,
-        displayName: worker.agentName || worker.name,
-        roleText: worker.agentRole || (isLeader ? leaderRoleText : 'Team Worker'),
-        vibeText: worker.agentVibe || selectedTeam?.vibe || 'Execution-focused',
-      }
-    })
-
-    profiles.sort((a, b) => {
-      if (a.isLeader !== b.isLeader) {
-        return a.isLeader ? -1 : 1
-      }
-      return a.displayName.localeCompare(b.displayName)
-    })
-
-    return profiles
-  }, [leaderRoleText, selectedTeam?.leaderId, selectedTeam?.vibe, teamWorkers])
-  const teamBriefText = useMemo(() => {
-    if (selectedTeam?.description?.trim()) {
-      return selectedTeam.description.trim()
-    }
-    if (selectedTeam?.principal?.trim()) {
-      return selectedTeam.principal.trim()
-    }
-    if (leaderWorker?.agentPrinciples?.trim()) {
-      return leaderWorker.agentPrinciples.trim()
-    }
-    return 'Use @leader to delegate work. Workers can also report progress or blockers back via @leader.'
-  }, [leaderWorker?.agentPrinciples, selectedTeam?.description, selectedTeam?.principal])
+  const { memberResumeProfiles, mentionOptions, teamBriefText, workerLookup } = useMemo(
+    () => buildClawRoomTeamView(selectedTeam, workers, selectedTeamId),
+    [selectedTeam, selectedTeamId, workers],
+  )
 
   const upsertMessage = useCallback((message: RoomMessage) => {
-    setMessages(prev => {
-      const index = prev.findIndex(existing => existing.id === message.id)
+    setMessages((prev) => {
+      const index = prev.findIndex((existing) => existing.id === message.id)
       if (index >= 0) {
         const next = [...prev]
         next[index] = message
@@ -190,8 +117,8 @@ const ClawRoomChat = ({
       if (!range) {
         return null
       }
-      const filtered = mentionOptions.filter(option =>
-        option.token.slice(1).toLowerCase().startsWith(range.query)
+      const filtered = mentionOptions.filter((option) =>
+        option.token.slice(1).toLowerCase().startsWith(range.query),
       )
       if (filtered.length === 0) {
         return null
@@ -202,12 +129,12 @@ const ClawRoomChat = ({
         activeIndex: 0,
       }
     },
-    [mentionOptions]
+    [mentionOptions],
   )
 
   const refreshMentionAutocomplete = useCallback(
     (value: string, caret: number) => {
-      setMentionAutocomplete(previous => {
+      setMentionAutocomplete((previous) => {
         const next = computeMentionAutocomplete(value, caret)
         if (!next) {
           return null
@@ -226,7 +153,7 @@ const ClawRoomChat = ({
         return next
       })
     },
-    [computeMentionAutocomplete]
+    [computeMentionAutocomplete],
   )
 
   const fetchTeamsAndWorkers = useCallback(async () => {
@@ -251,8 +178,8 @@ const ClawRoomChat = ({
     setTeams(sortedTeams)
     setWorkers(sortedWorkers)
 
-    setSelectedTeamId(prev => {
-      if (prev && sortedTeams.some(team => team.id === prev)) {
+    setSelectedTeamId((prev) => {
+      if (prev && sortedTeams.some((team) => team.id === prev)) {
         return prev
       }
       return sortedTeams[0]?.id || ''
@@ -261,26 +188,39 @@ const ClawRoomChat = ({
 
   const fetchRooms = useCallback(async (teamId: string) => {
     if (!teamId) {
+      roomsRequestRef.current?.cancel()
       setRooms([])
       setSelectedRoomId('')
+      setRoomsError(null)
       return
     }
 
-    const resp = await fetch(`/api/openclaw/rooms?teamId=${encodeURIComponent(teamId)}`)
-    if (!resp.ok) {
-      throw new Error(`Failed to load rooms: ${resp.status}`)
-    }
-
-    const data = await parseJSON<RoomEntry[]>(resp)
-    const nextRooms = (Array.isArray(data) ? data : []).sort(compareByName)
-    setRooms(nextRooms)
-
-    setSelectedRoomId(prev => {
-      if (prev && nextRooms.some(room => room.id === prev)) {
-        return prev
-      }
-      return nextRooms[0]?.id || ''
-    })
+    await roomsRequestRef.current?.run(
+      (signal) =>
+        fetchOpenClawJSON<RoomEntry[]>(
+          `/api/openclaw/rooms?teamId=${encodeURIComponent(teamId)}`,
+          {},
+          signal,
+        ),
+      {
+        onStart: () => {
+          setRoomsLoading(true)
+          setRoomsError(null)
+        },
+        onSuccess: (data) => {
+          const nextRooms = (Array.isArray(data) ? data : []).sort(compareByName)
+          setRooms(nextRooms)
+          setSelectedRoomId((prev) => {
+            if (prev && nextRooms.some((room) => room.id === prev)) return prev
+            return nextRooms[0]?.id || ''
+          })
+        },
+        onError: (requestError) => {
+          setRoomsError(getOpenClawErrorMessage(requestError, 'Failed to load rooms.'))
+        },
+        onFinish: () => setRoomsLoading(false),
+      },
+    )
   }, [])
 
   const fetchMessages = useCallback(async (roomId: string) => {
@@ -315,7 +255,7 @@ const ClawRoomChat = ({
 
   const streamingEntries = useMemo(
     () => buildStreamingEntries(messages, streamingMessages, streamingToolTraces),
-    [messages, streamingMessages, streamingToolTraces]
+    [messages, streamingMessages, streamingToolTraces],
   )
 
   useEffect(() => {
@@ -353,27 +293,10 @@ const ClawRoomChat = ({
       return
     }
 
-    let mounted = true
-
-    const loadRooms = async () => {
-      try {
-        await fetchRooms(selectedTeamId)
-        if (mounted) {
-          setError(null)
-        }
-      } catch (err) {
-        if (!mounted) return
-        const message = err instanceof Error ? err.message : 'Failed to load rooms'
-        setError(message)
-      }
-    }
-
-    void loadRooms()
-
-    return () => {
-      mounted = false
-    }
+    void fetchRooms(selectedTeamId)
   }, [fetchRooms, selectedTeamId])
+
+  useEffect(() => () => roomsRequestRef.current?.cancel(), [])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -420,16 +343,19 @@ const ClawRoomChat = ({
         setError(null)
       } else {
         // Fallback to HTTP POST
-        const resp = await fetch(`/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content,
-            senderType: 'user',
-            senderName: 'You',
-            senderId: 'playground-user',
-          }),
-        })
+        const resp = await fetch(
+          `/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content,
+              senderType: 'user',
+              senderName: 'You',
+              senderId: 'playground-user',
+            }),
+          },
+        )
         if (!resp.ok) {
           const body = await resp.text()
           throw new Error(body || `Send failed (${resp.status})`)
@@ -448,46 +374,49 @@ const ClawRoomChat = ({
     }
   }, [draft, posting, selectedRoomId, upsertMessage, wsConnected, wsRef])
 
-  const handleCreateRoom = useCallback(async (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault()
-    if (managementDisabled || !selectedTeamId || creatingRoom) {
-      return
-    }
-
-    setCreatingRoom(true)
-    try {
-      const payload: { teamId: string; name?: string } = {
-        teamId: selectedTeamId,
-      }
-      const roomName = newRoomName.trim()
-      if (roomName) {
-        payload.name = roomName
+  const handleCreateRoom = useCallback(
+    async (event?: FormEvent<HTMLFormElement>) => {
+      event?.preventDefault()
+      if (managementDisabled || !selectedTeamId || creatingRoom) {
+        return
       }
 
-      const resp = await fetch('/api/openclaw/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!resp.ok) {
-        const body = await resp.text()
-        throw new Error(body || `Create room failed (${resp.status})`)
-      }
+      setCreatingRoom(true)
+      try {
+        const payload: { teamId: string; name?: string } = {
+          teamId: selectedTeamId,
+        }
+        const roomName = newRoomName.trim()
+        if (roomName) {
+          payload.name = roomName
+        }
 
-      const created = await parseJSON<RoomEntry>(resp)
-      setNewRoomName('')
-      if (created?.id) {
-        setSelectedRoomId(created.id)
+        const resp = await fetch('/api/openclaw/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!resp.ok) {
+          const body = await resp.text()
+          throw new Error(body || `Create room failed (${resp.status})`)
+        }
+
+        const created = await parseJSON<RoomEntry>(resp)
+        setNewRoomName('')
+        if (created?.id) {
+          setSelectedRoomId(created.id)
+        }
+        await fetchRooms(selectedTeamId)
+        setError(null)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create room'
+        setError(message)
+      } finally {
+        setCreatingRoom(false)
       }
-      await fetchRooms(selectedTeamId)
-      setError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create room'
-      setError(message)
-    } finally {
-      setCreatingRoom(false)
-    }
-  }, [creatingRoom, fetchRooms, managementDisabled, newRoomName, selectedTeamId])
+    },
+    [creatingRoom, fetchRooms, managementDisabled, newRoomName, selectedTeamId],
+  )
 
   useEffect(() => {
     if (createRoomRequestToken <= lastCreateRoomRequestTokenRef.current) {
@@ -497,14 +426,11 @@ const ClawRoomChat = ({
     void handleCreateRoom()
   }, [createRoomRequestToken, handleCreateRoom])
 
-  const handleDeleteRoom = useCallback(async (room: Pick<RoomEntry, 'id' | 'name'>) => {
-    if (managementDisabled || !room?.id || deletingRoomId) {
+  const handleDeleteRoom = useCallback(async () => {
+    if (managementDisabled || !roomPendingDelete?.id || deletingRoomId) {
       return
     }
-    const ok = window.confirm(`Delete room "${room.name}"?`)
-    if (!ok) {
-      return
-    }
+    const room = roomPendingDelete
 
     setDeletingRoomId(room.id)
     try {
@@ -522,19 +448,30 @@ const ClawRoomChat = ({
       }
       await fetchRooms(selectedTeamId)
       setError(null)
+      setRoomPendingDelete(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete room'
       setError(message)
     } finally {
       setDeletingRoomId(null)
     }
-  }, [deletingRoomId, fetchRooms, managementDisabled, selectedRoomId, selectedTeamId])
+  }, [
+    deletingRoomId,
+    fetchRooms,
+    managementDisabled,
+    roomPendingDelete,
+    selectedRoomId,
+    selectedTeamId,
+  ])
 
-  const handleDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
-    const { value, selectionStart } = event.target
-    setDraft(value)
-    refreshMentionAutocomplete(value, selectionStart ?? value.length)
-  }, [refreshMentionAutocomplete])
+  const handleDraftChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      const { value, selectionStart } = event.target
+      setDraft(value)
+      refreshMentionAutocomplete(value, selectionStart ?? value.length)
+    },
+    [refreshMentionAutocomplete],
+  )
 
   const syncMentionByCursor = useCallback(() => {
     const element = inputRef.current
@@ -544,98 +481,108 @@ const ClawRoomChat = ({
     refreshMentionAutocomplete(draft, element.selectionStart ?? draft.length)
   }, [draft, refreshMentionAutocomplete])
 
-  const selectMentionOption = useCallback((option: MentionOption) => {
-    if (!mentionAutocomplete) {
-      return
-    }
-
-    const nextDraft = `${draft.slice(0, mentionAutocomplete.start)}${option.token} ${draft.slice(mentionAutocomplete.end)}`
-    const nextCaret = mentionAutocomplete.start + option.token.length + 1
-    setDraft(nextDraft)
-    setMentionAutocomplete(null)
-
-    requestAnimationFrame(() => {
-      const element = inputRef.current
-      if (!element) return
-      element.focus()
-      element.setSelectionRange(nextCaret, nextCaret)
-    })
-  }, [draft, mentionAutocomplete])
-
-  const handleDraftKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentionAutocomplete && mentionAutocomplete.options.length > 0) {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        setMentionAutocomplete(previous => {
-          if (!previous) return previous
-          return {
-            ...previous,
-            activeIndex: (previous.activeIndex + 1) % previous.options.length,
-          }
-        })
+  const selectMentionOption = useCallback(
+    (option: MentionOption) => {
+      if (!mentionAutocomplete) {
         return
       }
 
-      if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        setMentionAutocomplete(previous => {
-          if (!previous) return previous
-          return {
-            ...previous,
-            activeIndex: (previous.activeIndex - 1 + previous.options.length) % previous.options.length,
-          }
-        })
-        return
-      }
+      const nextDraft = `${draft.slice(0, mentionAutocomplete.start)}${option.token} ${draft.slice(mentionAutocomplete.end)}`
+      const nextCaret = mentionAutocomplete.start + option.token.length + 1
+      setDraft(nextDraft)
+      setMentionAutocomplete(null)
 
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setMentionAutocomplete(null)
-        return
-      }
+      requestAnimationFrame(() => {
+        const element = inputRef.current
+        if (!element) return
+        element.focus()
+        element.setSelectionRange(nextCaret, nextCaret)
+      })
+    },
+    [draft, mentionAutocomplete],
+  )
 
-      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
-        event.preventDefault()
-        const option = mentionAutocomplete.options[mentionAutocomplete.activeIndex]
-        if (option) {
-          selectMentionOption(option)
+  const handleDraftKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (mentionAutocomplete && mentionAutocomplete.options.length > 0) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          setMentionAutocomplete((previous) => {
+            if (!previous) return previous
+            return {
+              ...previous,
+              activeIndex: (previous.activeIndex + 1) % previous.options.length,
+            }
+          })
+          return
         }
-        return
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          setMentionAutocomplete((previous) => {
+            if (!previous) return previous
+            return {
+              ...previous,
+              activeIndex:
+                (previous.activeIndex - 1 + previous.options.length) % previous.options.length,
+            }
+          })
+          return
+        }
+
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setMentionAutocomplete(null)
+          return
+        }
+
+        if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+          event.preventDefault()
+          const option = mentionAutocomplete.options[mentionAutocomplete.activeIndex]
+          if (option) {
+            selectMentionOption(option)
+          }
+          return
+        }
       }
-    }
 
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      void handleSend()
-    }
-  }, [handleSend, mentionAutocomplete, selectMentionOption])
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        void handleSend()
+      }
+    },
+    [handleSend, mentionAutocomplete, selectMentionOption],
+  )
 
-  const resolveSenderVisual = useCallback((message: RoomMessage): SenderVisual => {
-    if (message.senderType === 'user') {
+  const resolveSenderVisual = useCallback(
+    (message: RoomMessage): SenderVisual => {
+      if (message.senderType === 'user') {
+        return {
+          displayName: message.senderName || 'You',
+          roleLabel: 'USER',
+        }
+      }
+
+      if (message.senderType === 'system') {
+        return {
+          displayName: message.senderName || 'ClawOS',
+          roleLabel: 'SYSTEM',
+        }
+      }
+
+      const lookupByID = workerLookup.get(sanitizeLookupKey(message.senderId))
+      const lookupByName = workerLookup.get(sanitizeLookupKey(message.senderName))
+      const worker = lookupByID || lookupByName
+
+      const displayName = worker?.agentName || message.senderName || message.senderId || 'Claw'
+
       return {
-        displayName: message.senderName || 'You',
-        roleLabel: 'USER',
+        displayName,
+        roleLabel: message.senderType === 'leader' ? 'LEADER' : 'WORKER',
       }
-    }
-
-    if (message.senderType === 'system') {
-      return {
-        displayName: message.senderName || 'ClawOS',
-        roleLabel: 'SYSTEM',
-      }
-    }
-
-    const lookupByID = workerLookup.get(sanitizeLookupKey(message.senderId))
-    const lookupByName = workerLookup.get(sanitizeLookupKey(message.senderName))
-    const worker = lookupByID || lookupByName
-
-    const displayName = worker?.agentName || message.senderName || message.senderId || 'Claw'
-
-    return {
-      displayName,
-      roleLabel: message.senderType === 'leader' ? 'LEADER' : 'WORKER',
-    }
-  }, [workerLookup])
+    },
+    [workerLookup],
+  )
 
   const containerClassName = `${styles.container} ${isSidebarOpen ? styles.containerSidebarOpen : ''}`
 
@@ -696,24 +643,31 @@ const ClawRoomChat = ({
             memberProfiles={memberResumeProfiles}
             newRoomName={newRoomName}
             onChangeNewRoomName={setNewRoomName}
-            onCreateRoom={event => void handleCreateRoom(event)}
-            onDeleteRoom={room => void handleDeleteRoom(room)}
+            onCreateRoom={(event) => void handleCreateRoom(event)}
+            onDeleteRoom={(room) => {
+              if (!managementDisabled && !deletingRoomId) setRoomPendingDelete(room)
+            }}
             onSelectRoom={setSelectedRoomId}
             onSelectTeam={setSelectedTeamId}
             rooms={rooms}
+            roomsError={roomsError}
+            roomsLoading={roomsLoading}
             selectedRoom={selectedRoom}
             selectedRoomId={selectedRoomId}
             selectedTeam={selectedTeam}
             selectedTeamId={selectedTeamId}
             teamBriefText={teamBriefText}
             teams={teams}
+            onRetryRooms={() => void fetchRooms(selectedTeamId)}
           />
         )}
 
         <section className={styles.chatPanel}>
           <header className={styles.chatHeader} data-testid="claw-room-header">
             <div className={styles.chatTitleWrap}>
-              <h3 className={styles.chatTitle}>{selectedRoom?.name || selectedTeam?.name || 'No room selected'}</h3>
+              <h3 className={styles.chatTitle}>
+                {selectedRoom?.name || selectedTeam?.name || 'No room selected'}
+              </h3>
               {selectedRoomId && (
                 <ClawRoomTransportStatus transportMode={transportMode} wsConnected={wsConnected} />
               )}
@@ -750,9 +704,7 @@ const ClawRoomChat = ({
                 />
                 <div className={styles.inputActionsRow}>
                   {inputModeControls && (
-                    <div className={styles.inputModeControls}>
-                      {inputModeControls}
-                    </div>
+                    <div className={styles.inputModeControls}>{inputModeControls}</div>
                   )}
                   <button
                     type="button"
@@ -762,8 +714,19 @@ const ClawRoomChat = ({
                     title="Send message"
                     aria-label="Send message"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                    >
+                      <path
+                        d="M12 19V5M5 12l7-7 7 7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -773,8 +736,8 @@ const ClawRoomChat = ({
                 <ClawRoomMentionMenu
                   mentionAutocomplete={mentionAutocomplete}
                   onSelect={selectMentionOption}
-                  onActiveIndexChange={index => {
-                    setMentionAutocomplete(previous => {
+                  onActiveIndexChange={(index) => {
+                    setMentionAutocomplete((previous) => {
                       if (!previous) return previous
                       return { ...previous, activeIndex: index }
                     })
@@ -785,6 +748,22 @@ const ClawRoomChat = ({
           </div>
         </section>
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(roomPendingDelete)}
+        title="Delete room"
+        description={
+          <>
+            Delete <strong>{roomPendingDelete?.name}</strong> and remove its conversation history?
+          </>
+        }
+        confirmLabel="Delete room"
+        pending={Boolean(deletingRoomId)}
+        onCancel={() => {
+          if (!deletingRoomId) setRoomPendingDelete(null)
+        }}
+        onConfirm={handleDeleteRoom}
+      />
     </div>
   )
 }

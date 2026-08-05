@@ -1,6 +1,7 @@
 import type { BuilderNLProviderKind } from "@/types/dsl";
+import { CANONICAL_AUTO_MODEL } from "@/utils/routerModelSelection";
 
-const DEFAULT_GENERATION_MODEL = "MoM";
+const DEFAULT_GENERATION_MODEL = CANONICAL_AUTO_MODEL;
 const FALLBACK_TARGET_MODEL = DEFAULT_GENERATION_MODEL;
 const DEFAULT_GENERATION_TEMPERATURE = 0.1;
 const DEFAULT_REPAIR_BUDGET = 1;

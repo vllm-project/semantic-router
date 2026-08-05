@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	agentGatewayVersion      = "v1.3.0-alpha.1"
+	agentGatewayVersion      = "v1.3.1"
 	agentGatewayNamespace    = "agentgateway-system"
 	agentGatewayProxyService = "agentgateway-proxy"
 	semanticRouterDeployment = "semantic-router"
@@ -135,7 +135,10 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return testmatrix.Combine(
 		testmatrix.RouterSmoke,
-		[]string{"agentgateway-traffic-routing"},
+		[]string{
+			"agentgateway-traffic-routing",
+			"agentgateway-full-duplex-multiturn",
+		},
 	)
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -114,11 +115,19 @@ func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 }
 
-func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
+func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error) {
 	embeddingModels := cfg.EmbeddingModels
 	toolsThreshold := embeddingModels.MinSimilarityThreshold()
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
+	}
+	var provider embedding.Provider
+	if cfg.Tools.Enabled {
+		var err error
+		provider, err = toolsEmbeddingProvider(cfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
@@ -126,6 +135,7 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 		Enabled:             cfg.Tools.Enabled,
 		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
 		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
+		Provider:            provider,
 	})
 
 	if toolsDatabase.IsEnabled() {
@@ -137,29 +147,44 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 		logging.ComponentEvent("extproc", "tools_database_disabled", map[string]interface{}{})
 	}
 
-	return toolsDatabase
+	return toolsDatabase, nil
+}
+
+func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		return nil, nil
+	}
+	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
+	}
+	return provider, nil
 }
 
 func createRouterClassifier(
 	cfg *config.RouterConfig,
 	mappings *classifierMappings,
-) (*classification.Classifier, *services.ClassificationService, error) {
-	classifier, err := classification.BuildClassifier(
+) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
+	classifiers, err := classification.BuildRecipeClassifiers(
 		cfg,
 		mappings.categoryMapping,
 		mappings.piiMapping,
 		mappings.jailbreakMapping,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build classifier: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to build recipe classifiers: %w", err)
 	}
 
-	if err := classifier.InitializeRuntime(); err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize classifier runtime: %w", err)
+	if err := classifiers.InitializeRuntime(); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to initialize recipe classifiers: %w", err)
 	}
 
-	classificationService := services.NewClassificationService(classifier, cfg)
-	return classifier, classificationService, nil
+	defaultClassifier := classifiers.Default()
+	if defaultClassifier == nil {
+		return nil, nil, nil, fmt.Errorf("default routing recipe classifier is unavailable")
+	}
+	classificationService := services.NewRecipeClassificationService(classifiers, cfg)
+	return classifiers, defaultClassifier, classificationService, nil
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {

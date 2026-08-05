@@ -2,7 +2,7 @@
 translation:
   source_commit: "baa07413"
   source_file: "docs/tutorials/signal/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 信号（Signal）
@@ -126,5 +126,5 @@ routing:
 - 需要 `PROJECTION partition`、加权分数聚合或命名档位时，阅读 [Projections](../projection/overview)。
 - 完整公开约定见 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。
 - 仓库内真实策略可参考维护的 `balance` 资产：
-  - [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-  - [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+  - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+  - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)

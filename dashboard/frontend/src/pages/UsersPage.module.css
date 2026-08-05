@@ -128,6 +128,105 @@
   flex-wrap: wrap;
 }
 
+.auditCount {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 0.72rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.auditFilterPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-tertiary) 78%, transparent);
+}
+
+.auditFilterGrid {
+  display: grid;
+  grid-template-columns: minmax(250px, 2fr) repeat(4, minmax(135px, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.auditFilterGroup {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.auditSearchGroup {
+  grid-column: span 2;
+}
+
+.auditFilterGroup .search,
+.auditFilterGroup .filter {
+  width: 100%;
+  min-width: 0;
+}
+
+.filterInput {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border-radius: 0.85rem;
+  border: 1px solid var(--color-border);
+  padding: 0 0.75rem;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  color-scheme: dark;
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.18);
+}
+
+.auditToolbarActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.auditError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: var(--radius-md);
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  font-size: 0.84rem;
+}
+
+.auditError button {
+  flex: 0 0 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
 .search {
   min-width: 260px;
   flex: 1;
@@ -142,7 +241,7 @@
 .search:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.18);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.18);
 }
 
 .filterGroup {
@@ -205,8 +304,8 @@
   border-radius: 999px;
   padding: 0.24rem 0.6rem;
   color: var(--color-text);
-  background: rgba(118, 185, 0, 0.15);
-  border: 1px solid rgba(118, 185, 0, 0.45);
+  background: rgba(143, 148, 156, 0.15);
+  border: 1px solid rgba(143, 148, 156, 0.45);
   font-size: 0.75rem;
   text-transform: capitalize;
 }
@@ -223,8 +322,38 @@
   color: var(--color-text-secondary);
 }
 
+.auditStatusCode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0.18rem 0.4rem;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #86efac;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.auditStatusCodeError {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+
 .tableContainer {
   --table-min-width: 640px;
+}
+
+.auditTableContainer {
+  --table-min-width: 1240px;
+}
+
+@media (max-width: 1150px) {
+  .auditFilterGrid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -245,6 +374,10 @@
     width: 100%;
     min-width: 0;
   }
+
+  .auditFilterGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -254,6 +387,23 @@
 
   .secondaryButton {
     width: 100%;
+  }
+
+  .auditFilterGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auditSearchGroup {
+    grid-column: auto;
+  }
+
+  .auditToolbarActions {
+    flex-direction: column;
+  }
+
+  .auditError {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .paginationActions {

@@ -38,14 +38,8 @@
   flex: 0 0 auto;
   min-height: 0;
   height: 100%;
-  background:
-    linear-gradient(180deg, rgba(40, 44, 52, 0.38) 0%, rgba(19, 21, 27, 0.62) 100%);
+  background: #09090a;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    inset -1px 0 0 rgba(255, 255, 255, 0.03),
-    18px 0 40px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(18px) saturate(132%);
-  -webkit-backdrop-filter: blur(18px) saturate(132%);
 }
 
 .playgroundSidebarRail {
@@ -63,17 +57,20 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.025);
+  background: #101012;
   color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .playgroundSidebarRailButton:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: #18181b;
   border-color: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
@@ -88,9 +85,10 @@
 }
 
 .playgroundSidebarRailButtonActive {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: #18181b;
+  border-color: rgba(227, 27, 35, 0.4);
   color: #ffffff;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .playgroundSidebarRailDivider {
@@ -112,15 +110,11 @@
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  transition: width 180ms ease, opacity 140ms ease;
-  background:
-    linear-gradient(180deg, rgba(46, 50, 58, 0.5) 0%, rgba(21, 23, 29, 0.76) 100%);
+  transition:
+    width 180ms ease,
+    opacity 140ms ease;
+  background: #101012;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    inset 1px 0 0 rgba(255, 255, 255, 0.03),
-    20px 0 44px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
 .playgroundSidebarPanelVisible {
@@ -341,7 +335,7 @@
   gap: 0.5rem;
   align-items: flex-start;
   padding: 0.62rem 0.7rem;
-  border-radius: 14px;
+  border-radius: 6px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -349,14 +343,14 @@
 }
 
 .sidebarItem:hover {
-  background-color: rgba(255, 255, 255, 0.045);
+  background-color: #18181b;
   border-color: rgba(255, 255, 255, 0.06);
 }
 
 .sidebarItemActive {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
+  background-color: #18181b;
+  border-color: rgba(227, 27, 35, 0.36);
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .sidebarItemText {
@@ -409,7 +403,7 @@
 
 .sidebarEmpty {
   padding: 0.75rem;
-  border-radius: 14px;
+  border-radius: 6px;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.82rem;
@@ -604,6 +598,30 @@ body.playground-fullscreen .container {
   opacity: 0.7;
 }
 
+.errorAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 0.7rem;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.32);
+  border-radius: 6px;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.errorAction:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.52);
+}
+
 .messagesContainer {
   flex: 1 1 auto;
   display: flex;
@@ -664,20 +682,20 @@ body.playground-fullscreen .container {
 }
 
 .emptyState h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  font-weight: 740;
   color: var(--color-text);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.045em;
 }
 
 .typingGreeting h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  font-weight: 740;
   color: var(--color-text);
   margin: 0;
-  letter-spacing: -0.02em;
-  min-height: 2rem;
+  letter-spacing: -0.045em;
+  min-height: 2.6rem;
 }
 
 .typingCursor {
@@ -859,8 +877,9 @@ body.playground-fullscreen .container {
 .message.user .messageText {
   white-space: pre-wrap;
   padding: 0.8rem 1.05rem;
-  border-radius: 1.45rem;
-  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: rgba(24, 24, 27, 0.9);
   color: rgba(255, 255, 255, 0.96);
 }
 
@@ -898,12 +917,15 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.5rem;
   width: 100%;
   padding: 1.35rem 1rem 1rem;
   background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
+  border-top: none;
   flex-shrink: 0;
-  margin-top: 0;
-  position: relative;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
   z-index: 5;
   isolation: isolate;
 }
@@ -914,22 +936,24 @@ body.playground-fullscreen .container {
   width: var(--chat-rail-width);
   max-width: var(--chat-rail-width);
   margin: 0 auto;
-  background: rgba(44, 45, 49, 0.82);
-  border: none;
-  border-radius: 28px;
+  background: rgba(20, 20, 23, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
   overflow: visible;
   transition: all var(--transition-base);
   position: relative;
   z-index: 1;
-  backdrop-filter: blur(14px) saturate(118%);
-  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  backdrop-filter: blur(20px) saturate(112%);
+  -webkit-backdrop-filter: blur(20px) saturate(112%);
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    0 18px 44px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 .inputWrapper:focus-within {
+  border-color: rgba(255, 255, 255, 0.2);
   box-shadow:
+    0 0 0 2px var(--focus-ring),
     0 10px 22px rgba(0, 0, 0, 0.22),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
@@ -955,9 +979,9 @@ body.playground-fullscreen .container {
 }
 
 .input:focus {
-  outline: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  outline: none;
+  border: none;
+  box-shadow: none;
 }
 
 .input::placeholder {
@@ -1218,13 +1242,13 @@ body.playground-fullscreen .container {
 
 /* Search Toggle Active State */
 .searchToggleActive {
-  color: #22c55e;
-  background-color: rgba(34, 197, 94, 0.15);
+  color: #f5f5f7;
+  background-color: rgba(255, 255, 255, 0.09);
 }
 
 .searchToggleActive:hover {
-  color: #4ade80;
-  background-color: rgba(34, 197, 94, 0.25);
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.14);
 }
 
 .clawModeToggleButton {
@@ -1514,10 +1538,10 @@ body.playground-fullscreen .container {
   }
 
   .inputWrapper {
-    flex-direction: row;
-    align-items: center;
-    border-radius: 100px;
-    padding: 0.375rem 0.375rem 0.375rem 0;
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 16px;
+    padding: 0;
   }
 
   .inputWrapper {
@@ -1535,7 +1559,8 @@ body.playground-fullscreen .container {
 
   .input,
   .input:focus {
-    padding: 0.875rem 1rem;
+    width: 100%;
+    padding: 0.82rem 0.9rem 0.34rem;
     font-size: 16px;
     /* Prevent mobile browser auto-zoom */
     min-height: unset;
@@ -1551,21 +1576,29 @@ body.playground-fullscreen .container {
   }
 
   .inputActionsRow {
-    display: contents;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.48rem 0.48rem;
   }
 
   .inputActions {
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin-left: 0.2rem;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .composerButtons {
+    margin-left: auto;
   }
 
   .sendButton {
     width: 32px;
     height: 32px;
     flex-shrink: 0;
-    margin-right: 0.25rem;
+    margin-right: 0;
   }
 
   .choiceCard {
@@ -1625,7 +1658,7 @@ body.playground-fullscreen .container {
   }
 
   .inputWrapper {
-    padding: 0.25rem 0.25rem 0.25rem 0;
+    padding: 0;
   }
 
   .inputWrapper:focus-within,
@@ -1654,23 +1687,6 @@ body.playground-fullscreen .container {
 /* ========================================
    Tool Toggle & Web Search Components
    ======================================== */
-
-.inputContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-  width: 100%;
-  padding: 1.35rem 1rem 1rem;
-  background: linear-gradient(180deg, rgba(7, 8, 10, 0) 0%, rgba(7, 8, 10, 0.72) 38%, rgba(7, 8, 10, 0.94) 100%);
-  border-top: none;
-  flex-shrink: 0;
-  margin-top: auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  isolation: isolate;
-}
 
 .inputToolbar {
   display: flex;
@@ -1720,15 +1736,15 @@ body.playground-fullscreen .container {
 }
 
 .toolToggleActive {
-  background-color: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background-color: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f5f5f7;
 }
 
 .toolToggleActive:hover:not(:disabled) {
-  background-color: rgba(59, 130, 246, 0.25);
-  border-color: #60a5fa;
-  color: #60a5fa;
+  background-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
 }
 
 /* Tool Calls Container */
@@ -1772,6 +1788,16 @@ body.playground-fullscreen .container {
   padding: 0.72rem 0.95rem;
   cursor: pointer;
   transition: background-color var(--transition-fast);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.webSearchHeader:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .webSearchHeader:hover {
@@ -2389,6 +2415,6 @@ body.playground-fullscreen .container {
     top: 0;
     bottom: 0;
     z-index: 6;
-    box-shadow: 20px 0 44px rgba(0, 0, 0, 0.28);
+    box-shadow: none;
   }
 }

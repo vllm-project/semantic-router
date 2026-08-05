@@ -7,6 +7,9 @@ export type CapabilityGlyphKind =
   | 'plugin'
   | 'language'
   | 'selection'
+  | 'economics'
+  | 'safety'
+  | 'mesh'
   | 'docs'
 
 type CapabilityGlyphProps = {

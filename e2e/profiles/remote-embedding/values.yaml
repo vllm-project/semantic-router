@@ -1,0 +1,114 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: base-model
+    models:
+      - name: base-model
+        provider_model_id: base-model
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: base-model
+    signals:
+      embeddings:
+        - name: billing_support
+          threshold: 0.9
+          aggregation_method: max
+          candidates:
+            - billing invoice payment subscription refund pricing credit card account balance
+    decisions:
+      - name: billing-route
+        description: Route billing requests using the remote embedding signal
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: embedding
+              name: billing_support
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+      - name: default-route
+        description: Fallback when the remote embedding signal does not match
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    services:
+      response_api:
+        enabled: false
+      router_replay:
+        enabled: false
+    stores:
+      semantic_cache:
+        enabled: false
+    model_catalog:
+      kbs: []
+      embeddings:
+        semantic:
+          qwen3_model_path: ""
+          gemma_model_path: ""
+          mmbert_model_path: ""
+          multimodal_model_path: ""
+          bert_model_path: ""
+          use_cpu: true
+          embedding_config:
+            backend: openai_compatible
+            model_type: remote
+            preload_embeddings: false
+            target_dimension: 4
+            top_k: 1
+            min_score_threshold: 0.9
+          endpoint:
+            base_url: http://mock-embedding.default.svc.cluster.local:8000/v1
+            model: e2e-remote-embedding
+            api_key_env: REMOTE_EMBEDDING_E2E_KEY
+            timeout_seconds: 5
+            max_retries: 1
+            dimensions: 4
+      modules:
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          jailbreak_mapping_path: ""
+          use_mmbert_32k: false
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+        feedback_detector:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          use_mmbert_32k: false
+
+extraEnv:
+  - name: REMOTE_EMBEDDING_E2E_KEY
+    value: e2e-embedding-key
+
+resources:
+  limits:
+    memory: 2Gi
+    cpu: "2"
+  requests:
+    memory: 512Mi
+    cpu: 250m

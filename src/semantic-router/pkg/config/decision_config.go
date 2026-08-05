@@ -6,15 +6,21 @@ type Decision struct {
 	Description         string                     `yaml:"description,omitempty"`
 	Priority            int                        `yaml:"priority,omitempty"`
 	Tier                int                        `yaml:"tier,omitempty"`
+	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
+	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
 	Rules               RuleCombination            `yaml:"rules"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
 	// inside the matching decision branch. The slice preserves DSL declaration
 	// order so round-trip decompilation stays stable.
 	Emits []EmitDirective `yaml:"emits,omitempty" json:"emits,omitempty"`
+	// Annotations carries bounded, non-executable decision metadata for replay
+	// and transport projections. Executable behavior belongs in Emits or Plugins.
+	Annotations map[string]interface{} `yaml:"annotations,omitempty" json:"annotations,omitempty"`
 }
 
 // EmitDirective is a tagged-union wrapper for declarative directives emitted
@@ -64,16 +70,28 @@ type AlgorithmConfig struct {
 	Confidence   *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
 	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
 	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
-	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
+	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
+	Workflows    *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
+	Elo          *EloSelectionConfig          `yaml:"-"`
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
-	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
+	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
+	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	Prompt       *PromptSelectionConfig       `yaml:"prompt,omitempty"`
+	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
+}
+
+// PromptSelectionConfig configures deterministic, prompt-driven selection
+// among a decision's ModelRefs. The runtime owns the structured output schema,
+// temperature, token bound, candidate descriptions, and fallback behavior.
+type PromptSelectionConfig struct {
+	Model          string `yaml:"model"`
+	Instructions   string `yaml:"instructions"`
+	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
 }
 
 type ConfidenceAlgorithmConfig struct {
@@ -117,7 +135,10 @@ type ReMoMAlgorithmConfig struct {
 	CompactionStrategy           string  `yaml:"compaction_strategy,omitempty"`
 	CompactionTokens             int     `yaml:"compaction_tokens,omitempty"`
 	SynthesisTemplate            string  `yaml:"synthesis_template,omitempty"`
+	SynthesisModel               string  `yaml:"synthesis_model,omitempty"`
 	MaxConcurrent                int     `yaml:"max_concurrent,omitempty"`
+	RoundTimeoutSeconds          int     `yaml:"round_timeout_seconds,omitempty"`
+	MinSuccessfulResponses       int     `yaml:"min_successful_responses,omitempty"`
 	OnError                      string  `yaml:"on_error,omitempty"`
 	ShuffleSeed                  int     `yaml:"shuffle_seed,omitempty"`
 	IncludeIntermediateResponses bool    `yaml:"include_intermediate_responses,omitempty"`
@@ -139,14 +160,24 @@ type ModelRef struct {
 
 // RuleNode is a recursive boolean expression tree over signal references.
 type RuleNode struct {
-	Type       string     `yaml:"type,omitempty" json:"type,omitempty"`
-	Name       string     `yaml:"name,omitempty" json:"name,omitempty"`
-	Operator   string     `yaml:"operator,omitempty" json:"operator,omitempty"`
-	Conditions []RuleNode `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+	Type       string            `yaml:"type,omitempty" json:"type,omitempty"`
+	Name       string            `yaml:"name,omitempty" json:"name,omitempty"`
+	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
+	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
+	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
+	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
 
 func (n *RuleNode) IsLeaf() bool {
 	return n.Type != ""
+}
+
+// IsEmpty reports whether a rule node was omitted entirely. At a decision
+// root, this is the canonical YAML representation of an unconditional
+// terminal decision. Evaluators must not infer that meaning for nested nodes.
+func (n *RuleNode) IsEmpty() bool {
+	return n.Type == "" && n.Name == "" && n.Operator == "" && len(n.Conditions) == 0
 }
 
 type (

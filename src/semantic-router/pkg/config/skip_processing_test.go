@@ -83,3 +83,40 @@ model_catalog:
 		t.Fatal("CanonicalGlobalFromRouterConfig should round-trip skip_processing.enabled=true")
 	}
 }
+
+func TestCanonicalGlobalModelSelectionFalseOverridesRoundTrip(t *testing.T) {
+	cfg := DefaultGlobalConfig()
+	cfg.ModelSelection.RouterDC.UseQueryContrastive = false
+	cfg.ModelSelection.RouterDC.UseModelContrastive = false
+	cfg.ModelSelection.RouterDC.UseCapabilities = false
+	cfg.ModelSelection.Hybrid.NormalizeScores = false
+
+	exported := CanonicalGlobalFromRouterConfig(&cfg)
+	if exported == nil {
+		t.Fatal("expected canonical global export")
+	}
+
+	doc := CanonicalConfig{Global: exported}
+	encoded, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatalf("failed to marshal canonical config: %v", err)
+	}
+
+	parsed, err := ParseYAMLBytes(encoded)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	if parsed.ModelSelection.RouterDC.UseQueryContrastive {
+		t.Fatalf("expected router_dc.use_query_contrastive=false after round-trip, got %+v", parsed.ModelSelection.RouterDC)
+	}
+	if parsed.ModelSelection.RouterDC.UseModelContrastive {
+		t.Fatalf("expected router_dc.use_model_contrastive=false after round-trip, got %+v", parsed.ModelSelection.RouterDC)
+	}
+	if parsed.ModelSelection.RouterDC.UseCapabilities {
+		t.Fatalf("expected router_dc.use_capabilities=false after round-trip, got %+v", parsed.ModelSelection.RouterDC)
+	}
+	if parsed.ModelSelection.Hybrid.NormalizeScores {
+		t.Fatalf("expected hybrid.normalize_scores=false after round-trip, got %+v", parsed.ModelSelection.Hybrid)
+	}
+}

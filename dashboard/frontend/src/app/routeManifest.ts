@@ -12,7 +12,6 @@ export type ShellRoutePage =
   | 'logs'
   | 'monitoring'
   | 'playground'
-  | 'ratings'
   | 'security'
   | 'status'
   | 'topology'
@@ -47,7 +46,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
   { path: '/evaluation', page: 'evaluation' },
-  { path: '/ratings', page: 'ratings' },
   { path: '/fleet-sim', page: 'fleet-sim' },
   { path: '/fleet-sim/workloads', page: 'fleet-sim-workloads' },
   { path: '/fleet-sim/fleets', page: 'fleet-sim-fleets' },

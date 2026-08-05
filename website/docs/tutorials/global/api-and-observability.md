@@ -30,6 +30,24 @@ Use these blocks when:
 
 ## Configuration
 
+### Router config validation
+
+The management API validates and normalizes a candidate config without writing
+it:
+
+```http
+POST /config/router/validate
+Content-Type: application/json
+
+{"yaml":"version: v0.3\n..."}
+```
+
+Successful responses include `valid: true` and the normalized canonical YAML.
+Validation uses the same parser and semantic checks as `PATCH /config/router`
+and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+than reading process secrets. The endpoint requires `config.read`; plaintext
+secret viewing is not implied.
+
 ### API
 
 ```yaml
@@ -66,7 +84,36 @@ global:
     observability:
       metrics:
         enabled: true
+      tracing:
+        enabled: true
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: jaeger:4317
+          insecure: true
+        sampling:
+          type: probabilistic
+          rate: 0.1
 ```
+
+`probabilistic` is the recommended tracing sampling type. Existing
+configurations that use `traceidratio` or `trace_id_ratio` continue to work as
+compatibility aliases.
+
+Common Prometheus metric families:
+
+| Family | Example metrics |
+|--------|-----------------|
+| Requests | `llm_model_requests_total`, `llm_request_errors_total` |
+| Errors | `llm_request_errors_total{reason="timeout"}` |
+| Latency | `llm_model_completion_latency_seconds`, `llm_model_ttft_seconds`, `llm_model_tpot_seconds`, `llm_model_routing_latency_seconds` |
+| Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
+| Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
+| Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
+| RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
+| Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
+| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
 
 ### Skip Processing Header
 

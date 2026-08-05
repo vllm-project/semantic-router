@@ -12,14 +12,28 @@ import (
 
 // State captures router startup readiness beyond process-level health.
 type State struct {
-	Phase            string   `json:"phase"`
-	Ready            bool     `json:"ready"`
-	Message          string   `json:"message,omitempty"`
-	DownloadingModel string   `json:"downloading_model,omitempty"`
-	PendingModels    []string `json:"pending_models,omitempty"`
-	ReadyModels      int      `json:"ready_models,omitempty"`
-	TotalModels      int      `json:"total_models,omitempty"`
-	UpdatedAt        string   `json:"updated_at,omitempty"`
+	Phase             string                   `json:"phase"`
+	Ready             bool                     `json:"ready"`
+	Message           string                   `json:"message,omitempty"`
+	DownloadingModel  string                   `json:"downloading_model,omitempty"`
+	PendingModels     []string                 `json:"pending_models,omitempty"`
+	ReadyModels       int                      `json:"ready_models,omitempty"`
+	TotalModels       int                      `json:"total_models,omitempty"`
+	EmbeddingProvider *EmbeddingProviderStatus `json:"embedding_provider,omitempty"`
+	UpdatedAt         string                   `json:"updated_at,omitempty"`
+}
+
+// EmbeddingProviderStatus exposes redacted embedding provider runtime state.
+type EmbeddingProviderStatus struct {
+	Mode           string `json:"mode,omitempty"`
+	Backend        string `json:"backend,omitempty"`
+	Model          string `json:"model,omitempty"`
+	Dimension      int    `json:"dimension,omitempty"`
+	APIKeyEnv      string `json:"api_key_env,omitempty"`
+	APIKeyEnvSet   *bool  `json:"api_key_env_set,omitempty"`
+	Healthy        *bool  `json:"healthy,omitempty"`
+	LastProbeError string `json:"last_probe_error,omitempty"`
+	LastCheckedAt  string `json:"last_checked_at,omitempty"`
 }
 
 // StatusWriter persists startup state so the dashboard (or other consumers)

@@ -97,12 +97,13 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	return requestIDs, embeddings, nil
 }
 
-// GetByID retrieves a document from Milvus by its request ID
+// GetByID retrieves a document from Milvus by request ID inside an exact model
+// partition.
 // This is much more efficient than FindSimilar when you already know the ID
 // Used by hybrid cache to fetch documents after local HNSW search
 //
 //nolint:funlen,cyclop,nestif
-func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, error) {
+func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]byte, error) {
 	start := time.Now()
 
 	if !c.enabled {
@@ -117,7 +118,11 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 		ctx,
 		c.collectionName,
 		[]string{}, // Empty partitions means search all
-		fmt.Sprintf("request_id == \"%s\" && response_body != \"\"", requestID),
+		fmt.Sprintf(
+			"request_id == %s && model == %s && response_body != \"\"",
+			milvusStringLiteral(requestID),
+			milvusStringLiteral(model),
+		),
 		[]string{"response_body"}, // Only fetch document, not embedding!
 	)
 	if err != nil {

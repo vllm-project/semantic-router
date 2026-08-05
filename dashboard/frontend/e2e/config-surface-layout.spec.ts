@@ -318,7 +318,8 @@ test.describe('Config surface layout regressions', () => {
     await mockConfigSurface(page);
 
     await page.goto('/config/decisions');
-    await page.getByRole('button', { name: 'Add Decision' }).click();
+    const addDecisionButton = page.getByRole('button', { name: 'Add Decision' });
+    await addDecisionButton.click();
 
     const modal = page.getByRole('dialog', { name: 'Add Decision' });
     const form = modal.locator('form').first();
@@ -339,6 +340,44 @@ test.describe('Config surface layout regressions', () => {
       await expect(control).toBeVisible();
       await expectInside(modal, control);
     }
+
+    const [modalBox, viewport] = await Promise.all([
+      modal.boundingBox(),
+      page.viewportSize(),
+    ]);
+    expect(modalBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(modalBox!.x + modalBox!.width).toBeCloseTo(viewport!.width, 0);
+    expect(modalBox!.y).toBeCloseTo(0, 0);
+    expect(modalBox!.height).toBeCloseTo(viewport!.height, 0);
+
+    const closeButton = modal.getByRole('button', { name: 'Close editor' });
+    await expect(closeButton).toBeFocused();
+    await modal.getByRole('button', { name: 'Add', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(closeButton).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(modal).toBeHidden();
+    await expect(addDecisionButton).toBeFocused();
+  });
+
+  test('expands the shared editor drawer to the mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/decisions');
+    await page.getByRole('button', { name: 'Add Decision' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Add Decision' });
+    await expect(modal).toHaveCSS('animation-name', 'none');
+    await expect.poll(async () => Math.round((await modal.boundingBox())?.x ?? -1)).toBe(0);
+    const modalBox = await modal.boundingBox();
+    expect(modalBox).not.toBeNull();
+    expect(modalBox!.x).toBeCloseTo(0, 0);
+    expect(modalBox!.y).toBeCloseTo(0, 0);
+    expect(modalBox!.width).toBeCloseTo(390, 0);
+    expect(modalBox!.height).toBeCloseTo(844, 0);
   });
 
   test('stacks model catalog section path and actions cleanly inside global cards', async ({ page }) => {
@@ -383,21 +422,13 @@ test.describe('Config surface layout regressions', () => {
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
   });
 
-  test('renders taxonomy classifiers as a standalone manager surface with classifier, tier, and category lists', async ({ page }) => {
+  test('redirects the retired classifier route to the canonical knowledge base manager', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1200 });
     await mockConfigSurface(page);
 
     await page.goto('/config/classifiers');
 
-    await expect(page.getByRole('heading', { name: 'Taxonomy Classifiers' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'research_classifier Details' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Tiers · research_classifier' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Categories · research_classifier' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Classifier' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Tier' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Category' })).toBeVisible();
-    await expect(page.getByText('lab_notes')).toBeVisible();
-    await expect(page.getByText('private notes', { exact: false })).toBeVisible();
+    await expect(page).toHaveURL(/\/knowledge-bases\/bases$/);
+    await expect(page.getByRole('heading', { name: 'Knowledge Bases' })).toBeVisible();
   });
 });

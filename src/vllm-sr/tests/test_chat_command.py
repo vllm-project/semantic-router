@@ -65,12 +65,12 @@ def test_resolve_listener_host_port_with_offset(
 
 def test_build_chat_payload_and_extract():
     payload = chat_client.build_chat_payload(
-        model="MoM",
+        model="vllm-sr/auto",
         user_text="hi",
         system_text="be brief",
         temperature=0.2,
     )
-    assert payload["model"] == "MoM"
+    assert payload["model"] == "vllm-sr/auto"
     assert payload["temperature"] == 0.2
     assert len(payload["messages"]) == 2
     assert payload["messages"][0]["role"] == "system"
@@ -94,6 +94,14 @@ def test_chat_completions_url():
     assert u.startswith("http://localhost:8899")
 
 
+def test_cli_chat_help_uses_namespaced_auto_model():
+    result = CliRunner().invoke(main, ["chat", "--help"])
+
+    assert result.exit_code == 0
+    assert "vllm-sr/auto" in result.output
+    assert "MoM" not in result.output
+
+
 def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
@@ -111,7 +119,7 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     _patch_stack_layout(monkeypatch, 0)
 
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -132,7 +140,7 @@ def test_cli_chat_invokes_post(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     mock_post.assert_called_once()
     call_kw = mock_post.call_args.kwargs
     assert "json" in call_kw
-    assert call_kw["json"]["model"] == "MoM"
+    assert call_kw["json"]["model"] == "vllm-sr/auto"
     assert call_kw["json"]["messages"][-1]["content"] == "hello"
 
 
@@ -152,7 +160,7 @@ def test_cli_chat_json_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     body = {"choices": [{"message": {"content": "x"}}]}
     mock_resp = MagicMock()
@@ -187,7 +195,7 @@ def test_cli_chat_not_running(
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: False)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: False)
 
     with caplog.at_level("ERROR", logger="cli.commands.chat"):
         runner = CliRunner()
@@ -215,7 +223,7 @@ def test_cli_chat_connection_error(
     )
 
     _patch_stack_layout(monkeypatch, 0)
-    monkeypatch.setattr(chat_command.DockerBackend, "is_running", lambda self: True)
+    monkeypatch.setattr(chat_command.ContainerBackend, "is_running", lambda self: True)
 
     monkeypatch.setattr(
         chat_command.requests,

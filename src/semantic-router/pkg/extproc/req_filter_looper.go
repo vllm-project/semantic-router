@@ -29,7 +29,7 @@ import (
 
 func isLooperAlgorithmType(algorithmType string) bool {
 	switch algorithmType {
-	case "confidence", "ratings", "remom":
+	case "confidence", "ratings", "remom", "fusion", "workflows":
 		return true
 	default:
 		return false
@@ -58,16 +58,8 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 		return false
 	}
 
-	// ReMoM algorithm can work with single model (first_only strategy)
-	// Other algorithms (confidence, ratings) require multiple models
-	if decision.Algorithm.Type == "remom" {
-		if len(decision.ModelRefs) < 1 {
-			return false
-		}
-	} else {
-		if len(decision.ModelRefs) <= 1 {
-			return false
-		}
+	if !hasLooperModelInputs(decision) {
+		return false
 	}
 
 	if !r.Config.Looper.IsEnabled() {
@@ -75,6 +67,24 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 		return false
 	}
 	return true
+}
+
+func hasLooperModelInputs(decision *config.Decision) bool {
+	switch decision.Algorithm.Type {
+	case "remom":
+		return len(decision.ModelRefs) >= 1
+	case "fusion":
+		return len(decision.ModelRefs) >= 1 || hasFusionAnalysisModels(decision)
+	case "workflows":
+		return len(decision.ModelRefs) >= 1
+	default:
+		return len(decision.ModelRefs) > 1
+	}
+}
+
+func hasFusionAnalysisModels(decision *config.Decision) bool {
+	return decision.Algorithm.Fusion != nil &&
+		len(decision.Algorithm.Fusion.AnalysisModels) > 0
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
@@ -86,7 +96,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.ModelSelector)
+	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.modelSelectorForRequest(reqCtx))
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
@@ -105,16 +115,27 @@ func (r *OpenAIRouter) handleLooperExecution(
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
 	looperReq := &looper.Request{
-		OriginalRequest: openAIRequest,
-		ModelRefs:       decision.ModelRefs,
-		ModelParams:     r.getModelParams(),
-		Algorithm:       decision.Algorithm,
-		IsStreaming:     streaming,
-		DecisionName:    decision.Name,
+		OriginalRequest:    openAIRequest,
+		ModelRefs:          decision.ModelRefs,
+		ModelParams:        r.getModelParams(),
+		Algorithm:          decision.Algorithm,
+		IsStreaming:        streaming,
+		DecisionName:       decision.Name,
+		OutputContract:     decision.OutputContract,
+		OutputContractSpec: decision.OutputContractSpec,
+	}
+	if decision.Algorithm.Type == "fusion" {
+		fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
+		if err != nil {
+			return r.createErrorResponse(400, "invalid Fusion plugin: "+err.Error()), nil
+		}
+		looperReq.Fusion = fusionOverride
 	}
 
-	// Execute looper
-	resp, err := l.Execute(ctx, looperReq)
+	// Execute looper, recording the wall-clock latency of the full execution
+	// (all model calls plus algorithm overhead) on the response for the
+	// x-vsr-looper-latency-ms debug header (#2694).
+	resp, err := looper.ExecuteWithLatency(ctx, l, looperReq)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_execution_failed", map[string]interface{}{
 			"request_id": reqCtx.RequestID,

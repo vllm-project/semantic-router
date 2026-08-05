@@ -1,4 +1,4 @@
-FROM golang:1.24
+FROM golang:1.25
 
 # Allow pip install without --break-system-packages inside the container.
 # Needed because make targets (e.g. agent-bootstrap) call pip directly.

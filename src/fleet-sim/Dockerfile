@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+ARG IMAGE_REGISTRY=docker.io/
+FROM ${IMAGE_REGISTRY}library/python:3.12-slim
 ARG GIT_SSL_NO_VERIFY=0
 
 WORKDIR /app

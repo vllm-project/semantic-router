@@ -1,12 +1,15 @@
 package extproc
 
 import (
+	"strings"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -118,6 +121,12 @@ func (r *OpenAIRouter) markUnverifiedFactualResponse(ctx *RequestContext) {
 	}
 }
 
+// applyResponseWarnings consolidates the response-quality warnings into the
+// single x-vsr-response-warnings header (#2204). Each warning either contributes
+// its code to that header (the "header"/default action), rewrites the body with
+// an inline warning (the "body" action), or is suppressed ("none"). Codes are
+// collected in a fixed order so the header value is deterministic. The detail
+// behind each warning stays in the replay record.
 func (r *OpenAIRouter) applyResponseWarnings(
 	ctx *RequestContext,
 	responseBody []byte,
@@ -126,32 +135,74 @@ func (r *OpenAIRouter) applyResponseWarnings(
 ) *ext_proc.ProcessingResponse {
 	response := buildResponseBodyContinueResponse(bodyMutation, headerMutation)
 	modifiedBody := responseBody
-	needsBodyMutation := false
+	var codes []string
 
-	if ctx.ResponseJailbreakDetected {
-		modifiedBody, response = r.applyResponseJailbreakWarning(response, ctx, modifiedBody)
-	}
 	if ctx.HallucinationDetected {
-		modifiedBody, response = r.applyHallucinationWarning(response, ctx, modifiedBody)
-		if string(modifiedBody) != string(responseBody) {
-			needsBodyMutation = true
-		}
+		var code string
+		modifiedBody, code = r.applyHallucinationWarning(ctx, modifiedBody)
+		codes = appendNonEmpty(codes, code)
 	}
 	if ctx.UnverifiedFactualResponse {
-		modifiedBody, response = r.applyUnverifiedFactualWarning(response, ctx, modifiedBody)
-		if string(modifiedBody) != string(responseBody) {
-			needsBodyMutation = true
-		}
+		var code string
+		modifiedBody, code = r.applyUnverifiedFactualWarning(ctx, modifiedBody)
+		codes = appendNonEmpty(codes, code)
 	}
-	if needsBodyMutation {
-		bodyResponse := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
-		bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{
-				Body: modifiedBody,
-			},
-		}
+	// Jailbreak never rewrites the body, so its position relative to the
+	// body-prepending warnings above is immaterial; it is appended last only to
+	// fix the code order in the header value.
+	codes = appendNonEmpty(codes, r.responseJailbreakWarningCode(ctx))
+
+	if len(codes) > 0 {
+		setResponseWarningsHeader(response, codes)
+	}
+	if string(modifiedBody) != string(responseBody) {
+		setResponseBodyMutation(response, modifiedBody)
 	}
 	return response
+}
+
+func appendNonEmpty(codes []string, code string) []string {
+	if code == "" {
+		return codes
+	}
+	return append(codes, code)
+}
+
+// setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
+// (comma-separated codes) onto the response, merging with any existing mutation.
+func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
+	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok {
+		return
+	}
+	if bodyResponse.ResponseBody.Response == nil {
+		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
+	}
+	opt := &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      headers.VSRResponseWarnings,
+			RawValue: []byte(strings.Join(codes, ",")),
+		},
+	}
+	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {
+		hm.SetHeaders = append(hm.SetHeaders, opt)
+		return
+	}
+	bodyResponse.ResponseBody.Response.HeaderMutation = &ext_proc.HeaderMutation{
+		SetHeaders: []*core.HeaderValueOption{opt},
+	}
+}
+
+func setResponseBodyMutation(response *ext_proc.ProcessingResponse, body []byte) {
+	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok {
+		return
+	}
+	bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{
+			Body: body,
+		},
+	}
 }
 
 func isResponseAPIRequest(ctx *RequestContext) bool {

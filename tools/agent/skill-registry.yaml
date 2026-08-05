@@ -109,7 +109,7 @@ surfaces:
     paths:
     - src/vllm-sr/cli/main.py
     - src/vllm-sr/cli/core.py
-    - src/vllm-sr/cli/docker_cli.py
+    - src/vllm-sr/cli/container_cli.py
     - src/vllm-sr/cli/commands/**
     - src/vllm-sr/start-router.sh
     - tools/make/docker.mk
@@ -218,7 +218,7 @@ surfaces:
     paths:
     - src/training/**
     - tools/make/models.mk
-    - scripts/train-mmbert32k-gpu.sh
+    - tools/models/train-mmbert32k-gpu.sh
     - website/docs/training/**
     task_rules:
     - training-stack
@@ -226,11 +226,8 @@ surfaces:
   docs_examples:
     description: User-facing docs, examples, presets, and reference configs that explain or demonstrate behavior.
     paths:
-    - docs/**
     - website/**
-    - deploy/amd/**
-    - deploy/examples/**
-    - config/**/*.yaml
+    - config/**
     task_rules:
     - repo-docs
     - training-stack
@@ -238,7 +235,7 @@ surfaces:
     description: Shared agent entry, indexed harness docs, local AGENTS supplements, skill prose, execution plans, glossary, and debt tracking for the harness itself.
     paths:
     - AGENTS.md
-    - docs/agent/**
+    - tools/agent/docs/**
     - tools/agent/skills/**
     - src/fleet-sim/AGENTS.md
     - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
@@ -279,7 +276,7 @@ surfaces:
   maintainer_ops:
     description: Maintainer-only release, milestone, issue, PR, stale-work, and daily board workflows.
     paths:
-    - docs/agent/maintainer-ops.md
+    - tools/agent/docs/maintainer-ops.md
     - tools/agent/maintainer-policy.yaml
     - tools/agent/scripts/maintainer_board.py
     - tools/agent/skills/maintainer/**
@@ -344,7 +341,7 @@ skills:
     - AGENTS.md
     - README.md
     - CONTRIBUTING.md
-    - docs/agent/**
+    - tools/agent/docs/**
     - tools/agent/skills/**
     - src/fleet-sim/AGENTS.md
     - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
@@ -699,7 +696,7 @@ skills:
     selector_paths:
     - src/training/**
     - tools/make/models.mk
-    - scripts/train-mmbert32k-gpu.sh
+    - tools/models/train-mmbert32k-gpu.sh
     - website/docs/training/**
     required_surfaces:
     - training_stack

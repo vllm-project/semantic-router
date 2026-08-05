@@ -440,6 +440,20 @@ func TestSessionAwareCacheCostPressureUsesInputCheckoutDelta(t *testing.T) {
 	}
 }
 
+func TestCacheCheckoutCostUsesConfiguredCacheWriteRate(t *testing.T) {
+	cacheWriteRate := 6.25
+	got := cacheCheckoutCost(config.ModelParams{
+		Pricing: config.ModelPricing{
+			PromptPer1M:      5,
+			CachedInputPer1M: 0.5,
+			CacheWritePer1M:  &cacheWriteRate,
+		},
+	})
+	if got != 5.75 {
+		t.Fatalf("cacheCheckoutCost() = %.2f, want 5.75", got)
+	}
+}
+
 func TestSessionAwareConfigNormalizesCacheBounds(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
 		MaxCacheCostMultiplier:    0.5,

@@ -159,6 +159,59 @@ func TestHandleAnthropicClientStreamingResponseBody_UnparsableChunk(t *testing.T
 	assert.Equal(t, []byte{}, mutation.GetBody(), "unparsable input must yield empty (not nil) mutation body")
 }
 
+// TestHandleAnthropicClientStreamingResponseBody_PreviewUsageChunk is the
+// end-to-end regression test for issue #2215. An upstream OpenAI gateway
+// sends a usage-only "preview" chunk first (completion_tokens:4, empty
+// choices), then content, then the real terminal chunk
+// (completion_tokens:252), then [DONE].
+//
+// Before the fix the emitter treated the preview chunk as terminal: it
+// fired message_stop after chunk 1, the handler called
+// finalizeStreamingResponse early, the StreamingComplete idempotency guard
+// then froze the recorded usage at the preview value (4), and all later
+// content was dropped from the cache/replay. After the fix finalization
+// happens only at [DONE], so the recorded usage is the real total (252) and
+// the content is preserved.
+func TestHandleAnthropicClientStreamingResponseBody_PreviewUsageChunk(t *testing.T) {
+	router := newTestRouter()
+	ctx := newAnthropicStreamCtx(anthropic.NewStreamState())
+	// Issue #2215 config: OpenAI upstream, Anthropic client. OpenAI bytes
+	// pass straight through translateUpstreamToOpenAI to the emitter.
+	ctx.APIFormat = config.APIFormatOpenAI
+	ctx.RequestModel = "claude-opus-4-6"
+
+	feed := func(chunk string) string {
+		resp := router.handleAnthropicClientStreamingResponseBody([]byte(chunk), ctx)
+		require.NotNil(t, resp)
+		return string(resp.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
+	}
+
+	// Chunk 1: preview usage-only chunk (the trigger).
+	out1 := feed(`data: {"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":37494,"completion_tokens":4,"total_tokens":37498}}` + "\n\n")
+	assert.NotContains(t, out1, "event: message_stop", "preview usage chunk must not emit a premature message_stop")
+	assert.False(t, ctx.StreamingComplete, "preview usage chunk must not finalize the stream")
+
+	// Chunk 2 + 3: real content.
+	feed(`data: {"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"hello "}}]}` + "\n\n")
+	feed(`data: {"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"world"}}]}` + "\n\n")
+	assert.False(t, ctx.StreamingComplete, "stream must stay open while content flows")
+
+	// Chunk 4: real terminal chunk with finish_reason and the true usage.
+	out4 := feed(`data: {"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":37494,"completion_tokens":252,"total_tokens":37746}}` + "\n\n")
+	assert.Contains(t, out4, "event: message_stop", "the real terminal chunk must emit message_stop")
+
+	// Chunk 5: [DONE] marker.
+	feed("data: [DONE]\n\n")
+
+	require.True(t, ctx.StreamingComplete, "stream must be finalized after [DONE]")
+	assert.Equal(t, "hello world", ctx.StreamingContent, "all content after the preview chunk must be preserved")
+
+	// The recorded usage must be the real total (252), not the preview (4).
+	usage := extractStreamingUsage(ctx)
+	assert.Equal(t, int64(252), usage.CompletionTokens, "recorded completion_tokens must be the real total, not the preview value")
+	assert.Equal(t, int64(37746), usage.TotalTokens, "recorded total_tokens must come from the real terminal chunk")
+}
+
 // TestHandleResponseBody_StreamingDispatchMatrix locks the four-cell
 // streaming dispatch in handleResponseBody:
 //

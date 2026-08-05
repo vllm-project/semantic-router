@@ -1,18 +1,12 @@
 import React from 'react'
-
-const fallbackStyle: React.CSSProperties = {
-  alignItems: 'center',
-  color: 'var(--color-text-secondary)',
-  display: 'flex',
-  fontSize: '0.875rem',
-  justifyContent: 'center',
-  minHeight: '12rem',
-  width: '100%',
-}
+import styles from './AppStatus.module.css'
 
 const RouteLoadingFallback: React.FC = () => (
-  <div aria-live="polite" role="status" style={fallbackStyle}>
-    Loading view...
+  <div aria-live="polite" role="status" className={styles.routeFallback}>
+    <div className={styles.routeStatus}>
+      <span>Loading control plane</span>
+      <span className={styles.routeLine} aria-hidden="true" />
+    </div>
   </div>
 )
 

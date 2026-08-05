@@ -53,7 +53,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		return r.handleLooperCacheSkip(ctx, categoryName)
 	}
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -63,7 +63,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestQuery = requestQuery
 	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 
 	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, cacheEnabled); shouldReturn {
 		return response, true
@@ -79,7 +79,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	logging.Debugf("[Cache] Skipping cache read for looper internal request")
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(cacheRequestBodyForContext(ctx))
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -88,9 +88,20 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	ctx.RequestQuery = requestQuery
 	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 	return nil, false
+}
+
+// semanticCachePartition keeps recipe identity out of the text passed to the
+// embedding model. Cache backends treat model as an exact partition key, so
+// named recipes cannot read each other's entries while the default recipe
+// preserves the legacy model key and semantic similarity behavior.
+func semanticCachePartition(ctx *RequestContext, model string) string {
+	if ctx == nil {
+		return model
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), model)
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
@@ -99,8 +110,9 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
 		return
 	}
-	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	partition := semanticCachePartition(ctx, requestModel)
+	if err := r.Cache.AddPendingRequest(ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }
@@ -116,17 +128,18 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	threshold := r.Config.GetCacheSimilarityThreshold()
-	if categoryName != "" {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
+	if ctx.VSRSelectedDecision != nil {
+		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
 	}
 
-	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, ctx.RequestQuery, threshold)
+	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
+		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
+	partition := semanticCachePartition(ctx, requestModel)
+	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(partition, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
@@ -150,7 +163,7 @@ func (r *OpenAIRouter) performCacheLookup(
 			ctx.VSRSelectedDecisionName = categoryName
 		}
 
-		metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
@@ -161,19 +174,64 @@ func (r *OpenAIRouter) performCacheLookup(
 			"category":   categoryName,
 			"threshold":  threshold,
 		})
-		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity)
+		// Intermediate cache detail (category, matched keywords, similarity) is
+		// demoted to the x-vsr-debug surface (#2205).
+		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
+		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
 		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
-		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+func (r *OpenAIRouter) createCacheHitResponse(
+	ctx *RequestContext,
+	cachedResponse []byte,
+	category string,
+	decisionName string,
+	matchedKeywords []string,
+	similarity float32,
+) *ext_proc.ProcessingResponse {
+	response := http.CreateCacheHitResponse(
+		cachedResponse,
+		ctx.ExpectStreamingResponse,
+		category,
+		decisionName,
+		matchedKeywords,
+		similarity,
+	)
+	if isResponseAPIRequest(ctx) {
+		if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
+			ctx,
+			cachedResponse,
+			category,
+			decisionName,
+			matchedKeywords,
+			similarity,
+		); ok {
+			response = responseAPIResponse
+		}
+	}
+	appendRecipeHeaderToImmediateResponse(response, ctx)
+	return response
+}
+
+func cacheRequestBodyForContext(ctx *RequestContext) []byte {
+	if ctx != nil && ctx.ResponseAPICtx != nil && len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
+		return ctx.ResponseAPICtx.TranslatedBody
+	}
+	if ctx != nil {
+		return ctx.OriginalRequestBody
+	}
+	return nil
 }
 
 func cacheQueryForContext(ctx *RequestContext) string {
@@ -184,4 +242,15 @@ func cacheQueryForContext(ctx *RequestContext) string {
 		return ctx.CacheQuery
 	}
 	return ctx.RequestQuery
+}
+
+// cacheDetailForSurface returns the intermediate cache-hit detail (category,
+// matched keywords, similarity) when the request opted into x-vsr-debug, and
+// empty values otherwise. CreateCacheHitResponse omits the empties, demoting
+// the detail off the lean default surface (#2205).
+func cacheDetailForSurface(ctx *RequestContext, categoryName string) (string, []string, float32) {
+	if !debugHeadersRequested(ctx) {
+		return "", nil, 0
+	}
+	return categoryName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity
 }

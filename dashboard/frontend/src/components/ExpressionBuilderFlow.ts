@@ -58,10 +58,10 @@ export function treeToFlowElements(
         source: parentId,
         target: id,
         type: 'default',
-        style: { stroke: 'rgba(118, 185, 0, 0.5)', strokeWidth: 2 },
+        style: { stroke: 'rgba(143, 148, 156, 0.5)', strokeWidth: 2 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: 'rgba(118, 185, 0, 0.55)',
+          color: 'rgba(143, 148, 156, 0.55)',
           width: 12,
           height: 12,
         },

@@ -1,0 +1,82 @@
+{
+  "benchmark": "GPQA-Diamond",
+  "score_unit": "0_to_100",
+  "generated_from": "EvalScope gpqa_diamond reports joined with public benchmark references",
+  "router_image": "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:loop-flow-majority-v1",
+  "vllm_sr_results": [
+    {
+      "mode": "vsr1_pro",
+      "model_api_name": "vllm-sr/auto",
+      "scorecard_name": "VSR 1.0 Pro",
+      "score": 96.0,
+      "num": 50,
+      "metric": "mean_acc",
+      "run_type": "formal-50",
+      "source_mode": "remom",
+      "config_snapshot": "bench/router_flow/configs/amd_auto_gpqa_omni.yaml",
+      "report_path": "bench/router_flow/results/evalscope-remom-formal-synthesis-model-report-v1/evalscope_scores.json",
+      "raw_evalscope_report": "bench/router_flow/results/evalscope-remom-formal-synthesis-model-v1/gpqa_d/remom/reports/remom_gpqa_d/gpqa_diamond.json"
+    }
+  ],
+  "public_references": [
+    {
+      "name": "Fugu Ultra",
+      "score": 95.5,
+      "source": "https://sakana.ai/fugu/"
+    },
+    {
+      "name": "Fugu",
+      "score": 95.5,
+      "source": "https://sakana.ai/fugu/"
+    },
+    {
+      "name": "Mythos Preview",
+      "score": 94.6,
+      "source": "https://sakana.ai/fugu/"
+    },
+    {
+      "name": "Gemini 3.1 Pro",
+      "score": 94.3,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "Claude Opus 4.8",
+      "score": 93.6,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "GPT-5.5",
+      "score": 93.6,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "MiniMax M3",
+      "score": 93.0,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "GLM-5.2",
+      "score": 91.2,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "DeepSeek-V4-Pro",
+      "score": 90.1,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "Qwen3.7-Max",
+      "score": 90.0,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    },
+    {
+      "name": "GLM-5.1",
+      "score": 86.2,
+      "source": "https://huggingface.co/zai-org/GLM-5.2#benchmark"
+    }
+  ],
+  "notes": [
+    "VSR 1.0 Pro uses the best existing GPQA-Diamond closed-model loop recipe, preserved as amd_auto_gpqa_omni.yaml and exposed externally as vllm-sr/auto.",
+    "The Fugu page and GLM-5.2 model card use different public reference tables; source each public baseline explicitly."
+  ]
+}

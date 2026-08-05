@@ -47,12 +47,12 @@ func evaluateResponseHeaderOutcome(
 		return outcome
 	}
 
-	if ctx != nil {
-		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers)
-	}
-
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
+	if ctx != nil {
+		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers) ||
+			(outcome.isSuccessful && isResponseAPIStreamRequest(ctx))
+	}
 	recordResponseHeaderErrorMetrics(ctx, outcome.statusCode)
 	return outcome
 }
@@ -126,6 +126,27 @@ func buildResponseHeadersContinueResponse(
 		}
 	}
 	return response
+}
+
+func isResponseAPIStreamRequest(ctx *RequestContext) bool {
+	return isResponseAPIRequest(ctx) &&
+		ctx.ResponseAPICtx.OriginalRequest != nil &&
+		ctx.ResponseAPICtx.OriginalRequest.Stream
+}
+
+func mergeHeaderMutations(mutations ...*ext_proc.HeaderMutation) *ext_proc.HeaderMutation {
+	merged := &ext_proc.HeaderMutation{}
+	for _, mutation := range mutations {
+		if mutation == nil {
+			continue
+		}
+		merged.SetHeaders = append(merged.SetHeaders, mutation.GetSetHeaders()...)
+		merged.RemoveHeaders = append(merged.RemoveHeaders, mutation.GetRemoveHeaders()...)
+	}
+	if len(merged.SetHeaders) == 0 && len(merged.RemoveHeaders) == 0 {
+		return nil
+	}
+	return merged
 }
 
 // getStatusFromHeaders extracts :status pseudo-header value as integer.

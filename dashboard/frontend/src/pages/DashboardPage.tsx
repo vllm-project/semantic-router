@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RouterModelInventory from '../components/RouterModelInventory'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,6 +20,7 @@ import {
   countSignals,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
@@ -32,32 +33,33 @@ const DashboardPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const configTickRef = useRef(0)
 
   const fetchStatus = useCallback(async () => {
-    try {
-      const statusRes = await fetch('/api/status')
-      if (statusRes.ok) {
-        setStatus(await statusRes.json())
-      }
-    } catch {
-      // Ignore transient polling errors.
+    const statusRes = await fetch('/api/status')
+    if (statusRes.ok) {
+      setStatus(await statusRes.json())
     }
   }, [])
+
+  const fetchConfig = useCallback(async () => {
+    const configResult = await fetch('/api/router/config/all')
+    if (configResult.ok) {
+      setConfig(await configResult.json())
+      setLastUpdated(new Date())
+      setError(null)
+    }
+  }, [])
+
+  const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
+  const configRequest = useMemo(() => createVisibilityAwareRequest(fetchConfig), [fetchConfig])
 
   const fetchAll = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
     try {
-      const [cfgRes, statusRes] = await Promise.all([
-        fetch('/api/router/config/all'),
-        fetch('/api/status'),
+      await Promise.all([
+        configRequest.run({ allowHidden: true }),
+        statusRequest.run({ allowHidden: true }),
       ])
-      if (cfgRes.ok) {
-        setConfig(await cfgRes.json())
-      }
-      if (statusRes.ok) {
-        setStatus(await statusRes.json())
-      }
       setLastUpdated(new Date())
       setError(null)
     } catch (err) {
@@ -66,27 +68,41 @@ const DashboardPage: React.FC = () => {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [configRequest, statusRequest])
 
   useEffect(() => {
-    fetchAll()
-    const statusInterval = setInterval(fetchStatus, 10000)
-    const configInterval = setInterval(() => {
-      configTickRef.current += 1
-      if (configTickRef.current % 3 === 0) {
-        fetchAll()
-      } else {
-        fetchStatus()
-      }
-    }, 10000)
-    const onConfigDeployed = () => fetchAll()
-    window.addEventListener('config-deployed', onConfigDeployed)
-    return () => {
-      clearInterval(statusInterval)
-      clearInterval(configInterval)
-      window.removeEventListener('config-deployed', onConfigDeployed)
+    const pollStatus = () => {
+      void statusRequest.run().catch(() => {
+        // Ignore transient status polling errors.
+      })
     }
-  }, [fetchAll, fetchStatus])
+    const pollConfig = () => {
+      void configRequest.run().catch((pollError) => {
+        setError(pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config')
+      })
+    }
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        pollStatus()
+        pollConfig()
+      }
+    }
+    const onConfigDeployed = () => {
+      void fetchAll()
+    }
+
+    void fetchAll()
+    const statusInterval = window.setInterval(pollStatus, 10000)
+    const configInterval = window.setInterval(pollConfig, 30000)
+    window.addEventListener('config-deployed', onConfigDeployed)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(statusInterval)
+      window.clearInterval(configInterval)
+      window.removeEventListener('config-deployed', onConfigDeployed)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [configRequest, fetchAll, statusRequest])
 
   const signalStats = useMemo(() => (config ? countSignals(config) : { total: 0, byType: {} }), [config])
   const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
@@ -133,8 +149,10 @@ const DashboardPage: React.FC = () => {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Building the System Intelligence</p>
+          <h1 className={styles.title}>Building Mixture-of-Models</h1>
+          <p className={styles.subtitle}>
+            The next-generation model architecture for heterogeneous LLM inference.
+          </p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (
@@ -165,8 +183,8 @@ const DashboardPage: React.FC = () => {
 
       <div className={styles.statsGrid}>
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/models')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-accent-purple)', boxShadow: 'var(--glow-purple)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="2" y="3" width="20" height="18" rx="3" />
               <path d="M8 7v10M12 7v10M16 7v10" />
             </svg>
@@ -179,8 +197,8 @@ const DashboardPage: React.FC = () => {
         </button>
 
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/decisions')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-accent-cyan)', boxShadow: 'var(--glow-cyan)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M4 6h16M4 12h8M4 18h12" />
             </svg>
           </div>
@@ -192,8 +210,8 @@ const DashboardPage: React.FC = () => {
         </button>
 
         <button type="button" className={styles.statCard} onClick={() => navigate('/config/signals')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-primary)', boxShadow: 'var(--glow-primary)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <div className={styles.statIcon}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
@@ -289,7 +307,7 @@ const DashboardPage: React.FC = () => {
                       {status.overall === 'not_running' ? 'Not Running' :
                        status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
                     </span>
-                    {status.version && <span className={styles.versionBadge}>v{status.version}</span>}
+                    {status.version && <span className={styles.versionBadge}>{status.version}</span>}
                     {status.deployment_type && status.deployment_type !== 'none' && (
                       <span className={styles.deployBadge}>{status.deployment_type}</span>
                     )}

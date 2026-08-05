@@ -213,6 +213,30 @@ func testDecision(
 	}
 }
 
+func TestConvertProviderMetadataPreservesCachePricing(t *testing.T) {
+	cachedInputPrice := 0.0000001
+	cacheWritePrice := 0.00000125
+	converted := convertProviderMetadata([]v1alpha1.ModelConfig{{
+		Name: "gpt-5.6-luna",
+		Pricing: &v1alpha1.ModelPricing{
+			Currency:              "USD",
+			InputTokenPrice:       0.000001,
+			CachedInputTokenPrice: &cachedInputPrice,
+			CacheWriteTokenPrice:  &cacheWritePrice,
+			OutputTokenPrice:      0.000006,
+		},
+	}})
+
+	require.Len(t, converted, 1)
+	pricing := converted[0].Pricing
+	assert.Equal(t, "USD", pricing.Currency)
+	assert.InDelta(t, 1.0, pricing.PromptPer1M, 1e-12)
+	assert.InDelta(t, 0.1, pricing.CachedInputPer1M, 1e-12)
+	require.NotNil(t, pricing.CacheWritePer1M)
+	assert.InDelta(t, 1.25, *pricing.CacheWritePer1M, 1e-12)
+	assert.InDelta(t, 6.0, pricing.CompletionPer1M, 1e-12)
+}
+
 func TestCRDConverterConvertsEventSignals(t *testing.T) {
 	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
 	route := &v1alpha1.IntelligentRoute{

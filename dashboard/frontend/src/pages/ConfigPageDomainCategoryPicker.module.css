@@ -28,12 +28,12 @@
 
 .option:hover {
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.08);
+  background: rgba(143, 148, 156, 0.08);
 }
 
 .optionSelected {
   border-color: var(--color-primary);
-  background: rgba(118, 185, 0, 0.12);
+  background: rgba(143, 148, 156, 0.12);
 }
 
 .option input {
@@ -69,7 +69,7 @@
 .customInput:focus {
   border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.18);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.18);
 }
 
 .addButton {
@@ -107,9 +107,9 @@
   align-items: center;
   max-width: 100%;
   min-height: 1.9rem;
-  border: 1px solid rgba(118, 185, 0, 0.32);
+  border: 1px solid rgba(143, 148, 156, 0.32);
   border-radius: 999px;
-  background: rgba(118, 185, 0, 0.1);
+  background: rgba(143, 148, 156, 0.1);
   color: var(--color-text);
   overflow: hidden;
 }

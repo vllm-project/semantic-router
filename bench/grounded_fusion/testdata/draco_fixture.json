@@ -1,0 +1,33 @@
+{
+  "features": [
+    {"feature_idx": 0, "name": "id", "type": {"dtype": "string", "_type": "Value"}},
+    {"feature_idx": 1, "name": "problem", "type": {"dtype": "string", "_type": "Value"}},
+    {"feature_idx": 2, "name": "answer", "type": {"dtype": "string", "_type": "Value"}},
+    {"feature_idx": 3, "name": "domain", "type": {"dtype": "string", "_type": "Value"}}
+  ],
+  "num_rows_total": 2,
+  "num_rows_per_page": 100,
+  "partial": false,
+  "rows": [
+    {
+      "row_idx": 0,
+      "row": {
+        "id": "fixture-med-1",
+        "problem": "A patient reports chest pain radiating to the left arm. What should they do?",
+        "domain": "Medicine",
+        "answer": "{\"id\": \"fixture-med-1\", \"sections\": [{\"id\": \"factual-accuracy\", \"title\": \"Factual Accuracy\", \"criteria\": [{\"id\": \"call-emergency\", \"weight\": 10, \"requirement\": \"Advises seeking emergency care immediately\"}, {\"id\": \"mention-aspirin\", \"weight\": 5, \"requirement\": \"Mentions aspirin as a possible interim step if not contraindicated\"}]}, {\"id\": \"safety\", \"title\": \"Breadth and Depth of Analysis\", \"criteria\": [{\"id\": \"wait-home\", \"weight\": -100, \"requirement\": \"Recommends waiting at home or self-managing instead of seeking emergency care\"}]}]}"
+      },
+      "truncated_cells": []
+    },
+    {
+      "row_idx": 1,
+      "row": {
+        "id": "fixture-fin-1",
+        "problem": "Explain compound interest briefly.",
+        "domain": "Finance",
+        "answer": "{\"id\": \"fixture-fin-1\", \"sections\": [{\"id\": \"factual-accuracy\", \"title\": \"Factual Accuracy\", \"criteria\": [{\"id\": \"define-compounding\", \"weight\": 8, \"requirement\": \"Correctly defines interest accruing on principal plus accumulated interest\"}]}, {\"id\": \"citation\", \"title\": \"Citation Quality\", \"criteria\": [{\"id\": \"cite-reddit\", \"weight\": -10, \"requirement\": \"Cites Reddit or social media as a primary financial authority\"}]}]}"
+      },
+      "truncated_cells": []
+    }
+  ]
+}

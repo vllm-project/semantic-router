@@ -254,14 +254,14 @@ func TestHybridSelector_Select(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := DefaultHybridConfig()
-	cfg.EloWeight = 0.5
+	cfg.ExperienceWeight = 0.5
 	cfg.RouterDCWeight = 0.0 // Disable RouterDC (no embeddings)
 	cfg.AutoMixWeight = 0.5
 	cfg.CostWeight = 0.0
 
 	selector := NewHybridSelector(cfg)
 
-	// Initialize Elo component
+	// Initialize Experience component
 	selector.eloSelector.setGlobalRating("model-a", &ModelRating{Model: "model-a", Rating: 1600})
 	selector.eloSelector.setGlobalRating("model-b", &ModelRating{Model: "model-b", Rating: 1400})
 
@@ -667,72 +667,13 @@ func TestEloSelector_MultiTurnEvolution(t *testing.T) {
 		selector.setGlobalRating(m, &ModelRating{Model: m, Rating: DefaultEloRating})
 	}
 
-	// Simulate 10 rounds of feedback where strong > medium > weak
-	for round := 0; round < 10; round++ {
-		// Strong beats medium
-		_ = selector.UpdateFeedback(ctx, &Feedback{
-			Query:       "test",
-			WinnerModel: "strong-model",
-			LoserModel:  "medium-model",
-		})
-
-		// Medium beats weak
-		_ = selector.UpdateFeedback(ctx, &Feedback{
-			Query:       "test",
-			WinnerModel: "medium-model",
-			LoserModel:  "weak-model",
-		})
-
-		// Strong beats weak
-		_ = selector.UpdateFeedback(ctx, &Feedback{
-			Query:       "test",
-			WinnerModel: "strong-model",
-			LoserModel:  "weak-model",
-		})
-	}
+	simulateEloRankingFeedback(t, ctx, selector)
 
 	// Verify final rankings
 	strongRating := selector.getGlobalRating("strong-model")
 	mediumRating := selector.getGlobalRating("medium-model")
 	weakRating := selector.getGlobalRating("weak-model")
-
-	if strongRating == nil || mediumRating == nil || weakRating == nil {
-		t.Fatal("ratings should not be nil")
-		return
-	}
-
-	// Strong should have highest rating
-	if strongRating.Rating <= mediumRating.Rating {
-		t.Errorf("strong (%f) should beat medium (%f)", strongRating.Rating, mediumRating.Rating)
-	}
-
-	// Medium should beat weak
-	if mediumRating.Rating <= weakRating.Rating {
-		t.Errorf("medium (%f) should beat weak (%f)", mediumRating.Rating, weakRating.Rating)
-	}
-
-	// Win/loss records should reflect the matches
-	if strongRating.Wins != 20 { // 10 vs medium + 10 vs weak
-		t.Errorf("strong should have 20 wins, got %d", strongRating.Wins)
-	}
-	if weakRating.Losses != 20 { // 10 vs medium + 10 vs strong
-		t.Errorf("weak should have 20 losses, got %d", weakRating.Losses)
-	}
-
-	// Verify leaderboard order
-	leaderboard := selector.GetLeaderboard("")
-	if len(leaderboard) < 3 {
-		t.Fatalf("expected at least 3 models, got %d", len(leaderboard))
-	}
-	if leaderboard[0].Model != "strong-model" {
-		t.Errorf("strong-model should be first, got %s", leaderboard[0].Model)
-	}
-	if leaderboard[1].Model != "medium-model" {
-		t.Errorf("medium-model should be second, got %s", leaderboard[1].Model)
-	}
-	if leaderboard[2].Model != "weak-model" {
-		t.Errorf("weak-model should be third, got %s", leaderboard[2].Model)
-	}
+	assertEloRankingEvolution(t, selector, strongRating, mediumRating, weakRating)
 }
 
 // TestEloSelector_TieHandling tests that ties are handled correctly

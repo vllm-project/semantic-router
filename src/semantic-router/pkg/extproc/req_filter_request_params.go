@@ -37,6 +37,8 @@ var allowedTopLevelFields = map[string]bool{
 func (r *OpenAIRouter) buildRequestParamsMutations(
 	decision *config.Decision,
 	requestBody []byte,
+	profile *config.ProviderProfile,
+	routingScope config.RecipeName,
 ) ([]byte, error) {
 	if decision == nil {
 		return requestBody, nil
@@ -48,6 +50,7 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 	}
 
 	logging.Debugf("Applying request params validation for decision %s", decision.Name)
+	metricDecisionName := config.RoutingDecisionKey(routingScope, decision.Name)
 
 	var body map[string]interface{}
 	if err := json.Unmarshal(requestBody, &body); err != nil {
@@ -55,10 +58,10 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 		return requestBody, nil
 	}
 
-	modified := applyBlockedParams(body, paramsConfig.BlockedParams, decision.Name)
-	modified = capIntField(body, "max_tokens", paramsConfig.MaxTokensLimit, decision.Name, metrics.RecordMaxTokensCapped) || modified
-	modified = capIntField(body, "n", paramsConfig.MaxN, decision.Name, metrics.RecordMaxNCapped) || modified
-	modified = stripUnknownFields(body, paramsConfig.StripUnknown, decision.Name) || modified
+	modified := applyBlockedParams(body, paramsConfig.BlockedParams, metricDecisionName)
+	modified = capIntField(body, "max_tokens", paramsConfig.MaxTokensLimit, metricDecisionName, metrics.RecordMaxTokensCapped) || modified
+	modified = capIntField(body, "n", paramsConfig.MaxN, metricDecisionName, metrics.RecordMaxNCapped) || modified
+	modified = stripUnknownFields(body, paramsConfig.StripUnknown, metricDecisionName, profile) || modified
 
 	if !modified {
 		return requestBody, nil
@@ -138,13 +141,19 @@ func toInt(val interface{}) (int, bool) {
 }
 
 // stripUnknownFields removes fields not in the OpenAI spec allowlist.
-func stripUnknownFields(body map[string]interface{}, strip bool, decisionName string) bool {
+func stripUnknownFields(
+	body map[string]interface{},
+	strip bool,
+	decisionName string,
+	profile *config.ProviderProfile,
+) bool {
 	if !strip {
 		return false
 	}
+	dialect := resolveOpenAIBackendDialect(profile)
 	modified := false
 	for key := range body {
-		if !allowedTopLevelFields[key] {
+		if !isAllowedTopLevelField(key, dialect) {
 			delete(body, key)
 			modified = true
 			logging.Debugf("Removed unknown field '%s' for decision '%s'", key, decisionName)
@@ -152,4 +161,13 @@ func stripUnknownFields(body map[string]interface{}, strip bool, decisionName st
 		}
 	}
 	return modified
+}
+
+func isAllowedTopLevelField(key string, dialect openAIBackendDialect) bool {
+	if allowedTopLevelFields[key] {
+		return true
+	}
+	// DeepSeek's official OpenAI-compatible API accepts top-level thinking;
+	// other providers should still have it stripped as an unknown field.
+	return key == "thinking" && dialect.usesDeepSeekOfficialReasoning()
 }

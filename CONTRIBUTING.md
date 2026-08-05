@@ -68,13 +68,13 @@ Before you begin, ensure you have the following installed:
 
 ### Agent Gates
 
-The repository-specific agent harness is indexed in [docs/agent/README.md](docs/agent/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `docs/agent/*` plus `tools/agent/*` as the durable source of truth.
-If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
+The repository-specific agent harness is indexed in [tools/agent/docs/README.md](tools/agent/docs/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `tools/agent/docs/*` plus `tools/agent/*` as the durable source of truth.
+If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [tools/agent/docs/tech-debt/README.md](tools/agent/docs/tech-debt/README.md).
 
 Read these first:
 
-- [docs/agent/testing-strategy.md](docs/agent/testing-strategy.md)
-- [docs/agent/module-boundaries.md](docs/agent/module-boundaries.md)
+- [tools/agent/docs/testing-strategy.md](tools/agent/docs/testing-strategy.md)
+- [tools/agent/docs/module-boundaries.md](tools/agent/docs/module-boundaries.md)
 
 Use the agent-specific gates for changed files:
 
@@ -214,6 +214,23 @@ The test suite includes:
 
 Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
 
+#### CI tiers
+
+GitHub Actions uses path-aware CI profiles:
+
+| Profile | When it runs | What runs |
+| --- | --- | --- |
+| **Docs/website lightweight** | PR changes only `website/**`, `tools/agent/docs/**`, or other markdown/agent-text paths | `make agent-docs-ci-gate`, markdown lint, website build |
+| **Full baseline** | Router, bindings, dashboard, e2e, CI, or mixed PRs | Full pre-commit, Go/Rust lint, security scans, integration tests as applicable |
+
+Reproduce the lightweight docs gate locally:
+
+```bash
+make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+```
+
+Maintainers can force the full baseline on a docs-only PR by adding the `ci/full` label.
+
 **Step 1: Install pre-commit tool**
 
 ```bash
@@ -290,16 +307,15 @@ make precommit-local
 ```
 ├── bench/                   # Benchmarking tools and workloads
 ├── candle-binding/          # Rust library for BERT classification
-├── config/                  # Sample and reference configuration
+├── config/                  # Canonical config, fragments, recipes, runtime examples
 ├── dashboard/               # Web UI and backend API
-├── deploy/                  # Kubernetes, operators, Helm charts, etc.
-├── docs/                    # Contributor docs (see also docs/agent)
+├── deploy/                  # Deployable Helm, Kubernetes, OpenShift, and local assets
 ├── e2e/                     # End-to-end test harness
 ├── src/semantic-router/     # Go router (Envoy ExtProc)
 ├── src/vllm-sr/             # Python CLI (`requirements.txt` for its deps)
 ├── src/training/            # Model training scripts
-├── tools/                   # Agent harness, scripts, automation
-├── website/                 # Documentation site (Docusaurus)
+├── tools/                   # Build, development, smoke, model, and agent tooling
+├── website/                 # All public documentation (Docusaurus)
 └── Makefile                 # Build automation
 ```
 
@@ -314,7 +330,7 @@ make precommit-local
 
 ## Getting Help
 
-- Check the [documentation](https://vllm-semantic-router.com/)
+- Check the [documentation](https://vllm-sr.ai/)
 - Review existing issues and pull requests
 - Ask questions in discussions or create a new issue
 

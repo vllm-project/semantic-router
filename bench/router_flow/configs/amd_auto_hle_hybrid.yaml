@@ -1,0 +1,412 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1800s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1800
+
+providers:
+  defaults:
+    default_model: gemini31-finalizer
+    default_reasoning_effort: high
+    reasoning_families:
+      openrouter:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: glm52-breadth-a
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: glm52-breadth-b
+      provider_model_id: z-ai/glm-5.2
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.95
+        cached_input_per_1m: 0.18
+        completion_per_1m: 3
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt55-verifier
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 5
+        cached_input_per_1m: 0
+        completion_per_1m: 30
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: opus48-verifier
+      provider_model_id: anthropic/claude-opus-4.8
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 15
+        cached_input_per_1m: 0
+        completion_per_1m: 75
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gemini31-finalizer
+      provider_model_id: google/gemini-3.1-pro-preview
+      api_format: openai
+      reasoning_family: openrouter
+      pricing:
+        currency: USD
+        prompt_per_1m: 2
+        cached_input_per_1m: 0
+        completion_per_1m: 12
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+routing:
+  modelCards:
+    - name: glm52-breadth-a
+      context_window_size: 1048576
+      description: GLM 5.2 breadth sample for HLE hybrid exploration.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:breadth, base:glm52]
+    - name: glm52-breadth-b
+      context_window_size: 1048576
+      description: GLM 5.2 alternate breadth sample for HLE hybrid exploration.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.91
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:breadth, base:glm52]
+    - name: gpt55-verifier
+      context_window_size: 1048576
+      description: Closed verifier for HLE exact-answer and reasoning-risk checks.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:verifier, pool:closed]
+    - name: opus48-verifier
+      context_window_size: 1000000
+      description: Closed verifier for long-horizon HLE reasoning disagreements.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.95
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:verifier, pool:closed]
+    - name: gemini31-finalizer
+      context_window_size: 1000000
+      description: Closed finalizer for HLE hybrid synthesis.
+      capabilities: [chat, reasoning, long-context]
+      quality_score: 0.94
+      modality: text
+      tags: [deployment:openrouter, benchmark:hle, role:finalizer, pool:closed]
+
+  signals:
+    keywords:
+      - name: hle_any
+        operator: OR
+        keywords:
+          - "Humanity's Last Exam"
+          - "Question:"
+          - "Answer:"
+          - "Exact Answer:"
+          - "Confidence:"
+          - "Your response should be in the following format"
+      - name: hle_formal_reasoning
+        operator: OR
+        keywords:
+          - "prove"
+          - "theorem"
+          - "derive"
+          - "calculate"
+          - "equation"
+          - "integral"
+          - "probability"
+          - "matrix"
+          - "physics"
+          - "chemistry"
+          - "biology"
+          - "genetics"
+          - "law"
+          - "philosophy"
+      - name: hle_disagreement_risk
+        operator: OR
+        keywords:
+          - "which of the following"
+          - "select all"
+          - "except"
+          - "least likely"
+          - "counterexample"
+          - "cannot be determined"
+          - "estimate"
+          - "approximate"
+      - name: hle_exact_answer_contract
+        operator: OR
+        keywords:
+          - "Explanation:"
+          - "Exact Answer:"
+          - "Confidence:"
+          - "succinct, final answer"
+    context:
+      - name: hle_long_prompt
+        min_tokens: 4K
+        max_tokens: 1M
+        description: Long HLE prompt or reference-heavy question.
+
+  projections:
+    scores:
+      - name: hle_competitive_risk_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: hle_formal_reasoning
+            weight: 0.35
+          - type: keyword
+            name: hle_disagreement_risk
+            weight: 0.25
+          - type: keyword
+            name: hle_exact_answer_contract
+            weight: 0.20
+          - type: context
+            name: hle_long_prompt
+            weight: 0.20
+    mappings:
+      - name: hle_competitive_risk_band
+        source: hle_competitive_risk_score
+        method: threshold_bands
+        outputs:
+          - name: hle_low_risk
+            lt: 0.30
+          - name: hle_medium_risk
+            gte: 0.30
+            lt: 0.60
+          - name: hle_high_risk
+            gte: 0.60
+
+  decisions:
+    - name: hle_high_risk_hybrid_remom
+      description: High-risk HLE uses GLM breadth plus closed verifiers and closed synthesis.
+      priority: 340
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: hle_high_risk
+      output_contract: >-
+        Return exactly: Explanation: {concise reasoning}
+        Exact Answer: {succinct final answer}
+        Confidence: {0%-100% confidence}. Do not add extra sections.
+      modelRefs:
+        - model: glm52-breadth-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: glm52-breadth-b
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gpt55-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: opus48-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gemini31-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [4]
+          model_distribution: round_robin
+          temperature: 0.8
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 12000
+          synthesis_model: gemini31-finalizer
+          max_concurrent: 4
+          round_timeout_seconds: 900
+          min_successful_responses: 2
+          max_responses_per_round: 4
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final HLE answer synthesizer for a competitive hybrid
+            router. The candidate panel contains GLM-5.2 breadth attempts and
+            stronger closed-model verifier attempts.
+
+            Original question:
+            {{.OriginalContent}}
+
+            Candidate attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Resolve disagreements using the original question. Prefer answers
+            with explicit derivation and contract-compliant exact answers.
+            Return exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}
+
+    - name: hle_medium_risk_hybrid_fusion
+      description: Medium-risk HLE uses GLM breadth and closed-model fusion synthesis.
+      priority: 240
+      rules:
+        operator: OR
+        conditions:
+          - type: projection
+            name: hle_medium_risk
+          - type: keyword
+            name: hle_disagreement_risk
+      output_contract: >-
+        Return exactly: Explanation: {concise reasoning}
+        Exact Answer: {succinct final answer}
+        Confidence: {0%-100% confidence}. Do not add extra sections.
+      modelRefs:
+        - model: glm52-breadth-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gpt55-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: opus48-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gemini31-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: fusion
+        fusion:
+          model: gemini31-finalizer
+          analysis_models: [glm52-breadth-a, gpt55-verifier, opus48-verifier]
+          max_concurrent: 3
+          max_completion_tokens: 32768
+          round_timeout_seconds: 900
+          min_successful_responses: 2
+          temperature: 0.8
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            You are the final HLE answer judge.
+
+            Original question:
+            {{original}}
+
+            Candidate responses:
+            {{responses}}
+
+            Select or repair the answer most likely to be judged correct.
+            Preserve the required HLE format exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}
+          grounding:
+            enabled: false
+            reference: panel
+            policy: weight
+            min_score: 0.0
+            min_keep: 1
+            nli_contradiction_penalty: 1.0
+            on_error: skip
+
+    - name: hle_fallback_hybrid_remom
+      description: Catch-all hybrid HLE fallback with GLM breadth and closed finalizer.
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      output_contract: >-
+        Preserve the HLE output contract exactly. Return Explanation, Exact
+        Answer, and Confidence only.
+      modelRefs:
+        - model: glm52-breadth-a
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gpt55-verifier
+          use_reasoning: true
+          reasoning_effort: high
+        - model: gemini31-finalizer
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule: [3]
+          model_distribution: round_robin
+          temperature: 0.8
+          include_reasoning: false
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 8000
+          synthesis_model: gemini31-finalizer
+          max_concurrent: 3
+          round_timeout_seconds: 900
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+          synthesis_template: |-
+            Produce the final HLE answer from the hybrid attempts.
+
+            Original question:
+            {{.OriginalContent}}
+
+            Attempts:
+            {{range $i, $resp := .ReferenceResponses}}
+            Attempt {{add $i 1}}{{if $resp.Model}} ({{$resp.Model}}){{end}}:
+            {{$resp.Content}}
+            {{end}}
+
+            Return exactly:
+            Explanation: {your concise reasoning}
+            Exact Answer: {your succinct final answer}
+            Confidence: {integer percentage between 0% and 100%}

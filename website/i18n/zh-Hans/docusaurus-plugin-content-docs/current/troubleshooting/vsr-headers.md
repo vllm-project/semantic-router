@@ -4,7 +4,7 @@ sidebar_label: VSR Header
 translation:
   source_commit: "c7d360e"
   source_file: "docs/troubleshooting/vsr-headers.md"
-  outdated: false
+  outdated: true
 ---
 
 # VSR 决策追踪 Header
@@ -22,6 +22,10 @@ translation:
 3. VSR 在请求处理期间做出了路由决策
 
 ## 添加的 Header
+
+### `x-vsr-selected-recipe`
+
+表示由 entrypoint 或 auto/looper alias 选中的 recipe 隔离域，例如 `privacy-first`。同名 signal、projection 和 decision 必须结合该 Header 才能确定完整身份；直接指定具体 backend model 时不会设置该 Header。
 
 ### `x-vsr-selected-category`
 

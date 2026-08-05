@@ -1606,11 +1606,18 @@ curl http://localhost:9190/metrics
 
 **Key Metrics:**
 
-- `semantic_router_request_duration_seconds` - Request latency
-- `semantic_router_cache_hit_total` - Cache hit rate
-- `semantic_router_classification_duration_seconds` - Classification latency
-- `semantic_router_tokens_total` - Token usage
-- `semantic_router_reasoning_requests_total` - Reasoning mode usage
+| Family | Example metrics |
+|--------|-----------------|
+| Requests | `llm_model_requests_total`, `llm_request_errors_total` |
+| Errors | `llm_request_errors_total{reason="timeout"}` |
+| Latency | `llm_model_completion_latency_seconds`, `llm_model_ttft_seconds`, `llm_model_tpot_seconds`, `llm_model_routing_latency_seconds` |
+| Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
+| Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
+| Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
+| RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
+| Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
+| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
 
 ### ServiceMonitor (Prometheus Operator)
 
@@ -1645,9 +1652,13 @@ spec:
           endpoint: "jaeger-collector:4317"
           insecure: true
         sampling:
-          type: "always_on"
-          rate: 1.0
+          type: "probabilistic"
+          rate: 0.1
 ```
+
+`probabilistic` is the recommended sampling type. `traceidratio` and
+`trace_id_ratio` are accepted as compatibility aliases for existing
+configurations.
 
 ## Troubleshooting
 

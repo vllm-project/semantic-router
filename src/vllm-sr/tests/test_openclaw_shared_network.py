@@ -1,7 +1,13 @@
 from types import SimpleNamespace
 
 import pytest
-from cli import core, docker_cli, docker_services, docker_start, runtime_lifecycle
+from cli import (
+    container_cli,
+    container_services,
+    container_start,
+    core,
+    runtime_lifecycle,
+)
 from cli.runtime_stack import resolve_runtime_stack
 
 
@@ -17,9 +23,9 @@ def _capture_run_commands(monkeypatch):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(docker_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
     monkeypatch.setattr(
-        docker_start, "_render_split_envoy_config", lambda *args, **kwargs: None
+        container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )
     return captured
 
@@ -35,28 +41,30 @@ def _find_container_run_cmd(commands, container_name):
     )
 
 
-def _stub_valid_docker_cli(monkeypatch, tmp_path):
+def _stub_valid_container_cli(monkeypatch, tmp_path):
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
     monkeypatch.setattr(
-        docker_start,
-        "resolve_docker_cli_path",
+        container_start,
+        "resolve_container_cli_path",
         lambda preferred_path=None: str(docker_bin),
     )
     return docker_bin
 
 
-def test_docker_start_vllm_sr_rejects_legacy_topology_override(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_rejects_legacy_topology_override(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "legacy")
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
 
     with pytest.raises(ValueError, match="Unsupported runtime topology"):
-        docker_cli.docker_start_vllm_sr(
+        container_cli.container_start_vllm_sr(
             str(config_path),
             {},
             [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -66,7 +74,9 @@ def test_docker_start_vllm_sr_rejects_legacy_topology_override(tmp_path, monkeyp
         )
 
 
-def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_sets_openclaw_shared_network_env(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -74,11 +84,11 @@ def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeyp
 
     socket_path = tmp_path / "docker.sock"
     socket_path.write_text("")
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
 
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -87,9 +97,9 @@ def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeyp
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    monkeypatch.setenv("VLLM_SR_DOCKER_SOCKET", str(socket_path))
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -108,7 +118,7 @@ def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeyp
     assert "VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml" in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_image(
+def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_image(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
@@ -118,10 +128,10 @@ def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_ima
 
     socket_path = tmp_path / "docker.sock"
     socket_path.write_text("")
-    monkeypatch.setenv("VLLM_SR_DOCKER_SOCKET", str(socket_path))
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "router-image:latest",
@@ -130,9 +140,9 @@ def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_ima
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
+    docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -155,16 +165,18 @@ def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_ima
     assert runtime_env_index < image_index
 
 
-def test_docker_start_vllm_sr_mounts_host_docker_cli_by_default(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
+    tmp_path, monkeypatch
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -174,7 +186,7 @@ def test_docker_start_vllm_sr_mounts_host_docker_cli_by_default(tmp_path, monkey
     )
     captured = _capture_run_commands(monkeypatch)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -189,7 +201,7 @@ def test_docker_start_vllm_sr_mounts_host_docker_cli_by_default(tmp_path, monkey
     assert f"{docker_bin}:/usr/local/bin/docker:ro" in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
+def test_container_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
@@ -197,11 +209,11 @@ def test_docker_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
-    monkeypatch.setenv("VLLM_SR_MOUNT_DOCKER_CLI", "0")
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("VLLM_SR_MOUNT_CONTAINER_CLI", "0")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -211,7 +223,7 @@ def test_docker_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     )
     captured = _capture_run_commands(monkeypatch)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -226,7 +238,7 @@ def test_docker_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     assert f"{docker_bin}:/usr/local/bin/docker:ro" not in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_mounts_host_docker_cli_when_requested(
+def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
@@ -234,10 +246,10 @@ def test_docker_start_vllm_sr_mounts_host_docker_cli_when_requested(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -246,9 +258,9 @@ def test_docker_start_vllm_sr_mounts_host_docker_cli_when_requested(
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    monkeypatch.setenv("VLLM_SR_MOUNT_DOCKER_CLI", "1")
+    monkeypatch.setenv("VLLM_SR_MOUNT_CONTAINER_CLI", "1")
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -263,15 +275,15 @@ def test_docker_start_vllm_sr_mounts_host_docker_cli_when_requested(
     assert f"{docker_bin}:/usr/local/bin/docker:ro" in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -280,9 +292,9 @@ def test_docker_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -299,7 +311,7 @@ def test_docker_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
     assert f"{dashboard_data_dir}:/app/data:z" in dashboard_cmd
 
 
-def test_docker_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
+def test_container_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
     workspace_dir = tmp_path / "workspace"
     workspace_dir.mkdir()
     config_path = tmp_path / "runtime-overrides" / "config-with-platform-overrides.yaml"
@@ -308,9 +320,9 @@ def test_docker_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
         "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -319,9 +331,9 @@ def test_docker_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -341,7 +353,7 @@ def test_docker_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
     assert f"{models_dir}:/app/models:z" in router_cmd
 
 
-def test_docker_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
+def test_container_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
     tmp_path, monkeypatch
 ):
     workspace_dir = tmp_path / "workspace"
@@ -357,9 +369,9 @@ def test_docker_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
         "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
-    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
-        docker_start,
+        container_start,
         "get_runtime_images",
         lambda **kwargs: {
             "router": "test-image",
@@ -368,9 +380,9 @@ def test_docker_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
+    rc, _, _ = container_cli.container_start_vllm_sr(
         str(source_config_path),
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -404,7 +416,7 @@ def test_render_observability_template_uses_stack_specific_container_hosts():
         "jaeger: vllm-sr-jaeger\n"
     )
 
-    rendered = docker_services.render_observability_template(template, stack_layout)
+    rendered = container_services.render_observability_template(template, stack_layout)
 
     assert "router: audit-a-vllm-sr-router-container" in rendered
     assert "metrics: audit-a-vllm-sr-router-container:9190" in rendered
@@ -438,36 +450,44 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     )
     monkeypatch.setattr(
         runtime_lifecycle,
-        "docker_container_status",
+        "container_status",
         lambda _name: "running",
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "docker_create_network", record("docker_create_network")
+        runtime_lifecycle,
+        "container_create_network",
+        record("container_create_network"),
     )
     monkeypatch.setattr(
         core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", True)
     )
-    monkeypatch.setattr(core, "docker_start_vllm_sr", record("docker_start_vllm_sr"))
     monkeypatch.setattr(
-        runtime_lifecycle, "docker_network_connect", record("docker_network_connect")
+        core, "container_start_vllm_sr", record("container_start_vllm_sr")
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "docker_logs_since", lambda *args, **kwargs: (0, "", "")
+        runtime_lifecycle,
+        "container_network_connect",
+        record("container_network_connect"),
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "docker_exec", lambda *args, **kwargs: (0, "ok", "")
+        runtime_lifecycle, "container_logs_since", lambda *args, **kwargs: (0, "", "")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_exec", lambda *args, **kwargs: (0, "ok", "")
     )
     monkeypatch.setattr(
         runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
     )
-    monkeypatch.setattr(runtime_lifecycle, "docker_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
+    )
 
     core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
 
-    create_calls = [c for c in calls if c[0] == "docker_create_network"]
+    create_calls = [c for c in calls if c[0] == "container_create_network"]
     fleet_sim_calls = [c for c in calls if c[0] == "start_fleet_sim_sidecar"]
-    start_calls = [c for c in calls if c[0] == "docker_start_vllm_sr"]
-    connect_calls = [c for c in calls if c[0] == "docker_network_connect"]
+    start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]
+    connect_calls = [c for c in calls if c[0] == "container_network_connect"]
 
     assert create_calls[0][1] == ("audit-a-vllm-sr-network",)
     assert fleet_sim_calls[0][1][2].fleet_sim_container_name == "audit-a-vllm-sr-sim"
@@ -510,7 +530,7 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
     monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
     monkeypatch.setattr(
         core,
-        "docker_container_status",
+        "container_status",
         lambda name: status_map.get(name, "not found"),
     )
     monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda cwd: "/tmp/openclaw")
@@ -519,34 +539,38 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         "load_openclaw_registry",
         lambda _path: [{"name": "openclaw-a"}, {"containerName": "openclaw-b"}, {}],
     )
-    monkeypatch.setattr(core, "docker_stop_container", record("docker_stop_container"))
     monkeypatch.setattr(
-        core,
-        "docker_remove_container",
-        record("docker_remove_container"),
+        core, "container_stop_container", record("container_stop_container")
     )
     monkeypatch.setattr(
         core,
-        "docker_network_disconnect",
-        record("docker_network_disconnect"),
+        "container_remove_container",
+        record("container_remove_container"),
     )
     monkeypatch.setattr(
         core,
-        "docker_remove_network",
-        record("docker_remove_network"),
+        "container_network_disconnect",
+        record("container_network_disconnect"),
+    )
+    monkeypatch.setattr(
+        core,
+        "container_remove_network",
+        record("container_remove_network"),
     )
 
     core.stop_vllm_sr()
 
-    stop_calls = [args[0] for name, args, _ in calls if name == "docker_stop_container"]
+    stop_calls = [
+        args[0] for name, args, _ in calls if name == "container_stop_container"
+    ]
     remove_calls = [
-        args[0] for name, args, _ in calls if name == "docker_remove_container"
+        args[0] for name, args, _ in calls if name == "container_remove_container"
     ]
     disconnect_calls = [
-        args for name, args, _ in calls if name == "docker_network_disconnect"
+        args for name, args, _ in calls if name == "container_network_disconnect"
     ]
     remove_network_calls = [
-        args for name, args, _ in calls if name == "docker_remove_network"
+        args for name, args, _ in calls if name == "container_remove_network"
     ]
 
     assert stop_calls == ["openclaw-a", stack_layout.grafana_container_name]
@@ -565,7 +589,7 @@ def test_runtime_service_container_name_prefers_split_runtime_container(monkeypa
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     monkeypatch.setattr(
         core,
-        "docker_container_status",
+        "container_status",
         lambda name: (
             "running" if name == stack_layout.router_container_name else "not found"
         ),
@@ -583,7 +607,7 @@ def test_runtime_service_container_name_returns_split_name_when_container_missin
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     monkeypatch.setattr(
         core,
-        "docker_container_status",
+        "container_status",
         lambda _name: "not found",
     )
 
@@ -599,7 +623,7 @@ def test_runtime_stack_status_detects_split_runtime_when_dashboard_running(
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     monkeypatch.setattr(
         core,
-        "docker_container_status",
+        "container_status",
         lambda name: (
             "running" if name == stack_layout.dashboard_container_name else "not found"
         ),
@@ -631,33 +655,37 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
     monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
     monkeypatch.setattr(
         core,
-        "docker_container_status",
+        "container_status",
         lambda name: status_map.get(name, "not found"),
     )
     monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda cwd: "/tmp/openclaw")
     monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
-    monkeypatch.setattr(core, "docker_stop_container", record("docker_stop_container"))
     monkeypatch.setattr(
-        core,
-        "docker_remove_container",
-        record("docker_remove_container"),
+        core, "container_stop_container", record("container_stop_container")
     )
     monkeypatch.setattr(
         core,
-        "docker_network_disconnect",
-        record("docker_network_disconnect"),
+        "container_remove_container",
+        record("container_remove_container"),
     )
     monkeypatch.setattr(
         core,
-        "docker_remove_network",
-        record("docker_remove_network"),
+        "container_network_disconnect",
+        record("container_network_disconnect"),
+    )
+    monkeypatch.setattr(
+        core,
+        "container_remove_network",
+        record("container_remove_network"),
     )
 
     core.stop_vllm_sr()
 
-    stop_calls = [args[0] for name, args, _ in calls if name == "docker_stop_container"]
+    stop_calls = [
+        args[0] for name, args, _ in calls if name == "container_stop_container"
+    ]
     remove_calls = [
-        args[0] for name, args, _ in calls if name == "docker_remove_container"
+        args[0] for name, args, _ in calls if name == "container_remove_container"
     ]
 
     assert stop_calls == [
@@ -678,17 +706,17 @@ def test_ensure_clean_runtime_container_removes_created_container_without_stop(
 
     monkeypatch.setattr(
         runtime_lifecycle,
-        "docker_container_status",
+        "container_status",
         lambda _name: "created",
     )
     monkeypatch.setattr(
         runtime_lifecycle,
-        "docker_stop_container",
+        "container_stop_container",
         lambda name: calls.append(("stop", name)),
     )
     monkeypatch.setattr(
         runtime_lifecycle,
-        "docker_remove_container",
+        "container_remove_container",
         lambda name: calls.append(("remove", name)),
     )
 

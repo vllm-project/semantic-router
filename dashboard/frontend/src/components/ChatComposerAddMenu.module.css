@@ -1,0 +1,215 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.trigger svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--transition-fast);
+}
+
+.trigger:hover,
+.triggerOpen {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
+}
+
+.triggerOpen svg {
+  transform: rotate(45deg);
+}
+
+.menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.65rem);
+  z-index: 40;
+  display: grid;
+  width: min(304px, calc(100vw - 2.5rem));
+  max-height: min(390px, calc(100dvh - 9rem));
+  gap: 0.2rem;
+  padding: 0.45rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(18, 18, 21, 0.98);
+  box-shadow:
+    0 24px 56px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(24px) saturate(118%);
+  -webkit-backdrop-filter: blur(24px) saturate(118%);
+  transform-origin: bottom left;
+  animation: composerMenuIn 120ms ease-out;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 20px;
+  align-items: center;
+  width: 100%;
+  min-height: 54px;
+  gap: 0.65rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible {
+  border-color: rgba(255, 255, 255, 0.08);
+  outline: none;
+  background: rgba(255, 255, 255, 0.065);
+  color: var(--color-text);
+}
+
+.item:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.itemActive {
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text);
+}
+
+.itemIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--color-text-secondary);
+}
+
+.itemIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.itemIcon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.itemActive .itemIcon,
+.itemActive .itemCheck {
+  color: #ef4444;
+}
+
+.itemCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.itemLabel {
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemDescription {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-secondary);
+}
+
+.itemCheck svg {
+  width: 15px;
+  height: 15px;
+}
+
+@keyframes composerMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .trigger {
+    width: 36px;
+    height: 36px;
+  }
+
+  .menu {
+    width: min(304px, calc(100vw - 2rem));
+    max-height: min(360px, calc(100dvh - 8rem - env(safe-area-inset-bottom, 0px)));
+  }
+}
+
+@media (max-width: 480px) {
+  .menu {
+    position: fixed;
+    right: calc(0.75rem + env(safe-area-inset-right, 0px));
+    bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+    left: auto;
+    width: min(304px, calc(100vw - 1.5rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    transform-origin: bottom right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+
+  .trigger,
+  .trigger svg {
+    transition: none;
+  }
+}

@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestTracingConfiguration(t *testing.T) {
@@ -62,6 +63,49 @@ func TestTracingConfiguration(t *testing.T) {
 			if err == nil {
 				shutdownCtx := context.Background()
 				_ = ShutdownTracing(shutdownCtx)
+			}
+		})
+	}
+}
+
+func TestSamplerFromConfigAliases(t *testing.T) {
+	ratioSamplerDescription := sdktrace.TraceIDRatioBased(0.25).Description()
+
+	tests := []struct {
+		name            string
+		samplingType    string
+		wantDescription string
+	}{
+		{
+			name:            "probabilistic canonical",
+			samplingType:    "probabilistic",
+			wantDescription: ratioSamplerDescription,
+		},
+		{
+			name:            "traceidratio compatibility alias",
+			samplingType:    "traceidratio",
+			wantDescription: ratioSamplerDescription,
+		},
+		{
+			name:            "trace_id_ratio compatibility alias",
+			samplingType:    "trace_id_ratio",
+			wantDescription: ratioSamplerDescription,
+		},
+		{
+			name:            "unknown falls back to always on",
+			samplingType:    "definitely_not_a_sampler",
+			wantDescription: sdktrace.AlwaysSample().Description(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sampler := samplerFromConfig(TracingConfig{
+				SamplingType: tt.samplingType,
+				SamplingRate: 0.25,
+			})
+			if sampler.Description() != tt.wantDescription {
+				t.Fatalf("sampler description = %q, want %q", sampler.Description(), tt.wantDescription)
 			}
 		})
 	}

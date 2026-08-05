@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/algorithm/selection/elo.md"
-  outdated: false
+  outdated: true
 ---
 
 # Elo

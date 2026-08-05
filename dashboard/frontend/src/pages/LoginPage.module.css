@@ -1,8 +1,25 @@
 .container {
   position: relative;
   min-height: 100vh;
-  overflow: hidden;
-  background: #000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #050505;
+}
+
+.container::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 50% 45%, transparent 0, rgba(5, 5, 5, 0.46) 74%);
+  background-size:
+    42px 42px,
+    42px 42px,
+    auto;
 }
 
 .backgroundEffect {
@@ -37,28 +54,14 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-radius: 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background:
-    linear-gradient(135deg, rgba(16, 22, 44, 0.58), rgba(9, 12, 24, 0.38) 58%, rgba(4, 8, 18, 0.62)),
-    rgba(8, 12, 24, 0.26);
-  box-shadow:
-    0 30px 72px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #101012;
 }
 
 .storyPanel::before,
 .card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.1), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015) 28%, transparent 72%);
-  pointer-events: none;
+  content: none;
 }
 
 .storyPanel {
@@ -76,9 +79,9 @@
   width: fit-content;
   max-width: 100%;
   padding: 0.6rem 1rem;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  background: #18181b;
   color: #f7f8fb;
   font-size: 0.95rem;
   font-weight: 650;
@@ -99,7 +102,7 @@
 .storyEyebrow,
 .stageEyebrow {
   margin: 0;
-  color: rgba(118, 185, 0, 0.96);
+  color: rgba(255, 255, 255, 0.52);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -134,24 +137,25 @@
   gap: 0.85rem;
   align-items: center;
   padding: 0.85rem 0.95rem;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  background: #18181b;
 }
 
 .progressStepActive {
-  border-color: rgba(118, 185, 0, 0.22);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.14), rgba(8, 10, 20, 0.9));
+  border-color: rgba(227, 27, 35, 0.34);
+  background: #18181b;
+  box-shadow: inset 3px 0 0 var(--brand-amd);
 }
 
 .progressStepComplete {
-  border-color: rgba(0, 212, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .progressIndex {
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -187,9 +191,9 @@
   display: grid;
   gap: 0.4rem;
   padding: 1rem;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  background: #18181b;
 }
 
 .metricValue,
@@ -237,9 +241,9 @@
   min-height: 58px;
   padding: 0 1rem;
   box-sizing: border-box;
-  border-radius: 1rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(9, 12, 22, 0.62);
+  background: #09090a;
   color: #ffffff;
   font-size: 1rem;
 }
@@ -250,8 +254,8 @@
 
 .input:focus {
   outline: none;
-  border-color: rgba(118, 185, 0, 0.95);
-  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.14);
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .summaryDetail {
@@ -261,7 +265,7 @@
 
 .error {
   padding: 0.9rem 1rem;
-  border-radius: 0.95rem;
+  border-radius: 6px;
   border: 1px solid rgba(255, 107, 107, 0.26);
   background: rgba(255, 107, 107, 0.1);
   color: #ff9f9f;
@@ -278,39 +282,36 @@
 .secondaryButton {
   flex: 1 1 0;
   min-height: 52px;
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 0 1.2rem;
   font-size: 0.95rem;
   font-weight: 650;
   letter-spacing: 0.01em;
-  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .button {
   border: 1px solid transparent;
   color: #0c0c10;
   background: #ffffff;
-  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.2);
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 34px rgba(255, 255, 255, 0.28);
+  background: #e4e4e7;
 }
 
 .secondaryButton {
   border: 1px solid rgba(255, 255, 255, 0.24);
   color: #f5f5f7;
-  background: rgba(16, 18, 31, 0.56);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: #18181b;
 }
 
 .secondaryButton:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.45);
-  transform: translateY(-2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 14px 26px rgba(5, 10, 24, 0.5);
+  background: #202024;
 }
 
 .button:disabled,

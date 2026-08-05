@@ -13,7 +13,7 @@ image: /img/amd-deploy-0.png
 
 </div>
 
-Running [vLLM Semantic Router](https://vllm-semantic-router.com) on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
+Running [vLLM Semantic Router](https://vllm-sr.ai) on AMD Developer Cloud is not just about bringing up one more inference endpoint. It is about turning it into a routed multi-tier system that can classify requests, choose a semantic lane, and make replay and Insights immediately useful.
 
 This post walks through the practical path: start the ROCm backend on an AMD Developer Cloud instance, install vLLM-SR, import the reference profile, and validate the deployment end to end.
 
@@ -54,7 +54,7 @@ At a high level, this deployment consists of:
 
 - One ROCm vLLM backend running `Qwen/Qwen3.5-122B-A10B-FP8`
 - One vLLM Semantic Router instance in front of that backend
-- One reference routing profile from `deploy/recipes/balance.yaml`
+- One reference routing profile from `config/recipes/balance/config.yaml`
 - One dashboard for onboarding, replay inspection, playground testing, and Insights
 
 The reference alias layout is:
@@ -169,7 +169,7 @@ Python version: python3.12
 # Create a virtual environment (recommended)
 python3 -m venv vsr
 source vsr/bin/activate 
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash
 ```
 
 ![vLLM Semantic Router installation step](/img/amd-deploy-3.png)
@@ -186,7 +186,7 @@ Open the dashboard and complete onboarding.
 
 When prompted to load a routing profile (please skip the model configuration directly), import the reference YAML directly from:
 
-> `https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml`
+> `https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml`
 
 The remote import path applies the full YAML directly during onboarding. If you later inspect the same profile in the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, `routing.projections`, and `routing.decisions`, while `providers` remains YAML-native.
 

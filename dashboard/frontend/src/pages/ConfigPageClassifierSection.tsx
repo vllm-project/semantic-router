@@ -1,6 +1,11 @@
 import styles from './ConfigPage.module.css'
 import type { MCPCategoryModel, ModelConfig, PreferenceModelConfig } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
+import {
+  McpArgumentsEditor,
+  McpEnvironmentEditor,
+} from './configPageClassifierStructuredEditors'
+import { normalizeMcpCategoryModel } from './configPageClassifierStructuredSupport'
 import { cloneConfig, type RouterSectionBaseProps } from './configPageRouterSectionSupport'
 
 export default function ConfigPageClassifierSection({
@@ -102,8 +107,24 @@ export default function ConfigPageClassifierSection({
                             { name: 'enabled', label: 'Enable MCP Classifier', type: 'boolean', description: 'Enable or disable MCP-based classification' },
                             { name: 'transport_type', label: 'Transport Type', type: 'select', options: ['stdio', 'http'], required: true, description: 'MCP transport protocol type' },
                             { name: 'command', label: 'Command', type: 'text', placeholder: 'e.g., python mcp_server.py', description: 'Command to start MCP server (for stdio transport)' },
-                            { name: 'args', label: 'Arguments (JSON)', type: 'json', placeholder: '["--port", "8080"]', description: 'Command line arguments as JSON array' },
-                            { name: 'env', label: 'Environment Variables (JSON)', type: 'json', placeholder: '{"API_KEY": "xxx"}', description: 'Environment variables as JSON object' },
+                            {
+                              name: 'args',
+                              label: 'Arguments',
+                              type: 'custom',
+                              description: 'Ordered command-line arguments passed to the MCP server.',
+                              customRender: (value, onChange) => (
+                                <McpArgumentsEditor value={value} onChange={onChange} />
+                              ),
+                            },
+                            {
+                              name: 'env',
+                              label: 'Environment Variables',
+                              type: 'custom',
+                              description: 'Environment variable names and values passed to the MCP server.',
+                              customRender: (value, onChange) => (
+                                <McpEnvironmentEditor value={value} onChange={onChange} />
+                              ),
+                            },
                             { name: 'url', label: 'URL', type: 'text', placeholder: 'http://localhost:8080', description: 'MCP server URL (for http transport)' },
                             { name: 'tool_name', label: 'Tool Name', type: 'text', placeholder: 'classify_category', description: 'Name of the MCP tool to call' },
                             { name: 'threshold', label: 'Classification Threshold', type: 'percentage', required: true, placeholder: '70', description: 'Confidence threshold for classification (0-100%)', step: 1 },
@@ -112,7 +133,7 @@ export default function ConfigPageClassifierSection({
                           async (data) => {
                             const newConfig = cloneConfig(config)
                             if (!newConfig.classifier) newConfig.classifier = {}
-                            newConfig.classifier.mcp_category_model = data
+                            newConfig.classifier.mcp_category_model = normalizeMcpCategoryModel(data)
                             await saveConfig(newConfig)
                           }
                         )

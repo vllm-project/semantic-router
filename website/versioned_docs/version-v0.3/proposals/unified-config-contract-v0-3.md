@@ -79,6 +79,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
 - `providers.models` carries per-model access bindings directly
 - each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
+- `providers.models[].pricing` can price prompt, cached-input, cache-write, and completion tokens independently; an omitted cache-write rate inherits the prompt rate
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
 - `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
@@ -126,7 +127,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
-- runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
+- runtime support examples such as `config/runtime/semantic-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
 - `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
 

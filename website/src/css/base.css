@@ -23,6 +23,13 @@ body,
   min-height: 100vh;
 }
 
+.site-page--home,
+.site-page--home .main-wrapper,
+html[data-page-key='home'],
+body[data-page-key='home'] {
+  background: #030303;
+}
+
 * {
   box-sizing: border-box;
 }

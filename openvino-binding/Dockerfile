@@ -8,7 +8,7 @@
 # =============================================================================
 
 # Use golang image to copy Go toolchain (avoids network download)
-FROM golang:1.24-alpine AS go-src
+FROM golang:1.25-alpine AS go-src
 
 # =============================================================================
 # Builder stage

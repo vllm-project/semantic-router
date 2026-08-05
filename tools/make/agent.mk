@@ -30,6 +30,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-validate"
 	@echo "  make agent-scorecard"
 	@echo "  make agent-ci-lint CHANGED_FILES=\"...\""
+	@echo "  make agent-docs-ci-gate CHANGED_FILES=\"...\""
 	@echo "  make agent-dev ENV=cpu|amd"
 	@echo "  make agent-serve-local ENV=cpu|amd"
 	@echo "    optional: AGENT_STACK_NAME=<name> AGENT_PORT_OFFSET=<n>"
@@ -156,6 +157,29 @@ agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locall
 	$(MAKE) codespell-tracked && \
 	$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$$BASE_REF"
 
+agent-docs-ci-gate: agent-bootstrap ## Reproduce the docs/website lightweight CI gate locally
+	@$(LOG_TARGET)
+	@BASE_REF="$(AGENT_BASE_REF)"; \
+	if [ -z "$$BASE_REF" ] && git rev-parse --verify origin/main >/dev/null 2>&1; then \
+		BASE_REF="origin/main"; \
+	fi; \
+	if [ -z "$$BASE_REF" ] && git rev-parse --verify HEAD^ >/dev/null 2>&1; then \
+		BASE_REF="HEAD^"; \
+	fi; \
+	if [ -n "$$BASE_REF" ]; then \
+		echo "Using AGENT_BASE_REF=$$BASE_REF"; \
+	else \
+		echo "Using AGENT_BASE_REF=<empty>"; \
+	fi; \
+	$(MAKE) agent-validate && \
+	$(MAKE) agent-ci-lint AGENT_BASE_REF="$$BASE_REF" CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" && \
+	$(MAKE) markdown-lint && \
+	$(MAKE) precommit-install && \
+	"$(AGENT_PRE_COMMIT)" run md-fmt --all-files && \
+	if git diff --name-only "$$BASE_REF"...HEAD 2>/dev/null | grep -Eq '^website/.*\.(js|ts|tsx)$$'; then \
+		cd website && npm install 2>/dev/null || true && npm run lint; \
+	fi
+
 agent-report: agent-venv-install ## Show primary skill, impacted surfaces, and validation commands
 	@$(LOG_TARGET)
 	@if [ -n "$(AGENT_REPORT_WRITE_PATH)" ]; then \
@@ -266,6 +290,6 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
 	fi; \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
 
-.PHONY: agent-help agent-venv-install agent-bootstrap agent-ci-lint agent-dev agent-serve-local agent-stop-local \
+.PHONY: agent-help agent-venv-install agent-bootstrap agent-ci-lint agent-docs-ci-gate agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
 	test-and-build-local agent-pr-gate agent-feature-gate

@@ -13,6 +13,7 @@ import csv
 import json
 import math
 import random
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -203,6 +204,20 @@ def parse_args() -> argparse.Namespace:
         "--ablation",
         action="store_true",
         help="Run policy ablations across the maintained scenario matrix.",
+    )
+    parser.add_argument(
+        "--learning-architecture",
+        action="store_true",
+        help="Run deterministic Router Learning architecture fixtures.",
+    )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        help=(
+            "Gate the --learning-architecture summary against a named profile "
+            "(pr/release) or a profile JSON path. Writes a verdict and exits "
+            "non-zero on failure so CI/release pipelines can gate."
+        ),
     )
     parser.add_argument(
         "--agentic-policy",
@@ -887,6 +902,416 @@ def write_ablation_outputs(
     return summary
 
 
+def learning_architecture_fixtures() -> list[dict[str, Any]]:
+    return [
+        {
+            "case_id": "conversation-cache-stay",
+            "decision": "complex_general",
+            "base_model": "frontier-reasoner",
+            "final_model": "qwen3-32b",
+            "expected_model": "qwen3-32b",
+            "expected_behavior": "protect_conversation",
+            "previous_model": "qwen3-32b",
+            "cache_tokens_base": 0,
+            "cache_tokens_final": 4200,
+            "cost_base": 0.0320,
+            "cost_final": 0.0058,
+            "overhead_ms": 1.4,
+            "adaptations": [
+                {
+                    "method": "session_aware",
+                    "mode": "apply",
+                    "action": "stay",
+                    "reason": "continuity_cost_blocks_switch",
+                    "scope": "conversation",
+                }
+            ],
+        },
+        {
+            "case_id": "session-idle-release",
+            "decision": "complex_general",
+            "base_model": "frontier-reasoner",
+            "final_model": "frontier-reasoner",
+            "expected_model": "frontier-reasoner",
+            "expected_behavior": "allow_redecision",
+            "previous_model": "qwen3-32b",
+            "cache_tokens_base": 0,
+            "cache_tokens_final": 0,
+            "cost_base": 0.0290,
+            "cost_final": 0.0291,
+            "overhead_ms": 1.1,
+            "adaptations": [
+                {
+                    "method": "session_aware",
+                    "mode": "apply",
+                    "action": "switch",
+                    "reason": "idle_select",
+                    "scope": "session",
+                }
+            ],
+        },
+        {
+            "case_id": "privacy-bypass-local",
+            "decision": "privacy_boundary",
+            "base_model": "qwen3-local",
+            "final_model": "qwen3-local",
+            "expected_model": "qwen3-local",
+            "expected_behavior": "bypass_policy_boundary",
+            "previous_model": "frontier-reasoner",
+            "cache_tokens_base": 0,
+            "cache_tokens_final": 0,
+            "cost_base": 0.0020,
+            "cost_final": 0.0020,
+            "overhead_ms": 0.5,
+            "adaptations": [
+                {
+                    "method": "session_aware",
+                    "mode": "bypass",
+                    "action": "bypass",
+                    "reason": "decision_bypass",
+                    "scope": "conversation",
+                },
+                {
+                    "method": "bandit",
+                    "mode": "bypass",
+                    "action": "bypass",
+                    "reason": "decision_bypass",
+                    "scope": "decision",
+                },
+            ],
+        },
+        {
+            "case_id": "bandit-cost-switch",
+            "decision": "simple_general",
+            "base_model": "qwen3-32b",
+            "final_model": "qwen3-8b",
+            "expected_model": "qwen3-8b",
+            "expected_behavior": "cost_goal_switch",
+            "previous_model": "qwen3-32b",
+            "cache_tokens_base": 1200,
+            "cache_tokens_final": 1200,
+            "cost_base": 0.0048,
+            "cost_final": 0.0009,
+            "overhead_ms": 1.7,
+            "adaptations": [
+                {
+                    "method": "bandit",
+                    "mode": "apply",
+                    "action": "switch",
+                    "reason": "score_win",
+                    "scope": "decision",
+                }
+            ],
+        },
+        {
+            "case_id": "elo-feedback-switch",
+            "decision": "domain_stem_research",
+            "base_model": "qwen3-32b",
+            "final_model": "frontier-reasoner",
+            "expected_model": "frontier-reasoner",
+            "expected_behavior": "rating_state_switch",
+            "previous_model": "qwen3-32b",
+            "cache_tokens_base": 600,
+            "cache_tokens_final": 0,
+            "cost_base": 0.0065,
+            "cost_final": 0.0330,
+            "overhead_ms": 1.5,
+            "adaptations": [
+                {
+                    "method": "elo",
+                    "mode": "apply",
+                    "action": "switch",
+                    "reason": "rating_win",
+                    "scope": "decision",
+                }
+            ],
+        },
+        {
+            "case_id": "personalization-user-switch",
+            "decision": "admin_personalized_route",
+            "base_model": "qwen3-32b",
+            "final_model": "qwen3-8b",
+            "expected_model": "qwen3-8b",
+            "expected_behavior": "user_preference_switch",
+            "previous_model": "qwen3-32b",
+            "cache_tokens_base": 900,
+            "cache_tokens_final": 900,
+            "cost_base": 0.0042,
+            "cost_final": 0.0008,
+            "overhead_ms": 1.8,
+            "adaptations": [
+                {
+                    "method": "personalization",
+                    "mode": "apply",
+                    "action": "switch",
+                    "reason": "preference_win",
+                    "scope": "decision",
+                }
+            ],
+        },
+        {
+            "case_id": "observe-no-change",
+            "decision": "domain_legal_health",
+            "base_model": "qwen3-local",
+            "final_model": "qwen3-local",
+            "expected_model": "qwen3-local",
+            "expected_behavior": "observe_only",
+            "previous_model": "qwen3-local",
+            "cache_tokens_base": 2400,
+            "cache_tokens_final": 2400,
+            "cost_base": 0.0018,
+            "cost_final": 0.0018,
+            "overhead_ms": 0.9,
+            "adaptations": [
+                {
+                    "method": "elo",
+                    "mode": "observe",
+                    "action": "switch",
+                    "reason": "rating_win",
+                    "scope": "decision",
+                }
+            ],
+        },
+    ]
+
+
+def summarize_learning_architecture(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {}
+    required_keys = {"method", "mode", "action", "reason", "scope"}
+    correct = [row for row in rows if row["final_model"] == row["expected_model"]]
+    switched = [row for row in rows if row["final_model"] != row["base_model"]]
+    unnecessary_switches = [
+        row
+        for row in switched
+        if row["expected_behavior"] in {"protect_conversation", "observe_only"}
+    ]
+    bypass_cases = [
+        row
+        for row in rows
+        if any(
+            adaptation.get("action") == "bypass" for adaptation in row["adaptations"]
+        )
+    ]
+    bypass_correct = [
+        row
+        for row in bypass_cases
+        if row["final_model"] == row["expected_model"]
+        and all(
+            adaptation.get("mode") == "bypass"
+            for adaptation in row["adaptations"]
+            if adaptation.get("action") == "bypass"
+        )
+    ]
+    adaptation_count = sum(len(row["adaptations"]) for row in rows)
+    explainable = sum(
+        1
+        for row in rows
+        for adaptation in row["adaptations"]
+        if required_keys.issubset(adaptation)
+    )
+    method_counts: dict[str, int] = {}
+    action_counts: dict[str, int] = {}
+    for row in rows:
+        for adaptation in row["adaptations"]:
+            method_counts[adaptation["method"]] = (
+                method_counts.get(adaptation["method"], 0) + 1
+            )
+            action_counts[adaptation["action"]] = (
+                action_counts.get(adaptation["action"], 0) + 1
+            )
+    cost_base = sum(float(row["cost_base"]) for row in rows)
+    cost_final = sum(float(row["cost_final"]) for row in rows)
+    cache_base = sum(int(row["cache_tokens_base"]) for row in rows)
+    cache_final = sum(int(row["cache_tokens_final"]) for row in rows)
+    overheads = sorted(float(row["overhead_ms"]) for row in rows)
+    return {
+        "cases": len(rows),
+        "route_correctness_pct": round(len(correct) / len(rows) * 100, 2),
+        "reasonable_routes": len(correct),
+        "unreasonable_routes": len(rows) - len(correct),
+        "base_final_switches": len(switched),
+        "unnecessary_switches": len(unnecessary_switches),
+        "unnecessary_switch_rate_pct": round(
+            len(unnecessary_switches) / max(len(rows), 1) * 100,
+            2,
+        ),
+        "bypass_cases": len(bypass_cases),
+        "bypass_correctness_pct": (
+            round(len(bypass_correct) / len(bypass_cases) * 100, 2)
+            if bypass_cases
+            else None
+        ),
+        "replay_explainability_coverage_pct": round(
+            explainable / max(adaptation_count, 1) * 100,
+            2,
+        ),
+        "adaptation_count": adaptation_count,
+        "method_counts": method_counts,
+        "action_counts": action_counts,
+        "cache_token_delta": cache_final - cache_base,
+        "cost_base": round(cost_base, 6),
+        "cost_final": round(cost_final, 6),
+        "cost_delta": round(cost_final - cost_base, 6),
+        "cost_savings_pct": (
+            round((cost_base - cost_final) / cost_base * 100, 2) if cost_base else None
+        ),
+        "p50_overhead_ms": percentile(overheads, 50),
+        "p95_overhead_ms": percentile(overheads, 95),
+    }
+
+
+def percentile(values: list[float], pct: float) -> float | None:
+    if not values:
+        return None
+    if len(values) == 1:
+        return round(values[0], 4)
+    rank = (len(values) - 1) * pct / 100.0
+    lower = math.floor(rank)
+    upper = math.ceil(rank)
+    if lower == upper:
+        return round(values[int(rank)], 4)
+    fraction = rank - lower
+    return round(values[lower] * (1 - fraction) + values[upper] * fraction, 4)
+
+
+def write_learning_architecture_outputs(out_dir: Path) -> dict[str, Any]:
+    rows = learning_architecture_fixtures()
+    summary = summarize_learning_architecture(rows)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_rows = []
+    for row in rows:
+        csv_row = dict(row)
+        csv_row["adaptations"] = json.dumps(row["adaptations"], sort_keys=True)
+        csv_rows.append(csv_row)
+    write_csv(csv_rows, out_dir / "learning_architecture_cases.csv")
+    (out_dir / "learning_architecture_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n"
+    )
+    (out_dir / "learning_architecture_report.md").write_text(
+        render_learning_architecture_report(summary, rows)
+    )
+    return summary
+
+
+PROFILE_DIR = Path(__file__).with_name("profiles") / "router_learning"
+
+
+def load_profile(name_or_path: str) -> dict[str, Any]:
+    """Load a Router Learning eval profile by short name (pr/release) or explicit path."""
+    candidate = Path(name_or_path)
+    if not candidate.exists():
+        candidate = PROFILE_DIR / f"{name_or_path}.json"
+    if not candidate.exists():
+        available = sorted(p.stem for p in PROFILE_DIR.glob("*.json"))
+        raise FileNotFoundError(
+            f"profile {name_or_path!r} not found; available: {', '.join(available) or '(none)'}"
+        )
+    profile = json.loads(candidate.read_text())
+    if "thresholds" not in profile or not isinstance(profile["thresholds"], dict):
+        raise ValueError(f"profile {candidate} missing a 'thresholds' object")
+    return profile
+
+
+def evaluate_against_profile(
+    summary: dict[str, Any], profile: dict[str, Any]
+) -> dict[str, Any]:
+    """Check a learning-architecture summary against a profile's min/max thresholds.
+
+    Returns a deterministic verdict dict: per-metric checks (with observed value,
+    bound, and pass flag) plus an overall ``passed`` boolean. A metric that is
+    absent from the summary, or ``None`` (e.g. bypass_correctness_pct when there
+    are no bypass cases), is reported as a failure so a profile can never be
+    silently satisfied by missing data.
+    """
+    checks: list[dict[str, Any]] = []
+    for metric, bounds in sorted(profile.get("thresholds", {}).items()):
+        observed = summary.get(metric)
+        failures: list[str] = []
+        if observed is None:
+            failures.append("missing-or-null")
+        else:
+            if "min" in bounds and observed < bounds["min"]:
+                failures.append(f"{observed} < min {bounds['min']}")
+            if "max" in bounds and observed > bounds["max"]:
+                failures.append(f"{observed} > max {bounds['max']}")
+        checks.append(
+            {
+                "metric": metric,
+                "observed": observed,
+                "min": bounds.get("min"),
+                "max": bounds.get("max"),
+                "passed": not failures,
+                "detail": "; ".join(failures) if failures else "ok",
+            }
+        )
+    failed = [c for c in checks if not c["passed"]]
+    return {
+        "profile": profile.get("profile", "unknown"),
+        "passed": not failed,
+        "n_checks": len(checks),
+        "n_failed": len(failed),
+        "checks": checks,
+        "failed_metrics": [c["metric"] for c in failed],
+    }
+
+
+def render_verdict(verdict: dict[str, Any]) -> str:
+    """Concise human-readable PASS/FAIL verdict for CI logs / PR comments."""
+    status = "PASS" if verdict["passed"] else "FAIL"
+    lines = [
+        f"Router Learning eval [{verdict['profile']}]: {status} "
+        f"({verdict['n_checks'] - verdict['n_failed']}/{verdict['n_checks']} checks passed)"
+    ]
+    for c in verdict["checks"]:
+        mark = "✓" if c["passed"] else "✗"
+        bound = []
+        if c["min"] is not None:
+            bound.append(f"min {c['min']}")
+        if c["max"] is not None:
+            bound.append(f"max {c['max']}")
+        lines.append(
+            f"  {mark} {c['metric']} = {c['observed']} [{', '.join(bound)}]"
+            + ("" if c["passed"] else f"  <-- {c['detail']}")
+        )
+    return "\n".join(lines)
+
+
+def render_learning_architecture_report(
+    summary: dict[str, Any], rows: list[dict[str, Any]]
+) -> str:
+    lines = [
+        "# Router Learning Architecture Eval",
+        "",
+        "## Summary",
+        "",
+        f"- Cases: {summary.get('cases')}",
+        f"- Route correctness: {summary.get('route_correctness_pct')}%",
+        f"- Unnecessary switch rate: {summary.get('unnecessary_switch_rate_pct')}%",
+        f"- Replay explainability coverage: {summary.get('replay_explainability_coverage_pct')}%",
+        f"- Cost savings: {summary.get('cost_savings_pct')}%",
+        f"- Cache token delta: {summary.get('cache_token_delta')}",
+        f"- Overhead p50/p95: {summary.get('p50_overhead_ms')} ms / {summary.get('p95_overhead_ms')} ms",
+        "",
+        "## Cases",
+        "",
+        "| Case | Decision | Base | Final | Expected | Behavior | Adaptations |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        adaptations = ", ".join(
+            f"{a['method']}:{a['mode']}/{a['action']}/{a['reason']}/{a['scope']}"
+            for a in row["adaptations"]
+        )
+        lines.append(
+            f"| {row['case_id']} | {row['decision']} | {row['base_model']} | "
+            f"{row['final_model']} | {row['expected_model']} | "
+            f"{row['expected_behavior']} | {adaptations} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
     if not rows:
         return
@@ -1029,7 +1454,35 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
 def main() -> None:
     args = parse_args()
     out_dir = args.output_dir or default_output_dir()
-    if args.ablation:
+    if args.profile and not args.learning_architecture:
+        print(
+            "error: --profile is only valid with --learning-architecture",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if args.learning_architecture:
+        summary = write_learning_architecture_outputs(out_dir)
+        if args.profile:
+            profile = load_profile(args.profile)
+            verdict = evaluate_against_profile(summary, profile)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "learning_architecture_verdict.json").write_text(
+                json.dumps(verdict, indent=2, sort_keys=True) + "\n"
+            )
+            print(render_verdict(verdict), file=sys.stderr)
+            print(
+                json.dumps(
+                    {
+                        "output_dir": str(out_dir),
+                        "summary": summary,
+                        "verdict": verdict,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            sys.exit(0 if verdict["passed"] else 1)
+    elif args.ablation:
         summary = write_ablation_outputs(
             DEFAULT_SCENARIOS,
             parse_seeds(args.seeds),

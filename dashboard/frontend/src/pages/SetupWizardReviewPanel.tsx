@@ -1,12 +1,16 @@
 import styles from "./SetupWizardPage.module.css";
 import { SetupRouteSummary } from "./SetupWizardPanels";
-import type { SetupValidationState } from "./setupWizardSupport";
+import type {
+  SetupActivationState,
+  SetupValidationState,
+} from "./setupWizardSupport";
 
 interface ReviewActivatePanelProps {
   currentRouteLabel: string;
   listenerPort?: number;
   validationState: SetupValidationState;
   validationError: string | null;
+  activationState: SetupActivationState;
   activationError: string | null;
   validatedCounts: {
     models: number;
@@ -28,6 +32,7 @@ export function ReviewActivatePanel({
   listenerPort,
   validationState,
   validationError,
+  activationState,
   activationError,
   validatedCounts,
   modelsCount,
@@ -44,15 +49,20 @@ export function ReviewActivatePanel({
         <div className={styles.sectionHeaderMain}>
           <h2 className={styles.sectionTitle}>Review and activate</h2>
           <p className={styles.sectionDescription}>
-            The dashboard validates the generated config before activation.
-            Activation writes the resulting YAML to <code>config.yaml</code> and
-            exits setup mode.
+            Validate the Mixture-of-Models configuration, then activate it as
+            the router&apos;s first architecture.
           </p>
           <SetupRouteSummary currentRouteLabel={currentRouteLabel} />
         </div>
         <div className={styles.sectionHeaderAside}>
-          <button className={styles.secondaryButton} onClick={onValidateAgain}>
-            Revalidate
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={onValidateAgain}
+            disabled={validationState === "validating"}
+            aria-busy={validationState === "validating"}
+          >
+            {validationState === "validating" ? "Validating…" : "Revalidate"}
           </button>
         </div>
       </div>
@@ -69,6 +79,8 @@ export function ReviewActivatePanel({
                     ? styles.statusError
                     : styles.statusPending
               }`}
+              role="status"
+              aria-live="polite"
             >
               {validationState === "validating" && "Validating"}
               {validationState === "valid" && "Ready"}
@@ -105,14 +117,14 @@ export function ReviewActivatePanel({
           </div>
 
           {validationError && (
-            <div className={styles.errorPanel}>
+            <div className={styles.errorPanel} role="alert">
               <div className={styles.errorTitle}>Validation failed</div>
               <p className={styles.errorText}>{validationError}</p>
             </div>
           )}
 
           {activationError && (
-            <div className={styles.errorPanel}>
+            <div className={styles.errorPanel} role="alert">
               <div className={styles.errorTitle}>Activation failed</div>
               <p className={styles.errorText}>{activationError}</p>
             </div>
@@ -124,6 +136,12 @@ export function ReviewActivatePanel({
               but activation is disabled.
             </div>
           )}
+
+          {activationState === "activating" && (
+            <div className={styles.asyncNotice} role="status">
+              Activating the validated router configuration…
+            </div>
+          )}
         </div>
 
         <div className={styles.previewCard}>
@@ -133,7 +151,9 @@ export function ReviewActivatePanel({
               Secrets are masked in preview.
             </span>
           </div>
-          <pre className={styles.previewCode}>{previewSource}</pre>
+          <pre className={styles.previewCode} tabIndex={0}>
+            {previewSource}
+          </pre>
         </div>
       </div>
     </div>

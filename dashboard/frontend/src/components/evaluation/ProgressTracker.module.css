@@ -15,11 +15,41 @@
   color: var(--color-text-secondary, #999);
 }
 
+.loadError {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.loadError h3 {
+  margin: 0 0 0.35rem;
+  color: var(--color-danger, #ef4444);
+}
+
+.loadError p {
+  margin: 0;
+  color: var(--color-text-secondary, #999);
+}
+
+.loadError button {
+  margin-top: 1rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: var(--color-danger, #ef4444);
+  cursor: pointer;
+}
+
 .spinner {
   width: 32px;
   height: 32px;
   border: 3px solid var(--color-border, #333);
-  border-top-color: var(--color-primary, #76b900);
+  border-top-color: var(--color-primary, #8f949c);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -73,7 +103,7 @@
 
 .progressPercent {
   font-weight: 600;
-  color: var(--color-primary, #76b900);
+  color: var(--color-primary, #8f949c);
 }
 
 .progressBar {
@@ -85,7 +115,7 @@
 
 .progressFill {
   height: 100%;
-  background: var(--color-primary, #76b900);
+  background: var(--color-primary, #8f949c);
   border-radius: 6px;
   transition: width 0.5s ease;
 }
@@ -93,9 +123,9 @@
 .progressFill.animated {
   background: linear-gradient(
     90deg,
-    var(--color-primary, #76b900) 0%,
-    var(--color-primary-light, #8fd400) 50%,
-    var(--color-primary, #76b900) 100%
+    var(--color-primary, #8f949c) 0%,
+    var(--color-primary-light, #c9cbd0) 50%,
+    var(--color-primary, #8f949c) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;

@@ -57,30 +57,77 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ignoreCase: false,
 
   keywords: [
-    'SIGNAL', 'ROUTE', 'PLUGIN', 'PROJECTION', 'DECISION_TREE', 'TEST',
-    'PRIORITY', 'WHEN', 'MODEL', 'ALGORITHM', 'TIER', 'DESCRIPTION',
-    'IF', 'ELSE',
+    'SIGNAL',
+    'ROUTE',
+    'PLUGIN',
+    'PROJECTION',
+    'DECISION_TREE',
+    'TEST',
+    'PRIORITY',
+    'WHEN',
+    'MODEL',
+    'ALGORITHM',
+    'TIER',
+    'DESCRIPTION',
+    'IF',
+    'ELSE',
   ],
 
   operators: ['AND', 'OR', 'NOT'],
 
-	signalTypes: [
-	  'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-	  'reask',
-	  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-	  'jailbreak', 'pii', 'kb', 'conversation', 'event',
-	],
+  signalTypes: [
+    'keyword',
+    'embedding',
+    'domain',
+    'fact_check',
+    'user_feedback',
+    'reask',
+    'preference',
+    'language',
+    'context',
+    'structure',
+    'complexity',
+    'modality',
+    'authz',
+    'jailbreak',
+    'pii',
+    'kb',
+    'conversation',
+    'event',
+  ],
 
   pluginTypes: [
-    'semantic_cache', 'memory', 'system_prompt',
-    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
-    'fast_response', 'request_params', 'response_jailbreak', 'tool_selection',
+    'semantic_cache',
+    'memory',
+    'system_prompt',
+    'header_mutation',
+    'hallucination',
+    'router_replay',
+    'rag',
+    'image_gen',
+    'tools',
+    'fast_response',
+    'request_params',
+    'response_jailbreak',
+    'tool_selection',
   ],
 
   algoTypes: [
-    'confidence', 'ratings', 'remom', 'static', 'elo', 'router_dc',
-    'automix', 'hybrid', 'rl_driven', 'gmtrouter', 'latency_aware',
-    'knn', 'kmeans', 'svm', 'mlp', 'multi_factor', 'session_aware',
+    'confidence',
+    'ratings',
+    'remom',
+    'fusion',
+    'workflows',
+    'static',
+    'router_dc',
+    'automix',
+    'hybrid',
+    'latency_aware',
+    'knn',
+    'kmeans',
+    'svm',
+    'mlp',
+    'multi_factor',
   ],
 
   booleans: ['true', 'false'],
@@ -111,7 +158,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-		/\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
         'type',
       ],
 
@@ -123,7 +170,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
+        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor)\b/,
         'type.algorithm',
       ],
 
@@ -156,31 +203,50 @@ export function defineTheme(monaco: typeof monacoNs): void {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
-      { token: 'keyword', foreground: 'C586C0', fontStyle: 'bold' },
-      { token: 'keyword.operator', foreground: 'D4D4D4', fontStyle: 'bold' },
-      { token: 'type', foreground: '4EC9B0' },
-      { token: 'type.plugin', foreground: 'DCDCAA' },
-      { token: 'type.algorithm', foreground: '9CDCFE' },
-      { token: 'string', foreground: 'CE9178' },
-      { token: 'string.escape', foreground: 'D7BA7D' },
-      { token: 'number', foreground: 'B5CEA8' },
-      { token: 'number.float', foreground: 'B5CEA8' },
-      { token: 'constant.language', foreground: '569CD6' },
-      { token: 'variable.field', foreground: '9CDCFE' },
-      { token: 'identifier', foreground: 'D4D4D4' },
-      { token: 'delimiter', foreground: 'D4D4D4' },
+      { token: 'comment', foreground: '858991', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'F4F4F5', fontStyle: 'bold' },
+      { token: 'keyword.operator', foreground: 'A1A1AA', fontStyle: 'bold' },
+      { token: 'type', foreground: 'C9CBD0' },
+      { token: 'type.plugin', foreground: 'B7BAC0' },
+      { token: 'type.algorithm', foreground: 'D4D4D8' },
+      { token: 'string', foreground: 'B8BBC2' },
+      { token: 'string.escape', foreground: 'F0444A' },
+      { token: 'number', foreground: '9CA3AF' },
+      { token: 'number.float', foreground: '9CA3AF' },
+      { token: 'constant.language', foreground: 'F0444A' },
+      { token: 'variable.field', foreground: 'D4D4D8' },
+      { token: 'identifier', foreground: 'E4E4E7' },
+      { token: 'delimiter', foreground: '777B82' },
     ],
     colors: {
-      'editor.background': '#1a1a1a',
-      'editor.foreground': '#e8e8e8',
-      'editor.lineHighlightBackground': '#252525',
-      'editor.selectionBackground': '#76b90040',
-      'editorCursor.foreground': '#76b900',
-      'editorLineNumber.foreground': '#666666',
-      'editorLineNumber.activeForeground': '#76b900',
-      'editorIndentGuide.background': '#333333',
-      'editorIndentGuide.activeBackground': '#444444',
+      'editor.background': '#050505',
+      'editor.foreground': '#e4e4e7',
+      'editorGutter.background': '#050505',
+      'editor.lineHighlightBackground': '#111113',
+      'editor.lineHighlightBorder': '#00000000',
+      'editor.selectionBackground': '#5f636a55',
+      'editor.inactiveSelectionBackground': '#5f636a32',
+      'editorCursor.foreground': '#e31b23',
+      'editorLineNumber.foreground': '#52525b',
+      'editorLineNumber.activeForeground': '#d4d4d8',
+      'editorIndentGuide.background1': '#252528',
+      'editorIndentGuide.activeBackground1': '#5f636a',
+      'editorBracketHighlight.foreground1': '#e31b23',
+      'editorBracketHighlight.foreground2': '#d4d4d8',
+      'editorBracketHighlight.foreground3': '#a1a1aa',
+      'editorBracketHighlight.foreground4': '#777b82',
+      'editorBracketHighlight.foreground5': '#e31b23',
+      'editorBracketHighlight.foreground6': '#a1a1aa',
+      'editorBracketHighlight.unexpectedBracket.foreground': '#e31b23',
+      'editorWidget.background': '#111113',
+      'editorWidget.border': '#2b2b2f',
+      'editorSuggestWidget.selectedBackground': '#202024',
+      'editorHoverWidget.background': '#111113',
+      'editorHoverWidget.border': '#2b2b2f',
+      'minimap.background': '#050505',
+      'scrollbarSlider.background': '#5f636a40',
+      'scrollbarSlider.hoverBackground': '#777b8260',
+      'scrollbarSlider.activeBackground': '#a1a1aa70',
     },
   })
 }
@@ -188,18 +254,56 @@ export function defineTheme(monaco: typeof monacoNs): void {
 // ---------- Completion Provider ----------
 
 const KEYWORD_SUGGESTIONS = [
-  { label: 'MODEL block', insertText: 'MODEL ${1:name} {\n\t$0\n}', detail: 'Top-level routing model declaration' },
-  { label: 'SIGNAL', insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}', detail: 'Signal declaration' },
-  { label: 'ROUTE', insertText: 'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}', detail: 'Route declaration' },
-  { label: 'PLUGIN', insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}', detail: 'Plugin template' },
-  { label: 'PROJECTION', insertText: 'PROJECTION ${1|score,mapping,partition|} ${2:name} {\n\t$0\n}', detail: 'Projection declaration (score, mapping, or partition)' },
-  { label: 'DECISION_TREE', insertText: 'DECISION_TREE ${1:name} {\n\tIF ${2:condition} {\n\t\tMODEL "${3:model}"\n\t} ELSE {\n\t\tMODEL "${4:fallback}"\n\t}\n}', detail: 'Decision tree with if/else branching' },
-  { label: 'PRIORITY', insertText: 'PRIORITY ${1:10}', detail: 'Route priority (higher = matched first)' },
+  {
+    label: 'MODEL block',
+    insertText: 'MODEL ${1:name} {\n\t$0\n}',
+    detail: 'Top-level routing model declaration',
+  },
+  {
+    label: 'SIGNAL',
+    insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}',
+    detail: 'Signal declaration',
+  },
+  {
+    label: 'ROUTE',
+    insertText:
+      'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}',
+    detail: 'Route declaration',
+  },
+  {
+    label: 'PLUGIN',
+    insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}',
+    detail: 'Plugin template',
+  },
+  {
+    label: 'PROJECTION',
+    insertText: 'PROJECTION ${1|score,mapping,partition|} ${2:name} {\n\t$0\n}',
+    detail: 'Projection declaration (score, mapping, or partition)',
+  },
+  {
+    label: 'DECISION_TREE',
+    insertText:
+      'DECISION_TREE ${1:name} {\n\tIF ${2:condition} {\n\t\tMODEL "${3:model}"\n\t} ELSE {\n\t\tMODEL "${4:fallback}"\n\t}\n}',
+    detail: 'Decision tree with if/else branching',
+  },
+  {
+    label: 'PRIORITY',
+    insertText: 'PRIORITY ${1:10}',
+    detail: 'Route priority (higher = matched first)',
+  },
   { label: 'TIER', insertText: 'TIER ${1:1}', detail: 'Route tier grouping' },
-  { label: 'DESCRIPTION', insertText: 'DESCRIPTION "${1:description}"', detail: 'Route description' },
+  {
+    label: 'DESCRIPTION',
+    insertText: 'DESCRIPTION "${1:description}"',
+    detail: 'Route description',
+  },
   { label: 'WHEN', insertText: 'WHEN ${1:condition}', detail: 'Route condition' },
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },
-  { label: 'ALGORITHM', insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}', detail: 'Algorithm block' },
+  {
+    label: 'ALGORITHM',
+    insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}',
+    detail: 'Algorithm block',
+  },
   { label: 'AND', insertText: 'AND', detail: 'Boolean AND' },
   { label: 'OR', insertText: 'OR', detail: 'Boolean OR' },
   { label: 'NOT', insertText: 'NOT', detail: 'Boolean NOT' },
@@ -246,27 +350,28 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'confidence', detail: 'Confidence-based routing' },
   { label: 'ratings', detail: 'Ratings-based routing' },
   { label: 'remom', detail: 'ReMoM algorithm' },
+  { label: 'fusion', detail: 'Fusion panel deliberation' },
+  { label: 'workflows', detail: 'Router Flow orchestration' },
   { label: 'static', detail: 'Static model assignment' },
-  { label: 'elo', detail: 'Elo rating algorithm' },
   { label: 'router_dc', detail: 'Router DC algorithm' },
   { label: 'automix', detail: 'AutoMix algorithm' },
   { label: 'hybrid', detail: 'Hybrid routing' },
-  { label: 'rl_driven', detail: 'Reinforcement-learning model selection' },
-  { label: 'gmtrouter', detail: 'Graph-based personalized routing' },
   { label: 'latency_aware', detail: 'Latency-aware routing' },
   { label: 'knn', detail: 'KNN model-selection classifier' },
   { label: 'kmeans', detail: 'KMeans model-selection classifier' },
   { label: 'svm', detail: 'SVM model-selection classifier' },
   { label: 'mlp', detail: 'MLP model-selection classifier' },
   { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
-  { label: 'session_aware', detail: 'Agentic stay-vs-switch policy' },
 ]
 
 /**
  * Determine the completion context by scanning backwards from the cursor.
  * Returns the context keyword if the cursor is in a recognizable position.
  */
-function getCompletionContext(model: monacoNs.editor.ITextModel, position: monacoNs.Position): string {
+function getCompletionContext(
+  model: monacoNs.editor.ITextModel,
+  position: monacoNs.Position,
+): string {
   const lineContent = model.getLineContent(position.lineNumber)
   const textBefore = lineContent.substring(0, position.column - 1).trim()
 
@@ -290,7 +395,8 @@ function getCompletionContext(model: monacoNs.editor.ITextModel, position: monac
   for (let ln = position.lineNumber; ln >= Math.max(1, position.lineNumber - 5); ln--) {
     const line = model.getLineContent(ln).trim()
     if (/^WHEN\b/.test(line)) return 'when-expr'
-    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|TIER|DESCRIPTION|\}|ROUTE|DECISION_TREE)\b/.test(line)) break
+    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|TIER|DESCRIPTION|\}|ROUTE|DECISION_TREE)\b/.test(line))
+      break
   }
 
   return 'default'
@@ -442,21 +548,23 @@ export function diagnosticsToMarkers(
     endColumn: Math.max(1, d.column + 1),
     source: 'signal-dsl',
     // Encode fix info as JSON in relatedInformation tag for CodeAction provider
-    ...(d.fixes?.length ? { tags: [], relatedInformation: d.fixes.map(f => ({
-      resource: { path: '' } as unknown as monacoNs.Uri,
-      message: JSON.stringify({ description: f.description, newText: f.newText }),
-      startLineNumber: Math.max(1, d.line),
-      startColumn: Math.max(1, d.column),
-      endLineNumber: Math.max(1, d.line),
-      endColumn: Math.max(1, d.column + 1),
-    })) } : {}),
+    ...(d.fixes?.length
+      ? {
+          tags: [],
+          relatedInformation: d.fixes.map((f) => ({
+            resource: { path: '' } as unknown as monacoNs.Uri,
+            message: JSON.stringify({ description: f.description, newText: f.newText }),
+            startLineNumber: Math.max(1, d.line),
+            startColumn: Math.max(1, d.column),
+            endLineNumber: Math.max(1, d.line),
+            endColumn: Math.max(1, d.column + 1),
+          })),
+        }
+      : {}),
   }))
 }
 
-function diagLevelToSeverity(
-  monaco: typeof monacoNs,
-  level: string,
-): monacoNs.MarkerSeverity {
+function diagLevelToSeverity(monaco: typeof monacoNs, level: string): monacoNs.MarkerSeverity {
   switch (level) {
     case 'error':
       return monaco.MarkerSeverity.Error
@@ -482,10 +590,11 @@ export function createCodeActionProvider(
 
       for (const marker of context.markers) {
         // Find matching diagnostic with fixes
-        const diag = diagnostics.find(d =>
-          d.line === marker.startLineNumber &&
-          d.column === marker.startColumn &&
-          d.message === marker.message
+        const diag = diagnostics.find(
+          (d) =>
+            d.line === marker.startLineNumber &&
+            d.column === marker.startColumn &&
+            d.message === marker.message,
         )
         if (!diag?.fixes?.length) continue
 
@@ -505,19 +614,21 @@ export function createCodeActionProvider(
             diagnostics: [marker],
             isPreferred: true,
             edit: {
-              edits: [{
-                resource: model.uri,
-                textEdit: {
-                  range: {
-                    startLineNumber: diag.line,
-                    startColumn: startCol,
-                    endLineNumber: diag.line,
-                    endColumn: endCol,
+              edits: [
+                {
+                  resource: model.uri,
+                  textEdit: {
+                    range: {
+                      startLineNumber: diag.line,
+                      startColumn: startCol,
+                      endLineNumber: diag.line,
+                      endColumn: endCol,
+                    },
+                    text: fix.newText,
                   },
-                  text: fix.newText,
+                  versionId: model.getVersionId(),
                 },
-                versionId: model.getVersionId(),
-              }],
+              ],
             },
           })
         }
@@ -549,7 +660,10 @@ export function registerDSLLanguage(
   )
   // Register CodeAction provider for Quick Fix support
   if (getDiagnostics) {
-    monaco.languages.registerCodeActionProvider(DSL_LANGUAGE_ID, createCodeActionProvider(monaco, getDiagnostics))
+    monaco.languages.registerCodeActionProvider(
+      DSL_LANGUAGE_ID,
+      createCodeActionProvider(monaco, getDiagnostics),
+    )
   }
   defineTheme(monaco)
 }

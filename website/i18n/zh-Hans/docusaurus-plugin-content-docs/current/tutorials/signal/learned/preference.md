@@ -2,7 +2,7 @@
 translation:
   source_commit: "485c74ba"
   source_file: "docs/tutorials/signal/learned/preference.md"
-  outdated: false
+  outdated: true
 ---
 
 # Preference 信号
@@ -13,7 +13,7 @@ translation:
 
 该族为学习型：使用 `global.model_catalog.modules.classifier.preference` 下的偏好分类路径。
 
-若省略 `global.model_catalog.modules.classifier.preference.use_contrastive`，vSR 现默认为 `true`。即 `deploy/recipes/balance.yaml` 等配置可依赖偏好信号，除非显式禁用对比模式，否则无需单独全局分类器块。
+若省略 `global.model_catalog.modules.classifier.preference.use_contrastive`，vSR 现默认为 `true`。即 `config/recipes/balance/config.yaml` 等配置可依赖偏好信号，除非显式禁用对比模式，否则无需单独全局分类器块。
 
 ## 主要优势
 

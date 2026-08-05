@@ -27,8 +27,8 @@ description: Synchronizes config representations across router config, Python CL
 
 ## Must Read
 
-- [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
-- [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
+- [tools/agent/docs/change-surfaces.md](../../../../tools/agent/docs/change-surfaces.md)
+- [tools/agent/docs/module-boundaries.md](../../../../tools/agent/docs/module-boundaries.md)
 
 ## Standard Commands
 

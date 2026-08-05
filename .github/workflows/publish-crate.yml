@@ -78,6 +78,9 @@ jobs:
           exit 1
         fi
 
+    - name: Run Rust lib unit tests (CPU-only, no model assets)
+      run: make test-rust-ci
+
     - name: Run API smoke tests (CPU-only, no CUDA)
       working-directory: candle-binding
       run: |

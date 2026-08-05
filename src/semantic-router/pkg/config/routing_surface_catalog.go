@@ -3,6 +3,23 @@ package config
 import "sort"
 
 const (
+	DecisionAlgorithmAutoMix      = "automix"
+	DecisionAlgorithmConfidence   = "confidence"
+	DecisionAlgorithmFusion       = "fusion"
+	DecisionAlgorithmHybrid       = "hybrid"
+	DecisionAlgorithmKMeans       = "kmeans"
+	DecisionAlgorithmKNN          = "knn"
+	DecisionAlgorithmLatencyAware = "latency_aware"
+	DecisionAlgorithmMLP          = "mlp"
+	DecisionAlgorithmMultiFactor  = "multi_factor"
+	DecisionAlgorithmRatings      = "ratings"
+	DecisionAlgorithmReMoM        = "remom"
+	DecisionAlgorithmRouterDC     = "router_dc"
+	DecisionAlgorithmStatic       = "static"
+	DecisionAlgorithmSVM          = "svm"
+	DecisionAlgorithmWorkflows    = "workflows"
+	DecisionAlgorithmPrompt       = "prompt"
+
 	DecisionPluginSemanticCache     = "semantic-cache"
 	DecisionPluginSystemPrompt      = "system_prompt"
 	DecisionPluginHeaderMutation    = "header_mutation"
@@ -36,6 +53,8 @@ var supportedSignalTypes = []string{
 	SignalTypeKB,
 	SignalTypeUserFeedback,
 	SignalTypeEvent,
+	SignalTypeMetadata,
+	SignalTypeClassifier,
 }
 
 var supportedDecisionPluginTypes = []string{
@@ -61,23 +80,22 @@ type AlgorithmCatalogEntry struct {
 }
 
 var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
-	{Type: "automix", Tier: "experimental"},
-	{Type: "confidence", Tier: "supported"},
-	{Type: "elo", Tier: "supported"},
-	{Type: "gmtrouter", Tier: "experimental"},
-	{Type: "hybrid", Tier: "supported"},
-	{Type: "kmeans", Tier: "experimental"},
-	{Type: "knn", Tier: "experimental"},
-	{Type: "latency_aware", Tier: "supported"},
-	{Type: "mlp", Tier: "experimental"},
-	{Type: "multi_factor", Tier: "supported"},
-	{Type: "ratings", Tier: "supported"},
-	{Type: "remom", Tier: "supported"},
-	{Type: "rl_driven", Tier: "experimental"},
-	{Type: "router_dc", Tier: "supported"},
-	{Type: "session_aware", Tier: "supported"},
-	{Type: "static", Tier: "supported"},
-	{Type: "svm", Tier: "experimental"},
+	{Type: DecisionAlgorithmAutoMix, Tier: "experimental"},
+	{Type: DecisionAlgorithmConfidence, Tier: "supported"},
+	{Type: DecisionAlgorithmFusion, Tier: "experimental"},
+	{Type: DecisionAlgorithmHybrid, Tier: "supported"},
+	{Type: DecisionAlgorithmKMeans, Tier: "experimental"},
+	{Type: DecisionAlgorithmKNN, Tier: "experimental"},
+	{Type: DecisionAlgorithmLatencyAware, Tier: "supported"},
+	{Type: DecisionAlgorithmMLP, Tier: "experimental"},
+	{Type: DecisionAlgorithmMultiFactor, Tier: "supported"},
+	{Type: DecisionAlgorithmRatings, Tier: "supported"},
+	{Type: DecisionAlgorithmReMoM, Tier: "supported"},
+	{Type: DecisionAlgorithmRouterDC, Tier: "supported"},
+	{Type: DecisionAlgorithmStatic, Tier: "supported"},
+	{Type: DecisionAlgorithmSVM, Tier: "experimental"},
+	{Type: DecisionAlgorithmWorkflows, Tier: "experimental"},
+	{Type: DecisionAlgorithmPrompt, Tier: "experimental"},
 }
 
 // supportedDecisionAlgorithmTypes is derived from the catalog for backwards compatibility

@@ -4,17 +4,49 @@ package benchmarks
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
-// BenchmarkCacheSearch_1000Entries benchmarks cache search with 1000 entries
-func BenchmarkCacheSearch_1000Entries(b *testing.B) {
-	// Initialize embedding models once
+const embeddingModelPathEnv = "QWEN3_MODEL_PATH"
+
+var embeddingModelPathOnce sync.Once
+
+// initCacheEmbeddingModels initializes the cache embedding models for benchmarks.
+// The fallback paths inside cache.InitEmbeddingModels are relative to the process
+// working directory, which for `go test` is this package directory
+// (perf/benchmarks), so none of them reach the repo-root models/ directory.
+// Point QWEN3_MODEL_PATH at the repo root explicitly (same repo-root resolution
+// as initIntentClassifier in classification_accuracy_bench_test.go) unless the
+// caller already set it.
+func initCacheEmbeddingModels(b *testing.B) {
+	b.Helper()
+	embeddingModelPathOnce.Do(func() {
+		if os.Getenv(embeddingModelPathEnv) != "" {
+			return
+		}
+		wd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		modelDir := filepath.Join(wd, "..", "..", "models", "mom-embedding-pro")
+		if _, err := os.Stat(modelDir); err == nil {
+			os.Setenv(embeddingModelPathEnv, modelDir)
+		}
+	})
 	if err := cache.InitEmbeddingModels(); err != nil {
 		b.Fatalf("Failed to initialize embedding models: %v", err)
 	}
+}
+
+// BenchmarkCacheSearch_1000Entries benchmarks cache search with 1000 entries
+func BenchmarkCacheSearch_1000Entries(b *testing.B) {
+	// Initialize embedding models once
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         1000,
@@ -42,9 +74,7 @@ func BenchmarkCacheSearch_1000Entries(b *testing.B) {
 
 // BenchmarkCacheSearch_10000Entries benchmarks cache search with 10,000 entries
 func BenchmarkCacheSearch_10000Entries(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         10000,
@@ -72,9 +102,7 @@ func BenchmarkCacheSearch_10000Entries(b *testing.B) {
 
 // BenchmarkCacheSearch_HNSW benchmarks HNSW index search
 func BenchmarkCacheSearch_HNSW(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -100,9 +128,7 @@ func BenchmarkCacheSearch_HNSW(b *testing.B) {
 
 // BenchmarkCacheSearch_Linear benchmarks linear search (no HNSW)
 func BenchmarkCacheSearch_Linear(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         1000, // Smaller for linear search
@@ -128,9 +154,7 @@ func BenchmarkCacheSearch_Linear(b *testing.B) {
 
 // BenchmarkCacheConcurrency_1 benchmarks cache with concurrency level 1
 func BenchmarkCacheConcurrency_1(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -155,9 +179,7 @@ func BenchmarkCacheConcurrency_1(b *testing.B) {
 
 // BenchmarkCacheConcurrency_10 benchmarks cache with concurrency level 10
 func BenchmarkCacheConcurrency_10(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -182,9 +204,7 @@ func BenchmarkCacheConcurrency_10(b *testing.B) {
 
 // BenchmarkCacheConcurrency_50 benchmarks cache with concurrency level 50
 func BenchmarkCacheConcurrency_50(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	config := cache.BenchmarkConfig{
 		CacheSize:         5000,
@@ -210,9 +230,7 @@ func BenchmarkCacheConcurrency_50(b *testing.B) {
 
 // BenchmarkCacheHitRate benchmarks cache hit rate effectiveness
 func BenchmarkCacheHitRate(b *testing.B) {
-	if err := cache.InitEmbeddingModels(); err != nil {
-		b.Fatalf("Failed to initialize embedding models: %v", err)
-	}
+	initCacheEmbeddingModels(b)
 
 	// High hit ratio scenario
 	config := cache.BenchmarkConfig{

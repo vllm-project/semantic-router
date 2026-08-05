@@ -5,6 +5,32 @@
 
 A comprehensive benchmark suite for evaluating **semantic router** performance against **direct vLLM** across multiple reasoning datasets. Perfect for researchers and developers working on LLM routing, evaluation, and performance optimization.
 
+## 🧭 Which benchmark do I want?
+
+This directory holds the **end-to-end** suites: they drive a running router, and
+usually an LLM backend, over real datasets to measure routing quality, safety,
+and session behavior.
+
+If instead you want to know whether a code change made the router slower or
+allocate more, you want the **component micro-benchmarks** in
+[`perf/`](../perf/README.md). Those are Go benchmarks over individual components,
+need no running router, and gate every PR.
+
+| Your question | Where to look |
+|---------------|---------------|
+| Did my change regress latency or allocations? | [`perf/`](../perf/README.md) |
+| Does routing preserve answer accuracy? | Reasoning datasets, below |
+| Does session-aware routing hold up under load or faults? | `agentic_routing_live_benchmark.py`, below |
+| How good is hallucination detection? | [`hallucination/`](hallucination/README.md) |
+| Does grounding-aware fusion help? | [`grounded_fusion/`](grounded_fusion/README.md) |
+| What are our publishable benchmark numbers? | [`router_flow/real_eval/`](router_flow/real_eval/README.md) |
+| How much faster is GPU or Flash Attention? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
+| Did Router Learning routing quality regress? | [`profiles/router_learning/`](profiles/router_learning/README.md) |
+
+For a full map of every suite, including the store and inference-backend
+comparisons that live only as Make targets, see the
+[Benchmarking guide](https://vllm-sr.ai/docs/benchmarking/overview) in the docs.
+
 ## 🎯 Key Features
 
 - **6 Major Reasoning Datasets**: MMLU-Pro, ARC, GPQA, TruthfulQA, CommonsenseQA, HellaSwag
@@ -316,6 +342,35 @@ evaluation. The
 readiness report blocks GA when the initial-implementation baseline is absent,
 because the release claim must compare the final policy against both the
 non-session-aware path and the first merged agentic-routing implementation.
+
+### Router Learning Architecture Eval
+
+Use the architecture eval when a Router Learning change needs deterministic
+evidence before live AMD validation. It is intentionally fixture-based and
+standard-library-only, so it can run on dev machines and validation hosts
+without benchmark dependencies:
+
+```bash
+python3 bench/agentic_routing_experiment.py \
+  --learning-architecture \
+  --output-dir .agent-harness/experiments/agentic-routing/router-learning-architecture-local
+```
+
+The command writes:
+
+- `learning_architecture_cases.csv`
+- `learning_architecture_summary.json`
+- `learning_architecture_report.md`
+
+The summary reports route correctness, base-versus-final model switches,
+adaptation method/mode/action/reason/scope coverage, cache-token delta,
+estimated cost delta, unnecessary switch rate, privacy/policy bypass
+correctness, replay explainability coverage, and p50/p95 learning overhead.
+It covers session-aware `conversation` and `session` protection, policy
+`bypass`, `observe` behavior, bandit cost switching, Elo rating switching, and
+personalization preference switching. Treat this as an architecture sanity gate;
+it does not replace the live router, replay, dashboard, and AMD deployment
+validation runs.
 
 Generate publication figures from the maintained CSV outputs with the plotting
 companion script. The experiment generator remains standard-library-only for
@@ -720,7 +775,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🔗 Links
 
-- **Documentation**: https://vllm-semantic-router.com
+- **Documentation**: https://vllm-sr.ai
 - **GitHub**: https://github.com/vllm-project/semantic-router
 - **Issues**: https://github.com/vllm-project/semantic-router/issues
 - **PyPI**: https://pypi.org/project/vllm-semantic-router-bench/

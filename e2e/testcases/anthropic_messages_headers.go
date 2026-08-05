@@ -13,7 +13,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("anthropic-messages-protocol-headers", pkgtestcases.TestCase{
-		Description: "Verify x-vsr-inbound-protocol/x-vsr-outbound-protocol markers and absence of lossiness warnings for clean /v1/messages requests",
+		Description: "Verify x-vsr-client-protocol/x-vsr-upstream-protocol markers and absence of lossiness warnings for clean /v1/messages requests",
 		Tags:        []string{"anthropic", "headers", "observability"},
 		Fn:          testAnthropicMessagesProtocolHeaders,
 	})
@@ -64,9 +64,9 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	// router module (src/semantic-router/go.mod) and does not import
 	// pkg/headers. If a header name changes upstream, this test must
 	// be updated explicitly.
-	inbound := resp.Header.Get("x-vsr-inbound-protocol")
-	outbound := resp.Header.Get("x-vsr-outbound-protocol")
-	lossiness := resp.Header.Get("x-vsr-lossiness-warnings")
+	inbound := resp.Header.Get("x-vsr-client-protocol")
+	outbound := resp.Header.Get("x-vsr-upstream-protocol")
+	lossiness := resp.Header.Get("x-vsr-protocol-warnings")
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
@@ -78,7 +78,7 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	}
 
 	if inbound != "anthropic" {
-		return fmt.Errorf("expected x-vsr-inbound-protocol=anthropic, got %q", inbound)
+		return fmt.Errorf("expected x-vsr-client-protocol=anthropic, got %q", inbound)
 	}
 	// Outbound protocol depends on the backend the router selected. In
 	// the kubernetes e2e profile the backend is OpenAI-shaped, so
@@ -86,10 +86,10 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	// at an Anthropic-native endpoint this assertion would tighten
 	// there.
 	if outbound != "openai" {
-		return fmt.Errorf("expected x-vsr-outbound-protocol=openai for kubernetes profile, got %q", outbound)
+		return fmt.Errorf("expected x-vsr-upstream-protocol=openai for kubernetes profile, got %q", outbound)
 	}
 	if lossiness != "" {
-		return fmt.Errorf("expected no x-vsr-lossiness-warnings for clean request, got %q", lossiness)
+		return fmt.Errorf("expected no x-vsr-protocol-warnings for clean request, got %q", lossiness)
 	}
 
 	return nil

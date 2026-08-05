@@ -1,7 +1,10 @@
 package routerreplay
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +24,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	promptTokens := 120
 	cachedPromptTokens := 40
+	cacheWriteTokens := 20
 	completionTokens := 45
 	totalTokens := 165
 	actualCost := 0.0012
@@ -31,6 +35,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	usage := UsageCost{
 		PromptTokens:       &promptTokens,
 		CachedPromptTokens: &cachedPromptTokens,
+		CacheWriteTokens:   &cacheWriteTokens,
 		CompletionTokens:   &completionTokens,
 		TotalTokens:        &totalTokens,
 		ActualCost:         &actualCost,
@@ -46,6 +51,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	promptTokens = 999
 	cachedPromptTokens = 999
+	cacheWriteTokens = 999
 	completionTokens = 999
 	totalTokens = 1998
 	actualCost = 9.9
@@ -61,6 +67,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 	assertIntPtr(t, record.PromptTokens, 120, "prompt tokens")
 	assertIntPtr(t, record.CachedPromptTokens, 40, "cached prompt tokens")
+	assertIntPtr(t, record.CacheWriteTokens, 20, "cache write tokens")
 	assertIntPtr(t, record.CompletionTokens, 45, "completion tokens")
 	assertIntPtr(t, record.TotalTokens, 165, "total tokens")
 	assertFloatPtr(t, record.ActualCost, 0.0012, "actual cost")
@@ -114,6 +121,56 @@ func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 	}
 	if got := record.ToolTrace.Steps[0].Text; got != "Find the weather." {
 		t.Fatalf("unexpected cloned step text: %q", got)
+	}
+}
+
+func TestRecorderUpdateHallucinationStatusClonesStoredValues(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recordID, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-hallucination-1",
+		Decision:  "decision-a",
+		RequestID: "req-1",
+	})
+	if err != nil {
+		t.Fatalf("failed to add record: %v", err)
+	}
+
+	spans := []string{"span-a"}
+	spanDetails := []HallucinationSpan{
+		{
+			Text:                    "span-a",
+			Start:                   0,
+			End:                     6,
+			HallucinationConfidence: 0.9,
+			NLILabel:                "CONTRADICTION",
+			NLIConfidence:           0.8,
+			Severity:                4,
+			Explanation:             "contradicts context",
+		},
+	}
+
+	if err := recorder.UpdateHallucinationStatus(recordID, true, 0.87, spans, spanDetails); err != nil {
+		t.Fatalf("failed to update hallucination status: %v", err)
+	}
+
+	spans[0] = "mutated"
+	spanDetails[0].Text = "mutated"
+	spanDetails[0].Severity = 0
+
+	record, found := recorder.GetRecord(recordID)
+	if !found {
+		t.Fatal("expected to retrieve updated replay record")
+	}
+
+	if !record.HallucinationDetected {
+		t.Fatal("expected hallucination detected to be true")
+	}
+	if len(record.HallucinationSpanDetails) != 1 {
+		t.Fatalf("expected 1 stored span detail, got %d", len(record.HallucinationSpanDetails))
+	}
+	got := record.HallucinationSpanDetails[0]
+	if got.Text != "span-a" || got.Severity != 4 || got.NLILabel != "CONTRADICTION" {
+		t.Fatalf("unexpected cloned span detail: %#v", got)
 	}
 }
 
@@ -632,4 +689,29 @@ func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	if rec.PromptTruncated {
 		t.Error("expected PromptTruncated=false")
 	}
+}
+
+func TestRecorderPolicyConcurrentAccess(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(1000, 0))
+	var waitGroup sync.WaitGroup
+	for worker := range 8 {
+		waitGroup.Add(1)
+		go func(worker int) {
+			defer waitGroup.Done()
+			for iteration := range 100 {
+				recorder.SetCapturePolicy(true, true, 128+iteration)
+				recorder.SetMaxToolTraceBytes(iteration)
+				recorder.SetMaxToolTraceSteps(iteration)
+				id := fmt.Sprintf("%d-%d", worker, iteration)
+				_, _ = recorder.AddRecord(RoutingRecord{
+					ID:           id,
+					RequestBody:  strings.Repeat("q", 256),
+					ResponseBody: strings.Repeat("a", 256),
+				})
+				_ = recorder.AttachRequest(id, []byte("request"))
+				_ = recorder.AttachResponse(id, []byte("response"))
+			}
+		}(worker)
+	}
+	waitGroup.Wait()
 }

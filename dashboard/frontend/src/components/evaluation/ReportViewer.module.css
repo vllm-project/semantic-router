@@ -28,7 +28,7 @@
 }
 
 .backButton:hover {
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
 }
 
@@ -60,8 +60,22 @@
 
 .exportButton:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
   color: var(--color-text, #e8e8e8);
+}
+
+.exportButton:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.exportError {
+  padding: 0.7rem 1rem;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-md, 0.375rem);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-danger, #ef4444);
+  font-size: 0.8125rem;
 }
 
 .summary {
@@ -96,11 +110,70 @@
   gap: var(--spacing-md, 1rem);
 }
 
+.resultToolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, auto)) auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.searchInput,
+.filterSelect {
+  min-height: 36px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-md, 0.375rem);
+  background: var(--color-bg-secondary, #242424);
+  color: var(--color-text, #e8e8e8);
+}
+
+.searchInput:focus,
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--color-primary, #8f949c);
+}
+
+.resultCount,
+.clientPagingNote {
+  color: var(--color-text-secondary, #999);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.resultCount {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.emptyResults {
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+  text-align: center;
+  color: var(--color-text-secondary, #999);
+}
+
+.emptyResults h3 {
+  margin: 0 0 0.35rem;
+  color: var(--color-text, #e8e8e8);
+}
+
+.emptyResults p {
+  margin: 0;
+}
+
 .resultCard {
   background: var(--color-bg-secondary, #242424);
   border: 1px solid var(--color-border, #333);
   border-radius: var(--radius-lg, 0.5rem);
   overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
 }
 
 .resultHeader {
@@ -238,8 +311,8 @@
   align-items: center;
   margin-top: var(--spacing-md, 1rem);
   padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
-  background: rgba(118, 185, 0, 0.1);
-  border: 1px solid rgba(118, 185, 0, 0.3);
+  background: rgba(143, 148, 156, 0.1);
+  border: 1px solid rgba(143, 148, 156, 0.3);
   border-radius: var(--radius-md, 0.375rem);
 }
 
@@ -250,7 +323,7 @@
 
 .efficiencyValue {
   font-weight: 600;
-  color: var(--color-primary, #76b900);
+  color: var(--color-primary, #8f949c);
 }
 
 .metadata {
@@ -287,8 +360,8 @@
 .dimensionInfoBox {
   margin-top: var(--spacing-md, 1rem);
   padding: var(--spacing-lg, 1.5rem);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(118, 185, 0, 0.02) 100%);
-  border: 1px solid rgba(118, 185, 0, 0.2);
+  background: linear-gradient(135deg, rgba(143, 148, 156, 0.05) 0%, rgba(143, 148, 156, 0.02) 100%);
+  border: 1px solid rgba(143, 148, 156, 0.2);
   border-radius: var(--radius-md, 0.375rem);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -346,7 +419,7 @@
 
 .toggleDetailsButton:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .testCaseList {
@@ -480,7 +553,7 @@
 
 .paginationButton:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary, #76b900);
+  border-color: var(--color-primary, #8f949c);
 }
 
 .paginationButton:disabled {
@@ -548,6 +621,15 @@
   .paginationButtons {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .resultToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .resultCount,
+  .clientPagingNote {
+    white-space: normal;
   }
 }
 

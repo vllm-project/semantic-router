@@ -22,8 +22,19 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if ctx.RequestID == "" || responseBody == nil {
 		return
 	}
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
+		return
+	}
+
+	// Status gate: never cache a non-2xx upstream body. Caching an error
+	// (4xx/5xx/3xx) would let a later cache hit replay it as an HTTP 200,
+	// freezing a transient upstream failure for the whole TTL.
+	if skip, reason := shouldSkipCacheWriteForStatus(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logging.Infof("Skipping cache write for request ID %s: upstream status %d is not 2xx (reason=%s)", ctx.RequestID, ctx.UpstreamStatusCode, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
 		return
 	}
 
@@ -50,7 +61,7 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	}
 	// Retention ttl_turns (when set) overrides the decision/global default,
 	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
@@ -72,8 +83,19 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		return nil
 	}
 
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
+		return nil
+	}
+
+	// Status gate: never cache a non-2xx upstream body (see updateResponseCache).
+	// Streaming errors are usually filtered by the preconditions above, but an
+	// error that still carries content must not be frozen into the cache either.
+	if skip, reason := shouldSkipCacheWriteForStatus(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logging.Infof("Skipping streaming cache write for request ID %s: upstream status %d is not 2xx (reason=%s)", ctx.RequestID, ctx.UpstreamStatusCode, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
 		return nil
 	}
 
@@ -162,6 +184,11 @@ func buildReconstructedStreamingResponse(
 	} else {
 		message["content"] = nil
 	}
+	// Preserve reasoning so a cache hit returns the same reasoning_content the
+	// live stream delivered (reasoning models stream it under delta.reasoning_content).
+	if ctx.StreamingReasoning != "" {
+		message["reasoning_content"] = ctx.StreamingReasoning
+	}
 
 	toolCalls := buildStreamingResponseToolCalls(ctx)
 	if includeToolCalls && len(toolCalls) > 0 {
@@ -236,14 +263,13 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	ctx *RequestContext,
 	reconstructedJSON []byte,
 ) error {
-	decisionName := ctx.VSRSelectedDecisionName
-	if !r.semanticCacheEnabledForScope(decisionName) {
+	if !r.semanticCacheEnabledForRequest(ctx) {
 		return nil
 	}
 
 	ttlSeconds := -1
 	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
+		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	}
 	// Retention ttl_turns (when set) overrides the decision/global default for
 	// the reconstructed streaming entry, mirroring the non-streaming path.

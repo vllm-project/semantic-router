@@ -12,6 +12,8 @@ var validConversationSourceTypes = map[string]bool{
 	"tool_definition":      true,
 	"assistant_tool_call":  true,
 	"assistant_tool_cycle": true,
+	"active_tool_loop":     true,
+	"image_content":        true,
 }
 
 var validConversationSourceRoles = map[string]bool{
@@ -45,7 +47,7 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 		return fmt.Errorf("unsupported feature.type %q; valid types: count, exists", rule.Feature.Type)
 	}
 	if !validConversationSourceTypes[rule.Feature.Source.Type] {
-		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, assistant_tool_call, assistant_tool_cycle", rule.Feature.Source.Type)
+		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, assistant_tool_call, assistant_tool_cycle, active_tool_loop, image_content", rule.Feature.Source.Type)
 	}
 	if rule.Feature.Source.Role != "" {
 		if rule.Feature.Source.Type != "message" {
@@ -65,14 +67,11 @@ func validateConversationPredicate(rule ConversationRule) error {
 	if rule.Predicate == nil {
 		return nil
 	}
+	if err := validateNumericPredicateContract(rule.Predicate); err != nil {
+		return err
+	}
 	if rule.Feature.Type == "exists" {
 		return fmt.Errorf("feature.type \"exists\" does not accept a predicate")
-	}
-	if rule.Predicate.GT != nil && rule.Predicate.GTE != nil {
-		return fmt.Errorf("predicate cannot set both gt and gte")
-	}
-	if rule.Predicate.LT != nil && rule.Predicate.LTE != nil {
-		return fmt.Errorf("predicate cannot set both lt and lte")
 	}
 	return nil
 }

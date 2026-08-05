@@ -1,11 +1,27 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
+import json
+import math
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from .algorithms import AlgorithmConfig, ModelRef
+
+RoutingStrategy = Literal["priority", "confidence"]
+LOCAL_CLASSIFIER_LABEL_COUNT = 2
+PROMPT_MIN_CANDIDATES = 2
+MAX_DECISION_ANNOTATIONS = 32
+MAX_DECISION_ANNOTATION_BYTES = 4096
 
 
 class Listener(BaseModel):
@@ -201,6 +217,25 @@ class NumericPredicate(BaseModel):
     lt: Optional[float] = None
     lte: Optional[float] = None
 
+    @model_validator(mode="after")
+    def validate_contract(self):
+        for value in (self.gt, self.gte, self.lt, self.lte):
+            if value is not None and not math.isfinite(value):
+                raise ValueError("numeric predicate values must be finite")
+        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
+            raise ValueError("numeric predicate requires at least one comparator")
+        if self.gt is not None and self.gte is not None:
+            raise ValueError("numeric predicate cannot set both gt and gte")
+        if self.lt is not None and self.lte is not None:
+            raise ValueError("numeric predicate cannot set both lt and lte")
+        lower = self.gt if self.gt is not None else self.gte
+        upper = self.lt if self.lt is not None else self.lte
+        if lower is not None and upper is not None:
+            strict = self.gt is not None or self.lt is not None
+            if lower > upper or (lower == upper and strict):
+                raise ValueError("numeric predicate defines an empty range")
+        return self
+
 
 class StructureRule(BaseModel):
     """Request-shape routing signal configuration."""
@@ -278,6 +313,7 @@ class EmbeddingClassifierConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    backend: Optional[str] = None
     model_type: Optional[str] = None
     preload_embeddings: Optional[bool] = None
     target_dimension: Optional[int] = None
@@ -286,6 +322,17 @@ class EmbeddingClassifierConfig(BaseModel):
     top_k: Optional[int] = None
     min_score_threshold: Optional[float] = None
     prototype_scoring: Optional[PrototypeScoringConfig] = None
+
+
+class EmbeddingEndpointConfig(BaseModel):
+    """External embedding provider endpoint configuration."""
+
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key_env: Optional[str] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    max_retries: Optional[int] = Field(default=None, ge=0)
+    dimensions: Optional[int] = Field(default=None, ge=1)
 
 
 class ComplexityRule(BaseModel):
@@ -390,6 +437,89 @@ class Reask(BaseModel):
     lookback_turns: Optional[int] = None
 
 
+class MetadataPredicate(BaseModel):
+    """Comparator for untrusted request metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    equals: Optional[str] = None
+    in_: Optional[List[str]] = Field(default=None, alias="in")
+    exists: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_comparator(self):
+        configured = sum(
+            (
+                self.equals is not None,
+                bool(self.in_),
+                self.exists is not None,
+            )
+        )
+        if configured != 1:
+            raise ValueError("exactly one of equals, in, or exists is required")
+        return self
+
+
+class MetadataRule(BaseModel):
+    """Matches caller-provided request metadata without granting authorization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    key: str
+    predicate: MetadataPredicate
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("metadata signal name must be nonempty and trimmed")
+        if not self.key.strip() or self.key != self.key.strip():
+            raise ValueError("metadata key must be nonempty and trimmed")
+        return self
+
+
+class ClassifierSignal(BaseModel):
+    """Generic label-score classifier signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    type: Literal["local", "llm"]
+    model: Optional[str] = None
+    model_path: Optional[str] = None
+    labels: List[str]
+    instructions: Optional[str] = None
+    use_cpu: bool = False
+
+    @model_validator(mode="after")
+    def validate_classifier(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("classifier signal name must be nonempty and trimmed")
+        if ":" in self.name:
+            raise ValueError("classifier signal name cannot contain ':'")
+        if not self.labels or any(not label.strip() for label in self.labels):
+            raise ValueError("labels cannot be empty")
+        if any(label != label.strip() or ":" in label for label in self.labels):
+            raise ValueError("labels must be trimmed and cannot contain ':'")
+        if len(set(self.labels)) != len(self.labels):
+            raise ValueError("labels cannot contain duplicates")
+        if self.type == "local" and not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if self.type == "local" and len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.type == "local" and (self.model or self.instructions):
+            raise ValueError("local classifiers do not accept model or instructions")
+        if self.type == "llm" and not self.model:
+            raise ValueError("llm classifiers require model")
+        if self.type == "llm" and not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.type == "llm" and (self.model_path or self.use_cpu):
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+        return self
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -411,6 +541,25 @@ class Signals(BaseModel):
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
     events: Optional[List[EventRule]] = []
+    metadata: Optional[List[MetadataRule]] = []
+    classifiers: Optional[List[ClassifierSignal]] = []
+
+    @model_validator(mode="after")
+    def validate_rule_names(self):
+        for family in type(self).model_fields:
+            seen: set[str] = set()
+            for signal in getattr(self, family) or []:
+                name = (
+                    signal.name.lower()
+                    if family in {"metadata", "classifiers"}
+                    else signal.name
+                )
+                if name in seen:
+                    raise ValueError(
+                        f"{family} signal names must be unique within a recipe"
+                    )
+                seen.add(name)
+        return self
 
 
 class Condition(BaseModel):
@@ -418,12 +567,23 @@ class Condition(BaseModel):
 
     type: Optional[str] = None
     name: Optional[str] = None
+    label: Optional[str] = None
+    predicate: Optional[NumericPredicate] = None
+    on_error: Optional[Literal["no_match", "match"]] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
     @model_validator(mode="after")
     def validate_node_shape(self):
-        has_leaf_fields = self.type is not None or self.name is not None
+        has_leaf_fields = any(
+            (
+                self.type is not None,
+                self.name is not None,
+                self.label is not None,
+                self.predicate is not None,
+                self.on_error is not None,
+            )
+        )
         has_operator = self.operator is not None
 
         if has_leaf_fields and has_operator:
@@ -448,6 +608,12 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
+        if self.label is not None and self.type != "classifier":
+            raise ValueError("label is only valid for classifier conditions")
+        if self.type == "classifier" and (self.label is None or self.predicate is None):
+            raise ValueError("classifier conditions require label and predicate")
+        if self.on_error is not None and self.type != "classifier":
+            raise ValueError("on_error is only valid for classifier conditions")
         return self
 
 
@@ -463,7 +629,7 @@ class Rules(BaseModel):
     """
 
     operator: str = "AND"
-    conditions: List[Condition] = []
+    conditions: List[Condition] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -473,7 +639,12 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {"type": data["type"], "name": data.get("name", "")}
+            leaf = {
+                key: data[key]
+                for key in ("type", "name", "label", "predicate", "on_error")
+                if key in data
+            }
+            leaf.setdefault("name", "")
             return {"operator": "AND", "conditions": [leaf]}
         return data
 
@@ -820,6 +991,200 @@ class ImageGenPluginConfig(BaseModel):
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
+class DecisionLearningAdaptationConfig(BaseModel):
+    """Decision-local control for Router Learning adaptation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class DecisionLearningProtectionConfig(BaseModel):
+    """Decision-local control for Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+
+
+class DecisionAdaptationsConfig(BaseModel):
+    """Decision-local Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    adaptation: Optional[DecisionLearningAdaptationConfig] = None
+    protection: Optional[DecisionLearningProtectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_mode_boundaries(self):
+        component_modes = [
+            ("adaptation", self.adaptation.mode if self.adaptation else None),
+            ("protection", self.protection.mode if self.protection else None),
+        ]
+        for component, component_mode in component_modes:
+            if component_mode is None:
+                continue
+            if self.mode == "bypass" and component_mode != "bypass":
+                raise ValueError(
+                    f"{component}.mode cannot be {component_mode!r} when mode is 'bypass'"
+                )
+            if self.mode == "observe" and component_mode == "apply":
+                raise ValueError(
+                    f"{component}.mode cannot be 'apply' when mode is 'observe'"
+                )
+        return self
+
+
+class RouterLearningAdaptationConfig(BaseModel):
+    """Global Router Learning adaptation controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    strategy: Optional[Literal["routing_sampling"]] = None
+    candidate_set: Optional[Literal["decision", "tier", "global"]] = None
+
+
+class RouterLearningIdentityHeadersConfig(BaseModel):
+    """Header names used by Router Learning protection identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session: Optional[StrictStr] = None
+    conversation: Optional[StrictStr] = None
+
+
+class RouterLearningIdentityConfig(BaseModel):
+    """Identity configuration used by Router Learning protection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    headers: Optional[RouterLearningIdentityHeadersConfig] = None
+
+
+class RouterLearningProtectionTuningConfig(BaseModel):
+    """Global Router Learning protection tuning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    idle_timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    min_turns_before_switch: Optional[int] = Field(default=None, ge=0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+    stability_weight: Optional[float] = Field(default=None, ge=0.0)
+
+
+class RouterLearningProtectionConfig(BaseModel):
+    """Global Router Learning protection controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    scope: Optional[Literal["conversation", "session"]] = None
+    identity: Optional[RouterLearningIdentityConfig] = None
+    tuning: Optional[RouterLearningProtectionTuningConfig] = None
+
+
+class RouterLearningConfig(BaseModel):
+    """Global Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    adaptation: Optional[RouterLearningAdaptationConfig] = None
+    protection: Optional[RouterLearningProtectionConfig] = None
+
+
+class OutputContractChoiceSetSpec(BaseModel):
+    """Allowed values for choice-style output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    values: List[str]
+
+
+class OutputContractJSONSchemaSpec(BaseModel):
+    """Structured JSON schema selector for router-enforced output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_ref: Literal["terminal_action_v1"]
+
+
+class OutputContractReferenceSpec(BaseModel):
+    """Reference selection source metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Optional[Literal["candidate_responses"]] = None
+    id_format: Optional[Literal["index", "reference_number"]] = None
+
+
+class OutputContractRenderSpec(BaseModel):
+    """How the router renders a normalized output value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["value", "template"]] = None
+    template: Optional[str] = None
+
+
+class OutputContractExtractSpec(BaseModel):
+    """Preferred response fields for extraction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["exact", "json_object"]] = None
+    sources: Optional[
+        List[Literal["content", "reasoning_content", "candidate_responses"]]
+    ] = None
+
+
+class OutputContractNormalizeSpec(BaseModel):
+    """Normalization policy for structured output contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field_order: Optional[List[str]] = None
+    defaults: Optional[Dict[str, str]] = None
+
+
+class OutputContractViolationPolicy(BaseModel):
+    """Repair and fallback policy when output contract enforcement fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repair: Optional[StrictBool] = None
+    fallback: Optional[str] = None
+
+
+class OutputContractPostprocess(BaseModel):
+    """Post-processing operation for output contract enforcement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["dereference_selected_reference"]
+
+
+class OutputContractSpec(BaseModel):
+    """Router-executable typed output contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Optional[Literal["choice", "structured_json", "reference_selection"]] = None
+    choice_set: Optional[OutputContractChoiceSetSpec] = None
+    json_schema: Optional[OutputContractJSONSchemaSpec] = None
+    reference: Optional[OutputContractReferenceSpec] = None
+    render: Optional[OutputContractRenderSpec] = None
+    extract: Optional[OutputContractExtractSpec] = None
+    normalize: Optional[OutputContractNormalizeSpec] = None
+    on_violation: Optional[OutputContractViolationPolicy] = None
+    postprocess: Optional[List[OutputContractPostprocess]] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -828,10 +1193,56 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
-    rules: Rules
+    # A decision without an explicit rule is the canonical match-all fallback.
+    # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
+    rules: Rules = Field(default_factory=Rules)
+    output_contract: Optional[str] = None
+    output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
+    adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
+    annotations: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_prompt_candidates(self):
+        if (
+            self.algorithm
+            and self.algorithm.type == "prompt"
+            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
+        ):
+            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
+        if self.algorithm and self.algorithm.type == "prompt":
+            model_names = [model_ref.model for model_ref in self.modelRefs]
+            if len(model_names) != len(set(model_names)):
+                raise ValueError("algorithm.type=prompt requires unique modelRefs")
+            effective_names = [
+                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
+            ]
+            if len(effective_names) != len(set(effective_names)):
+                raise ValueError(
+                    "algorithm.type=prompt requires unique effective model identities"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_annotation_bounds(self):
+        if self.annotations is None:
+            return self
+        if len(self.annotations) > MAX_DECISION_ANNOTATIONS:
+            raise ValueError(
+                f"annotations cannot contain more than {MAX_DECISION_ANNOTATIONS} entries"
+            )
+        encoded = json.dumps(
+            self.annotations,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) > MAX_DECISION_ANNOTATION_BYTES:
+            raise ValueError(
+                f"annotations cannot exceed {MAX_DECISION_ANNOTATION_BYTES} encoded bytes"
+            )
+        return self
 
 
 class ModelPricing(BaseModel):
@@ -842,6 +1253,7 @@ class ModelPricing(BaseModel):
     currency: Optional[str] = "USD"
     prompt_per_1m: Optional[float] = 0.0
     cached_input_per_1m: Optional[float] = 0.0
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
     completion_per_1m: Optional[float] = 0.0
 
 
@@ -951,6 +1363,65 @@ class Routing(BaseModel):
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
+
+
+class Entrypoint(BaseModel):
+    """Request-facing virtual model names mapped to one routing recipe."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_names: List[str] = Field(min_length=1)
+    recipe: str = Field(min_length=1)
+
+    @field_validator("model_names", mode="before")
+    @classmethod
+    def normalize_model_names(cls, value):
+        if not isinstance(value, list):
+            return value
+        if any(not isinstance(item, str) for item in value):
+            raise ValueError("model_names entries must be strings")
+        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        if not normalized:
+            raise ValueError("model_names must contain at least one non-empty name")
+        return normalized
+
+    @field_validator("recipe")
+    @classmethod
+    def normalize_recipe(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("recipe must not be empty")
+        return normalized
+
+
+class RecipeRouting(BaseModel):
+    """Recipe-owned routing profile; the shared model catalog stays top-level."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
+    decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
+
+
+class Recipe(BaseModel):
+    """Named routing profile selected through an entrypoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: Optional[str] = None
+    routing: RecipeRouting = Field(default_factory=RecipeRouting)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name must not be empty")
+        return normalized
 
 
 class EmbeddingModelsConfig(BaseModel):
@@ -980,6 +1451,10 @@ class EmbeddingModelsConfig(BaseModel):
         default=None,
         description="Embedding classifier tuning (model_type/target_dimension/top_k/prototype_scoring/etc.)",
     )
+    endpoint: Optional[EmbeddingEndpointConfig] = Field(
+        default=None,
+        description="External OpenAI-compatible embedding provider endpoint",
+    )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 
 
@@ -992,6 +1467,8 @@ class UserConfig(BaseModel):
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     routing: Routing = Field(default_factory=Routing)
+    entrypoints: List[Entrypoint] = Field(default_factory=list)
+    recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 

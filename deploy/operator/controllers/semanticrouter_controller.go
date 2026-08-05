@@ -81,11 +81,13 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	baseSR := semanticrouter.DeepCopy()
+
 	if err := r.reconcileOwnedResources(ctx, semanticrouter, logger); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, semanticrouter); err != nil {
+	if err := r.updateStatus(ctx, semanticrouter, baseSR); err != nil {
 		logger.Error(err, "Failed to update SemanticRouter status, will retry on next reconcile")
 	}
 

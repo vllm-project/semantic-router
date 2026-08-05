@@ -420,8 +420,22 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 	return m.upsertRecord(ctx, record)
 }
 
+// AppendOutcome links post-route feedback to a record.
+func (m *MilvusStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.Outcomes = append(record.Outcomes, cloneOutcome(outcome))
+	return m.upsertRecord(ctx, record)
+}
+
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	record, found, err := m.Get(ctx, id)
 	if err != nil {
 		return err
@@ -433,6 +447,7 @@ func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 	record.HallucinationDetected = detected
 	record.HallucinationConfidence = confidence
 	record.HallucinationSpans = spans
+	record.HallucinationSpanDetails = spanDetails
 
 	return m.upsertRecord(ctx, record)
 }
@@ -449,6 +464,7 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 
 	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+	record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
 	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
 	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)

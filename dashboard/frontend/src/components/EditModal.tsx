@@ -1,4 +1,7 @@
 import React, { useEffect, useId, useState } from 'react'
+
+import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ConfirmDialog from './ConfirmDialog'
 import styles from './EditModal.module.css'
 
 export type EditFormData = Record<string, unknown>
@@ -19,7 +22,7 @@ interface EditModalProps {
 export interface FieldConfig<TForm extends object = EditFormData> {
   name: string
   label: string
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage' | 'custom'
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'percentage' | 'custom'
   required?: boolean
   options?: string[]
   placeholder?: string
@@ -41,9 +44,27 @@ const EditModal: React.FC<EditModalProps> = ({
   mode = 'edit'
 }) => {
   const [formData, setFormData] = useState<EditFormData>({})
+  const [initialFormData, setInitialFormData] = useState<EditFormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false)
   const titleId = useId()
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+
+  const requestClose = () => {
+    if (saving) return
+    if (isDirty) {
+      setShowDiscardConfirmation(true)
+      return
+    }
+    onClose()
+  }
+
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen,
+    onClose: requestClose,
+    dismissible: !saving,
+  })
 
   const readField = (fieldName: string): unknown => formData[fieldName]
   const readString = (fieldName: string): string => {
@@ -79,7 +100,9 @@ const EditModal: React.FC<EditModalProps> = ({
         }
       })
       setFormData(convertedData)
+      setInitialFormData(convertedData)
       setError(null)
+      setShowDiscardConfirmation(false)
     }
   }, [isOpen, data, fields])
 
@@ -124,50 +147,79 @@ const EditModal: React.FC<EditModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <>
       <div
-        className={styles.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onClick={(e) => e.stopPropagation()}
+        className={styles.overlay}
+        role="presentation"
+        onMouseDown={saving ? undefined : requestClose}
       >
-        <div className={styles.header}>
-          <h2 id={titleId} className={styles.title}>{title}</h2>
-          <button className={styles.closeButton} onClick={onClose}>✕</button>
-        </div>
+        <div
+          ref={dialogRef}
+          className={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-busy={saving}
+          tabIndex={-1}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className={styles.header}>
+            <h2 id={titleId} className={styles.title}>{title}</h2>
+            <button
+              className={styles.closeButton}
+              type="button"
+              aria-label="Close editor"
+              onClick={requestClose}
+              disabled={saving}
+            >
+              ×
+            </button>
+          </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && (
-            <div className={styles.error}>
+            <div className={styles.error} role="alert">
               {error}
             </div>
           )}
 
           <div className={styles.fields}>
-            {fields.map((field) => !field.shouldHide?.(formData) && (
+            {fields.map((field) => {
+              if (field.shouldHide?.(formData)) return null
+              const fieldId = `${titleId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+              const descriptionId = `${fieldId}-description`
+              const isGroupedField = field.type === 'multiselect' || field.type === 'custom'
+
+              return (
               <div key={field.name} className={styles.field}>
-                <label className={styles.label}>
+                <label
+                  id={`${fieldId}-label`}
+                  className={styles.label}
+                  htmlFor={isGroupedField ? undefined : fieldId}
+                >
                   {field.label}
                   {field.required && <span className={styles.required}>*</span>}
                 </label>
                 {field.description && (
-                  <p className={styles.description}>{field.description}</p>
+                  <p id={descriptionId} className={styles.description}>{field.description}</p>
                 )}
 
                 {field.type === 'text' && (
                   <input
+                    id={fieldId}
                     type="text"
                     className={styles.input}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'number' && (
                   <input
+                    id={fieldId}
                     type="number"
                     step={field.step !== undefined ? field.step : "any"}
                     min={field.min}
@@ -177,12 +229,14 @@ const EditModal: React.FC<EditModalProps> = ({
                     onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
                     placeholder={field.placeholder}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'percentage' && (
                   <div style={{ position: 'relative' }}>
                     <input
+                      id={fieldId}
                       type="number"
                       step={field.step !== undefined ? field.step : 1}
                       min={0}
@@ -195,6 +249,7 @@ const EditModal: React.FC<EditModalProps> = ({
                       }}
                       placeholder={field.placeholder}
                       required={field.required}
+                      aria-describedby={field.description ? descriptionId : undefined}
                       style={{ paddingRight: '2.5rem' }}
                     />
                     <span style={{
@@ -214,6 +269,7 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'boolean' && (
                   <label className={styles.checkbox}>
                     <input
+                      id={fieldId}
                       type="checkbox"
                       checked={readBoolean(field.name)}
                       onChange={(e) => handleChange(field.name, e.target.checked)}
@@ -224,10 +280,12 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'select' && (
                   <select
+                    id={fieldId}
                     className={styles.select}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     required={field.required}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   >
                     {field.options?.map((option) => (
                       <option key={option} value={option}>
@@ -238,7 +296,12 @@ const EditModal: React.FC<EditModalProps> = ({
                 )}
 
                 {field.type === 'multiselect' && (
-                  <div className={styles.multiselect}>
+                  <div
+                    className={styles.multiselect}
+                    role="group"
+                    aria-labelledby={`${fieldId}-label`}
+                    aria-describedby={field.description ? descriptionId : undefined}
+                  >
                     {field.options?.map((option) => (
                       <label key={option} className={styles.multiselectOption}>
                         <input
@@ -260,51 +323,36 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'textarea' && (
                   <textarea
+                    id={fieldId}
                     className={styles.textarea}
                     value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
                     rows={4}
-                  />
-                )}
-
-                {field.type === 'json' && (
-                  <textarea
-                    className={styles.textarea}
-                    value={
-                      typeof readField(field.name) === 'object' && readField(field.name) !== null
-                        ? JSON.stringify(readField(field.name), null, 2)
-                        : readString(field.name)
-                    }
-                    onChange={(e) => {
-                      try {
-                        const parsed = JSON.parse(e.target.value)
-                        handleChange(field.name, parsed)
-                      } catch {
-                        handleChange(field.name, e.target.value)
-                      }
-                    }}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    rows={6}
+                    aria-describedby={field.description ? descriptionId : undefined}
                   />
                 )}
 
                 {field.type === 'custom' && field.customRender && (
-                  <div>
+                  <div
+                    role="group"
+                    aria-labelledby={`${fieldId}-label`}
+                    aria-describedby={field.description ? descriptionId : undefined}
+                  >
                     {field.customRender(readField(field.name), (value) => handleChange(field.name, value))}
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className={styles.actions}>
             <button
               type="button"
               className={styles.cancelButton}
-              onClick={onClose}
+              onClick={requestClose}
               disabled={saving}
             >
               Cancel
@@ -317,9 +365,24 @@ const EditModal: React.FC<EditModalProps> = ({
               {saving ? 'Saving...' : mode === 'add' ? 'Add' : 'Save'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={showDiscardConfirmation}
+        title="Discard unsaved changes?"
+        description="Your edits have not been saved. Closing the editor will lose them."
+        eyebrow="Unsaved changes"
+        confirmLabel="Discard changes"
+        tone="warning"
+        onCancel={() => setShowDiscardConfirmation(false)}
+        onConfirm={() => {
+          setShowDiscardConfirmation(false)
+          onClose()
+        }}
+      />
+    </>
   )
 }
 

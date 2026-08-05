@@ -7,17 +7,24 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 func newContrastivePreferenceClassifier(
 	rules []config.PreferenceRule,
 	resolvedLocalCfg config.PreferenceModelConfig,
+	providers ...embedding.Provider,
 ) (*PreferenceClassifier, error) {
+	var provider embedding.Provider
+	if len(providers) > 0 {
+		provider = providers[0]
+	}
 	contrastive, err := NewContrastivePreferenceClassifierWithConfig(
 		rules,
 		resolvedLocalCfg.EmbeddingModel,
 		resolvedLocalCfg.PrototypeScoring,
+		provider,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize contrastive preference classifier: %w", err)

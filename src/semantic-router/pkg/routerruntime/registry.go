@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -18,6 +19,14 @@ type Registry struct {
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
+	learningRuntime       LearningRuntime
+}
+
+// LearningRuntime is the narrow API-server seam for Router Learning state.
+// The implementation lives with the router runtime; the API server only needs
+// to forward typed outcomes without depending on extproc internals.
+type LearningRuntime interface {
+	OutcomeRuntime
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
@@ -114,6 +123,24 @@ func (r *Registry) SetModelSelector(registry *selection.Registry) {
 	r.mu.Unlock()
 }
 
+func (r *Registry) LearningRuntime() LearningRuntime {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.learningRuntime
+}
+
+func (r *Registry) SetLearningRuntime(runtime LearningRuntime) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.learningRuntime = runtime
+	r.mu.Unlock()
+}
+
 func (r *Registry) PublishRouterRuntime(
 	cfg *config.RouterConfig,
 	classificationService *services.ClassificationService,
@@ -135,8 +162,14 @@ func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
 	if r == nil {
 		return
 	}
-	r.UpdateConfig(newCfg)
 	if service := r.ClassificationService(); service != nil {
-		service.RefreshRuntimeConfig(newCfg)
+		if err := service.TryRefreshRuntimeConfig(newCfg); err != nil {
+			logging.Errorf(
+				"Runtime config refresh rejected; retaining previous registry snapshot: %v",
+				err,
+			)
+			return
+		}
 	}
+	r.UpdateConfig(newCfg)
 }

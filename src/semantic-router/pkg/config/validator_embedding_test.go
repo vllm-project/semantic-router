@@ -131,6 +131,67 @@ func TestValidateEmbeddingContracts_RoutesThroughTopLevelConfig(t *testing.T) {
 	}
 }
 
+func TestValidateEmbeddingContracts_AcceptsRemoteEmbeddingProvider(t *testing.T) {
+	cfg := &RouterConfig{
+		InlineModels: InlineModels{
+			EmbeddingModels: EmbeddingModels{
+				EmbeddingConfig: HNSWConfig{
+					Backend:         EmbeddingBackendOpenAICompatible,
+					ModelType:       EmbeddingModelTypeRemote,
+					TargetDimension: 1536,
+				},
+				Endpoint: EmbeddingEndpointConfig{
+					BaseURL:    "https://example.test/v1",
+					Model:      "text-embedding-3-small",
+					APIKeyEnv:  "OPENAI_API_KEY",
+					Dimensions: 1536,
+				},
+			},
+		},
+	}
+	if err := validateEmbeddingContracts(cfg); err != nil {
+		t.Fatalf("validateEmbeddingContracts() error = %v", err)
+	}
+}
+
+func TestValidateEmbeddingContracts_RejectsInvalidRemoteEmbeddingProvider(t *testing.T) {
+	cfg := &RouterConfig{
+		InlineModels: InlineModels{
+			EmbeddingModels: EmbeddingModels{
+				EmbeddingConfig: HNSWConfig{
+					Backend:         EmbeddingBackendOpenAICompatible,
+					ModelType:       "multimodal",
+					TargetDimension: 768,
+				},
+				Endpoint: EmbeddingEndpointConfig{
+					BaseURL:        "example.test/v1",
+					Dimensions:     1536,
+					TimeoutSeconds: -1,
+					MaxRetries:     -1,
+				},
+			},
+		},
+	}
+
+	err := validateEmbeddingContracts(cfg)
+	if err == nil {
+		t.Fatal("expected validateEmbeddingContracts to reject invalid remote provider, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"endpoint.base_url",
+		"endpoint.model",
+		"endpoint.timeout_seconds",
+		"endpoint.max_retries",
+		"endpoint.dimensions (1536)",
+		"embedding_config.model_type",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should contain %q, got: %s", want, msg)
+		}
+	}
+}
+
 // TestValidateEmbeddingContracts_ExportedWrapperMatchesInternal confirms the
 // exported wrapper added for the K8s reconcile path forwards to the same
 // private function the file-config path uses. Branch coverage is owned by

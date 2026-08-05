@@ -12,7 +12,7 @@ func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
 	if status, ok := collectDirectStatus(runtimePath, routerAPIURL); ok {
 		return status
 	}
-	return baseSystemStatus()
+	return collectDashboardOnlyHostStatus(routerAPIURL)
 }
 
 func collectSplitManagedHostStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) {
@@ -90,6 +90,25 @@ func collectDirectStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) 
 	status.Services = append(status.Services, buildServiceStatus("Dashboard", "running", true, "Running", "process"))
 
 	return status, true
+}
+
+func collectDashboardOnlyHostStatus(routerAPIURL string) SystemStatus {
+	status := baseSystemStatus()
+	routerMsg := "Router API URL is not configured"
+	if routerAPIURL != "" {
+		status.Endpoints = []string{routerAPIURL}
+		routerMsg = "Router health check failed"
+	}
+
+	status.Services = append(status.Services,
+		buildServiceStatus("Router", "not running", false, routerMsg, "process"),
+	)
+	appendDirectEnvoyStatus(&status)
+	status.Services = append(status.Services,
+		buildServiceStatus("Dashboard", "running", true, "Running", "process"),
+	)
+
+	return status
 }
 
 func appendDirectEnvoyStatus(status *SystemStatus) {

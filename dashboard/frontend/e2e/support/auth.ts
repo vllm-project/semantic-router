@@ -24,12 +24,18 @@ const defaultUser: SessionUser = {
     'config.deploy',
     'config.read',
     'config.write',
+    'evaluation.read',
+    'evaluation.run',
+    'evaluation.write',
+    'feedback.submit',
     'logs.read',
     'mcp.manage',
     'mcp.read',
     'mlpipeline.manage',
     'openclaw.manage',
     'openclaw.read',
+    'replay.read',
+    'security.manage',
     'tools.use',
     'topology.read',
     'users.manage',
@@ -59,9 +65,12 @@ export async function mockAuthenticatedSession(
   page: Page,
   { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(({ storedToken }) => {
-    window.localStorage.setItem('vsr_auth_token', storedToken)
-  }, { storedToken: token })
+  await page.addInitScript(
+    ({ storedToken }) => {
+      window.localStorage.setItem('vsr_auth_token', storedToken)
+    },
+    { storedToken: token },
+  )
 
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({

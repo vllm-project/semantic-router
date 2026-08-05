@@ -285,8 +285,16 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 		}
 		if model.Pricing != nil {
 			providerModel.Pricing = config.ModelPricing{
+				Currency:        model.Pricing.Currency,
 				PromptPer1M:     model.Pricing.InputTokenPrice * 1000000,
 				CompletionPer1M: model.Pricing.OutputTokenPrice * 1000000,
+			}
+			if model.Pricing.CachedInputTokenPrice != nil {
+				providerModel.Pricing.CachedInputPer1M = *model.Pricing.CachedInputTokenPrice * 1000000
+			}
+			if model.Pricing.CacheWriteTokenPrice != nil {
+				cacheWritePer1M := *model.Pricing.CacheWriteTokenPrice * 1000000
+				providerModel.Pricing.CacheWritePer1M = &cacheWritePer1M
 			}
 		}
 		converted = append(converted, providerModel)

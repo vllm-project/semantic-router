@@ -305,6 +305,12 @@ A nightly build is promoted to a release by:
 3. Pushing a `v<version>` tag — this triggers `docker-release.yml`, `helm-publish.yml`, `pypi-publish.yml`, `publish-crate.yml`, and `release.yml` simultaneously.
 4. The `release.yml` workflow validates all surfaces are consistent before the GitHub Release is created.
 
+For dashboard images, the Docker release workflow also passes the pushed `v<version>`
+tag into the dashboard backend build. The dashboard `/api/status` response therefore
+reports the same tag-form version as the released image. Non-release Docker publish
+builds use the `src/vllm-sr/pyproject.toml` version plus PR, commit, or nightly
+metadata, for example `v0.3.0-dev.<sha>` or `v0.3.0-nightly.<date>.<sha>`.
+
 Fleet simulator package releases are promoted separately by bumping
 `src/fleet-sim/pyproject.toml` and pushing a `vllm-sr-sim-v<version>` tag,
 which triggers `pypi-publish-vllm-sr-sim.yml`.

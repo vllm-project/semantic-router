@@ -202,7 +202,19 @@ const BuilderOutputPanel: React.FC<BuilderOutputPanelProps> = ({
             <pre className={styles.outputPanelCode}>{outputContent}</pre>
           ) : (
             <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>&#9889;</div>
+              <div className={styles.emptyIcon} aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path
+                    d="M13 2L5 14h6l-1 8 9-13h-6V2Z"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
               <div>
                 {outputTab === "dsl" ? (
                   `${dslTabLabel} source is empty`

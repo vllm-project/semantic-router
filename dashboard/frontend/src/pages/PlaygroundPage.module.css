@@ -1,4 +1,3 @@
-/* Console Style - Playground */
 .container {
   position: relative;
   display: flex;
@@ -9,17 +8,30 @@
   padding: 0;
   overflow-x: hidden;
   overflow-y: visible;
-  background: #000;
+  isolation: isolate;
+  background: #030303;
+}
+
+.container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(3, 3, 3, 0.08), transparent 34%, rgba(3, 3, 3, 0.22)),
+    radial-gradient(circle at center, transparent 42%, rgba(3, 3, 3, 0.3) 100%);
 }
 
 .chatWrapper {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.025);
 }
 
 .controls {
@@ -73,7 +85,7 @@
 .input:focus {
   border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+  box-shadow: 0 0 0 2px rgba(143, 148, 156, 0.2);
 }
 
 .button {
@@ -148,7 +160,7 @@
   font-style: italic;
   margin-top: 1rem !important;
   padding: 0.75rem 1rem;
-  background-color: rgba(118, 185, 0, 0.1);
+  background-color: rgba(143, 148, 156, 0.1);
   border-left: 3px solid var(--color-primary);
   border-radius: var(--radius-sm);
 }

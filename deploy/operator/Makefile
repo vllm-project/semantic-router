@@ -2,6 +2,30 @@
 IMG ?= ghcr.io/vllm-project/semantic-router-operator:latest
 BUNDLE_IMG ?= ghcr.io/vllm-project/semantic-router-operator-bundle:latest
 
+# VERSION defines the project version for the bundle.
+VERSION ?= 0.1.0
+
+# CHANNELS / DEFAULT_CHANNEL define the OLM channels the bundle is published to.
+# These must be passed to 'operator-sdk generate bundle'; otherwise it defaults
+# to the 'alpha' channel and silently drops the configured channel.
+CHANNELS ?= stable
+DEFAULT_CHANNEL ?= stable
+BUNDLE_METADATA_OPTS := --channels=$(CHANNELS) --default-channel=$(DEFAULT_CHANNEL)
+
+# OPENSHIFT_VERSIONS is the OpenShift version range this operator supports. It is
+# an OpenShift-specific bundle annotation that operator-sdk does not manage, so we
+# re-apply it after 'generate bundle' (which rewrites metadata/annotations.yaml).
+OPENSHIFT_VERSIONS ?= v4.12-v4.17
+
+# CREATED_AT pins the CSV createdAt timestamp. operator-sdk stamps the current
+# time on every 'generate bundle' (it ignores the createdAt in the base CSV), so
+# the bundle is non-reproducible and the drift check would fail unless we reset it
+# afterwards. This is the single source of truth. Bump it when cutting a release.
+CREATED_AT ?= 2026-01-14T00:00:00Z
+
+# Generated bundle CSV path (post-processed for the createdAt pin below).
+BUNDLE_CSV := bundle/manifests/semantic-router-operator.clusterserviceversion.yaml
+
 # Platform detection - automatically detects host architecture
 # Can be overridden: make docker-build ARCH=arm64
 OS ?= $(shell go env GOOS)
@@ -126,10 +150,15 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.0
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
+# Must match the operator-sdk version recorded in bundle/metadata/annotations.yaml
+# (operators.operatorframework.io.metrics.builder); a mismatch produces spurious
+# diffs when regenerating the bundle.
+OPERATOR_SDK_VERSION ?= v1.34.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -146,14 +175,38 @@ envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
+# Unlike controller-gen/kustomize (file targets that install only when the binary
+# is missing), operator-sdk uses a .PHONY recipe so the version check runs on every
+# invocation. A file target would skip the recipe whenever the binary exists, making
+# the version guard dead code. The bundle records the builder version
+# (metrics.builder: operator-sdk-vX.Y.Z), so a stale binary silently drifts the
+# bundle and breaks the drift gate — hence the hard version pin.
+.PHONY: operator-sdk
+operator-sdk: $(LOCALBIN) ## Install operator-sdk (pinned) if missing or version-mismatched.
+	@if test -x $(OPERATOR_SDK) && ! $(OPERATOR_SDK) version | grep -qF '"$(OPERATOR_SDK_VERSION)"'; then \
+		echo "$(OPERATOR_SDK) is not $(OPERATOR_SDK_VERSION), reinstalling"; rm -f $(OPERATOR_SDK); \
+	fi
+	@test -x $(OPERATOR_SDK) || { \
+		echo "Downloading operator-sdk $(OPERATOR_SDK_VERSION)"; \
+		curl -fsSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$(OS)_$(ARCH) && \
+		chmod +x $(OPERATOR_SDK); \
+	}
+
 ##@ Bundle
 
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	operator-sdk generate kustomize manifests -q
+bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version 0.1.0
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	# operator-sdk recreates annotations.yaml each run and drops the OpenShift
+	# version range it does not manage; re-add it, guarding against duplicate keys.
+	grep -q 'com.redhat.openshift.versions' bundle/metadata/annotations.yaml || \
+		echo "  com.redhat.openshift.versions: $(OPENSHIFT_VERSIONS)" >> bundle/metadata/annotations.yaml
+	# Pin createdAt (see CREATED_AT above) via a temp file so an interrupted run
+	# leaves no stray file in the tracked bundle directory.
+	tmp=$$(mktemp) && sed -E 's/(createdAt: ).*/\1"$(CREATED_AT)"/' $(BUNDLE_CSV) > $$tmp && mv $$tmp $(BUNDLE_CSV)
+	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.

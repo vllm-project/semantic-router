@@ -82,7 +82,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 		modifiedBody, err = r.setReasoningModeToRequestBodyForProvider(
 			modifiedBody,
 			useReasoning,
-			decisionName,
+			ctx.VSRSelectedDecision,
 			profile,
 		)
 		if err != nil {
@@ -105,7 +105,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 	}
 
 	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody)
+		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody, profile, ctx.Routing.RecipeName())
 		if err != nil {
 			logging.Warnf("Failed to apply request params mutation: %v", err)
 		}
@@ -478,7 +478,7 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 	}
 
 	if needsRequestParamsMutation {
-		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes)
+		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes, state.profile, ctx.Routing.RecipeName())
 		if err != nil {
 			logging.Warnf("Failed to apply request params mutation: %v", err)
 		} else {

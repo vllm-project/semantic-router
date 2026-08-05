@@ -5,11 +5,13 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
@@ -122,4 +124,56 @@ func TestBuildInitialResponseMutations_TransformProducesMutations(t *testing.T) 
 	require.NotNil(t, headerMut)
 	assert.Equal(t, []byte("body"), bodyMut.GetBody())
 	assert.Contains(t, headerMut.RemoveHeaders, "content-length")
+}
+
+// responseWarningsHeaderValue returns the x-vsr-response-warnings value emitted
+// on a response, and whether the header was present.
+func responseWarningsHeaderValue(resp *ext_proc.ProcessingResponse) (string, bool) {
+	body, ok := resp.GetResponse().(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok || body.ResponseBody.GetResponse() == nil || body.ResponseBody.GetResponse().GetHeaderMutation() == nil {
+		return "", false
+	}
+	for _, h := range body.ResponseBody.GetResponse().GetHeaderMutation().GetSetHeaders() {
+		if h.GetHeader().GetKey() == headers.VSRResponseWarnings {
+			return string(h.GetHeader().GetRawValue()), true
+		}
+	}
+	return "", false
+}
+
+func TestApplyResponseWarnings_MergesCodesInFixedOrder(t *testing.T) {
+	r := &OpenAIRouter{}
+	// Default action (nil decision) surfaces each warning as a header code.
+	ctx := &RequestContext{
+		HallucinationDetected:     true,
+		UnverifiedFactualResponse: true,
+		ResponseJailbreakDetected: true,
+	}
+
+	resp := r.applyResponseWarnings(ctx, []byte(`{"choices":[]}`), nil, nil)
+
+	val, ok := responseWarningsHeaderValue(resp)
+	require.True(t, ok, "x-vsr-response-warnings should be present")
+	assert.Equal(t, "hallucination,unverified_factual,response_jailbreak", val)
+}
+
+func TestApplyResponseWarnings_SingleCode(t *testing.T) {
+	r := &OpenAIRouter{}
+	ctx := &RequestContext{ResponseJailbreakDetected: true}
+
+	resp := r.applyResponseWarnings(ctx, []byte(`{"choices":[]}`), nil, nil)
+
+	val, ok := responseWarningsHeaderValue(resp)
+	require.True(t, ok)
+	assert.Equal(t, "response_jailbreak", val)
+}
+
+func TestApplyResponseWarnings_NoWarningsOmitsHeader(t *testing.T) {
+	r := &OpenAIRouter{}
+	ctx := &RequestContext{}
+
+	resp := r.applyResponseWarnings(ctx, []byte(`{"choices":[]}`), nil, nil)
+
+	_, ok := responseWarningsHeaderValue(resp)
+	assert.False(t, ok, "no warnings should emit no x-vsr-response-warnings header")
 }

@@ -16,6 +16,200 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// BuildStreamingModalityBody converts a complete ChatCompletion JSON body into
+// SSE chunks compatible with OpenAI streaming protocol. For multimodal
+// responses (content array with non-text parts), the entire message is emitted
+// as a single delta chunk. For text-only responses, content is split into
+// word-level chunks for smooth streaming.
+func BuildStreamingModalityBody(body []byte) []byte {
+	// First pass: detect whether content is multimodal (JSON array) by
+	// inspecting the raw JSON, since openai.ChatCompletionMessage.Content
+	// is typed as string and would lose the array structure.
+	if rawContent := extractRawContent(body); rawContent != nil && isMultimodalContent(rawContent) {
+		return buildMultimodalSSE(body)
+	}
+
+	// Text-only path: use the typed struct
+	var completion openai.ChatCompletion
+	if err := json.Unmarshal(body, &completion); err != nil {
+		logging.Errorf("Modality streaming: failed to parse response: %v", err)
+		return []byte("data: {\"error\": \"Failed to process modality response\"}\n\ndata: [DONE]\n\n")
+	}
+
+	return buildTextSSE(completion)
+}
+
+// extractRawContent extracts the raw content value from a ChatCompletion JSON
+// body without type coercion. Returns nil if the content cannot be extracted.
+func extractRawContent(body []byte) interface{} {
+	var raw struct {
+		Choices []struct {
+			Message struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil
+	}
+	if len(raw.Choices) == 0 || len(raw.Choices[0].Message.Content) == 0 {
+		return nil
+	}
+	// Determine if it's an array
+	var arr []interface{}
+	if err := json.Unmarshal(raw.Choices[0].Message.Content, &arr); err == nil {
+		return arr
+	}
+	// It's a string
+	var s string
+	if err := json.Unmarshal(raw.Choices[0].Message.Content, &s); err == nil {
+		return s
+	}
+	return nil
+}
+
+// buildMultimodalSSE constructs SSE chunks for a multimodal response.
+// The entire content array is emitted as a single delta chunk.
+func buildMultimodalSSE(body []byte) []byte {
+	unixTimeStep := time.Now().Unix()
+	newID := fmt.Sprintf("chatcmpl-modality-%d", unixTimeStep)
+
+	// Extract model, role, and content from raw JSON
+	var raw struct {
+		Model   string `json:"model"`
+		Choices []struct {
+			Message struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return []byte("data: {\"error\": \"Failed to process multimodal response\"}\n\ndata: [DONE]\n\n")
+	}
+	if len(raw.Choices) == 0 {
+		return []byte("data: {\"error\": \"No choices in multimodal response\"}\n\ndata: [DONE]\n\n")
+	}
+
+	model := raw.Model
+	if model == "" {
+		model = "router"
+	}
+	ch := raw.Choices[0]
+
+	// Reconstruct the content as an interface value
+	var content interface{}
+	_ = json.Unmarshal(ch.Message.Content, &content)
+
+	var sseChunks []string
+
+	delta := map[string]interface{}{
+		"role":    ch.Message.Role,
+		"content": content,
+	}
+	chunk := buildSSEModalityChunk(newID, model, unixTimeStep, delta, nil)
+	sseChunks = append(sseChunks, chunk)
+
+	// Final chunk
+	finalReason := ch.FinishReason
+	if finalReason == "" {
+		finalReason = "stop"
+	}
+	finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
+	sseChunks = append(sseChunks, finalChunk)
+	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+
+	return []byte(strings.Join(sseChunks, ""))
+}
+
+// buildTextSSE constructs SSE chunks for a text-only ChatCompletion response,
+// splitting the content into word-level chunks for smooth streaming.
+func buildTextSSE(completion openai.ChatCompletion) []byte {
+	unixTimeStep := time.Now().Unix()
+	newID := fmt.Sprintf("chatcmpl-modality-%d", unixTimeStep)
+	model := completion.Model
+	if model == "" {
+		model = "router"
+	}
+
+	var sseChunks []string
+
+	if len(completion.Choices) == 0 {
+		sseChunks = append(sseChunks, "data: [DONE]\n\n")
+		return []byte(strings.Join(sseChunks, ""))
+	}
+
+	message := completion.Choices[0].Message
+	content := message.Content
+	finishReason := completion.Choices[0].FinishReason
+
+	sseChunks = appendContentChunks(sseChunks, content, string(message.Role), newID, model, unixTimeStep)
+
+	finalReason := finishReason
+	if finalReason == "" {
+		finalReason = "stop"
+	}
+	finalChunk := buildSSEModalityChunk(newID, model, unixTimeStep, map[string]interface{}{}, finalReason)
+	sseChunks = append(sseChunks, finalChunk)
+
+	sseChunks = append(sseChunks, "data: [DONE]\n\n")
+	return []byte(strings.Join(sseChunks, ""))
+}
+
+// appendContentChunks splits text content into word-level SSE delta chunks and
+// appends them to sseChunks. The first chunk includes the assistant role.
+func appendContentChunks(sseChunks []string, content string, role string, id, model string, created int64) []string {
+	if content == "" {
+		return sseChunks
+	}
+	chunks := splitContentIntoChunks(content)
+	for i, c := range chunks {
+		delta := map[string]interface{}{"content": c}
+		if i == 0 {
+			delta["role"] = role
+		}
+		chunk := buildSSEModalityChunk(id, model, created, delta, nil)
+		sseChunks = append(sseChunks, chunk)
+	}
+	return sseChunks
+}
+
+// isMultimodalContent returns true if the content is an array (multimodal
+// content parts) rather than a plain string.
+func isMultimodalContent(content interface{}) bool {
+	_, isArray := content.([]interface{})
+	return isArray
+}
+
+// extractStringContent returns the content as a string, or an empty string if
+// the content is not a string.
+func extractStringContent(content interface{}) string {
+	s, _ := content.(string)
+	return s
+}
+
+// buildSSEModalityChunk constructs a single SSE data frame for a streaming
+// ChatCompletion chunk. When finishReason is empty, the chunk is a content
+// delta; otherwise it is the terminal chunk.
+func buildSSEModalityChunk(id, model string, created int64, delta map[string]interface{}, finishReason interface{}) string {
+	chunk := map[string]interface{}{
+		"id":      id,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         delta,
+				"finish_reason": finishReason,
+			},
+		},
+	}
+	chunkJSON, _ := json.Marshal(chunk)
+	return fmt.Sprintf("data: %s\n\n", chunkJSON)
+}
+
 // isErrorResponse checks if a JSON response is an error response
 func isErrorResponse(responseBytes []byte) bool {
 	var responseMap map[string]interface{}
@@ -203,7 +397,23 @@ func buildNonStreamingCacheBody(cachedResponse []byte) []byte {
 	return marshaledBody
 }
 
-// CreateCacheHitResponse creates an immediate response from cache
+// KeystoneHeaderOptions returns the v0.4 keystone header options
+// (x-vsr-schema-version + x-vsr-response-path) for an immediate response on the
+// given response path. See issue #2203.
+func KeystoneHeaderOptions(path string) []*core.HeaderValueOption {
+	return []*core.HeaderValueOption{
+		{Header: &core.HeaderValue{Key: headers.VSRSchemaVersion, RawValue: []byte(headers.SchemaVersionValue)}},
+		{Header: &core.HeaderValue{Key: headers.VSRResponsePath, RawValue: []byte(path)}},
+	}
+}
+
+// CreateCacheHitResponse creates an immediate response from cache.
+//
+// content-type, the cache-hit marker and the final routing fact (selected
+// decision) ride on the default surface. The intermediate category,
+// cache-similarity and matched-keyword headers are demoted off the default
+// surface (#2205): each is emitted only when non-empty, so the caller demotes
+// them by passing empty values unless the request opted into x-vsr-debug.
 func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string, similarity ...float32) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
@@ -220,7 +430,6 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		responseBody = buildNonStreamingCacheBody(cachedResponse)
 	}
 
-	// Build headers including VSR decision headers for cache hits
 	setHeaders := []*core.HeaderValueOption{
 		{
 			Header: &core.HeaderValue{
@@ -236,19 +445,21 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		},
 		{
 			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedCategory,
-				RawValue: []byte(category),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
 				Key:      headers.VSRSelectedDecision,
 				RawValue: []byte(decisionName),
 			},
 		},
 	}
 
-	// Add cache similarity header
+	// Demoted intermediate detail (#2205): emitted only when non-empty.
+	if category != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedCategory,
+				RawValue: []byte(category),
+			},
+		})
+	}
 	if len(similarity) > 0 && similarity[0] > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -257,8 +468,6 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 			},
 		})
 	}
-
-	// Add matched keywords header if provided
 	if len(matchedKeywords) > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -267,6 +476,9 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 			},
 		})
 	}
+
+	// v0.4 keystone headers: this is the semantic-cache path (#2203).
+	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathCache)...)
 
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{
@@ -411,6 +623,9 @@ func CreateFastResponse(message string, isStreaming bool, decisionName string) *
 			},
 		},
 	}
+
+	// v0.4 keystone headers: this is the fast_response plugin path (#2203).
+	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathFastResponse)...)
 
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{

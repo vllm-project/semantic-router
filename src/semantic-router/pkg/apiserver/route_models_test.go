@@ -16,20 +16,46 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 	tests := []struct {
 		name                      string
 		includeConfiguredModels   bool
+		config                    *config.RouterConfig
 		expectedModels            []string
 		expectedModelResultLength int
 	}{
 		{
 			name:                      "default excludes config models",
 			includeConfiguredModels:   false,
-			expectedModels:            []string{"MoM"},
-			expectedModelResultLength: 1,
+			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedModelResultLength: 3,
 		},
 		{
 			name:                      "router option includes config models",
 			includeConfiguredModels:   true,
-			expectedModels:            []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedModelResultLength: 3,
+			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedModelResultLength: 5,
+		},
+		{
+			name:   "entrypoint model names are exposed",
+			config: openAIModelsEntrypointTestConfig(),
+			expectedModels: []string{
+				"vllm-sr/auto",
+				"auto",
+				"MoM",
+				"vllm-sr/privacy",
+				"vllm-sr/default-alias",
+			},
+			expectedModelResultLength: 5,
+		},
+		{
+			name:   "direct looper models are exposed when decisions are configured",
+			config: openAIModelsLooperTestConfig(),
+			expectedModels: []string{
+				"vllm-sr/auto",
+				"auto",
+				"MoM",
+				"vllm-sr/remom",
+				"vllm-sr/fusion",
+				"vllm-sr/flow",
+			},
+			expectedModelResultLength: 6,
 		},
 	}
 
@@ -37,7 +63,7 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apiServer := &ClassificationAPIServer{
 				classificationSvc: services.NewPlaceholderClassificationService(),
-				config:            openAIModelsTestConfig(tt.includeConfiguredModels),
+				config:            openAIModelsTestConfigForCase(tt.config, tt.includeConfiguredModels),
 			}
 
 			req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
@@ -56,6 +82,13 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 			assertOpenAIModelList(t, resp, tt.expectedModels, tt.expectedModelResultLength)
 		})
 	}
+}
+
+func openAIModelsTestConfigForCase(cfg *config.RouterConfig, includeConfiguredModels bool) *config.RouterConfig {
+	if cfg != nil {
+		return cfg
+	}
+	return openAIModelsTestConfig(includeConfiguredModels)
 }
 
 func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
@@ -84,6 +117,51 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 	}
 }
 
+func openAIModelsEntrypointTestConfig() *config.RouterConfig {
+	return &config.RouterConfig{
+		Recipes: []config.RoutingRecipe{
+			{Name: config.DefaultRecipeName},
+			{Name: "privacy", Description: "privacy profile"},
+		},
+		Entrypoints: []config.EntrypointMapping{
+			{ModelNames: []string{"vllm-sr/privacy"}, Recipe: "privacy"},
+			{ModelNames: []string{"vllm-sr/default-alias"}, Recipe: config.DefaultRecipeName},
+		},
+	}
+}
+
+func openAIModelsLooperTestConfig() *config.RouterConfig {
+	return &config.RouterConfig{
+		Looper: config.LooperConfig{Endpoint: "http://looper"},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "remom-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type:  "remom",
+						ReMoM: &config.ReMoMAlgorithmConfig{BreadthSchedule: []int{1}},
+					},
+				},
+				{
+					Name:      "fusion-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type: "fusion",
+					},
+				},
+				{
+					Name:      "flow-route",
+					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					Algorithm: &config.AlgorithmConfig{
+						Type: "workflows",
+					},
+				},
+			},
+		},
+	}
+}
+
 func assertOpenAIModelList(t *testing.T, resp OpenAIModelList, expectedModels []string, expectedLength int) {
 	t.Helper()
 
@@ -99,6 +177,9 @@ func assertOpenAIModelList(t *testing.T, resp OpenAIModelList, expectedModels []
 		}
 		if model.Created == 0 {
 			t.Fatalf("expected created timestamp to be non-zero")
+		}
+		if model.Routing.Resolution == "" {
+			t.Fatalf("expected %s to declare routing metadata", model.ID)
 		}
 	}
 

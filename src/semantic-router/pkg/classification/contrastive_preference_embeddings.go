@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strings"
@@ -77,14 +78,14 @@ func (c *ContrastivePreferenceClassifier) embedRuleExamples(
 		go func() {
 			defer wg.Done()
 			for task := range taskCh {
-				out, err := getEmbeddingWithModelType(task.text, c.modelType, 0)
+				embedding, err := c.embedText(task.text)
 				if err != nil {
 					resultCh <- preferenceEmbeddingResult{ruleName: task.ruleName, err: err}
 					continue
 				}
 				resultCh <- preferenceEmbeddingResult{
 					ruleName:  task.ruleName,
-					embedding: out.Embedding,
+					embedding: embedding,
 				}
 			}
 		}()
@@ -95,6 +96,17 @@ func (c *ContrastivePreferenceClassifier) embedRuleExamples(
 		close(resultCh)
 	}()
 	return resultCh
+}
+
+func (c *ContrastivePreferenceClassifier) embedText(text string) ([]float32, error) {
+	if c.provider != nil {
+		return c.provider.Embed(context.Background(), text)
+	}
+	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
 }
 
 func (c *ContrastivePreferenceClassifier) collectEmbeddedResults(

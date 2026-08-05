@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -21,13 +22,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	Config                *config.RouterConfig
-	CategoryDescriptions  []string
-	Classifier            *classification.Classifier
+	Config               *config.RouterConfig
+	CategoryDescriptions []string
+	Classifier           *classification.Classifier
+	// RecipeClassifiers selects the isolated classifier graph for each routing
+	// request. Classifier is the default-recipe accessor.
+	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
@@ -39,11 +44,14 @@ type OpenAIRouter struct {
 	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
-	ModelSelector   *selection.Registry
-	LookupTable     lookuptable.LookupTable
-	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     memory.Store
-	MemoryExtractor *memory.MemoryExtractor
+	ModelSelector *selection.Registry
+	// RecipeModelSelectors keeps mutable algorithm state (Elo, RL, ML adapters,
+	// and similar selectors) isolated even when recipes reuse decision names.
+	RecipeModelSelectors map[config.RecipeName]*selection.Registry
+	LookupTable          lookuptable.LookupTable
+	ReplayRecorders      map[string]*routerreplay.Recorder
+	MemoryStore          memory.Store
+	MemoryExtractor      *memory.MemoryExtractor
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
@@ -57,7 +65,9 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	lookupTableCancel func()
+	routerLearningMu      sync.Mutex
+	routerLearningRuntime *routerLearningRuntime
+	lookupTableCancel     func()
 }
 
 // Close releases background resources held by the router (e.g. lookup table
@@ -77,8 +87,24 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 const routerReplayAPIBasePath = "/v1/router_replay"
 
-// createJSONResponseWithBody creates a direct response with pre-marshaled JSON body.
-func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {
+// createJSONResponseWithBody creates a direct response with pre-marshaled JSON
+// body. When responsePath is non-empty, the v0.4 keystone headers
+// (x-vsr-schema-version + x-vsr-response-path) are emitted for that path; pass
+// "" for router-management responses (e.g. /v1/models) that are not routed LLM
+// responses and therefore carry no response-path. See issue #2203.
+func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte, responsePath string) *ext_proc.ProcessingResponse {
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      "content-type",
+				RawValue: []byte("application/json"),
+			},
+		},
+	}
+	if responsePath != "" {
+		setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(responsePath)...)
+	}
+
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
@@ -86,16 +112,41 @@ func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byt
 					Code: statusCodeToImmediateResponseCode(statusCode),
 				},
 				Headers: &ext_proc.HeaderMutation{
-					SetHeaders: []*core.HeaderValueOption{
-						{
-							Header: &core.HeaderValue{
-								Key:      "content-type",
-								RawValue: []byte("application/json"),
-							},
-						},
-					},
+					SetHeaders: setHeaders,
 				},
 				Body: jsonBody,
+			},
+		},
+	}
+}
+
+// createSSEResponseWithBody creates a direct response with pre-marshaled SSE
+// (text/event-stream) body. Used when the original client request requested
+// streaming (stream: true) but the response is generated by modality routing
+// (e.g. image generation) rather than a streaming model backend.
+func (r *OpenAIRouter) createSSEResponseWithBody(statusCode int, sseBody []byte, responsePath string) *ext_proc.ProcessingResponse {
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      "content-type",
+				RawValue: []byte("text/event-stream; charset=utf-8"),
+			},
+		},
+	}
+	if responsePath != "" {
+		setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(responsePath)...)
+	}
+
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: statusCodeToImmediateResponseCode(statusCode),
+				},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: setHeaders,
+				},
+				Body: sseBody,
 			},
 		},
 	}
@@ -109,7 +160,9 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 		return r.createErrorResponse(500, "Internal server error")
 	}
 
-	return r.createJSONResponseWithBody(statusCode, jsonData)
+	// Router-management JSON responses (model lists, classify/route APIs, etc.)
+	// are not routed LLM responses, so they carry no response-path.
+	return r.createJSONResponseWithBody(statusCode, jsonData, "")
 }
 
 // createErrorResponse creates a direct error response.
@@ -129,7 +182,7 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 		statusCode = 500
 	}
 
-	return r.createJSONResponseWithBody(statusCode, jsonData)
+	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
 }
 
 // shouldClearRouteCache checks if route cache should be cleared.
@@ -157,6 +210,21 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
 
 	return nil
+}
+
+// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
+// request and into startup/reload readiness.
+func (r *OpenAIRouter) PreloadKnowledgeBases() error {
+	if r == nil {
+		return nil
+	}
+	if r.RecipeClassifiers != nil {
+		return r.RecipeClassifiers.PreloadKnowledgeBases()
+	}
+	if r.Classifier == nil {
+		return nil
+	}
+	return r.Classifier.PreloadKnowledgeBases()
 }
 
 func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {

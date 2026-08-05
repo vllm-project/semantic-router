@@ -5,8 +5,7 @@
   padding: 1.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: rgba(6, 10, 9, 0.84);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  background: #09090a;
 }
 
 .summaryGrid {
@@ -23,7 +22,7 @@
   padding: 0.95rem 1rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(118, 185, 0, 0.08), rgba(0, 212, 255, 0.04)), rgba(12, 16, 16, 0.86);
+  background: #101012;
 }
 
 .summaryLabel {
@@ -42,24 +41,20 @@
 }
 
 .summaryValuePositive {
-  color: var(--color-primary-light);
+  color: #f5f5f7;
 }
 
 .summaryValueNeutral {
-  color: var(--color-accent-cyan);
+  color: #a1a1aa;
 }
 
 .summaryCardHighlight {
-  border-color: rgba(143, 212, 0, 0.36);
-  background:
-    linear-gradient(180deg, rgba(143, 212, 0, 0.18), rgba(118, 185, 0, 0.08)),
-    rgba(12, 18, 12, 0.94);
-  box-shadow: 0 0 0 1px rgba(143, 212, 0, 0.12), 0 16px 34px rgba(118, 185, 0, 0.16);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: #18181b;
 }
 
 .summaryValueHighlight {
-  color: #d9ff72;
-  text-shadow: 0 0 18px rgba(143, 212, 0, 0.28);
+  color: #d4d4d8;
 }
 
 .summaryHint {
@@ -93,14 +88,14 @@
   margin: 0 0 1rem 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-text);
   white-space: nowrap;
 }
 
 .chartIcon {
   width: 18px;
   height: 18px;
-  color: var(--color-primary);
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 

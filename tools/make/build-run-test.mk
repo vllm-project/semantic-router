@@ -82,9 +82,13 @@ test-semantic-router: build-router
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && \
+		TEST_PACKAGES="$$(go list ./...)" && \
+		if [ "$${SKIP_MODEL_DEPENDENT_TESTS:-false}" = "true" ]; then \
+			TEST_PACKAGES="$$(printf '%s\n' "$$TEST_PACKAGES" | awk '!/\/pkg\/(memory|tools)$$/')"; \
+		fi && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		go test -v $$(go list ./...)
+		go test -v $$TEST_PACKAGES
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
@@ -94,7 +98,7 @@ test-semantic-router: build-router
 #   4. Run test-binding-lora
 # In local dev, run all tests together
 ifeq ($(CI),true)
-test: vet check-go-mod-tidy download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
+test: vet check-go-mod-tidy test-rust-ci download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
 else
 test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
 endif
@@ -188,6 +192,19 @@ test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
 	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e/testing/run_all_tests.py
+
+# Run the deterministic Router Learning architecture eval and gate it against a
+# named threshold profile (pr/release). Pure stdlib Python — no router/vLLM needed.
+# Exits non-zero on a threshold breach so CI/release pipelines can gate.
+# Usage: make bench-router-learning            (defaults to the pr profile)
+#        make bench-router-learning PROFILE=release
+bench-router-learning: ## Run + gate the Router Learning architecture eval (PROFILE=pr|release)
+bench-router-learning: PROFILE ?= pr
+bench-router-learning:
+	@echo "Running Router Learning architecture eval (profile: $(PROFILE))..."
+	@python3 bench/agentic_routing_experiment.py \
+		--learning-architecture --profile $(PROFILE) \
+		--output-dir .agent-harness/router-learning-eval
 
 # Run hallucination detection benchmark
 # Requires: router running with hallucination config, vLLM endpoint, envoy proxy
@@ -408,7 +425,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./scripts/test-image-gen.sh
+	@./tools/smoke/test-image-gen.sh
 
 # Run image generation integration tests (Go)
 test-image-gen-integration: ## Run Go integration tests for image generation

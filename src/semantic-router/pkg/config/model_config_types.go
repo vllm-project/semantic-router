@@ -33,13 +33,14 @@ type PIIModel struct {
 }
 
 type EmbeddingModels struct {
-	Qwen3ModelPath      string     `yaml:"qwen3_model_path"`
-	GemmaModelPath      string     `yaml:"gemma_model_path"`
-	MmBertModelPath     string     `yaml:"mmbert_model_path"`
-	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
-	BertModelPath       string     `yaml:"bert_model_path"`
-	UseCPU              bool       `yaml:"use_cpu"`
-	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
+	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
+	GemmaModelPath      string                  `yaml:"gemma_model_path"`
+	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
+	MultiModalModelPath string                  `yaml:"multimodal_model_path,omitempty"`
+	BertModelPath       string                  `yaml:"bert_model_path"`
+	UseCPU              bool                    `yaml:"use_cpu"`
+	EmbeddingConfig     HNSWConfig              `yaml:"embedding_config,omitempty"`
+	Endpoint            EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
 }
 
 func (e EmbeddingModels) MinSimilarityThreshold() float32 {
@@ -62,10 +63,14 @@ type HNSWConfig struct {
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
 	if result.Backend == "" {
-		result.Backend = "candle"
+		result.Backend = EmbeddingBackendCandle
 	}
 	if result.ModelType == "" {
-		result.ModelType = "qwen3"
+		if normalizeEmbeddingBackend(result.Backend) == EmbeddingBackendOpenAICompatible {
+			result.ModelType = EmbeddingModelTypeRemote
+		} else {
+			result.ModelType = EmbeddingModelTypeQwen3
+		}
 	}
 	if result.TargetDimension <= 0 {
 		result.TargetDimension = 768
@@ -180,6 +185,7 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
+	Name           string                 `yaml:"name,omitempty"`
 	Provider       string                 `yaml:"llm_provider"`
 	ModelRole      string                 `yaml:"model_role"`
 	ModelEndpoint  ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
@@ -187,7 +193,7 @@ type ExternalModelConfig struct {
 	TimeoutSeconds int                    `yaml:"llm_timeout_seconds,omitempty"`
 	ParserType     string                 `yaml:"parser_type,omitempty"`
 	Threshold      float32                `yaml:"threshold,omitempty"`
-	AccessKey      string                 `yaml:"access_key,omitempty"`
+	AccessKey      string                 `yaml:"access_key,omitempty" json:"-"`
 	MaxTokens      int                    `yaml:"max_tokens,omitempty"`
 	Temperature    float64                `yaml:"temperature,omitempty"`
 }
@@ -250,6 +256,9 @@ type FactCheckModelConfig struct {
 }
 
 type HallucinationModelConfig struct {
+	Backend                string  `yaml:"backend,omitempty"`
+	Endpoint               string  `yaml:"endpoint,omitempty"`
+	IncludeExplanation     bool    `yaml:"include_explanation,omitempty"`
 	ModelID                string  `yaml:"model_id"`
 	Threshold              float32 `yaml:"threshold"`
 	UseCPU                 bool    `yaml:"use_cpu"`
@@ -281,7 +290,7 @@ type VLLMEndpoint struct {
 	Port                int    `yaml:"port"`
 	Weight              int    `yaml:"weight,omitempty"`
 	Type                string `yaml:"type,omitempty"`
-	APIKey              string `yaml:"api_key,omitempty"`
+	APIKey              string `yaml:"api_key,omitempty" json:"-"`
 	ProviderProfileName string `yaml:"provider_profile,omitempty"`
 	Model               string `yaml:"model,omitempty"`
 	Protocol            string `yaml:"protocol,omitempty"`
@@ -298,10 +307,11 @@ type ProviderProfile struct {
 }
 
 type ModelPricing struct {
-	Currency         string  `yaml:"currency,omitempty"`
-	PromptPer1M      float64 `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M  float64 `yaml:"completion_per_1m,omitempty"`
-	CachedInputPer1M float64 `yaml:"cached_input_per_1m,omitempty"`
+	Currency         string   `yaml:"currency,omitempty"`
+	PromptPer1M      float64  `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M  float64  `yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M float64  `yaml:"cached_input_per_1m,omitempty"`
+	CacheWritePer1M  *float64 `yaml:"cache_write_per_1m,omitempty"`
 }
 
 type ModelParams struct {
@@ -309,7 +319,7 @@ type ModelParams struct {
 	Pricing            ModelPricing      `yaml:"pricing,omitempty"`
 	ReasoningFamily    string            `yaml:"reasoning_family,omitempty"`
 	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
-	AccessKey          string            `yaml:"access_key,omitempty"`
+	AccessKey          string            `yaml:"access_key,omitempty" json:"-"`
 	ParamSize          string            `yaml:"param_size,omitempty"`
 	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
 	APIFormat          string            `yaml:"api_format,omitempty"`
@@ -361,6 +371,15 @@ const (
 func (cfg *RouterConfig) FindExternalModelByRole(role string) *ExternalModelConfig {
 	for i := range cfg.ExternalModels {
 		if cfg.ExternalModels[i].ModelRole == role {
+			return &cfg.ExternalModels[i]
+		}
+	}
+	return nil
+}
+
+func (cfg *RouterConfig) FindExternalModelByName(name string) *ExternalModelConfig {
+	for i := range cfg.ExternalModels {
+		if cfg.ExternalModels[i].Name == name {
 			return &cfg.ExternalModels[i]
 		}
 	}

@@ -11,6 +11,26 @@ limits:
   interface_methods:
     error: 5
 
+root_files:
+  allowed:
+    - .dockerignore
+    - .editorconfig
+    - .gitattributes
+    - .gitignore
+    - .mergify.yml
+    - .pre-commit-config.yaml
+    - .prowlabels.yaml
+    - AGENTS.md
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - GOVERNANCE.md
+    - LICENSE
+    - Makefile
+    - OWNER
+    - README.md
+    - SECURITY.md
+    - install.sh
+
 languages:
   go:
     globs:
@@ -38,12 +58,12 @@ languages:
 
 ignore_globs:
   - website/**
-  - docs/**
   - models/**
   - '**/*.pb.go'
   - '**/zz_generated*'
   - '**/node_modules/**'
   - candle-binding/src/ffi/embedding.rs
+  - candle-binding/src/ffi/classify.rs
   - candle-binding/src/model_architectures/embedding/multimodal_embedding.rs
 
 structure_exceptions:
@@ -51,12 +71,13 @@ structure_exceptions:
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go
       - src/semantic-router/pkg/config/validator.go
+      - candle-binding/src/model_architectures/lora/bert_lora.rs
   - paths:
       - dashboard/frontend/src/pages/ConfigPage.tsx
     file_checks: relaxed
   - paths:
       - dashboard/backend/handlers/deploy.go
-      - deploy/addons/redis/redis-cache.go
+      - tools/redis/redis-cache.go
       - src/semantic-router/pkg/config/canonical_defaults.go
       - src/semantic-router/pkg/config/docs_contract_test.go
       - src/semantic-router/pkg/dsl/emitter_yaml.go
@@ -77,6 +98,15 @@ structure_exceptions:
   - paths:
       - src/semantic-router/pkg/config/config_test.go
       - src/semantic-router/pkg/dsl/dsl_test.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - bench/router_flow/real_eval/collect_evalscope_results.py
+      - bench/router_flow/real_eval/run_evalscope_suite.py
+      - bench/router_flow/real_eval/test_run_evalscope_suite.py
+      - src/semantic-router/pkg/config/canonical_loader_test.go
+      - src/semantic-router/pkg/config/validator_test.go
+      - src/semantic-router/pkg/looper/workflows_test.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:
@@ -163,7 +193,7 @@ structure_exceptions:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
       - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go
-      - src/vllm-sr/cli/docker_cli.py
+      - src/vllm-sr/cli/container_cli.py
       - dashboard/frontend/src/pages/BuilderPage.tsx
       - dashboard/frontend/src/pages/ConfigPage.tsx
       - dashboard/frontend/src/pages/OpenClawPage.tsx
@@ -213,6 +243,26 @@ structure_exceptions:
       - tools/security/scan_sensitive_paths.toml
     file_checks: relaxed
     function_checks: relaxed
+  # These model-backed test suites predate the shared structure gate. This PR
+  # only updates their reference-generator path, so retain a no-growth ratchet.
+  - paths:
+      - candle-binding/src/model_architectures/embedding/gemma_embedding_test.rs
+      - candle-binding/src/model_architectures/embedding/qwen3_embedding_test.rs
+    file_checks: relaxed
+    function_checks: relaxed
+  # Standalone MCP reference servers keep protocol dispatch visible in one
+  # executable file; shared routing policy and runtime ownership are extracted.
+  - paths:
+      - tools/mcp-classifier-server/server_embedding.py
+      - tools/mcp-classifier-server/server_generative.py
+      - tools/mcp-classifier-server/server_keyword.py
+    file_checks: relaxed
+    function_checks: relaxed
+  # One-shot reference generators are intentionally linear pipelines.
+  - paths:
+      - tools/models/generate_gemma_reference.py
+      - tools/models/generate_qwen3_reference.py
+    function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/vectorstore/filestore_test.go
       - src/semantic-router/pkg/vectorstore/integration_test.go
@@ -231,7 +281,7 @@ dependency_rules:
     forbidden_literals:
       - github.com/vllm-project/semantic-router/e2e
       - e2e/
-      - docs/agent/
+      - tools/agent/docs/
       - tools/agent/
       - website/
   - name: dashboard-backend-must-not-reference-frontend-source

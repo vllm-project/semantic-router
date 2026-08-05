@@ -315,7 +315,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Stage 5: Build Go application (candle on all platforms, onnx on amd64 only)
 # ============================================================================
 ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.25 AS go-builder
 
 # Install cross-compilation tools for Go
 RUN dpkg --add-architecture arm64 && \
@@ -503,7 +503,7 @@ ENV AI_BINDING=candle
 EXPOSE 50051
 
 # Copy entrypoint which selects binary via AI_BINDING env var
-COPY scripts/entrypoint.sh /app/entrypoint.sh
+COPY tools/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]

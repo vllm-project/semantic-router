@@ -14,7 +14,7 @@ from cli.consts import (
     DEFAULT_MILVUS_PORT,
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
-    VLLM_SR_SIM_DOCKER_NAME,
+    VLLM_SR_SIM_CONTAINER_NAME,
 )
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
@@ -183,7 +183,7 @@ def resolve_runtime_stack(
         router_container_name = "vllm-sr-router-container"
         envoy_container_name = "vllm-sr-envoy-container"
         dashboard_container_name = "vllm-sr-dashboard-container"
-        fleet_sim_container_name = VLLM_SR_SIM_DOCKER_NAME
+        fleet_sim_container_name = VLLM_SR_SIM_CONTAINER_NAME
         network_name = f"{DEFAULT_STACK_NAME}-network"
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
         prometheus_container_name = f"{DEFAULT_STACK_NAME}-prometheus"
@@ -234,11 +234,22 @@ def resolve_runtime_stack(
 
 
 def normalize_stack_name(raw_value: str | None) -> str:
+    """Return the one stack identity shared by every local runtime namespace.
+
+    Missing or blank input selects the default stack. Distinct raw inputs that
+    normalize to the same value intentionally alias one stack; a nonblank value
+    with no usable ASCII identity fails instead of silently selecting default.
+    """
     if raw_value is None:
         return DEFAULT_STACK_NAME
-    cleaned = STACK_NAME_PATTERN.sub("-", raw_value.strip()).strip("-")
-    if not cleaned:
+    stripped = raw_value.strip()
+    if not stripped:
         return DEFAULT_STACK_NAME
+    cleaned = STACK_NAME_PATTERN.sub("-", stripped).strip("._-")
+    if not cleaned:
+        raise ValueError(
+            f"{STACK_NAME_ENV} must contain at least one ASCII letter or digit"
+        )
     return cleaned
 
 
