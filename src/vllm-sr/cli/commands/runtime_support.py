@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from itertools import chain
 from pathlib import Path
 
 import yaml
@@ -42,6 +44,12 @@ RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
 SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
 
+# Mirrors resolveBracedEnvReference, including ${NAME:-default}. Upper case only, so
+# MCP tool-argument placeholders like ${user_content} are not read as env vars.
+_ENV_REFERENCE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::?-[^}]*)?\}")
+
+API_KEY_ENV_FIELD = "api_key_env"
+
 PASSTHROUGH_ENV_RULES = (
     ("HF_ENDPOINT", False),
     ("HF_TOKEN", True),
@@ -57,6 +65,8 @@ PASSTHROUGH_ENV_RULES = (
     ("SR_LOG_DEVELOPMENT", False),
     ("SR_LOG_ADD_CALLER", False),
 )
+
+_STATIC_SENSITIVE = frozenset(name for name, masked in PASSTHROUGH_ENV_RULES if masked)
 
 
 def _finalize_runtime_config_write(
@@ -95,9 +105,48 @@ def validate_setup_mode_flags(setup_mode: bool, minimal: bool, readonly: bool) -
         )
 
 
-def append_passthrough_env_vars(env_vars: dict[str, str]) -> None:
+def config_env_references(config_path: Path | str | None) -> set[str]:
+    """Env var names a config depends on: ``api_key_env`` targets and ``${VAR}`` refs.
+
+    ``api_key_env`` is free-form, so these cannot be enumerated ahead of the config.
+    """
+    if config_path is None:
+        return set()
+    try:
+        document = yaml.safe_load(Path(config_path).read_text())
+    except (OSError, yaml.YAMLError):
+        return set()
+
+    names: set[str] = set()
+    pending: list[object] = [document]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            named = node.get(API_KEY_ENV_FIELD)
+            if isinstance(named, str) and named.strip():
+                names.add(named.strip())
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+        elif isinstance(node, str):
+            names.update(_ENV_REFERENCE.findall(node))
+    return names
+
+
+def sensitive_env_names(config_path: Path | str | None = None) -> set[str]:
+    """Names that must reach the container as a secret, never as plain-text manifest."""
+    return _STATIC_SENSITIVE | config_env_references(config_path)
+
+
+def append_passthrough_env_vars(
+    env_vars: dict[str, str], config_path: Path | str | None = None
+) -> None:
     """Pass selected host environment variables into the container runtime."""
-    for name, masked in PASSTHROUGH_ENV_RULES:
+    # Static rules first so their masking wins; sorted for a stable log order.
+    discovered = ((name, True) for name in sorted(config_env_references(config_path)))
+    for name, masked in chain(PASSTHROUGH_ENV_RULES, discovered):
+        if name in env_vars:
+            continue
         value = os.environ.get(name)
         if value is None:
             continue

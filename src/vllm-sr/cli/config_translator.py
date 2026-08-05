@@ -54,7 +54,9 @@ def translate_config_to_helm_values(
 
     _translate_config_section(user_config, values)
     _translate_observability(enable_observability, values)
-    _translate_env_vars(env_vars, values, secret_name=env_secret_name)
+    _translate_env_vars(
+        env_vars, values, secret_name=env_secret_name, config_file=config_file
+    )
 
     if profile_values:
         values = _deep_merge(profile_values, values)
@@ -117,12 +119,13 @@ def _translate_env_vars(
     env_vars: dict[str, str] | None,
     values: dict,
     secret_name: str | None = None,
+    config_file: str | None = None,
 ) -> None:
     """Map non-sensitive env vars into ``env:`` and wire a secret via ``envFromSecrets:``."""
     if env_vars:
-        from cli.commands.runtime_support import PASSTHROUGH_ENV_RULES  # noqa: PLC0415
+        from cli.commands.runtime_support import sensitive_env_names  # noqa: PLC0415
 
-        sensitive_names = {name for name, masked in PASSTHROUGH_ENV_RULES if masked}
+        sensitive_names = sensitive_env_names(config_file)
         env_list: list[dict[str, str]] = values.get("env", [])
         existing_names = {e["name"] for e in env_list}
         for name, value in sorted(env_vars.items()):

@@ -198,6 +198,28 @@ class TestConfigTranslator:
         assert "OPENAI_API_KEY" not in names, "Sensitive var leaked into plain env"
         assert "HF_ENDPOINT" in names, "Non-sensitive var should be in plain env"
 
+    def test_config_named_api_key_excluded_from_plain_env(self, tmp_path):
+        """A key named only by api_key_env is still a credential and must not be inlined."""
+        config = tmp_path / "config.yaml"
+        config.write_text(
+            yaml.safe_dump(
+                {
+                    "listeners": [],
+                    "providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]},
+                }
+            )
+        )
+
+        values = translate_config_to_helm_values(
+            str(config),
+            env_vars={"GEMINI_API_KEY": "gk-test", "HF_ENDPOINT": "https://hf.co"},
+        )
+        names = {e["name"] for e in values.get("env", [])}
+        assert (
+            "GEMINI_API_KEY" not in names
+        ), "Config-named credential leaked into plain env"
+        assert "HF_ENDPOINT" in names
+
     def test_router_log_level_env_vars_are_included_in_plain_env(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(yaml.safe_dump({"listeners": []}))

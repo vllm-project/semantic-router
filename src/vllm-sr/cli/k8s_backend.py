@@ -70,7 +70,7 @@ class K8sBackend:
         if self.context:
             log.info(f"  Context:   {self.context}")
 
-        secret_name = self._sync_env_secret(env_vars)
+        secret_name = self._sync_env_secret(env_vars, config_file)
 
         profile_values = load_profile_values(self.profile, self.chart_dir)
         values = translate_config_to_helm_values(
@@ -208,14 +208,16 @@ class K8sBackend:
 
     # -- helpers --------------------------------------------------------------
 
-    def _sync_env_secret(self, env_vars: dict[str, str] | None) -> str | None:
+    def _sync_env_secret(
+        self, env_vars: dict[str, str] | None, config_file: str | None = None
+    ) -> str | None:
         """Create or update a K8s Secret with sensitive env vars; return the secret name or None."""
         if not env_vars:
             return None
 
-        from cli.commands.runtime_support import PASSTHROUGH_ENV_RULES  # noqa: PLC0415
+        from cli.commands.runtime_support import sensitive_env_names  # noqa: PLC0415
 
-        sensitive_names = {name for name, masked in PASSTHROUGH_ENV_RULES if masked}
+        sensitive_names = sensitive_env_names(config_file)
         secret_data = {k: v for k, v in env_vars.items() if k in sensitive_names and v}
 
         if not secret_data:
