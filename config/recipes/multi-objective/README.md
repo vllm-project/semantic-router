@@ -15,6 +15,10 @@ Signals, projections, decisions, algorithms, and decision plugins are owned by
 one recipe and cannot match another recipe. Provider bindings, model cards, and
 runtime services remain shared infrastructure.
 
+For a compact AMD ROCm deployment that exposes one physical model through
+multiple logical aliases, see
+[`website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md`](../../../website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md).
+
 ## Maintained capability assumptions
 
 Request-facing model IDs are routing aliases, not capability declarations. The
