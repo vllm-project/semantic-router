@@ -143,9 +143,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.Timestamp = time.Now().UTC()
 	}
 
-	// The capture switches decide whether a body may reach storage at all,
-	// not just whether it is truncated. When capture is off the body must be
-	// dropped here — truncation alone only bounds a leak (see #2748).
+	// Enforce capture switches and apply body truncation limits.
 	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
 		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
 	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
