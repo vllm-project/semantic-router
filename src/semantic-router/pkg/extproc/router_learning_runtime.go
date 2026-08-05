@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,65 +17,7 @@ type routerLearningRuntime struct {
 	replayRecorder  *routerreplay.Recorder
 	replayRecorders map[string]*routerreplay.Recorder
 	experience      map[string]*routerLearningModelExperience
-}
-
-func (rt *routerLearningRuntime) UpdateOutcome(
-	_ context.Context,
-	outcome *routerruntime.RouterOutcome,
-) routerruntime.RouterOutcomeResult {
-	result := routerruntime.RouterOutcomeResult{}
-	if rt == nil || outcome == nil || outcome.Target != routerruntime.RouterOutcomeTargetModel {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	verdict, ok := routerOutcomeVerdict(outcome.Verdict)
-	if !ok {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	model := rt.resolveOutcomeModel(outcome)
-	if model == "" {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	outcome.TargetRef = model
-	result.Recorded = rt.appendReplayOutcome(outcome)
-	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
-	rt.recordModelExperience(
-		decisionName,
-		decisionTier,
-		model,
-		verdict,
-		outcome.Score,
-	)
-	result.Updated = 1
-	return result
-}
-
-func (rt *routerLearningRuntime) resolveOutcomeModel(outcome *routerruntime.RouterOutcome) string {
-	if outcome == nil {
-		return ""
-	}
-	if model := strings.TrimSpace(outcome.TargetRef); model != "" {
-		return model
-	}
-	if model := strings.TrimSpace(outcome.Metadata["model"]); model != "" {
-		return model
-	}
-	if model := strings.TrimSpace(outcome.Metadata["selected_model"]); model != "" {
-		return model
-	}
-	record, ok := rt.replayRecord(outcome.ReplayID)
-	if !ok {
-		return ""
-	}
-	if model := strings.TrimSpace(record.SelectedModel); model != "" {
-		return model
-	}
-	if record.RouteDiagnostics != nil {
-		return strings.TrimSpace(record.RouteDiagnostics.SelectedModel)
-	}
-	return ""
+	idempotencyKeys map[string]time.Time
 }
 
 func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerruntime.RouterOutcome) (string, int) {
@@ -275,6 +216,7 @@ func newRouterLearningRuntime(
 		replayRecorder:  replayRecorder,
 		replayRecorders: replayRecorders,
 		experience:      map[string]*routerLearningModelExperience{},
+		idempotencyKeys: map[string]time.Time{},
 	}
 }
 
