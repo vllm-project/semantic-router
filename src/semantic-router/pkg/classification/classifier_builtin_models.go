@@ -10,7 +10,7 @@ import (
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.Active() && c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
@@ -191,7 +191,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
-	return c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	return c.Config.PIIModel.Active() && c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.

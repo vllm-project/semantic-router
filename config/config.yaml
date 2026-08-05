@@ -2285,6 +2285,9 @@ global:
         positive_labels: [jailbreak]
       classifier:
         domain:
+          # Omit to keep the historical behaviour of running whenever a model is
+          # configured; false disables the classifier outright.
+          enabled: true
           model_ref: domain_classifier
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
@@ -2305,6 +2308,9 @@ global:
           threshold: 0.6
           timeout_seconds: 15
         pii:
+          # Omit to keep the historical behaviour of running whenever a model is
+          # configured; false disables the classifier outright.
+          enabled: true
           model_ref: pii_classifier
           model_id: models/mmbert32k-pii-detector-merged
           threshold: 0.9
