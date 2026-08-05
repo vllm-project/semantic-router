@@ -74,17 +74,18 @@ func newTestPolicy() securityPolicyPayload {
 	return securityPolicyPayload{
 		RoleMappings: []roleMappingPayload{
 			{
-				Name:      "premium",
-				Subjects:  []subjectPayload{{Kind: "Group", Name: "paying-customers"}},
-				Role:      "premium_tier",
-				ModelRefs: []string{"gpt-4"},
+				Name:     "premium",
+				Subjects: []subjectPayload{{Kind: "Group", Name: "paying-customers"}},
+				Role:     "premium_tier",
+				// Match Helm chart default routing.modelCards name after values merge.
+				ModelRefs: []string{"replace-with-your-model"},
 				Priority:  10,
 			},
 			{
 				Name:      "free",
 				Subjects:  []subjectPayload{{Kind: "Group", Name: "free-users"}},
 				Role:      "free_tier",
-				ModelRefs: []string{"gpt-3.5-turbo"},
+				ModelRefs: []string{"replace-with-your-model"},
 				Priority:  20,
 			},
 		},
@@ -308,6 +309,8 @@ func testSecurityPolicyApply(ctx context.Context, client *kubernetes.Clientset, 
 		return err
 	}
 
+	// ConfigMap-mounted ROUTER_CONFIG_PATH is read-only in this profile, so
+	// auto-apply may report applied=false even when validation succeeds.
 	if applied {
 		if err := env.verifyConfigApplied(ctx); err != nil {
 			return err
