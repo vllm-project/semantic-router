@@ -2,6 +2,7 @@ package routerreplay
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,7 +148,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// dropped here — truncation alone only bounds a leak (see #2748).
 	if policy.captureRequestBody {
 		if len(rec.RequestBody) > policy.maxBodyBytes {
-			rec.RequestBody = rec.RequestBody[:policy.maxBodyBytes]
+			rec.RequestBody = strings.Clone(rec.RequestBody[:policy.maxBodyBytes])
 			rec.RequestBodyTruncated = true
 		}
 	} else {
@@ -157,7 +158,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 
 	if policy.captureResponseBody {
 		if len(rec.ResponseBody) > policy.maxBodyBytes {
-			rec.ResponseBody = rec.ResponseBody[:policy.maxBodyBytes]
+			rec.ResponseBody = strings.Clone(rec.ResponseBody[:policy.maxBodyBytes])
 			rec.ResponseBodyTruncated = true
 		}
 	} else {
@@ -185,11 +186,11 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 		return
 	}
 	if len(rec.Prompt) > max {
-		rec.Prompt = rec.Prompt[:max]
+		rec.Prompt = strings.Clone(rec.Prompt[:max])
 		rec.PromptTruncated = true
 	}
 	if len(rec.ToolDefinitions) > max {
-		rec.ToolDefinitions = rec.ToolDefinitions[:max]
+		rec.ToolDefinitions = strings.Clone(rec.ToolDefinitions[:max])
 		rec.ToolDefinitionsTruncated = true
 	}
 	truncateToolTraceSteps(rec.ToolTrace, max)
@@ -237,11 +238,11 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
 	if len(step.Arguments) > max {
-		step.Arguments = step.Arguments[:max]
+		step.Arguments = strings.Clone(step.Arguments[:max])
 		step.Truncated = true
 	}
 	if len(step.Output) > max {
-		step.Output = step.Output[:max]
+		step.Output = strings.Clone(step.Output[:max])
 		step.Truncated = true
 	}
 }
