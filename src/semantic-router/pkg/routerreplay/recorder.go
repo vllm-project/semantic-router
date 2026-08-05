@@ -146,25 +146,11 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// The capture switches decide whether a body may reach storage at all,
 	// not just whether it is truncated. When capture is off the body must be
 	// dropped here — truncation alone only bounds a leak (see #2748).
-	if policy.captureRequestBody {
-		if len(rec.RequestBody) > policy.maxBodyBytes {
-			rec.RequestBody = strings.Clone(rec.RequestBody[:policy.maxBodyBytes])
-			rec.RequestBodyTruncated = true
-		}
-	} else {
-		rec.RequestBody = ""
-		rec.RequestBodyTruncated = false
-	}
+	rec.RequestBody, rec.RequestBodyTruncated = applyCapturePolicy(
+		policy.captureRequestBody, rec.RequestBody, policy.maxBodyBytes)
 
-	if policy.captureResponseBody {
-		if len(rec.ResponseBody) > policy.maxBodyBytes {
-			rec.ResponseBody = strings.Clone(rec.ResponseBody[:policy.maxBodyBytes])
-			rec.ResponseBodyTruncated = true
-		}
-	} else {
-		rec.ResponseBody = ""
-		rec.ResponseBodyTruncated = false
-	}
+	rec.ResponseBody, rec.ResponseBodyTruncated = applyCapturePolicy(
+		policy.captureResponseBody, rec.ResponseBody, policy.maxBodyBytes)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
@@ -185,14 +171,8 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	if max <= 0 {
 		return
 	}
-	if len(rec.Prompt) > max {
-		rec.Prompt = strings.Clone(rec.Prompt[:max])
-		rec.PromptTruncated = true
-	}
-	if len(rec.ToolDefinitions) > max {
-		rec.ToolDefinitions = strings.Clone(rec.ToolDefinitions[:max])
-		rec.ToolDefinitionsTruncated = true
-	}
+	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
@@ -237,12 +217,11 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 // payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
-	if len(step.Arguments) > max {
-		step.Arguments = strings.Clone(step.Arguments[:max])
-		step.Truncated = true
-	}
-	if len(step.Output) > max {
-		step.Output = strings.Clone(step.Output[:max])
+	args, t1 := truncateString(step.Arguments, max)
+	out, t2 := truncateString(step.Output, max)
+	step.Arguments = args
+	step.Output = out
+	if t1 || t2 {
 		step.Truncated = true
 	}
 }
@@ -339,6 +318,20 @@ func truncateBody(body []byte, maxBytes int) (string, bool) {
 		return string(body), false
 	}
 	return string(body[:maxBytes]), true
+}
+
+func truncateString(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s, false
+	}
+	return strings.Clone(s[:maxBytes]), true
+}
+
+func applyCapturePolicy(capture bool, s string, maxBytes int) (string, bool) {
+	if !capture {
+		return "", false
+	}
+	return truncateString(s, maxBytes)
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {
