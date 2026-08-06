@@ -437,15 +437,23 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     PRIORITY 200
     TIER 1
     WHEN projection("unified_cost_reasoning")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium")
-    ALGORITHM static
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
+          "local/qwen3.5-9b-economy-replica" (reasoning = true, effort = "medium")
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.6, load: 0.4 }
+    }
   }
 
   ROUTE unified_cost_first_route (description = "Deterministic local route with semantic reuse for ordinary requests.") {
     PRIORITY 100
     TIER 2
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false)
-    ALGORITHM static
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.5-9b-economy-replica" (reasoning = false)
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.8, load: 0.2 }
+    }
     PLUGIN semantic_cache {
       enabled: true
       similarity_threshold: 0.88
@@ -665,11 +673,11 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
           "local/deepseek-v4-flash-analyst" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM fusion {
-      analysis_models: ["local/qwen3.6-27b-coder", "local/gemma4-26b-balanced", "local/deepseek-v4-flash-analyst", "local/qwen3.5-122b-frontier"]
+      analysis_models: ["local/qwen3.6-27b-coder", "local/gemma4-26b-balanced", "local/deepseek-v4-flash-analyst"]
       include_analysis: false
       include_intermediate_responses: false
       judge_prompt_version: "fusion-v1"
-      max_concurrent: 4
+      max_concurrent: 3
       min_successful_responses: 2
       model: "local/qwen3.5-122b-frontier"
       on_error: "skip"
@@ -724,7 +732,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     MODEL "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/gemma4-26b-balanced" (reasoning = false),
-          "local/deepseek-v4-flash-analyst" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       on_no_candidates: "first"

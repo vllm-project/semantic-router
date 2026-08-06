@@ -127,8 +127,16 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 
 	cost, _ := cfg.RecipeByName("cost-first")
 	for _, decision := range cost.Profile.Decisions {
-		if refs := decision.ModelRefs; len(refs) != 1 || refs[0].Model != "local/qwen3.5-9b-economy" {
-			t.Fatalf("cost-first decision %q must remain on the self-hosted model: %+v", decision.Name, refs)
+		models := make([]string, 0, len(decision.ModelRefs))
+		for _, ref := range decision.ModelRefs {
+			models = append(models, ref.Model)
+		}
+		slices.Sort(models)
+		if !slices.Equal(models, []string{"local/qwen3.5-9b-economy", "local/qwen3.5-9b-economy-replica"}) {
+			t.Fatalf("cost-first decision %q must use both self-hosted economy replicas: %+v", decision.Name, decision.ModelRefs)
+		}
+		if decision.Algorithm == nil || decision.Algorithm.Type != DecisionAlgorithmMultiFactor {
+			t.Fatalf("cost-first decision %q must load-balance with multi-factor selection: %+v", decision.Name, decision.Algorithm)
 		}
 	}
 	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginSemanticCache) {

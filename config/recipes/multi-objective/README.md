@@ -24,7 +24,8 @@ or routing responsibilities, see
 Request-facing model IDs are routing aliases, not capability declarations. The
 maintained provider entries resolve to a measured local pool:
 
-- `Qwen3.5-9B` has primary and replica endpoints for economy and privacy.
+- `Qwen3.5-9B` has independent primary and replica lanes for cost/load-aware
+  economy routing; the primary also owns the privacy alias.
 - `Qwen3.6-35B-A3B-FP8` owns the flash lane.
 - `Qwen3.6-27B` owns coding, planning, and structured-output work.
 - `Gemma 4-26B-A4B-it` provides the fastest measured balanced lane and
