@@ -124,7 +124,6 @@ func assertSearchEnforcesUserScope(t *testing.T, useHNSW bool) {
 		t.Fatalf("unscoped lookup must not match a scoped entry, idx=%d", search.bestIndex)
 	}
 
-	// A different model partition must not match even in the same scope.
 	if search := c.runFindSimilarEmbeddingSearch(emb, "model-b", aliceQ, 0.8, aliceScope); search.bestIndex != -1 {
 		t.Fatalf("a different model partition must not match, idx=%d", search.bestIndex)
 	}

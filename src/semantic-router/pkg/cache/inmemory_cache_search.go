@@ -199,9 +199,8 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(
 		c.refreshHNSWIfStaleDuringSearch()
 		result = c.scanHNSWCandidates(queryEmbedding, model, query, threshold, scopeNamespace, now)
 		if result.polarityRejected && (result.bestIndex < 0 || result.bestSimilarity < threshold) {
-			// HNSW only considers an approximate candidate set. Once its nearest
-			// results are rejected for polarity, scan all entries before treating
-			// the lookup as a miss so a valid lower-ranked cache hit is not hidden.
+			// HNSW is approximate; scan all entries before a polarity rejection
+			// hides a valid lower-ranked hit.
 			result = c.scanLinearForSimilarity(queryEmbedding, model, query, threshold, scopeNamespace, now)
 		}
 	} else {
@@ -211,11 +210,8 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(
 	return result
 }
 
-// recordPolarityReject accounts a polarity-guard rejection as a cache miss and
-// emits the observability signal for it. The caller-visible outcome is a miss
-// (the request is recomputed); a dedicated cache_negation_reject event lets the
-// rejection be distinguished from an ordinary below-threshold miss without
-// adding a hot-path metric label.
+// recordPolarityReject preserves caller-visible miss semantics while emitting
+// an event that distinguishes polarity rejection from a threshold miss.
 func (c *InMemoryCache) recordPolarityReject(start time.Time, model, query, cachedQuery string, similarity, threshold float32) {
 	atomic.AddInt64(&c.missCount, 1)
 	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: POLARITY REJECT - similarity=%.4f >= threshold=%.4f but query and cached entry differ in polarity (negation/antonym); treating as miss",
@@ -248,9 +244,8 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		})
 	}
 
-	// If every above-threshold candidate was rejected, preserve the old miss
-	// semantics and diagnostics. A valid lower-ranked candidate, however, is
-	// selected by the scan and must remain eligible for a cache hit.
+	// A valid lower-ranked candidate remains eligible after stronger candidates
+	// are rejected.
 	if search.polarityRejected && (search.bestIndex < 0 || search.bestSimilarity < threshold) {
 		c.StoreSimilarity(search.polarityRejectedScore)
 		c.recordPolarityReject(
@@ -270,11 +265,7 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	c.StoreSimilarity(search.bestSimilarity)
 
 	if search.bestSimilarity >= threshold {
-		// The polarity guard (#2691) runs per candidate in considerSearchCandidate:
-		// any above-threshold negation/antonym variant is diverted to
-		// polarityRejected before it can win bestEntry, and the all-rejected case
-		// is handled above. So a winner reaching here is already known not to be a
-		// polarity mismatch — no second check is needed on the hot path.
+		// Candidate selection already excluded above-threshold polarity mismatches.
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()

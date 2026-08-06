@@ -7,20 +7,12 @@ import (
 	"time"
 )
 
-// TestFinishFindSimilarSearchPolarityWiring verifies the guard is actually
-// wired into the in-memory lookup decision, independent of any embedding model.
-// It builds the search result the real way — through considerSearchCandidate,
-// which is where the polarity divert lives — using synthetic above-threshold
-// embeddings, then runs finishFindSimilarSearch over that result. So it always
-// runs in CI (cgo build, no model fetch required) and deterministically proves
-// that a polarity mismatch flips a would-be hit into a miss while a genuine
-// match is still served. The model-dependent end-to-end behavior over real
-// mmBERT embeddings is covered separately (and skipped when the model is
-// absent) in negation_regression_test.go.
+// TestFinishFindSimilarSearchPolarityWiring exercises candidate selection and
+// final hit/miss wiring without a model. negation_regression_test.go covers the
+// model-backed path.
 func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 	const threshold = float32(0.80)
-	// Identical unit vectors give a deterministic dot product of 1.0, safely
-	// above the threshold, with no embedding model involved.
+	// Identical unit vectors give a deterministic above-threshold score.
 	embedding := []float32{1, 0, 0}
 	const aboveThreshold = float32(1.0)
 
@@ -44,9 +36,6 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 		return c, entry
 	}
 
-	// buildResult drives the candidate through considerSearchCandidate exactly as
-	// the scan paths do, so the polarity divert (or its absence) is what shapes
-	// the result handed to finishFindSimilarSearch.
 	buildResult := func(c *InMemoryCache, query string, entry CacheEntry) cacheSearchResult {
 		result := cacheSearchResult{bestIndex: -1}
 		c.considerSearchCandidate(&result, query, threshold, 0, entry, embedding)
@@ -55,7 +44,7 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 
 	t.Run("polarity mismatch flips above-threshold candidate to miss", func(t *testing.T) {
 		c, entry := newCacheWithEntry()
-		const query = "How do I disable two-factor authentication?" // antonym of the cached query
+		const query = "How do I disable two-factor authentication?"
 		result := buildResult(c, query, entry)
 		if !result.polarityRejected {
 			t.Fatalf("expected candidate diverted to polarityRejected, got %+v", result)
@@ -74,7 +63,7 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 
 	t.Run("genuine match above threshold is still served", func(t *testing.T) {
 		c, entry := newCacheWithEntry()
-		const query = "How do I enable two-factor authentication?" // identical to the cached query
+		const query = "How do I enable two-factor authentication?"
 		result := buildResult(c, query, entry)
 		if result.polarityRejected || result.bestIndex != 0 {
 			t.Fatalf("expected genuine match promoted to bestIndex 0, got %+v", result)

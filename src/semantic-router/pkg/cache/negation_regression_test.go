@@ -12,22 +12,12 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
-// End-to-end regression for #2691: negated / antonym variants of a cached query
-// must not be served that entry's cached answer, while genuine paraphrases must
-// still hit. This drives the real production cache path
-// (NewInMemoryCache{EmbeddingModel:"mmbert"} → AddEntry → FindSimilarWithThreshold),
-// so it needs the mmbert embedding model and cgo; it is skipped when the model
-// is not present (e.g. a CI job without models fetched). The pure-function guard
-// logic is covered separately, without a model, in polarity_test.go.
-//
-// PAWS-style hard negatives: high lexical overlap, opposite meaning. The full
-// PAWS/QQP calibration corpus is the offline threshold-calibration tool's input
-// (a separate PR), not duplicated here.
+// Model-backed regression for #2691 through the production in-memory cache
+// path. It skips without mmBERT; polarity_test.go provides model-free coverage.
 
 const negationRegressionThreshold = 0.80 // config/plugin/semantic-cache/memory.yaml ships 0.80
 
-// Each pair is {cached, incoming}: the cache is seeded with an answer for
-// `cached`, then queried with the opposite-meaning `incoming`.
+// Each pair is {cached, incoming}.
 var negationRegressionPairs = [][2]string{
 	{"How to turn on dark mode?", "How to turn off dark mode?"},
 	{"Is port 6379 open by default?", "Is port 6379 closed by default?"},
@@ -39,10 +29,7 @@ var negationRegressionPairs = [][2]string{
 	{"How do I enable two-factor authentication?", "How do I disable two-factor authentication?"},
 }
 
-// Genuine paraphrases (equivalent meaning, high surface overlap) that clear the
-// threshold on the mmbert path — the guard must keep hitting them, proving it
-// does not eat legitimate recall. These differ only by a non-polarity token
-// swap (do/can, dropped article), so polarityMismatch must not fire on them.
+// High-overlap paraphrases ensure the guard preserves legitimate recall.
 var paraphraseControlPairs = [][2]string{
 	{"How do I reset my password?", "How can I reset my password?"},
 	{"Where are the logs stored?", "Where are logs stored?"},
@@ -51,8 +38,6 @@ var paraphraseControlPairs = [][2]string{
 
 var mmbertInitOnce sync.Once
 
-// findMmbertModel walks up from the test's working directory looking for the
-// locally-fetched mmbert embedding model, returning "" if it is not present.
 func findMmbertModel() string {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -135,8 +120,6 @@ func runNegationRegressionPairs(t *testing.T) int {
 		sim := float64(c.LastSimilarity())
 
 		if sim >= negationRegressionThreshold {
-			// The embedding cleared the threshold: absent the guard this WOULD
-			// be a false hit. Assert the guard rejected it.
 			guardExercised++
 			if hit {
 				t.Errorf("negation false-hit: incoming %q matched cached %q at sim=%.4f >= %.2f and returned %q; polarity guard should have rejected it",
@@ -150,7 +133,6 @@ func runNegationRegressionPairs(t *testing.T) int {
 	return guardExercised
 }
 
-// runParaphraseControlPairs verifies that the guard preserves genuine cache hits.
 func runParaphraseControlPairs(t *testing.T) int {
 	t.Helper()
 	paraphraseExercised := 0
