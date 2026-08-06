@@ -69,21 +69,15 @@
 
 .menuHeader {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   padding: 7px 8px 10px;
   color: var(--text-primary, #f4f4f5);
   font-size: 0.78rem;
-  font-weight: 760;
+  font-weight: 700;
 }
 
-.menuHeader > div {
-  display: grid;
-  gap: 2px;
-}
-
-.menuHeader small,
-.menuHeader > div small {
+.menuHeader small {
   color: var(--text-secondary, #a1a1aa);
   font-size: 0.68rem;
   font-weight: 600;
@@ -108,10 +102,11 @@
 
 .option {
   position: relative;
-  display: grid;
+  display: flex;
   width: 100%;
-  gap: 5px;
-  padding: 10px;
+  min-height: 42px;
+  align-items: center;
+  padding: 9px 10px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -132,11 +127,16 @@
 
 .optionIdentity {
   display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: baseline;
-  padding-right: 24px;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 26px;
 }
 
 .optionModelId {
+  min-width: 0;
   overflow: hidden;
   color: var(--text-primary, #f4f4f5);
   font-family: inherit;
@@ -147,11 +147,17 @@
   white-space: nowrap;
 }
 
-.optionDescription {
-  max-width: 92%;
+.objectiveChip {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-secondary, #a1a1aa);
-  font-size: 0.71rem;
-  line-height: 1.35;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
 
 .activeMark {

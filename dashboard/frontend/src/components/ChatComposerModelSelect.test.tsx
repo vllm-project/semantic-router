@@ -9,10 +9,12 @@ const models = [
   {
     id: 'vllm-sr/mom-balanced-v1',
     description: 'Balanced Mixture-of-Models profile',
+    recipe: 'balanced',
   },
   {
     id: 'vllm-sr/mom-flash-v1',
     description: 'Latency-first Mixture-of-Models profile',
+    recipe: 'speed-first',
   },
 ]
 
@@ -28,6 +30,7 @@ describe('ChatComposerModelSelect', () => {
 
     expect(markup).toContain('data-testid="playground-composer-model-select"')
     expect(markup).toContain('aria-haspopup="listbox"')
+    expect(markup).toContain('aria-label="Model: vllm-sr/mom-balanced-v1"')
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).not.toContain('>MoM<')
     expect(markup).not.toContain('AMD')
@@ -55,5 +58,13 @@ describe('ChatComposerModelSelect', () => {
     expect(source).toContain("event.key === 'Home'")
     expect(source).toContain("event.key === 'End'")
     expect(source).toContain('triggerRef.current?.focus()')
+  })
+
+  it('keeps options compact and presents recipe names as objective chips', () => {
+    const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('styles.objectiveChip')
+    expect(source).not.toContain('recipe: {model.recipe}')
+    expect(source).not.toContain('styles.optionDescription')
   })
 })
