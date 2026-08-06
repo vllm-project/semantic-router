@@ -64,6 +64,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
+          [[ "${{ needs.changes.outputs.e2e_multimodal_routing }}" == "true" ]] && profiles+=("multimodal-routing")
           [[ "${{ needs.changes.outputs.e2e_anthropic_shim }}" == "true" ]] && profiles+=("anthropic-shim")
 
           # Drop duplicates between the baseline and per-profile additions
