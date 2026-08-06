@@ -119,8 +119,20 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 	assert.True(t, ctx.VSRCacheHit)
 }
 
-func TestHandleCaching_BypassesAnthropicClientUntilCacheHitEmitterExists(t *testing.T) {
-	mockCache := &mockStreamingCache{exactHit: true}
+func TestHandleCaching_ReplaysExactHitForAnthropicClient(t *testing.T) {
+	mockCache := &mockStreamingCache{
+		exactHit: true,
+		exactResponse: []byte(`{
+			"id":"cached",
+			"model":"claude",
+			"choices":[{
+				"index":0,
+				"message":{"role":"assistant","content":"cached"},
+				"finish_reason":"stop"
+			}],
+			"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}
+		}`),
+	}
 	decision := config.Decision{
 		Name:      "anthropic-route",
 		ModelRefs: []config.ModelRef{{Model: "claude"}},
@@ -150,10 +162,13 @@ func TestHandleCaching_BypassesAnthropicClientUntilCacheHitEmitterExists(t *test
 
 	resp, hit := router.handleCaching(ctx, decision.Name, "claude")
 
-	assert.Nil(t, resp)
-	assert.False(t, hit)
-	assert.False(t, mockCache.exactFindCalled)
+	assert.NotNil(t, resp)
+	assert.True(t, hit)
+	assert.True(t, mockCache.exactFindCalled)
 	assert.False(t, mockCache.findSimilarCalled)
+	body := string(resp.GetImmediateResponse().GetBody())
+	assert.Contains(t, body, `"type":"message"`)
+	assert.Contains(t, body, `"text":"cached"`)
 }
 
 func TestHandleCaching_NoCacheControlSkipsReadsButKeepsWritePath(t *testing.T) {

@@ -131,7 +131,7 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 	}
 
 	usage := extractStreamingUsage(ctx)
-	reconstructedJSON, err := buildReconstructedStreamingResponse(ctx, usage, false)
+	reconstructedJSON, err := buildReconstructedStreamingResponse(ctx, usage, true)
 	if err != nil {
 		if errors.Is(err, errSkipStreamingCache) {
 			return nil
@@ -148,8 +148,11 @@ func validateStreamingCachePreconditions(ctx *RequestContext) error {
 		logging.Warnf("Stream not completed (no [DONE] marker), skipping cache")
 	case ctx.StreamingAborted:
 		logging.Warnf("Stream was aborted, skipping cache")
-	case ctx.StreamingContent == "":
-		logging.Warnf("Streaming response has no content, skipping cache")
+	case ctx.StreamingContent == "" &&
+		ctx.StreamingReasoning == "" &&
+		ctx.StreamingRefusal == "" &&
+		len(ctx.StreamingToolCalls) == 0:
+		logging.Warnf("Streaming response has no replayable payload, skipping cache")
 	case ctx.StreamingMetadata["id"] == nil || ctx.StreamingMetadata["model"] == nil:
 		logging.Warnf("Streaming response missing required metadata, skipping cache")
 	default:
@@ -199,6 +202,9 @@ func buildReconstructedStreamingResponse(
 	if ctx.StreamingReasoning != "" {
 		message["reasoning_content"] = ctx.StreamingReasoning
 	}
+	if ctx.StreamingRefusal != "" {
+		message["refusal"] = ctx.StreamingRefusal
+	}
 
 	toolCalls := buildStreamingResponseToolCalls(ctx)
 	if includeToolCalls && len(toolCalls) > 0 {
@@ -208,7 +214,10 @@ func buildReconstructedStreamingResponse(
 		}
 	}
 
-	if ctx.StreamingContent == "" && (!includeToolCalls || len(toolCalls) == 0) {
+	if ctx.StreamingContent == "" &&
+		ctx.StreamingReasoning == "" &&
+		ctx.StreamingRefusal == "" &&
+		(!includeToolCalls || len(toolCalls) == 0) {
 		logging.Warnf("Reconstructed response has no valid assistant payload, skipping cache")
 		return nil, errSkipStreamingCache
 	}

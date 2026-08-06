@@ -385,6 +385,7 @@ func (c *QdrantCache) LookupSimilarWithThreshold(model, query string, threshold 
 					Filter: &qdrant.Filter{
 						MustNot: []*qdrant.Condition{
 							qdrant.NewMatchKeyword("response_body", pendingResponseMarker),
+							qdrant.NewMatchKeyword("query", exactCacheQueryMarker),
 						},
 					},
 				},
