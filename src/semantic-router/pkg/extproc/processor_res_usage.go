@@ -270,14 +270,13 @@ func streamingPromptTokenDetails(ctx *RequestContext, promptTokens int) (cached 
 			}
 		}
 	}
-	cached, cachedReported, cacheWrite, cacheWriteReported =
-		mergeProviderStreamingTokenDetails(
-			ctx,
-			cached,
-			cachedReported,
-			cacheWrite,
-			cacheWriteReported,
-		)
+	cached, cachedReported, cacheWrite, cacheWriteReported = mergeProviderStreamingTokenDetails(
+		ctx,
+		cached,
+		cachedReported,
+		cacheWrite,
+		cacheWriteReported,
+	)
 	normalized := normalizeResponseUsage(responseUsageMetrics{
 		promptTokens:       promptTokens,
 		cachedPromptTokens: cached,

@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 )
 
-const exactCacheKeyPrefix = "vsr:response-cache:exact:v1:"
-const exactCacheQueryMarker = "__vsr_exact__"
+const (
+	exactCacheKeyPrefix   = "vsr:response-cache:exact:v1:"
+	exactCacheQueryMarker = "__vsr_exact__"
+)
 
 func exactCacheStorageKey(partition string, fingerprint string) string {
 	return exactCacheKeyPrefix + exactCacheRecordID(partition, fingerprint)
