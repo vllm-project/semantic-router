@@ -168,10 +168,11 @@ func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[s
 	if !w.Final.IsZero() {
 		fields["final"] = workflowFinalValue(w.Final)
 	}
-	if w.Planner.Model != "" {
-		fields["planner"] = ObjectValue{Fields: map[string]Value{
-			"model": StringValue{V: w.Planner.Model},
-		}}
+	plannerFields := make(map[string]Value)
+	setStringValue(plannerFields, "model", w.Planner.Model)
+	setIntValue(plannerFields, "max_completion_tokens", w.Planner.MaxCompletionTokens)
+	if len(plannerFields) > 0 {
+		fields["planner"] = ObjectValue{Fields: plannerFields}
 	}
 	setIntValue(fields, "max_steps", w.MaxSteps)
 	setIntValue(fields, "max_parallel", w.MaxParallel)
