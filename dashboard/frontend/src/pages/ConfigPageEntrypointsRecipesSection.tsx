@@ -29,6 +29,11 @@ import type {
 } from './configPageSupport'
 import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
+import {
+  countProjectionsInProfile,
+  countSignalsInProfile,
+  type RoutingProfileLike,
+} from '../utils/routingScopes'
 
 interface ConfigPageEntrypointsRecipesSectionProps {
   config: ConfigData
@@ -269,8 +274,14 @@ export default function ConfigPageEntrypointsRecipesSection({
               value: recipe.routing.strategy ?? DEFAULT_ROUTING_STRATEGY,
             },
             { label: 'Decisions', value: recipe.routing.decisions?.length ?? 0 },
-            { label: 'Signals', value: Object.values(recipe.routing.signals ?? {}).flat().length },
-            { label: 'Projections', value: Object.keys(recipe.routing.projections ?? {}).length },
+            {
+              label: 'Signals',
+              value: countSignalsInProfile(recipe.routing as RoutingProfileLike).total,
+            },
+            {
+              label: 'Projections',
+              value: countProjectionsInProfile(recipe.routing as RoutingProfileLike),
+            },
             {
               label: 'Physical targets',
               value: targets.join('\n') || 'No target models',
