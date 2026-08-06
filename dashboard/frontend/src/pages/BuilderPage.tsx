@@ -22,6 +22,7 @@ import { BuilderOutputPanel } from "./builderPageOutputPanel";
 import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
 import { BuilderToolbar } from "./builderPageToolbar";
+import { summarizeBuilderRoutingScopes } from "./builderPageRoutingScopeSupport";
 import { useReadonly } from "@/contexts/ReadonlyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDeployConfig } from "@/utils/accessControl";
@@ -41,6 +42,7 @@ const BuilderPage: React.FC = () => {
     loading,
     mode,
     dirty,
+    renderedYamlOutput,
     yamlOutput,
     crdOutput,
     compileError,
@@ -494,12 +496,16 @@ const BuilderPage: React.FC = () => {
       new Set(rawNames.map((name) => name.trim()).filter(Boolean)),
     );
   }, [ast?.models, symbols?.models]);
-  const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
-  const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
-  const projectionScoreCount = ast?.projectionScores?.length ?? 0;
-  const projectionMappingCount = ast?.projectionMappings?.length ?? 0;
-  const routeCount = ast?.routes?.length ?? symbols?.routes?.length ?? 0;
-  const pluginCount = ast?.plugins?.length ?? symbols?.plugins?.length ?? 0;
+  const {
+    signalCount,
+    projectionPartitionCount,
+    projectionScoreCount,
+    projectionMappingCount,
+    routeCount,
+    pluginCount,
+    recipeCount,
+    entrypointCount,
+  } = useMemo(() => summarizeBuilderRoutingScopes(ast, symbols), [ast, symbols]);
   const isValid = errorCount === 0 && wasmReady;
   const lineCount = dslSource.split("\n").length;
 
@@ -634,7 +640,7 @@ const BuilderPage: React.FC = () => {
           <BuilderOutputPanel
             open={outputPanelOpen}
             width={outputWidth}
-            yamlOutput={yamlOutput}
+            yamlOutput={renderedYamlOutput || yamlOutput}
             crdOutput={crdOutput}
             dslSource={dslSource}
             dslTabLabel="DSL"
@@ -653,6 +659,8 @@ const BuilderPage: React.FC = () => {
         signalCount={signalCount}
         routeCount={routeCount}
         pluginCount={pluginCount}
+        recipeCount={recipeCount}
+        entrypointCount={entrypointCount}
         lineCount={lineCount}
         mode={mode}
       />

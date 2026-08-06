@@ -125,6 +125,42 @@
   font-size: 0.72rem;
 }
 
+.scopePicker {
+  position: absolute;
+  top: 116px;
+  left: 16px;
+  z-index: 8;
+  display: grid;
+  gap: 5px;
+  width: min(360px, calc(100% - 32px));
+  padding: 8px 10px;
+  border: 1px solid #303036;
+  border-radius: 6px;
+  background: rgba(16, 16, 18, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.scopeSelect {
+  width: 100%;
+  height: 30px;
+  padding: 0 28px 0 9px;
+  overflow: hidden;
+  border: 1px solid #3f3f46;
+  border-radius: 5px;
+  outline: none;
+  background: #18181b;
+  color: #f4f4f5;
+  font: inherit;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeSelect:focus-visible {
+  border-color: #71717a;
+  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.22);
+}
+
 .layoutToolbar {
   position: absolute;
   top: 14px;
@@ -546,6 +582,13 @@
     top: 10px;
     left: 10px;
     max-width: calc(100% - 20px);
+  }
+
+  .scopePicker {
+    top: 108px;
+    right: 10px;
+    left: 10px;
+    width: auto;
   }
 }
 

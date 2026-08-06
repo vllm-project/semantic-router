@@ -738,7 +738,22 @@ export interface ConfigData {
     signals?: ConfigData['signals']
     projections?: ConfigData['projections']
     decisions?: ConfigData['decisions']
+    strategy?: 'priority' | 'confidence'
   }
+  entrypoints?: Array<{
+    model_names: string[]
+    recipe: string
+  }>
+  recipes?: Array<{
+    name: string
+    description?: string
+    routing: {
+      signals?: ConfigData['signals']
+      projections?: ConfigData['projections']
+      decisions?: ConfigData['decisions']
+      strategy?: 'priority' | 'confidence'
+    }
+  }>
   global?: {
     router?: {
       strategy?: 'priority' | 'confidence'

@@ -25,9 +25,20 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const { data, loading, error, refresh } = useTopologyData()
+  const {
+    data,
+    loading,
+    error,
+    refresh,
+    routingScopes,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useTopologyData()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
+  const selectedScope =
+    routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
+  const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
   const {
     testQuery,
     setTestQuery,
@@ -35,7 +46,7 @@ const TopologyFlow: React.FC = () => {
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data)
+  } = useTestQuery(data, selectedRoutingModel)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -100,7 +111,12 @@ const TopologyFlow: React.FC = () => {
 
   useEffect(() => {
     setExpandHiddenDecisions(false)
-  }, [densityMode])
+  }, [densityMode, selectedScopeId])
+
+  useEffect(() => {
+    clearResult()
+    setFocusedDecisionName(null)
+  }, [clearResult, selectedScopeId])
 
   // Generate full topology layout
   useEffect(() => {
@@ -170,8 +186,32 @@ const TopologyFlow: React.FC = () => {
           <div className={styles.canvasTitle}>
             <span>System map</span>
             <strong>Routing Topology</strong>
-            <p>Signals → Projections → Decisions → Runtime → Models</p>
+            <p>
+              Signals → Projections → Decisions → Runtime → Models
+              {selectedScope ? ` · ${selectedScope.label}` : ''}
+            </p>
           </div>
+          {routingScopes.length > 0 && (
+            <div className={styles.scopePicker}>
+              <label className={styles.toolbarLabel} htmlFor="topology-routing-scope">
+                Entrypoint / recipe
+              </label>
+              <select
+                id="topology-routing-scope"
+                className={styles.scopeSelect}
+                value={selectedScopeId}
+                onChange={(event) => setSelectedScopeId(event.target.value)}
+              >
+                {routingScopes.map((scope) => (
+                  <option key={scope.id} value={scope.id}>
+                    {scope.entrypointModelNames.length > 0
+                      ? `${scope.label} · ${scope.entrypointModelNames.join(', ')}`
+                      : scope.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className={styles.layoutToolbar}>
             <div className={`${styles.toolbarSection} ${styles.densitySection}`}>
               <span className={styles.toolbarLabel}>Density</span>
