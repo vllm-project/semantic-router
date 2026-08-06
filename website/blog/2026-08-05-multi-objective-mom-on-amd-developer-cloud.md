@@ -70,7 +70,7 @@ stable judge can resolve disagreements.
 | 3 | `deepseek-ai/DeepSeek-V4-Flash-0731` | `local/deepseek-v4-flash-analyst` | Current MIT-licensed analyst behind the stable judge. |
 | 4 | `Qwen/Qwen3.6-27B` | `local/qwen3.6-27b-coder` | Dense coding, planning, and structured output. |
 | 5 | `google/gemma-4-26B-A4B-it` | `local/gemma4-26b-balanced` | Fast architecture-diverse balanced tier. |
-| 6 | `Qwen/Qwen3.5-9B` | `local/qwen3.5-9b-economy-replica` | Independent speed/load replica. |
+| 6 | `Qwen/Qwen3.5-9B` | `local/qwen3.5-9b-economy-replica` | Independent cost/speed load replica. |
 | 7 | Router signal models | internal | Isolated classification and projection runtime. |
 
 DeepSeek V4 is intentionally an analyst, not the direct default. Its pinned
@@ -463,6 +463,8 @@ The maintained commands were exercised on an 8×MI300X host with vLLM
   per second with p50 238.822 ms, p95 381.197 ms, and 0 errors
 - 126 real generated requests passed across all five entrypoints and all six
   maintained languages
+- a 24-request concurrent cost-reasoning gate split evenly across the two 9B
+  economy lanes, confirming GPU 6 participates in live selection
 
 Representative generated requests took 0.181 seconds for economy, 0.333 seconds
 for flash, 0.650 seconds for privacy, 4.342 seconds for balanced direct,
