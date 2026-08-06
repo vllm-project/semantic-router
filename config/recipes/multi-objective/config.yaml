@@ -6,98 +6,98 @@ listeners:
   timeout: 1200s
 providers:
   defaults:
-    default_model: qwen/qwen3.5-rocm
+    default_model: local/qwen3.5-9b-economy
     reasoning_families:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
     default_reasoning_effort: low
   models:
-  - name: anthropic/claude-opus-4.6
-    reasoning_family: qwen3
-    provider_model_id: anthropic/claude-opus-4.6
-    backend_refs:
-    - name: anthropic/claude-opus-4.6_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.8
-      completion_per_1m: 7.2
-      cached_input_per_1m: 0.45
-    external_model_ids:
-      vllm: anthropic/claude-opus-4.6
-  - name: google/gemini-2.5-flash-lite
-    reasoning_family: qwen3
-    provider_model_id: google/gemini-2.5-flash-lite
-    backend_refs:
-    - name: google/gemini-2.5-flash-lite_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.01
-      completion_per_1m: 0.04
-      cached_input_per_1m: 0.002
-    external_model_ids:
-      vllm: google/gemini-2.5-flash-lite
-  - name: google/gemini-3.1-pro
-    reasoning_family: qwen3
-    provider_model_id: google/gemini-3.1-pro
-    backend_refs:
-    - name: google/gemini-3.1-pro_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.48
-      completion_per_1m: 1.92
-      cached_input_per_1m: 0.12
-    external_model_ids:
-      vllm: google/gemini-3.1-pro
-  - name: openai/gpt5.4
-    reasoning_family: qwen3
-    provider_model_id: openai/gpt5.4
-    backend_refs:
-    - name: openai/gpt5.4_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.2
-      completion_per_1m: 4.8
-      cached_input_per_1m: 0.3
-    external_model_ids:
-      vllm: openai/gpt5.4
-  - name: qwen/qwen3.5-rocm
+  - name: local/qwen3.5-122b-frontier
     reasoning_family: qwen3
     provider_model_id: qwen/qwen3.5-rocm
     backend_refs:
-    - name: qwen/qwen3.5-rocm_vllm_primary
+    - name: qwen3.5-122b_vllm_primary
       endpoint: vllm:8000
       protocol: http
       weight: 1
       type: vllm
     pricing:
       currency: USD
-      prompt_per_1m: 0.001
-      completion_per_1m: 0.004
-      cached_input_per_1m: 0.0001
+      prompt_per_1m: 0.35
+      completion_per_1m: 1.4
+      cached_input_per_1m: 0.0875
     external_model_ids:
       vllm: qwen/qwen3.5-rocm
+  - name: local/qwen3.5-9b-economy
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-economy
+    backend_refs:
+    - name: qwen3.5-9b-economy_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.02
+      completion_per_1m: 0.08
+      cached_input_per_1m: 0.005
+    external_model_ids:
+      vllm: local/qwen3.5-9b-economy
+  - name: local/qwen3.5-9b-private
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-private
+    backend_refs:
+    - name: qwen3.5-9b-private_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.025
+      completion_per_1m: 0.1
+      cached_input_per_1m: 0.00625
+    external_model_ids:
+      vllm: local/qwen3.5-9b-private
+  - name: local/qwen3.6-35b-balanced
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-35b-balanced
+    backend_refs:
+    - name: qwen3.6-35b-balanced_vllm_primary
+      endpoint: vllm-qwen36-flash:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.1
+      completion_per_1m: 0.4
+      cached_input_per_1m: 0.025
+    external_model_ids:
+      vllm: local/qwen3.6-35b-balanced
+  - name: local/qwen3.6-35b-flash
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-35b-flash
+    backend_refs:
+    - name: qwen3.6-35b-flash_vllm_primary
+      endpoint: vllm-qwen36-flash:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.08
+      completion_per_1m: 0.32
+      cached_input_per_1m: 0.02
+    external_model_ids:
+      vllm: local/qwen3.6-35b-flash
 routing:
   modelCards:
-  - name: anthropic/claude-opus-4.6
+  - name: local/qwen3.5-122b-frontier
     context_window_size: 262144
-    description: Highest-quality model for accuracy-first routing.
+    description: Large local MoE tier for accuracy-first synthesis and review.
     capabilities:
     - legal_analysis
     - high_risk_review
@@ -107,57 +107,66 @@ routing:
     tags:
     - tier:premium
     - cost:highest
-  - name: google/gemini-2.5-flash-lite
-    context_window_size: 262144
-    description: Low-cost managed lane for fast general workloads.
+    - deployment:self_hosted
+    - physical:qwen3.5-122b-a10b-fp8
+  - name: local/qwen3.5-9b-economy
+    context_window_size: 32768
+    description: Small dense local tier for low-cost and short interactive workloads.
     capabilities:
     - fast_qa
     - explanation
-    - coding
+    - general_chat
     quality_score: 0.68
     modality: text
     tags:
-    - tier:medium
+    - tier:economy
+    - cost:lowest
+    - latency:fastest
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.5-9b-private
+    context_window_size: 32768
+    description: Isolated alias of the local 9B tier for privacy-policy routes.
+    capabilities:
+    - privacy_locality
+    - sensitive_data
+    - general_chat
+    quality_score: 0.68
+    modality: text
+    tags:
+    - tier:private
     - cost:low
-    - latency:fast
-  - name: google/gemini-3.1-pro
-    context_window_size: 262144
-    description: Strong general reasoning and long-context model.
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.6-35b-balanced
+    context_window_size: 32768
+    description: Latest local MoE tier for balanced reasoning and coding workloads.
     capabilities:
     - reasoning
     - architecture
-    - long_context
-    quality_score: 0.82
+    - coding
+    quality_score: 0.86
     modality: text
     tags:
-    - tier:complex
-    - cost:upper_mid
-  - name: openai/gpt5.4
-    context_window_size: 262144
-    description: Frontier formal reasoning and proof model.
-    capabilities:
-    - reasoning
-    - proofs
-    - formal_derivation
-    quality_score: 0.9
-    modality: text
-    tags:
-    - tier:reasoning
-    - cost:high
-  - name: qwen/qwen3.5-rocm
-    context_window_size: 262144
-    description: Self-hosted general model and strict local-policy target.
+    - tier:balanced
+    - cost:medium
+    - deployment:self_hosted
+    - physical:qwen3.6-35b-a3b-fp8
+  - name: local/qwen3.6-35b-flash
+    context_window_size: 32768
+    description: Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning.
     capabilities:
     - fast_qa
-    - self_hosted
-    - general_chat
-    - privacy_locality
-    quality_score: 0.58
+    - coding
+    - reasoning
+    quality_score: 0.84
     modality: text
     tags:
-    - tier:simple
-    - cost:lowest
+    - tier:flash
+    - cost:medium
+    - latency:fast
     - deployment:self_hosted
+    - physical:qwen3.6-35b-a3b-fp8
   strategy: priority
 entrypoints:
 - model_names:
@@ -429,13 +438,13 @@ recipes:
         - type: reask
           name: unified_balance_reask
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -464,16 +473,16 @@ recipes:
         - type: projection
           name: unified_balance_deliberate
       modelRefs:
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy
         use_reasoning: true
         reasoning_effort: medium
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -494,19 +503,14 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: false
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: medium
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: multi_factor
         multi_factor:
@@ -597,11 +601,9 @@ recipes:
         - type: projection
           name: unified_speed_heavy
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
-        use_reasoning: false
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: false
       algorithm:
         type: latency_aware
@@ -617,9 +619,7 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
-        use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
       algorithm:
         type: multi_factor
@@ -721,7 +721,7 @@ recipes:
         - type: projection
           name: unified_cost_reasoning
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: true
         reasoning_effort: medium
       algorithm:
@@ -734,7 +734,7 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
       algorithm:
         type: static
@@ -1088,13 +1088,13 @@ recipes:
         - type: projection
           name: unified_frontier_use_workflow
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -1103,12 +1103,12 @@ recipes:
           mode: dynamic
           template: micro_agent
           planner:
-            model: google/gemini-3.1-pro
-            max_completion_tokens: 2048
+            model: local/qwen3.6-35b-balanced
+            max_completion_tokens: 512
           max_steps: 4
           max_parallel: 3
-          max_completion_tokens: 32768
-          round_timeout_seconds: 300
+          max_completion_tokens: 4096
+          round_timeout_seconds: 180
           min_successful_responses: 2
           include_intermediate_responses: false
           on_error: skip
@@ -1122,26 +1122,26 @@ recipes:
         - type: projection
           name: unified_frontier_use_fusion
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
         type: fusion
         fusion:
-          model: anthropic/claude-opus-4.6
+          model: local/qwen3.5-122b-frontier
           analysis_models:
-          - google/gemini-3.1-pro
-          - openai/gpt5.4
-          - anthropic/claude-opus-4.6
+          - local/qwen3.6-35b-balanced
+          - local/qwen3.6-35b-flash
+          - local/qwen3.5-122b-frontier
           max_concurrent: 3
-          max_completion_tokens: 32768
-          round_timeout_seconds: 300
+          max_completion_tokens: 1024
+          round_timeout_seconds: 180
           min_successful_responses: 2
           temperature: 0.2
           include_analysis: false
@@ -1160,15 +1160,15 @@ recipes:
         - type: fact_check
           name: unified_frontier_fact_check
       modelRefs:
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -1188,13 +1188,13 @@ recipes:
         - type: projection
           name: unified_frontier_deliberate
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -1208,9 +1208,9 @@ recipes:
           include_reasoning: true
           compaction_strategy: last_n_tokens
           compaction_tokens: 8000
-          synthesis_model: anthropic/claude-opus-4.6
+          synthesis_model: local/qwen3.5-122b-frontier
           max_concurrent: 3
-          round_timeout_seconds: 300
+          round_timeout_seconds: 180
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
@@ -1223,13 +1223,13 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-balanced
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
+      - model: local/qwen3.6-35b-flash
         use_reasoning: true
         reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -1352,7 +1352,7 @@ recipes:
         - type: keyword
           name: unified_privacy_attack_markers
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-private
         use_reasoning: false
       algorithm:
         type: static
@@ -1371,9 +1371,8 @@ recipes:
         - type: projection
           name: unified_privacy_sensitive
       modelRefs:
-      - model: qwen/qwen3.5-rocm
-        use_reasoning: true
-        reasoning_effort: medium
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
       algorithm:
         type: static
       plugins:
@@ -1389,9 +1388,8 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
-        use_reasoning: true
-        reasoning_effort: medium
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
     strategy: priority
 global:
   router:
@@ -1468,7 +1466,7 @@ global:
       eviction_policy: fifo
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1200
       flow:
         state:

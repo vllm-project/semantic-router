@@ -14,48 +14,48 @@ ROUTING {
 # MODELS
 # =============================================================================
 
-MODEL anthropic/claude-opus-4.6 {
+MODEL local/qwen3.5-122b-frontier {
   context_window_size: 262144
-  description: "Highest-quality model for accuracy-first routing."
+  description: "Large local MoE tier for accuracy-first synthesis and review."
   capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis"]
-  tags: ["tier:premium", "cost:highest"]
+  tags: ["tier:premium", "cost:highest", "deployment:self_hosted", "physical:qwen3.5-122b-a10b-fp8"]
   quality_score: 0.94
   modality: "text"
 }
 
-MODEL google/gemini-2.5-flash-lite {
-  context_window_size: 262144
-  description: "Low-cost managed lane for fast general workloads."
-  capabilities: ["fast_qa", "explanation", "coding"]
-  tags: ["tier:medium", "cost:low", "latency:fast"]
+MODEL local/qwen3.5-9b-economy {
+  context_window_size: 32768
+  description: "Small dense local tier for low-cost and short interactive workloads."
+  capabilities: ["fast_qa", "explanation", "general_chat"]
+  tags: ["tier:economy", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
   quality_score: 0.68
   modality: "text"
 }
 
-MODEL google/gemini-3.1-pro {
-  context_window_size: 262144
-  description: "Strong general reasoning and long-context model."
-  capabilities: ["reasoning", "architecture", "long_context"]
-  tags: ["tier:complex", "cost:upper_mid"]
-  quality_score: 0.82
+MODEL local/qwen3.5-9b-private {
+  context_window_size: 32768
+  description: "Isolated alias of the local 9B tier for privacy-policy routes."
+  capabilities: ["privacy_locality", "sensitive_data", "general_chat"]
+  tags: ["tier:private", "cost:low", "deployment:self_hosted", "physical:qwen3.5-9b"]
+  quality_score: 0.68
   modality: "text"
 }
 
-MODEL openai/gpt5.4 {
-  context_window_size: 262144
-  description: "Frontier formal reasoning and proof model."
-  capabilities: ["reasoning", "proofs", "formal_derivation"]
-  tags: ["tier:reasoning", "cost:high"]
-  quality_score: 0.9
+MODEL local/qwen3.6-35b-balanced {
+  context_window_size: 32768
+  description: "Latest local MoE tier for balanced reasoning and coding workloads."
+  capabilities: ["reasoning", "architecture", "coding"]
+  tags: ["tier:balanced", "cost:medium", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
+  quality_score: 0.86
   modality: "text"
 }
 
-MODEL qwen/qwen3.5-rocm {
-  context_window_size: 262144
-  description: "Self-hosted general model and strict local-policy target."
-  capabilities: ["fast_qa", "self_hosted", "general_chat", "privacy_locality"]
-  tags: ["tier:simple", "cost:lowest", "deployment:self_hosted"]
-  quality_score: 0.58
+MODEL local/qwen3.6-35b-flash {
+  context_window_size: 32768
+  description: "Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning."
+  capabilities: ["fast_qa", "coding", "reasoning"]
+  tags: ["tier:flash", "cost:medium", "latency:fast", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
+  quality_score: 0.84
   modality: "text"
 }
 
@@ -223,9 +223,9 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 300
     TIER 1
     WHEN (user_feedback("unified_balance_wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "first"
@@ -242,10 +242,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 200
     TIER 2
     WHEN projection("unified_balance_deliberate")
-    MODEL "google/gemini-2.5-flash-lite" (reasoning = true, effort = "medium"),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
+          "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -256,11 +256,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_route (description = "Balance quality, observed latency, configured cost, and current load.") {
     PRIORITY 100
     TIER 3
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "medium"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-35b-balanced" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -323,9 +322,8 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     PRIORITY 200
     TIER 1
     WHEN projection("unified_speed_heavy")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-35b-balanced" (reasoning = false)
     ALGORITHM latency_aware {
       description: "Minimize observed generation and first-token latency."
       tpot_percentile: 90
@@ -336,8 +334,7 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   ROUTE unified_speed_first_route (description = "Choose the fastest healthy candidate from live p90 latency and load.") {
     PRIORITY 100
     TIER 2
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 90
       on_no_candidates: "first"
@@ -405,14 +402,14 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     PRIORITY 200
     TIER 1
     WHEN projection("unified_cost_reasoning")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium")
     ALGORITHM static
   }
 
   ROUTE unified_cost_first_route (description = "Deterministic local route with semantic reuse for ordinary requests.") {
     PRIORITY 100
     TIER 2
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false)
     ALGORITHM static
     PLUGIN semantic_cache {
       enabled: true
@@ -595,19 +592,19 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 400
     TIER 1
     WHEN projection("unified_frontier_use_workflow")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM workflows {
       include_intermediate_responses: false
-      max_completion_tokens: 32768
+      max_completion_tokens: 4096
       max_parallel: 3
       max_steps: 4
       min_successful_responses: 2
       mode: "dynamic"
       on_error: "skip"
-      planner: { max_completion_tokens: 2048, model: "google/gemini-3.1-pro" }
-      round_timeout_seconds: 300
+      planner: { max_completion_tokens: 512, model: "local/qwen3.6-35b-balanced" }
+      round_timeout_seconds: 180
       template: "micro_agent"
     }
   }
@@ -616,20 +613,20 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 350
     TIER 2
     WHEN projection("unified_frontier_use_fusion")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM fusion {
-      analysis_models: ["google/gemini-3.1-pro", "openai/gpt5.4", "anthropic/claude-opus-4.6"]
+      analysis_models: ["local/qwen3.6-35b-balanced", "local/qwen3.6-35b-flash", "local/qwen3.5-122b-frontier"]
       include_analysis: false
       include_intermediate_responses: false
       judge_prompt_version: "fusion-v1"
-      max_completion_tokens: 32768
+      max_completion_tokens: 1024
       max_concurrent: 3
       min_successful_responses: 2
-      model: "anthropic/claude-opus-4.6"
+      model: "local/qwen3.5-122b-frontier"
       on_error: "skip"
-      round_timeout_seconds: 300
+      round_timeout_seconds: 180
       temperature: 0.2
     }
   }
@@ -638,10 +635,10 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 325
     TIER 3
     WHEN (keyword("unified_frontier_verification_markers") OR fact_check("unified_frontier_fact_check"))
-    MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM confidence {
       confidence_method: "hybrid"
       escalation_order: "small_to_large"
@@ -654,9 +651,9 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 300
     TIER 4
     WHEN projection("unified_frontier_deliberate")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
       compaction_strategy: "last_n_tokens"
@@ -667,8 +664,8 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       min_successful_responses: 2
       model_distribution: "round_robin"
       on_error: "skip"
-      round_timeout_seconds: 300
-      synthesis_model: "anthropic/claude-opus-4.6"
+      round_timeout_seconds: 180
+      synthesis_model: "local/qwen3.5-122b-frontier"
       temperature: 0.6
     }
   }
@@ -676,9 +673,9 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_accuracy_first_route (description = "Use the strongest direct model when orchestration would add little value.") {
     PRIORITY 100
     TIER 5
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
+          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { quality: 1 }
@@ -759,7 +756,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 300
     TIER 1
     WHEN (jailbreak("unified_privacy_jailbreak_strict") OR keyword("unified_privacy_attack_markers"))
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -771,7 +768,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 200
     TIER 2
     WHEN projection("unified_privacy_sensitive")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -782,7 +779,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
   ROUTE unified_privacy_local_default (description = "Route non-sensitive traffic locally as the privacy-first default.") {
     PRIORITY 100
     TIER 3
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
   }
 
 }
