@@ -181,6 +181,55 @@ func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 	}
 }
 
+func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
+	configPath := setupTestConfig(t)
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
+
+	var received RouterIntentRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/api/v1/eval", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{
+			RoutingDecision: "balanced-route",
+		}))
+	}))
+	defer server.Close()
+
+	result := callRouterAPI(TestQueryRequest{
+		Query: "hello",
+		Mode:  TestQueryModeDryRun,
+		Model: "vllm-sr/mom-balanced-v1",
+	}, server.URL, configPath)
+
+	require.Equal(t, "vllm-sr/mom-balanced-v1", received.Model)
+	require.Equal(t, "balanced-route", result.MatchedDecision)
+}
+
+func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {
+	cfg := &routerconfig.RouterConfig{
+		IntelligentRouting: routerconfig.IntelligentRouting{
+			Decisions: []routerconfig.Decision{{Name: "default-route"}},
+		},
+		Recipes: []routerconfig.RoutingRecipe{{
+			Name: "balanced",
+			Profile: routerconfig.RoutingProfile{
+				Decisions: []routerconfig.Decision{{Name: "balanced-route"}},
+			},
+		}},
+		Entrypoints: []routerconfig.EntrypointMapping{{
+			ModelNames: []string{"vllm-sr/mom-balanced-v1"},
+			Recipe:     "balanced",
+		}},
+	}
+
+	scoped := topologyConfigForRequestModel(cfg, "vllm-sr/mom-balanced-v1")
+
+	require.Len(t, scoped.IntelligentRouting.Decisions, 1)
+	require.Equal(t, "balanced-route", scoped.IntelligentRouting.Decisions[0].Name)
+	require.Equal(t, routerconfig.RecipeName("balanced"), scoped.RoutingScope)
+}
+
 func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
