@@ -144,7 +144,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   SIGNAL keyword unified_balance_reasoning_markers {
     operator: "OR"
-    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "分析取舍", "第一性原理", "根因分析", "逐步推理", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "kompromisse analysieren"]
+    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
     method: "regex"
   }
 
@@ -160,11 +160,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     method: "regex"
   }
 
-  SIGNAL fact_check unified_balance_needs_fact_check {
+  SIGNAL fact_check needs_fact_check {
     description: "Detect claims that benefit from evidence-backed verification."
   }
 
-  SIGNAL user_feedback unified_balance_wrong_answer {
+  SIGNAL user_feedback wrong_answer {
     description: "Detect explicit correction or dissatisfaction with the previous answer."
   }
 
@@ -224,7 +224,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   }
 
   SIGNAL complexity unified_balance_difficulty {
-    threshold: 0.72
+    threshold: 0.08
     description: "Semantic boundary between direct requests and synthesis-heavy work."
     hard: { candidates: ["Analyze a production failure from several competing root causes.", "Design a distributed system and justify its consistency tradeoffs.", "Synthesize conflicting evidence into a defensible recommendation."] }
     easy: { candidates: ["Give a short definition of a common term.", "Summarize one paragraph in a single sentence.", "Explain a basic concept with one example."] }
@@ -232,7 +232,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.1, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.46, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.32, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.35, name: "unified_balance_needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "unified_balance_wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.12, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.3, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.1, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.46, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
@@ -249,7 +249,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.") {
     PRIORITY 300
     TIER 1
-    WHEN (user_feedback("unified_balance_wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
+    WHEN (user_feedback("wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
     MODEL "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/gemma4-26b-balanced" (reasoning = false),
@@ -486,13 +486,13 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL keyword unified_frontier_deep_markers {
     operator: "OR"
-    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen"]
+    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
     method: "regex"
   }
 
   SIGNAL keyword unified_frontier_verification_markers {
     operator: "OR"
-    keywords: ["verify with evidence", "verify the answer", "cite reliable sources", "check every factual claim", "用证据核实", "核实每个事实", "verificar con evidencia", "vérifier avec des preuves", "証拠で検証", "mit belegen überprüfen"]
+    keywords: ["verify with evidence", "verify the answer", "cite reliable sources", "check every factual claim", "用证据核实", "核实每个事实", "verificar con evidencia", "vérifier avec des preuves", "証拠で検証", "mit belegen überprüfen", "\\b(is|was|were)\\b.{0,80}\\b(accurate|true|correct)\\b", "\\b(when was|who invented|what is the population|how tall is)\\b"]
     method: "regex"
   }
 
@@ -514,7 +514,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     aggregation_method: "max"
   }
 
-  SIGNAL fact_check unified_frontier_fact_check {
+  SIGNAL fact_check needs_fact_check {
     description: "Detect factual requests that benefit from independent verification."
   }
 
@@ -562,7 +562,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL structure unified_frontier_direct_reference {
     description: "Detect requests that quote orchestration vocabulary only to define, translate, or briefly explain it; this independently suppresses workflow and fusion escalation even when their keyword signals match."
-    feature: { source: { pattern: "^\\s*((define|translate|explain|définis|traduis|explique|traduce|explica|definiere|übersetze)\\b|(定义|翻译|解释|説明|翻訳))", type: "regex" }, type: "exists" }
+    feature: { source: { pattern: "(?i)(\\b(define|translate|explain)\\b.{0,48}\\b(phrase|term|expression)\\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))", type: "regex" }, type: "exists" }
   }
 
   SIGNAL conversation unified_frontier_tooling_available {
@@ -577,7 +577,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   }
 
   SIGNAL complexity unified_frontier_complexity {
-    threshold: 0.74
+    threshold: 0.15
     description: "Semantic boundary for tasks that merit multi-round reasoning."
     hard: { candidates: ["Prove a difficult result by exploring multiple possible derivations.", "Diagnose a complex distributed-system failure with incomplete evidence.", "Synthesize competing scientific explanations into a rigorous conclusion."] }
     easy: { candidates: ["Explain a familiar concept in plain language.", "Summarize a short paragraph.", "Answer a direct factual question."] }
@@ -590,12 +590,12 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   PROJECTION score unified_frontier_fusion_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.15, name: "unified_frontier_fact_check" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
+    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.15, name: "needs_fact_check" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
   }
 
   PROJECTION score unified_frontier_deliberation_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.2, name: "unified_frontier_fact_check" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
+    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.2, name: "needs_fact_check" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
   }
 
   PROJECTION mapping unified_frontier_workflow_band {
@@ -658,7 +658,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_fusion (description = "Use independent expert answers plus a frontier judge when disagreement resolution matters.") {
     PRIORITY 350
     TIER 3
-    WHEN projection("unified_frontier_use_fusion")
+    WHEN projection("unified_frontier_use_fusion") AND keyword("unified_frontier_fusion_markers")
     MODEL "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
           "local/gemma4-26b-balanced" (reasoning = false),
@@ -681,7 +681,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_verified_answer (description = "Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.") {
     PRIORITY 325
     TIER 4
-    WHEN (keyword("unified_frontier_verification_markers") OR fact_check("unified_frontier_fact_check"))
+    WHEN (keyword("unified_frontier_verification_markers") OR fact_check("needs_fact_check"))
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
           "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
@@ -757,6 +757,12 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     method: "regex"
   }
 
+  SIGNAL keyword unified_privacy_sensitive_markers {
+    operator: "OR"
+    keywords: ["\\b\\d{3}-\\d{2}-\\d{4}\\b", "\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", "\\b(ssn|social security number|credit card|passport number)\\b", "(身份证|邮箱|护照号码|银行卡号)", "(número de seguridad social|correo electrónico|pasaporte)", "(numéro de sécurité sociale|adresse e-mail|passeport)", "(マイナンバー|メールアドレス|パスポート番号)", "(sozialversicherungsnummer|e-mail-adresse|reisepassnummer)"]
+    method: "regex"
+  }
+
   SIGNAL keyword unified_privacy_attack_markers {
     operator: "OR"
     keywords: ["ignore previous instructions", "reveal the system prompt", "exfiltrate credentials", "bypass the safety policy", "忽略之前的指令", "泄露系统提示词", "导出凭据", "绕过安全策略", "ignora las instrucciones anteriores", "extraer credenciales", "ignorer les instructions précédentes", "exfiltrer les identifiants", "以前の指示を無視", "認証情報を流出", "vorherige anweisungen ignorieren"]
@@ -782,7 +788,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
 
   PROJECTION score unified_privacy_risk_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.5, name: "unified_privacy_local_only_markers", value_source: "confidence" }, { type: "pii", weight: 0.9, name: "unified_privacy_pii_strict" }, { type: "jailbreak", weight: 0.9, name: "unified_privacy_jailbreak_strict" }, { type: "keyword", weight: 0.9, name: "unified_privacy_attack_markers", value_source: "confidence" }, { type: "kb", weight: 0.7, name: "unified_privacy_policy" }]
+    inputs: [{ type: "keyword", weight: 0.5, name: "unified_privacy_local_only_markers", value_source: "confidence" }, { type: "keyword", weight: 0.75, name: "unified_privacy_sensitive_markers", value_source: "confidence" }, { type: "pii", weight: 0.9, name: "unified_privacy_pii_strict" }, { type: "jailbreak", weight: 0.9, name: "unified_privacy_jailbreak_strict" }, { type: "keyword", weight: 0.9, name: "unified_privacy_attack_markers", value_source: "confidence" }, { type: "kb", weight: 0.3, name: "unified_privacy_policy" }]
   }
 
   PROJECTION mapping unified_privacy_risk_band {

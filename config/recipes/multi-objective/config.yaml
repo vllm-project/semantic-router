@@ -307,16 +307,24 @@ recipes:
         - root cause
         - step by step
         - system design
+        - consistency tradeoffs
+        - competing production failure
         - 分析取舍
         - 第一性原理
         - 根因分析
         - 逐步推理
+        - 取舍
+        - 根因
         - analizar las ventajas y desventajas
         - causa raíz
         - analyser les compromis
         - cause racine
         - 根本原因を分析
         - 段階的に推論
+        - トレードオフ
+        - 根本原因
+        - トレードオフを分析
+        - 根本原因と
         - kompromisse analysieren
         case_sensitive: false
         method: regex
@@ -356,10 +364,10 @@ recipes:
         case_sensitive: false
         method: regex
       fact_check:
-      - name: unified_balance_needs_fact_check
+      - name: needs_fact_check
         description: Detect claims that benefit from evidence-backed verification.
       user_feedbacks:
-      - name: unified_balance_wrong_answer
+      - name: wrong_answer
         description: Detect explicit correction or dissatisfaction with the previous answer.
       reasks:
       - name: unified_balance_reask
@@ -427,7 +435,7 @@ recipes:
           gt: 0.08
       complexity:
       - name: unified_balance_difficulty
-        threshold: 0.72
+        threshold: 0.08
         description: Semantic boundary between direct requests and synthesis-heavy work.
         easy:
           candidates:
@@ -458,13 +466,13 @@ recipes:
           value_source: confidence
         - type: keyword
           name: unified_balance_verification_markers
-          weight: 0.32
+          weight: 0.45
           value_source: confidence
         - type: fact_check
-          name: unified_balance_needs_fact_check
-          weight: 0.35
+          name: needs_fact_check
+          weight: 0.45
         - type: user_feedback
-          name: unified_balance_wrong_answer
+          name: wrong_answer
           weight: 0.35
         - type: keyword
           name: unified_balance_correction_markers
@@ -479,10 +487,10 @@ recipes:
           weight: 0.18
         - type: structure
           name: unified_balance_constraint_dense
-          weight: 0.12
+          weight: 0.45
         - type: complexity
           name: unified_balance_difficulty:hard
-          weight: 0.3
+          weight: 0.4
         - type: complexity
           name: unified_balance_difficulty:easy
           weight: -0.2
@@ -525,7 +533,7 @@ recipes:
         operator: OR
         conditions:
         - type: user_feedback
-          name: unified_balance_wrong_answer
+          name: wrong_answer
         - type: keyword
           name: unified_balance_correction_markers
         - type: reask
@@ -903,6 +911,8 @@ recipes:
         - rigorous proof
         - derive step by step
         - hard reasoning problem
+        - difficult result
+        - multiple possible derivations
         - 探索多种方法
         - 多条推理路径
         - 第一性原理
@@ -915,6 +925,7 @@ recipes:
         - 複数のアプローチを探索
         - 厳密な証明
         - mehrere ansätze untersuchen
+        - denkwege untersuchen
         case_sensitive: false
         method: regex
       - name: unified_frontier_verification_markers
@@ -930,6 +941,8 @@ recipes:
         - vérifier avec des preuves
         - 証拠で検証
         - mit belegen überprüfen
+        - \b(is|was|were)\b.{0,80}\b(accurate|true|correct)\b
+        - \b(when was|who invented|what is the population|how tall is)\b
         case_sensitive: false
         method: regex
       embeddings:
@@ -961,7 +974,7 @@ recipes:
         - Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.
         - 複数の推論経路を探索し、最も厳密な解答を統合してください。
       fact_check:
-      - name: unified_frontier_fact_check
+      - name: needs_fact_check
         description: Detect factual requests that benefit from independent verification.
       language:
       - name: zh
@@ -1044,10 +1057,10 @@ recipes:
           source:
             type: regex
             pattern: >-
-              ^\s*((define|translate|explain|définis|traduis|explique|traduce|explica|definiere|übersetze)\b|(定义|翻译|解释|説明|翻訳))
+              (?i)(\b(define|translate|explain)\b.{0,48}\b(phrase|term|expression)\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))
       complexity:
       - name: unified_frontier_complexity
-        threshold: 0.74
+        threshold: 0.15
         description: Semantic boundary for tasks that merit multi-round reasoning.
         easy:
           candidates:
@@ -1096,7 +1109,7 @@ recipes:
           weight: 0.55
           value_source: confidence
         - type: fact_check
-          name: unified_frontier_fact_check
+          name: needs_fact_check
           weight: 0.15
         - type: structure
           name: unified_frontier_direct_reference
@@ -1113,7 +1126,7 @@ recipes:
           weight: 0.35
           value_source: confidence
         - type: fact_check
-          name: unified_frontier_fact_check
+          name: needs_fact_check
           weight: 0.2
         - type: context
           name: unified_frontier_long_context
@@ -1248,6 +1261,8 @@ recipes:
         conditions:
         - type: projection
           name: unified_frontier_use_fusion
+        - type: keyword
+          name: unified_frontier_fusion_markers
       modelRefs:
       - model: local/qwen3.6-27b-coder
         use_reasoning: false
@@ -1286,7 +1301,7 @@ recipes:
         - type: keyword
           name: unified_frontier_verification_markers
         - type: fact_check
-          name: unified_frontier_fact_check
+          name: needs_fact_check
       modelRefs:
       - model: local/qwen3.5-9b-economy
         use_reasoning: false
@@ -1396,6 +1411,19 @@ recipes:
         - nur lokale verarbeitung
         case_sensitive: false
         method: regex
+      - name: unified_privacy_sensitive_markers
+        operator: OR
+        keywords:
+        - \b\d{3}-\d{2}-\d{4}\b
+        - \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+        - \b(ssn|social security number|credit card|passport number)\b
+        - (身份证|邮箱|护照号码|银行卡号)
+        - (número de seguridad social|correo electrónico|pasaporte)
+        - (numéro de sécurité sociale|adresse e-mail|passeport)
+        - (マイナンバー|メールアドレス|パスポート番号)
+        - (sozialversicherungsnummer|e-mail-adresse|reisepassnummer)
+        case_sensitive: false
+        method: regex
       - name: unified_privacy_attack_markers
         operator: OR
         keywords:
@@ -1441,6 +1469,10 @@ recipes:
           name: unified_privacy_local_only_markers
           weight: 0.5
           value_source: confidence
+        - type: keyword
+          name: unified_privacy_sensitive_markers
+          weight: 0.75
+          value_source: confidence
         - type: pii
           name: unified_privacy_pii_strict
           weight: 0.9
@@ -1453,7 +1485,7 @@ recipes:
           value_source: confidence
         - type: kb
           name: unified_privacy_policy
-          weight: 0.7
+          weight: 0.3
       mappings:
       - name: unified_privacy_risk_band
         source: unified_privacy_risk_score
@@ -1647,7 +1679,7 @@ global:
       hallucination_mitigation:
         fact_check:
           model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.6
+          threshold: 0.5
           use_cpu: true
           use_mmbert_32k: true
           model_ref: fact_check_classifier
@@ -1669,7 +1701,7 @@ global:
       feedback_detector:
         enabled: true
         model_id: models/mmbert32k-feedback-detector-merged
-        threshold: 0.7
+        threshold: 0.5
         use_cpu: true
         use_modernbert: false
         use_mmbert_32k: true
