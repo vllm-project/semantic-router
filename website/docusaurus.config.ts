@@ -50,7 +50,23 @@ const config: Config = {
       onBrokenMarkdownLinks: 'warn',
     },
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true, // cache-bust the index between deploys
+        indexDocs: true,
+        indexBlog: true,
+        indexPages: false, // homepage/community are marketing pages, not docs
+        docsRouteBasePath: '/docs',
+        blogRouteBasePath: '/blog',
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        // language / styling / version scoping are handled in later phases
+      },
+    ],
+  ],
 
   presets: [
     [
