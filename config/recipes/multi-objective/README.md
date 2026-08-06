@@ -15,17 +15,22 @@ Signals, projections, decisions, algorithms, and decision plugins are owned by
 one recipe and cannot match another recipe. Provider bindings, model cards, and
 runtime services remain shared infrastructure.
 
-For a compact AMD ROCm deployment that exposes one physical model through
-multiple logical aliases, see
+For an AMD ROCm deployment that runs three physical models and uses explicit
+aliases for balanced and private lanes, see
 [`website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md`](../../../website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md).
 
 ## Maintained capability assumptions
 
 Request-facing model IDs are routing aliases, not capability declarations. The
-maintained provider entries resolve to one shared backend, so every alias uses
-the reasoning family supported by that backend. A deployment with distinct
-physical backends should set this metadata from each backend's actual request
-contract.
+maintained provider entries resolve to a three-tier local pool:
+
+- `Qwen3.5-9B` serves economy and private aliases.
+- `Qwen3.6-35B-A3B-FP8` serves flash and balanced aliases.
+- `Qwen3.5-122B-A10B-FP8` serves the frontier tier.
+
+All three backends use the Qwen3 reasoning request contract. The configured
+32K limits for the smaller tiers are deployment limits chosen for predictable
+single-GPU capacity, not the models' architectural maximum.
 
 The balanced effort score gives explicit reasoning markers a `0.46` contribution
 and limits the learned terse-preference penalty to `-0.10`. Explicit reasoning

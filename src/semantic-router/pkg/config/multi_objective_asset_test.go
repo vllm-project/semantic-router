@@ -12,7 +12,7 @@ func TestMultiObjectiveRecipeDefinesObjectiveProfiles(t *testing.T) {
 	}
 
 	assertMultiObjectiveMappings(t, cfg)
-	assertMultiObjectiveSharedBackendReasoningCapability(t, cfg)
+	assertMultiObjectivePoolReasoningCapability(t, cfg)
 	assertMultiObjectiveRecipes(t, cfg)
 }
 
@@ -54,21 +54,21 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertMultiObjectiveSharedBackendReasoningCapability(t *testing.T, cfg *RouterConfig) {
+func assertMultiObjectivePoolReasoningCapability(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	for _, modelName := range []string{
-		"qwen/qwen3.5-rocm",
-		"google/gemini-2.5-flash-lite",
-		"google/gemini-3.1-pro",
-		"openai/gpt5.4",
-		"anthropic/claude-opus-4.6",
+		"local/qwen3.5-122b-frontier",
+		"local/qwen3.5-9b-economy",
+		"local/qwen3.5-9b-private",
+		"local/qwen3.6-35b-balanced",
+		"local/qwen3.6-35b-flash",
 	} {
 		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "qwen3" {
-			t.Fatalf("%s shared-backend reasoning family = %q, want qwen3", modelName, got)
+			t.Fatalf("%s model-pool reasoning family = %q, want qwen3", modelName, got)
 		}
 	}
 	if family := cfg.ReasoningFamilies["qwen3"]; family.Type != "chat_template_kwargs" {
-		t.Fatalf("shared qwen3 backend lost chat-template reasoning capability: %+v", family)
+		t.Fatalf("qwen3 model pool lost chat-template reasoning capability: %+v", family)
 	}
 }
 
@@ -109,7 +109,7 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 
 	cost, _ := cfg.RecipeByName("cost-first")
 	for _, decision := range cost.Profile.Decisions {
-		if refs := decision.ModelRefs; len(refs) != 1 || refs[0].Model != "qwen/qwen3.5-rocm" {
+		if refs := decision.ModelRefs; len(refs) != 1 || refs[0].Model != "local/qwen3.5-9b-economy" {
 			t.Fatalf("cost-first decision %q must remain on the self-hosted model: %+v", decision.Name, refs)
 		}
 	}
@@ -176,7 +176,7 @@ func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 	}
 	for _, decision := range privacy.Profile.Decisions {
 		for _, ref := range decision.ModelRefs {
-			if ref.Model != "qwen/qwen3.5-rocm" {
+			if ref.Model != "local/qwen3.5-9b-private" {
 				t.Fatalf("privacy-first decision %q routes to non-local model %q", decision.Name, ref.Model)
 			}
 		}

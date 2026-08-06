@@ -61,7 +61,7 @@ func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 	}
 	for _, expected := range []string{
 		`mode: "insert"`,
-		`max_completion_tokens: 2048`,
+		`max_completion_tokens: 512`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled multi-objective DSL missing %q", expected)
