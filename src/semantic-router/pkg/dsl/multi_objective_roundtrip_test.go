@@ -15,6 +15,22 @@ import (
 )
 
 func TestMultiObjectiveConfigRoundTripsEntrypointsAndRecipes(t *testing.T) {
+	original := loadMultiObjectiveConfig(t)
+	source, err := Decompile(original)
+	if err != nil {
+		t.Fatalf("decompile multi-objective config: %v", err)
+	}
+	assertMultiObjectiveScopedDSL(t, source)
+
+	recompiled, compileErrs := Compile(source)
+	if len(compileErrs) > 0 {
+		t.Fatalf("recompile multi-objective DSL: %v", compileErrs)
+	}
+	assertMultiObjectiveRoutingScopesEqual(t, original, recompiled)
+}
+
+func loadMultiObjectiveConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve test path")
@@ -32,11 +48,11 @@ func TestMultiObjectiveConfigRoundTripsEntrypointsAndRecipes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse multi-objective config: %v", err)
 	}
+	return original
+}
 
-	source, err := Decompile(original)
-	if err != nil {
-		t.Fatalf("decompile multi-objective config: %v", err)
-	}
+func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
+	t.Helper()
 	if got := strings.Count(source, "ENTRYPOINT {"); got != 5 {
 		t.Fatalf("decompiled entrypoints = %d, want 5", got)
 	}
@@ -51,11 +67,13 @@ func TestMultiObjectiveConfigRoundTripsEntrypointsAndRecipes(t *testing.T) {
 			t.Fatalf("decompiled multi-objective DSL missing %q", expected)
 		}
 	}
+}
 
-	recompiled, compileErrs := Compile(source)
-	if len(compileErrs) > 0 {
-		t.Fatalf("recompile multi-objective DSL: %v", compileErrs)
-	}
+func assertMultiObjectiveRoutingScopesEqual(
+	t *testing.T,
+	original, recompiled *config.RouterConfig,
+) {
+	t.Helper()
 	if !reflect.DeepEqual(original.Entrypoints, recompiled.Entrypoints) {
 		t.Fatalf("entrypoints changed after YAML -> DSL -> config round trip")
 	}
