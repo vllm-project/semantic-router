@@ -17,7 +17,7 @@ const models = [
 ]
 
 describe('ChatComposerModelSelect', () => {
-  it('renders a compact MoM dropdown beside the composer add button', () => {
+  it('renders a compact model dropdown without a redundant prefix badge', () => {
     const markup = renderToStaticMarkup(
       createElement(ChatComposerModelSelect, {
         models,
@@ -29,7 +29,7 @@ describe('ChatComposerModelSelect', () => {
     expect(markup).toContain('data-testid="playground-composer-model-select"')
     expect(markup).toContain('aria-haspopup="listbox"')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).toContain('MoM')
+    expect(markup).not.toContain('>MoM<')
     expect(markup).not.toContain('AMD')
     expect(markup).toContain('vllm-sr/mom-balanced-v1')
   })
