@@ -11,10 +11,8 @@ import type {
   ConfigData,
   ConfigProjections,
   ProjectionMapping,
-  ProjectionMappingOutput,
   ProjectionPartition,
   ProjectionScore,
-  ProjectionScoreInput,
 } from './configPageSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
@@ -37,6 +35,18 @@ import {
 } from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import {
+  cloneProjections,
+  EMPTY_MAPPINGS,
+  EMPTY_PARTITIONS,
+  EMPTY_PROJECTIONS,
+  EMPTY_SCORES,
+  ensureProjectionConfig,
+  type ProjectionDeleteTarget,
+  type ProjectionMappingFormState,
+  type ProjectionPartitionFormState,
+  type ProjectionScoreFormState,
+} from './configPageProjectionTableSupport'
 
 interface ConfigPageProjectionsSectionProps {
   config: ConfigData | null
@@ -44,54 +54,6 @@ interface ConfigPageProjectionsSectionProps {
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-}
-
-interface ProjectionPartitionFormState {
-  name: string
-  semantics: string
-  members: string[]
-  temperature?: number
-  default?: string
-}
-
-interface ProjectionScoreFormState {
-  name: string
-  method: string
-  inputs: ProjectionScoreInput[]
-}
-
-interface ProjectionMappingFormState {
-  name: string
-  source: string
-  method: string
-  calibration?: ProjectionMapping['calibration']
-  outputs: ProjectionMappingOutput[]
-}
-
-type ProjectionDeleteTarget =
-  | { kind: 'partition'; name: string }
-  | { kind: 'score'; name: string }
-  | { kind: 'mapping'; name: string }
-
-const EMPTY_PROJECTIONS: ConfigProjections = { partitions: [], scores: [], mappings: [] }
-const EMPTY_PARTITIONS: ProjectionPartition[] = []
-const EMPTY_SCORES: ProjectionScore[] = []
-const EMPTY_MAPPINGS: ProjectionMapping[] = []
-
-const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
-  partitions: [...(cfg.projections?.partitions || [])],
-  scores: [...(cfg.projections?.scores || [])],
-  mappings: [...(cfg.projections?.mappings || [])],
-})
-
-const ensureProjectionConfig = (cfg: ConfigData) => {
-  if (!cfg.projections) {
-    cfg.projections = { partitions: [], scores: [], mappings: [] }
-  }
-  if (!cfg.projections.partitions) cfg.projections.partitions = []
-  if (!cfg.projections.scores) cfg.projections.scores = []
-  if (!cfg.projections.mappings) cfg.projections.mappings = []
-  return cfg.projections
 }
 
 export default function ConfigPageProjectionsSection({
