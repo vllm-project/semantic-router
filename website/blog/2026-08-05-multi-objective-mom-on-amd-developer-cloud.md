@@ -433,7 +433,7 @@ vllm-sr eval \
 
 The maintained
 [`probes.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/probes.yaml)
-contains 103 backend-independent cases used by repository CI and recipe
+contains 114 backend-independent cases used by repository CI and recipe
 calibration. It checks:
 
 - all 16 decisions
@@ -458,7 +458,11 @@ The maintained commands were exercised on an 8×MI300X host with vLLM
 - all five public entrypoints generated non-empty final answers
 - the real Playground accuracy tool flow stayed direct, then used the
   tool-result synthesis lane without a repeated search
-- the 103-probe suite matched all 16 decisions with 0 errors
+- the 114-probe suite matched all 16 decisions with 0 errors
+- 570 deterministic framing/whitespace stress cases passed at 74.313 requests
+  per second with p50 238.822 ms, p95 381.197 ms, and 0 errors
+- 126 real generated requests passed across all five entrypoints and all six
+  maintained languages
 
 Representative generated requests took 0.181 seconds for economy, 0.333 seconds
 for flash, 0.650 seconds for privacy, 4.342 seconds for balanced direct,
