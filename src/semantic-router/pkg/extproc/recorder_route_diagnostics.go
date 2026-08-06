@@ -44,6 +44,10 @@ func buildReplayRouteDiagnostics(
 		MemoryFallbackReason:         ctx.MemoryFallbackReason,
 		MemoryFailOpen:               ctx.MemoryFailOpen,
 		MemoryResultCount:            ctx.MemoryResultCount,
+		ContextCompressionApplied:    ctx.ContextCompressionApplied,
+		ContextCompressionBefore:     ctx.ContextCompressionBefore,
+		ContextCompressionAfter:      ctx.ContextCompressionAfter,
+		ContextCompressionMessages:   ctx.ContextCompressionMessages,
 		SignalErrors:                 cloneReplayStringMap(ctx.VSRSignalErrors),
 	}
 	if ctx.VSRSelectedDecision != nil {

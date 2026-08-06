@@ -31,6 +31,30 @@ plugin:
   type: semantic-cache
   configuration:
     enabled: true
+    mode: exact_then_semantic
+    allow_request_controls: true
+    control_header: x-vsr-cache-control
     similarity_threshold: 0.92
     ttl_seconds: 86400
 ```
+
+`mode` accepts:
+
+- `semantic` (default): vector lookup only.
+- `exact`: normalized exact request lookup only.
+- `exact_then_semantic`: exact lookup first, then vector lookup on a miss.
+
+The exact tier is available with the in-memory, Redis, and Valkey cache
+backends. Other vector backends continue to provide semantic lookup only.
+Anthropic client requests currently bypass response caching because cache-hit
+replay does not yet emit the Anthropic wire format.
+
+Streaming and non-streaming requests use separate cache identities so replay
+never translates a cached response across wire modes. Semantic matching uses a
+compatibility fingerprint over system/history, tools, response format,
+generation parameters, client protocol, and route policy, plus hard recipe,
+tenant, request-model, and selected-model partitioning.
+
+When request controls are enabled, the configured header accepts `no-cache`
+(skip reads), `no-store` (skip writes), or `bypass` (skip both). The controls
+are ignored unless the route explicitly enables them.

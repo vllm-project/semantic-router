@@ -97,13 +97,6 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 		}
 	}
 
-	if ctx.MemoryContext != "" {
-		modifiedBody, err = injectMemoryMessages(modifiedBody, ctx.MemoryContext)
-		if err != nil {
-			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-		}
-	}
-
 	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
 		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody, profile, ctx.Routing.RecipeName())
 		if err != nil {

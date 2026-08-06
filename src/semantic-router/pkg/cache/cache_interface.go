@@ -23,6 +23,22 @@ type CacheEntry struct {
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
+// LookupResult is the request-scoped result of one semantic cache lookup.
+// Similarity belongs to this lookup and must not be read from shared backend
+// state, where concurrent requests can overwrite each other's diagnostics.
+type LookupResult struct {
+	ResponseBody []byte
+	Found        bool
+	Similarity   float32
+}
+
+// ExactCacheBackend is an optional exact-response fast path implemented by
+// key-value-capable cache backends.
+type ExactCacheBackend interface {
+	FindExact(partition string, fingerprint string) (LookupResult, error)
+	AddExact(partition string, fingerprint string, responseBody []byte, ttlSeconds int) error
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
@@ -33,12 +49,12 @@ type CacheBackend interface {
 	// For local caches (in-memory), this may be a no-op
 	CheckConnection() error
 
-	// AddPendingRequest stores a request awaiting its response. Model is an
-	// exact cache partition key; entries from another model partition must
-	// never be considered by lookup.
+	// AddPendingRequest is retained for backend compatibility. New request
+	// paths keep pending state request-local and write only complete entries.
 	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
 
-	// UpdateWithResponse completes a pending request with the received response
+	// UpdateWithResponse is retained for legacy callers that still own a
+	// backend pending entry.
 	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
 
 	// AddEntry stores a complete request-response pair in the cache
@@ -55,10 +71,10 @@ type CacheBackend interface {
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 
-	// LastSimilarity returns the similarity score from the most recent
-	// FindSimilarWithThreshold call. Returns 0 if no lookup has been performed.
-	// Used by the extproc layer to set the x-vsr-cache-similarity response header.
-	LastSimilarity() float32
+	// LookupSimilarWithThreshold returns response data and similarity from the
+	// same lookup operation. Request paths should use this method instead of
+	// backend-global similarity state.
+	LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
@@ -67,8 +83,8 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
-// SimilarityTracker provides thread-safe storage for the last similarity score.
-// Embed this in cache backends to satisfy the LastSimilarity() interface method.
+// SimilarityTracker preserves legacy backend diagnostics. Request paths must
+// use LookupResult instead because this value is shared across requests.
 type SimilarityTracker struct {
 	lastSimilarity uint64 // atomic; stores float32 bits
 }

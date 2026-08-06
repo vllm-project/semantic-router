@@ -74,6 +74,9 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `decision.algorithm.type: prompt` selects one declared `modelRef` with a concrete helper model and runtime-owned JSON output contract
 - `global.model_catalog.modules.prompt_compression.profile` provides built-in signal-compression scoring defaults for `default`, `coding`, `medical`, `security`, and `multi_turn` workloads. The `multi-turn` alias is normalized to `multi_turn`, unknown profile names fail config validation, and explicit weights/preserve counts override the selected profile.
 - `global.model_catalog.modules.hallucination_mitigation.detector.backend` selects the hallucination span detector backend. It defaults to `candle` (the in-process token classifier); set it to `endpoint` to call a generative span detector behind an OpenAI-compatible server, which then requires an absolute `http(s)` `detector.endpoint` plus a `detector.model_id`. Config validation rejects any other value.
+- `providers.models[].reliability` controls generated Envoy least-request or round-robin balancing, bounded connect/reset retries, circuit breakers, and passive 5xx outlier ejection.
+- `semantic-cache` supports `semantic`, `exact`, and `exact_then_semantic` modes with route-authorized request bypass controls.
+- `provider_prompt_cache` injects provider-native prompt cache markers after model selection; `context_compression` performs fail-open route-local compression of large tool outputs before provider dispatch.
 
 ## Canonical example
 

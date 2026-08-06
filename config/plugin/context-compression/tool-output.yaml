@@ -1,0 +1,7 @@
+plugin:
+  type: context_compression
+  configuration:
+    enabled: true
+    min_tokens: 2000
+    target_tokens: 1000
+    bypass_header: x-vsr-compression-bypass

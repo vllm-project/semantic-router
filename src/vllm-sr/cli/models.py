@@ -665,12 +665,17 @@ class PluginType(str, Enum):
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
+    PROVIDER_PROMPT_CACHE = "provider_prompt_cache"
+    CONTEXT_COMPRESSION = "context_compression"
 
 
 class SemanticCachePluginConfig(BaseModel):
     """Configuration for semantic-cache plugin."""
 
     enabled: bool
+    mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
     similarity_threshold: Optional[float] = Field(
         default=None,
         ge=0.0,
@@ -680,6 +685,27 @@ class SemanticCachePluginConfig(BaseModel):
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
+
+
+class ProviderPromptCachePluginConfig(BaseModel):
+    """Configuration for provider_prompt_cache plugin."""
+
+    enabled: bool
+    system: bool = False
+    tools: bool = False
+    last_user: bool = False
+    ttl: Optional[Literal["5m", "1h"]] = None
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
+
+
+class ContextCompressionPluginConfig(BaseModel):
+    """Configuration for context_compression plugin."""
+
+    enabled: bool
+    min_tokens: Optional[int] = Field(default=None, ge=0)
+    target_tokens: Optional[int] = Field(default=None, ge=0)
+    bypass_header: Optional[str] = None
 
 
 class FastResponsePluginConfig(BaseModel):
@@ -1088,6 +1114,36 @@ class RouterLearningProtectionConfig(BaseModel):
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
 
 
+class RouterLearningRedisStateStoreConfig(BaseModel):
+    """Redis connectivity for shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str
+    password: Optional[str] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[str] = None
+
+
+class RouterLearningStateStoreConfig(BaseModel):
+    """Optional shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: int = Field(default=86400, ge=0)
+    timeout_ms: int = Field(default=50, ge=0)
+    redis: Optional[RouterLearningRedisStateStoreConfig] = None
+
+    @model_validator(mode="after")
+    def validate_redis(self):
+        if self.backend == "redis" and self.redis is None:
+            raise ValueError(
+                "redis config is required when state_store.backend is redis"
+            )
+        return self
+
+
 class RouterLearningConfig(BaseModel):
     """Global Router Learning controls."""
 
@@ -1096,6 +1152,7 @@ class RouterLearningConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     adaptation: Optional[RouterLearningAdaptationConfig] = None
     protection: Optional[RouterLearningProtectionConfig] = None
+    state_store: Optional[RouterLearningStateStoreConfig] = None
 
 
 class OutputContractChoiceSetSpec(BaseModel):
@@ -1193,6 +1250,7 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
+    tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
@@ -1257,6 +1315,22 @@ class ModelPricing(BaseModel):
     completion_per_1m: Optional[float] = 0.0
 
 
+class ProviderReliability(BaseModel):
+    """Generated Envoy reliability policy for one provider model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    retry_count: int = Field(default=0, ge=0, le=5)
+    retry_on: str = "connect-failure,refused-stream"
+    consecutive_5xx: int = Field(default=0, ge=0)
+    base_ejection_time: str = "30s"
+    max_ejection_percent: int = Field(default=50, ge=0, le=100)
+    health_check_path: Optional[str] = None
+    health_check_interval: str = "10s"
+    health_check_timeout: str = "2s"
+
+
 class Model(BaseModel):
     """Provider model binding for canonical providers.models entries."""
 
@@ -1265,6 +1339,7 @@ class Model(BaseModel):
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
+    reliability: Optional[ProviderReliability] = None
     api_format: Optional[str] = None
     external_model_ids: Optional[Dict[str, str]] = None
 

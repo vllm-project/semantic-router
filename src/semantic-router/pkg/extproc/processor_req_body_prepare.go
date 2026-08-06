@@ -182,7 +182,7 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 		ctx.RateLimitCtx = &rlCtx
 	}
 
-	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+	if response, shouldReturn := r.handleCaching(ctx, decisionName, selectedModel); shouldReturn {
 		logging.ComponentDebugEvent("extproc", "cache_short_circuit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   decisionName,
@@ -233,6 +233,10 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		})
 	}
 	if ctx.MemoryContext != "" {
+		ctx.OriginalRequestBody = requestBody
+	}
+	requestBody = r.applyContextCompression(ctx, requestBody)
+	if ctx.ContextCompressionApplied {
 		ctx.OriginalRequestBody = requestBody
 	}
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)

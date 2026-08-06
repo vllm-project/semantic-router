@@ -102,6 +102,26 @@ func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	assert.NoError(t, err, "Connection check should succeed")
 }
 
+func TestValkeyCacheIntegration_ExactRoundTripAndPartitionIsolation(t *testing.T) {
+	cache := setupValkeyCacheIntegration(t)
+	defer func() { _ = cache.Close() }()
+
+	fingerprint := fmt.Sprintf("exact-%d", time.Now().UnixNano())
+	require.NoError(
+		t,
+		cache.AddExact("tenant-a", fingerprint, []byte(`{"answer":"cached"}`), 60),
+	)
+	hit, err := cache.FindExact("tenant-a", fingerprint)
+	require.NoError(t, err)
+	require.True(t, hit.Found)
+	assert.JSONEq(t, `{"answer":"cached"}`, string(hit.ResponseBody))
+	assert.Equal(t, float32(1), hit.Similarity)
+
+	miss, err := cache.FindExact("tenant-b", fingerprint)
+	require.NoError(t, err)
+	assert.False(t, miss.Found)
+}
+
 func TestValkeyCacheIntegration_IndexCreation(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()

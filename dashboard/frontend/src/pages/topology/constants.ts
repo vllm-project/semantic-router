@@ -86,6 +86,8 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   response_jailbreak: 'RJ',
   tools: 'TL',
   tool_selection: 'TS',
+  provider_prompt_cache: 'PC',
+  context_compression: 'CC',
 }
 
 // ============== Plugin Colors (Graphite Theme) ==============
@@ -103,6 +105,8 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   response_jailbreak: { background: '#c05621', border: '#9c4221' },
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
+  provider_prompt_cache: { background: '#5a6c7d', border: '#3d4a59' },
+  context_compression: { background: '#606c7a', border: '#3d4a59' },
 }
 
 // ============== Algorithm Icons ==============

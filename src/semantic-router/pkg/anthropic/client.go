@@ -102,6 +102,7 @@ func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]by
 // metadata.user_id, multi-block system prompts, image blocks, tool_result
 // error/array content) are emitted on the outbound body.
 func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionNewParams, pt *AnthropicPassthrough) ([]byte, error) {
+	pt = disableAutoCacheControlWhenExplicit(pt)
 	systemPrompt, messages, err := buildAnthropicMessages(openAIRequest.Messages)
 	if err != nil {
 		return nil, err
@@ -125,6 +126,29 @@ func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionN
 	applyMetadata(&params, openAIRequest, pt)
 
 	return json.Marshal(params)
+}
+
+func disableAutoCacheControlWhenExplicit(
+	pt *AnthropicPassthrough,
+) *AnthropicPassthrough {
+	if pt == nil || pt.AutoCacheControl == nil || !hasExplicitCacheControl(pt) {
+		return pt
+	}
+	clone := *pt
+	clone.AutoCacheControl = nil
+	return &clone
+}
+
+func hasExplicitCacheControl(pt *AnthropicPassthrough) bool {
+	if len(pt.CacheControl) > 0 {
+		return true
+	}
+	for _, block := range pt.SystemBlocks {
+		if block.CacheControl != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ToOpenAIResponseBody transforms an Anthropic API response to OpenAI format.
