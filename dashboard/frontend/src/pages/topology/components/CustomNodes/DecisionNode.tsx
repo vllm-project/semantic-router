@@ -13,6 +13,7 @@ interface DecisionNodeData {
   isHighlighted?: boolean
   isFocusTarget?: boolean
   focusModeEnabled?: boolean
+  isFallback?: boolean
   isUnreachable?: boolean
   unreachableReason?: string
   onToggleRulesCollapse?: () => void
@@ -26,6 +27,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
     isHighlighted, 
     isFocusTarget = false,
     focusModeEnabled = false,
+    isFallback = false,
     isUnreachable = false,
     unreachableReason,
     onToggleRulesCollapse,
@@ -60,7 +62,13 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
         border: `2px solid ${colors.border}`,
         cursor: focusModeEnabled ? 'pointer' : undefined,
       }}
-      title={isUnreachable ? `⚠️ Unreachable: ${unreachableReason}` : undefined}
+      title={
+        isUnreachable
+          ? `⚠️ Unreachable: ${unreachableReason}`
+          : isFallback
+            ? 'Fallback route: matches when no earlier decision wins'
+            : undefined
+      }
       onClick={() => {
         if (focusModeEnabled) {
           onFocusDecision?.(name)
@@ -70,7 +78,9 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.decisionHeader}>
-        <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
+        <span className={styles.decisionIcon}>
+          {isUnreachable ? '⚠️' : isFallback ? '↪' : '🔀'}
+        </span>
         <span className={styles.decisionName} title={name}>{name}</span>
         <span className={styles.decisionPriority}>P{priority}</span>
       </div>
@@ -89,9 +99,11 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
           onClick={onToggleRulesCollapse}
         >
           <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
-          <span className={styles.rulesOperator}>{rules.operator}</span>
+          <span className={styles.rulesOperator}>
+            {isFallback ? 'FALLBACK' : rules.operator}
+          </span>
           <span className={styles.rulesCount}>
-            {rules.conditions.length === 0 ? '0 rules ⚠️' : `${rules.conditions.length} rules`}
+            {isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
           </span>
         </div>
 

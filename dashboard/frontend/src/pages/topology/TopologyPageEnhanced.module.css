@@ -97,7 +97,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  max-width: 22rem;
+  width: min(380px, calc(100% - 32px));
   padding: 0.75rem 0.85rem;
   border: 1px solid #303036;
   border-radius: 6px;
@@ -125,19 +125,19 @@
   font-size: 0.72rem;
 }
 
-.scopePicker {
-  position: absolute;
-  top: 116px;
-  left: 16px;
-  z-index: 8;
+.scopeControl {
   display: grid;
   gap: 5px;
-  width: min(360px, calc(100% - 32px));
-  padding: 8px 10px;
-  border: 1px solid #303036;
-  border-radius: 6px;
-  background: rgba(16, 16, 18, 0.94);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  margin-top: 7px;
+  padding-top: 9px;
+  border-top: 1px solid #303036;
+}
+
+.scopeControl label {
+  color: #a1a1aa;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .scopeSelect {
@@ -581,14 +581,8 @@
   .canvasTitle {
     top: 10px;
     left: 10px;
+    width: calc(100% - 20px);
     max-width: calc(100% - 20px);
-  }
-
-  .scopePicker {
-    top: 108px;
-    right: 10px;
-    left: 10px;
-    width: auto;
   }
 }
 
