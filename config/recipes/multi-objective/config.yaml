@@ -834,8 +834,16 @@ recipes:
       - model: local/qwen3.5-9b-economy
         use_reasoning: true
         reasoning_effort: medium
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: true
+        reasoning_effort: medium
       algorithm:
-        type: static
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.6
+            load: 0.4
+          on_no_candidates: first
     - name: unified_cost_first_route
       description: Deterministic local route with semantic reuse for ordinary requests.
       priority: 100
@@ -846,8 +854,15 @@ recipes:
       modelRefs:
       - model: local/qwen3.5-9b-economy
         use_reasoning: false
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: false
       algorithm:
-        type: static
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.8
+            load: 0.2
+          on_no_candidates: first
       plugins:
       - type: semantic-cache
         configuration:
@@ -1282,8 +1297,7 @@ recipes:
           - local/qwen3.6-27b-coder
           - local/gemma4-26b-balanced
           - local/deepseek-v4-flash-analyst
-          - local/qwen3.5-122b-frontier
-          max_concurrent: 4
+          max_concurrent: 3
           round_timeout_seconds: 180
           min_successful_responses: 2
           temperature: 0.2
@@ -1369,8 +1383,6 @@ recipes:
       - model: local/qwen3.6-35b-flash
         use_reasoning: false
       - model: local/gemma4-26b-balanced
-        use_reasoning: false
-      - model: local/deepseek-v4-flash-analyst
         use_reasoning: false
       - model: local/qwen3.5-122b-frontier
         use_reasoning: false

@@ -269,7 +269,7 @@ decisions:
     model: vllm-sr/mom-economy-v1
     expected_recipe: cost-first
     expected_decision: unified_cost_first_route
-    expected_algorithm: static
+    expected_algorithm: multi_factor
     expected_plugins: [semantic-cache]
     variants:
       - id: basic_definition
@@ -297,7 +297,7 @@ decisions:
     model: vllm-sr/mom-economy-v1
     expected_recipe: cost-first
     expected_decision: unified_cost_local_reasoning
-    expected_algorithm: static
+    expected_algorithm: multi_factor
     variants:
       - id: system_design
         query: Design a system and reason step by step about the tradeoffs.
