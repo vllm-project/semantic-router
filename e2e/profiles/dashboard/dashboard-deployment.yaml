@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
-          imagePullPolicy: Never
+          image: ghcr.io/vllm-project/semantic-router/dashboard:latest
+          imagePullPolicy: IfNotPresent
           # The image ENTRYPOINT is /app/entrypoint.sh which calls:
           #   exec su-exec nonroot:nonroot "$@"
           # So args must begin with the binary path; flags-only args would
