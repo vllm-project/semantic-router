@@ -18,6 +18,7 @@ import {
   countModels,
   countPlugins,
   countSignals,
+  getAllDecisions,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
@@ -108,7 +109,7 @@ const DashboardPage: React.FC = () => {
   const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
   const modelCount = useMemo(() => (config ? countModels(config) : 0), [config])
   const pluginCount = useMemo(() => (config ? countPlugins(config) : 0), [config])
-  const currentDecisions = useMemo(() => config?.routing?.decisions ?? config?.decisions ?? [], [config])
+  const currentDecisions = useMemo(() => (config ? getAllDecisions(config) : []), [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const showMLSetupQuickLink = canAccessMLSetup(user)
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
@@ -455,8 +456,11 @@ const DashboardPage: React.FC = () => {
               </div>
               {decisionPreviewRows.map((row) => (
                 <div key={row.key} className={styles.decisionTableRow}>
-                  <span className={styles.decisionName} title={row.title}>
-                    {row.name}
+                  <span className={styles.decisionIdentity} title={row.title}>
+                    <span className={styles.decisionName}>{row.name}</span>
+                    {row.scopeLabel ? (
+                      <span className={styles.decisionScope}>{row.scopeLabel}</span>
+                    ) : null}
                   </span>
                   <span className={styles.decisionPriority}>{row.priorityLabel}</span>
                   <span className={`${styles.decisionBadge} ${
