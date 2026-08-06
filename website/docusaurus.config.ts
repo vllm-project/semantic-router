@@ -63,7 +63,15 @@ const config: Config = {
         blogRouteBasePath: '/blog',
         searchBarShortcut: true,
         searchBarShortcutHint: true,
-        // language / styling / version scoping are handled in later phases
+        // v1 scope: index the current docs version only, per the decision on #2737.
+        // To make archived versions searchable later, drop this and add
+        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // so results stay scoped to the version the reader is on.
+        // NOTE: ignoreFiles matches the route *without* a leading slash (the
+        // plugin strips baseUrl, which is "/" here, off the front) and without
+        // the base URL itself, so the pattern must not anchor on "/".
+        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        // language / styling are handled in later phases
       },
     ],
   ],
