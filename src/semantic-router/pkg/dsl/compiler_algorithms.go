@@ -309,6 +309,9 @@ func compileWorkflowPlanner(fields map[string]Value, cfg *config.WorkflowsAlgori
 		if v, ok := getStringField(planner.Fields, "model"); ok {
 			cfg.Planner.Model = v
 		}
+		if v, ok := getIntField(planner.Fields, "max_completion_tokens"); ok {
+			cfg.Planner.MaxCompletionTokens = v
+		}
 	}
 	if v, ok := getStringField(fields, "planner.model"); ok {
 		cfg.Planner.Model = v
