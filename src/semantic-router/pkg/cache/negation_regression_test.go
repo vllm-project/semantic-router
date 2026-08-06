@@ -14,6 +14,7 @@ import (
 
 // Model-backed regression for #2691 through the production in-memory cache
 // path. It skips without mmBERT; polarity_test.go provides model-free coverage.
+// The pairs are a focused smoke set, not a PAWS/QQP calibration corpus.
 
 const negationRegressionThreshold = 0.80 // config/plugin/semantic-cache/memory.yaml ships 0.80
 
