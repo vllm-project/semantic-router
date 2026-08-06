@@ -60,6 +60,10 @@ const config = {
       name: 'privacy',
       description: 'Private objective',
       routing: {
+        projections: {
+          scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
+          mappings: [],
+        },
         signals: {
           pii: [{ name: 'private-pii', threshold: 0.8 }],
         },
@@ -134,6 +138,14 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await expect(page.getByText('private-pii')).toBeVisible()
   await expect(page.getByText('balanced-keyword')).toHaveCount(0)
 
+  await page.goto('/config/projections')
+  const projectionScope = page.getByLabel('Routing profile')
+  await expect(projectionScope).toHaveValue('balanced')
+  await expect(page.getByText('balanced-score')).toBeVisible()
+  await projectionScope.selectOption('privacy')
+  await expect(page.getByText('private-score')).toBeVisible()
+  await expect(page.getByText('balanced-score')).toHaveCount(0)
+
   await page.goto('/config/decisions')
   const decisionScope = page.getByLabel('Routing profile')
   await expect(decisionScope).toHaveValue('balanced')
@@ -149,12 +161,12 @@ test('topology switches the complete graph and test model by entrypoint recipe',
 
   const scope = page.getByLabel('Entrypoint / recipe')
   await expect(scope).toHaveValue('balanced')
-  await expect(page.getByText('balanced-route')).toBeVisible()
+  await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
   await expect(page.getByText('balanced-keyword')).toBeVisible()
   await expect(page.getByText('balanced-standard')).toBeVisible()
 
   await scope.selectOption('privacy')
-  await expect(page.getByText('private-route')).toBeVisible()
+  await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
   await expect(page.getByText('private-pii')).toBeVisible()
-  await expect(page.getByText('balanced-route')).toHaveCount(0)
+  await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
 })

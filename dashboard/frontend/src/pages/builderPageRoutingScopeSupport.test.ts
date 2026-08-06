@@ -58,4 +58,33 @@ describe('summarizeBuilderRoutingScopes', () => {
       entrypointCount: 1,
     })
   })
+
+  it('treats WASM null collections as empty arrays', () => {
+    const ast = {
+      signals: null,
+      routes: null,
+      plugins: null,
+      models: [],
+      entrypoints: null,
+      recipes: [
+        {
+          name: 'balanced',
+          program: {
+            signals: null,
+            routes: null,
+            plugins: null,
+          },
+        },
+      ],
+    } as unknown as ASTProgram
+
+    expect(() => summarizeBuilderRoutingScopes(ast, null)).not.toThrow()
+    expect(summarizeBuilderRoutingScopes(ast, null)).toMatchObject({
+      signalCount: 0,
+      routeCount: 0,
+      pluginCount: 0,
+      recipeCount: 1,
+      entrypointCount: 0,
+    })
+  })
 })
