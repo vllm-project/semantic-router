@@ -8,8 +8,8 @@
   max-width: min(320px, 42vw);
   height: 32px;
   align-items: center;
-  gap: 7px;
-  padding: 0 10px 0 7px;
+  gap: 6px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9px;
   background: rgba(20, 20, 22, 0.92);
@@ -31,27 +31,15 @@
   opacity: 0.48;
 }
 
-.brandMark {
-  display: inline-grid;
-  height: 20px;
-  place-items: center;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--brand-amd, #e31b23) 14%, transparent);
-  color: #ff8d91;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-
 .triggerLabel {
   min-width: 0;
   overflow: hidden;
-  font-size: 0.76rem;
-  font-weight: 700;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .chevron {
@@ -148,11 +136,13 @@
   padding-right: 24px;
 }
 
-.optionIdentity code {
+.optionModelId {
   overflow: hidden;
   color: var(--text-primary, #f4f4f5);
-  font-size: 0.75rem;
-  font-weight: 650;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

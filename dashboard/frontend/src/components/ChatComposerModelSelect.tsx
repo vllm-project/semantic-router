@@ -97,7 +97,6 @@ export default function ChatComposerModelSelect({
         data-testid="playground-composer-model-select"
         title={selected?.description || value || 'Choose model'}
       >
-        <span className={styles.brandMark}>MoM</span>
         <span className={styles.triggerLabel}>{value || 'Choose model'}</span>
         <svg className={styles.chevron} viewBox="0 0 16 16" aria-hidden="true">
           <path d="m4 10 4-4 4 4" />
@@ -154,7 +153,7 @@ export default function ChatComposerModelSelect({
                   }}
                 >
                   <span className={styles.optionIdentity}>
-                    <code>{model.id}</code>
+                    <span className={styles.optionModelId}>{model.id}</span>
                     {model.recipe ? <small>recipe: {model.recipe}</small> : null}
                   </span>
                   {model.description ? (
