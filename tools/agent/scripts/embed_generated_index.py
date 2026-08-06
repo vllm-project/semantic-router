@@ -23,7 +23,10 @@ def main() -> int:
     args = parser.parse_args()
 
     md_path = pathlib.Path(args.markdown)
-    index = pathlib.Path(args.index).read_text(encoding="utf-8").lstrip("\n").rstrip() + "\n"
+    index = (
+        pathlib.Path(args.index).read_text(encoding="utf-8").lstrip("\n").rstrip()
+        + "\n"
+    )
     text = md_path.read_text(encoding="utf-8")
 
     begin = _as_comment(args.begin)
