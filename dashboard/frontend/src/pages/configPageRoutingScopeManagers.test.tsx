@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
+import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
 import type { ConfigData } from './configPageSupport'
 
@@ -17,6 +18,11 @@ const config: ConfigData = {
     {
       name: 'balanced',
       routing: {
+        projections: {
+          scores: [{ name: 'balanced-score', method: 'weighted_sum', inputs: [] }],
+          mappings: [],
+          partitions: [],
+        },
         signals: {
           keywords: [
             {
@@ -44,6 +50,11 @@ const config: ConfigData = {
     {
       name: 'privacy',
       routing: {
+        projections: {
+          scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
+          mappings: [],
+          partitions: [],
+        },
         signals: {
           pii: [{ name: 'private-pii', threshold: 0.8 }],
         },
@@ -106,5 +117,22 @@ describe('recipe-aware config managers', () => {
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('balanced-route')
     expect(markup).not.toContain('private-route')
+  })
+
+  it('shows recipe-owned projections through the same routing profile selector', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ConfigPageProjectionsSection, {
+        config,
+        isReadonly: false,
+        saveConfig: vi.fn(),
+        openEditModal: vi.fn(),
+        openViewModal: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('Routing profile')
+    expect(markup).toContain('vllm-sr/balanced')
+    expect(markup).toContain('balanced-score')
+    expect(markup).not.toContain('private-score')
   })
 })
