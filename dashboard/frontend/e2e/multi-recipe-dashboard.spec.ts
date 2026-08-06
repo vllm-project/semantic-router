@@ -141,9 +141,9 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await page.goto('/config/projections')
   const projectionScope = page.getByLabel('Routing profile')
   await expect(projectionScope).toHaveValue('balanced')
-  await expect(page.getByText('balanced-score')).toBeVisible()
+  await expect(page.getByText('balanced-score').first()).toBeVisible()
   await projectionScope.selectOption('privacy')
-  await expect(page.getByText('private-score')).toBeVisible()
+  await expect(page.getByText('private-score').first()).toBeVisible()
   await expect(page.getByText('balanced-score')).toHaveCount(0)
 
   await page.goto('/config/decisions')
@@ -162,11 +162,17 @@ test('topology switches the complete graph and test model by entrypoint recipe',
   const scope = page.getByLabel('Entrypoint / recipe')
   await expect(scope).toHaveValue('balanced')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
-  await expect(page.getByText('balanced-keyword')).toBeVisible()
-  await expect(page.getByText('balanced-standard')).toBeVisible()
+  await expect(
+    page.getByTestId('rf__node-signal-group-keyword').getByText('balanced-keyword'),
+  ).toBeVisible()
+  await expect(
+    page.getByTestId('rf__node-projection-group-balanced-map').getByText('balanced-standard'),
+  ).toBeVisible()
 
   await scope.selectOption('privacy')
   await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
-  await expect(page.getByText('private-pii')).toBeVisible()
+  await expect(
+    page.getByTestId('rf__node-signal-group-pii').getByText('private-pii'),
+  ).toBeVisible()
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
 })
