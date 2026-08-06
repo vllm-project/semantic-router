@@ -33,25 +33,23 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          # Run the default PR baseline profiles if common e2e code, core code changes, or manual/scheduled trigger
+          # Start from the baseline profiles if common e2e code, core code changes, or manual trigger.
+          # Per-profile additions below still apply, so a PR that touches both
+          # common code and a specific profile runs that profile too instead of
+          # having it shadowed by the baseline set.
+          profiles=()
           if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.docker }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.make }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.ci }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
-             [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            profiles=("kubernetes" "dashboard" "remote-embedding")
-            printf -v json '"%s",' "${profiles[@]}"
-            echo "profiles=[${json%,}]" >> $GITHUB_OUTPUT
-            echo 'should_run=true' >> $GITHUB_OUTPUT
-            echo "Running default baseline profiles due to common/core changes or push/schedule/manual trigger"
-            exit 0
+            profiles+=("kubernetes" "dashboard" "remote-embedding")
+            echo "Including baseline profiles due to common/core changes or manual trigger"
           fi
 
-          # Only run affected profiles for PRs
-          profiles=()
+          # Add profiles affected by the change set
           [[ "${{ needs.changes.outputs.e2e_istio }}" == "true" ]] && profiles+=("istio")
           [[ "${{ needs.changes.outputs.e2e_agentgateway }}" == "true" ]] && profiles+=("agentgateway")
           [[ "${{ needs.changes.outputs.e2e_kubernetes }}" == "true" ]] && profiles+=("kubernetes")
@@ -67,6 +65,13 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
           [[ "${{ needs.changes.outputs.e2e_anthropic_shim }}" == "true" ]] && profiles+=("anthropic-shim")
+
+          # Drop duplicates between the baseline and per-profile additions
+          deduped=()
+          for profile in "${profiles[@]}"; do
+            [[ " ${deduped[*]} " == *" ${profile} "* ]] || deduped+=("${profile}")
+          done
+          profiles=("${deduped[@]}")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then
@@ -89,6 +94,7 @@ jobs:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
+      max-parallel: 6  # Affected profiles stack on the baseline set now; bound peak runner usage
       matrix:
         # Dynamic profile matrix based on detected changes
         profile: ${{ fromJson(needs.determine-profiles.outputs.profiles) }}
