@@ -99,6 +99,15 @@ func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
 	if !recovery.HasPlugin(DecisionPluginSystemPrompt) {
 		t.Fatal("balanced recovery route must include corrective response behavior")
 	}
+	if rules := balanced.Profile.Signals.FactCheckRules; len(rules) != 1 || rules[0].Name != "needs_fact_check" {
+		t.Fatalf("balanced fact-check rules must use the runtime classifier label: %+v", rules)
+	}
+	if rules := balanced.Profile.Signals.UserFeedbackRules; len(rules) != 1 || rules[0].Name != "wrong_answer" {
+		t.Fatalf("balanced feedback rules must use the runtime classifier label: %+v", rules)
+	}
+	if rules := balanced.Profile.Signals.ComplexityRules; len(rules) != 1 || rules[0].Threshold != 0.08 {
+		t.Fatalf("balanced complexity threshold must use a calibrated margin: %+v", rules)
+	}
 	assertMultiObjectiveLanguageCodes(t, balanced, []string{"zh", "es", "fr", "ja", "de"})
 }
 
@@ -130,6 +139,12 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	accuracy, _ := cfg.RecipeByName("accuracy-first")
+	if rules := accuracy.Profile.Signals.FactCheckRules; len(rules) != 1 || rules[0].Name != "needs_fact_check" {
+		t.Fatalf("accuracy fact-check rules must use the runtime classifier label: %+v", rules)
+	}
+	if rules := accuracy.Profile.Signals.ComplexityRules; len(rules) != 1 || rules[0].Threshold != 0.15 {
+		t.Fatalf("accuracy complexity threshold must use a calibrated margin: %+v", rules)
+	}
 	accuracyAlgorithm := multiObjectiveDecision(t, accuracy, "unified_frontier_direct").Algorithm
 	if accuracyAlgorithm == nil || accuracyAlgorithm.MultiFactor == nil ||
 		accuracyAlgorithm.MultiFactor.Weights == nil ||
