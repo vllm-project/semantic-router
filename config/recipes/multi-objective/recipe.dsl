@@ -606,7 +606,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       min_successful_responses: 2
       mode: "dynamic"
       on_error: "skip"
-      planner: { model: "google/gemini-3.1-pro" }
+      planner: { max_completion_tokens: 2048, model: "google/gemini-3.1-pro" }
       round_timeout_seconds: 300
       template: "micro_agent"
     }
