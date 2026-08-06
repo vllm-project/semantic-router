@@ -63,6 +63,11 @@ const config: Config = {
         blogRouteBasePath: '/blog',
         searchBarShortcut: true,
         searchBarShortcutHint: true,
+        // The site ships a full zh-Hans locale, so the index needs a Chinese
+        // tokenizer as well: Chinese is written without spaces and the default
+        // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
+        // native module that ships prebuilt binaries.
+        language: ['en', 'zh'],
         // v1 scope: index the current docs version only, per the decision on #2737.
         // To make archived versions searchable later, drop this and add
         // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
@@ -71,7 +76,7 @@ const config: Config = {
         // plugin strips baseUrl, which is "/" here, off the front) and without
         // the base URL itself, so the pattern must not anchor on "/".
         ignoreFiles: [/^docs\/v\d+\.\d+\//],
-        // language / styling are handled in later phases
+        // styling is handled in a later phase
       },
     ],
   ],
