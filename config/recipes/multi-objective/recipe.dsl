@@ -14,6 +14,24 @@ ROUTING {
 # MODELS
 # =============================================================================
 
+MODEL local/deepseek-v4-flash-analyst {
+  context_window_size: 262144
+  description: "Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration."
+  capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity"]
+  tags: ["tier:experimental_frontier", "cost:high", "deployment:self_hosted", "physical:deepseek-v4-flash-0731"]
+  quality_score: 0.88
+  modality: "text"
+}
+
+MODEL local/gemma4-26b-balanced {
+  context_window_size: 32768
+  description: "Fast architecture-diverse MoE tier for balanced general reasoning."
+  capabilities: ["reasoning", "multilingual", "structured_output", "long_context"]
+  tags: ["tier:balanced", "cost:medium", "latency:fastest_measured", "deployment:self_hosted", "physical:gemma4-26b-a4b"]
+  quality_score: 0.89
+  modality: "text"
+}
+
 MODEL local/qwen3.5-122b-frontier {
   context_window_size: 262144
   description: "Large local MoE tier for accuracy-first synthesis and review."
@@ -32,6 +50,15 @@ MODEL local/qwen3.5-9b-economy {
   modality: "text"
 }
 
+MODEL local/qwen3.5-9b-economy-replica {
+  context_window_size: 32768
+  description: "Independent replica of the economy tier for latency and load-aware selection."
+  capabilities: ["fast_qa", "explanation", "general_chat"]
+  tags: ["tier:economy_replica", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
+  quality_score: 0.68
+  modality: "text"
+}
+
 MODEL local/qwen3.5-9b-private {
   context_window_size: 32768
   description: "Isolated alias of the local 9B tier for privacy-policy routes."
@@ -41,12 +68,12 @@ MODEL local/qwen3.5-9b-private {
   modality: "text"
 }
 
-MODEL local/qwen3.6-35b-balanced {
+MODEL local/qwen3.6-27b-coder {
   context_window_size: 32768
-  description: "Latest local MoE tier for balanced reasoning and coding workloads."
-  capabilities: ["reasoning", "architecture", "coding"]
-  tags: ["tier:balanced", "cost:medium", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
-  quality_score: 0.86
+  description: "Dense Qwen3.6 tier for coding, structured output, and verification."
+  capabilities: ["reasoning", "coding", "structured_output", "tool_use"]
+  tags: ["tier:coder", "cost:upper_mid", "deployment:self_hosted", "physical:qwen3.6-27b"]
+  quality_score: 0.9
   modality: "text"
 }
 
@@ -223,9 +250,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 300
     TIER 1
     WHEN (user_feedback("unified_balance_wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
-    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "first"
@@ -242,10 +270,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 200
     TIER 2
     WHEN projection("unified_balance_deliberate")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
-          "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -257,8 +285,9 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 100
     TIER 3
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-35b-balanced" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
@@ -323,7 +352,10 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     TIER 1
     WHEN projection("unified_speed_heavy")
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-35b-balanced" (reasoning = false)
+          "local/qwen3.5-9b-economy-replica" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false)
     ALGORITHM latency_aware {
       description: "Minimize observed generation and first-token latency."
       tpot_percentile: 90
@@ -334,7 +366,10 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   ROUTE unified_speed_first_route (description = "Choose the fastest healthy candidate from live p90 latency and load.") {
     PRIORITY 100
     TIER 2
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.5-9b-economy-replica" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 90
       on_no_candidates: "first"
@@ -581,7 +616,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     source: "unified_frontier_deliberation_score"
     method: "threshold_bands"
     calibration: { method: "sigmoid_distance", slope: 10 }
-    outputs: [{ name: "unified_frontier_direct", lt: 0.45 }, { name: "unified_frontier_deliberate", gte: 0.45 }]
+    outputs: [{ name: "unified_frontier_direct", lt: 0.35 }, { name: "unified_frontier_deliberate", gte: 0.35 }]
   }
 
   # =============================================================================
@@ -592,19 +627,18 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 400
     TIER 1
     WHEN projection("unified_frontier_use_workflow") AND (keyword("unified_frontier_workflow_markers") OR structure("unified_frontier_ordered_workflow"))
-    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM workflows {
       include_intermediate_responses: false
-      max_completion_tokens: 4096
       max_parallel: 3
       max_steps: 4
       min_successful_responses: 2
       mode: "dynamic"
       on_error: "skip"
-      planner: { max_completion_tokens: 512, model: "local/qwen3.6-35b-balanced" }
-      round_timeout_seconds: 180
+      planner: { model: "local/qwen3.6-27b-coder" }
+      round_timeout_seconds: 120
       template: "micro_agent"
     }
   }
@@ -625,16 +659,17 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 350
     TIER 3
     WHEN projection("unified_frontier_use_fusion")
-    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/deepseek-v4-flash-analyst" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM fusion {
-      analysis_models: ["local/qwen3.6-35b-balanced", "local/qwen3.6-35b-flash", "local/qwen3.5-122b-frontier"]
+      analysis_models: ["local/qwen3.6-27b-coder", "local/gemma4-26b-balanced", "local/deepseek-v4-flash-analyst", "local/qwen3.5-122b-frontier"]
       include_analysis: false
       include_intermediate_responses: false
       judge_prompt_version: "fusion-v1"
-      max_completion_tokens: 1024
-      max_concurrent: 3
+      max_concurrent: 4
       min_successful_responses: 2
       model: "local/qwen3.5-122b-frontier"
       on_error: "skip"
@@ -648,9 +683,10 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     TIER 4
     WHEN (keyword("unified_frontier_verification_markers") OR fact_check("unified_frontier_fact_check"))
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+          "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM confidence {
       confidence_method: "hybrid"
       escalation_order: "small_to_large"
@@ -663,8 +699,8 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 300
     TIER 5
     WHEN projection("unified_frontier_deliberate")
-    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
+    MODEL "local/qwen3.6-27b-coder" (reasoning = true, effort = "high"),
+          "local/deepseek-v4-flash-analyst" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
@@ -682,12 +718,14 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     }
   }
 
-  ROUTE unified_accuracy_first_route (description = "Use the strongest direct model when orchestration would add little value.") {
+  ROUTE unified_frontier_direct (description = "Use the strongest direct model when orchestration would add little value.") {
     PRIORITY 100
     TIER 6
-    MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
-          "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/deepseek-v4-flash-analyst" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { quality: 1 }

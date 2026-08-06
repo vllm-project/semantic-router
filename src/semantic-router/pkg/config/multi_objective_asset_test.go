@@ -59,8 +59,9 @@ func assertMultiObjectivePoolReasoningCapability(t *testing.T, cfg *RouterConfig
 	for _, modelName := range []string{
 		"local/qwen3.5-122b-frontier",
 		"local/qwen3.5-9b-economy",
+		"local/qwen3.5-9b-economy-replica",
 		"local/qwen3.5-9b-private",
-		"local/qwen3.6-35b-balanced",
+		"local/qwen3.6-27b-coder",
 		"local/qwen3.6-35b-flash",
 	} {
 		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "qwen3" {
@@ -69,6 +70,14 @@ func assertMultiObjectivePoolReasoningCapability(t *testing.T, cfg *RouterConfig
 	}
 	if family := cfg.ReasoningFamilies["qwen3"]; family.Type != "chat_template_kwargs" {
 		t.Fatalf("qwen3 model pool lost chat-template reasoning capability: %+v", family)
+	}
+	for _, modelName := range []string{
+		"local/gemma4-26b-balanced",
+		"local/deepseek-v4-flash-analyst",
+	} {
+		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "" {
+			t.Fatalf("%s must not inherit the Qwen reasoning contract, got %q", modelName, got)
+		}
 	}
 }
 
@@ -121,7 +130,7 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	accuracy, _ := cfg.RecipeByName("accuracy-first")
-	accuracyAlgorithm := multiObjectiveDecision(t, accuracy, "unified_accuracy_first_route").Algorithm
+	accuracyAlgorithm := multiObjectiveDecision(t, accuracy, "unified_frontier_direct").Algorithm
 	if accuracyAlgorithm == nil || accuracyAlgorithm.MultiFactor == nil ||
 		accuracyAlgorithm.MultiFactor.Weights == nil ||
 		accuracyAlgorithm.MultiFactor.Weights.Quality != 1.0 {
