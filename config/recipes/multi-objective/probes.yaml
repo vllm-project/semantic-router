@@ -282,7 +282,7 @@ decisions:
   - id: frontier_direct
     model: vllm-sr/mom-frontier-v1
     expected_recipe: accuracy-first
-    expected_decision: unified_accuracy_first_route
+    expected_decision: unified_frontier_direct
     expected_algorithm: multi_factor
     variants:
       - id: basic_fact

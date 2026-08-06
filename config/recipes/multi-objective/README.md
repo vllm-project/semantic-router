@@ -15,21 +15,28 @@ Signals, projections, decisions, algorithms, and decision plugins are owned by
 one recipe and cannot match another recipe. Provider bindings, model cards, and
 runtime services remain shared infrastructure.
 
-For an AMD ROCm deployment that runs three physical models and uses explicit
-aliases for balanced and private lanes, see
+For an AMD ROCm deployment that assigns all eight MI300X GPUs explicit serving
+or routing responsibilities, see
 [`website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md`](../../../website/blog/2026-08-05-multi-objective-mom-on-amd-developer-cloud.md).
 
 ## Maintained capability assumptions
 
 Request-facing model IDs are routing aliases, not capability declarations. The
-maintained provider entries resolve to a three-tier local pool:
+maintained provider entries resolve to a measured local pool:
 
-- `Qwen3.5-9B` serves economy and private aliases.
-- `Qwen3.6-35B-A3B-FP8` serves flash and balanced aliases.
-- `Qwen3.5-122B-A10B-FP8` serves the frontier tier.
+- `Qwen3.5-9B` has primary and replica endpoints for economy and privacy.
+- `Qwen3.6-35B-A3B-FP8` owns the flash lane.
+- `Qwen3.6-27B` owns coding, planning, and structured-output work.
+- `Gemma 4-26B-A4B-it` provides the fastest measured balanced lane and
+  architecture diversity.
+- `Qwen3.5-122B-A10B-FP8` remains the stable direct model and orchestration
+  judge.
+- `DeepSeek-V4-Flash-0731` contributes a current, MIT-licensed analysis path
+  behind the stable judge; it is not the direct default because the MI300X
+  correctness gate scored below the stable models.
 
-All three backends use the Qwen3 reasoning request contract. The configured
-32K limits for the smaller tiers are deployment limits chosen for predictable
+Only Qwen backends use the Qwen3 reasoning request contract. The configured 32K
+limits for the smaller tiers are deployment limits chosen for predictable
 single-GPU capacity, not the models' architectural maximum.
 
 The balanced effort score gives explicit reasoning markers a `0.46` contribution
