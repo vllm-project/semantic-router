@@ -10,6 +10,7 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_gpu_isolation import router_runtime_env
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -278,13 +279,14 @@ def _build_router_runtime_command(
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
 ):
+    router_env = router_runtime_env(common_env, normalized_platform)
     return _build_service_run_command(
         runtime=runtime,
         image=router_image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
-        env_vars=common_env,
+        env_vars=router_env,
         mount_specs=_runtime_mount_specs(runtime_paths, include_models=True),
         port_mappings=[
             (stack_layout.router_port, 50051),
@@ -293,7 +295,7 @@ def _build_router_runtime_command(
         ],
         entrypoint="/app/start-router.sh",
         command_args=[
-            common_env.get("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/config.yaml"),
+            router_env.get("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/config.yaml"),
             "/app/.vllm-sr",
         ],
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
