@@ -129,6 +129,10 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   ).toContainText('2')
   await expect(page.getByText('balanced-route')).toBeVisible()
   await expect(page.getByText('private-route')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Routing objectives' })).toBeVisible()
+  await expect(page.getByText('2 profiles')).toBeVisible()
+  await page.getByRole('button', { name: 'View privacy topology' }).click()
+  await expect(page).toHaveURL(/\/topology\?scope=privacy$/)
 
   await page.goto('/config/signals')
   const signalScope = page.getByLabel('Routing profile')

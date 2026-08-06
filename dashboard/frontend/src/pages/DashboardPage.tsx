@@ -11,6 +11,7 @@ import {
   type SystemStatus,
 } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
+import DashboardRoutingProfiles from './DashboardRoutingProfiles'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   categorizeDecisions,
@@ -393,6 +394,15 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {config ? (
+        <DashboardRoutingProfiles
+          config={config}
+          onOpenTopology={(scopeId) =>
+            navigate(`/topology?scope=${encodeURIComponent(scopeId)}`)
+          }
+        />
+      ) : null}
 
       <div className={styles.card}>
         <div className={styles.cardHeader}>
