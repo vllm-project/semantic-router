@@ -1,0 +1,120 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  quality:
+    needs: changes
+    uses: ./.github/workflows/pre-commit.yml
+    with:
+      docs_only: ${{ needs.changes.outputs.docs_only == 'true' }}
+      website: ${{ needs.changes.outputs.website == 'true' }}
+
+  core:
+    needs: changes
+    if: needs.changes.outputs.core_test == 'true'
+    uses: ./.github/workflows/test-and-build.yml
+    secrets: inherit
+
+  dashboard:
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
+    uses: ./.github/workflows/dashboard-test.yml
+
+  operator:
+    needs: changes
+    if: needs.changes.outputs.operator == 'true'
+    uses: ./.github/workflows/operator-ci.yml
+    with:
+      run_integration: false
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      profiles: ${{ needs.changes.outputs.e2e_profiles }}
+    secrets: inherit
+
+  cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
+
+  openvino:
+    needs: changes
+    if: needs.changes.outputs.openvino == 'true'
+    uses: ./.github/workflows/openvino-binding-ci.yml
+
+  gate:
+    name: Main validation gate
+    if: always()
+    needs:
+      - changes
+      - quality
+      - core
+      - dashboard
+      - operator
+      - e2e
+      - cli
+      - openvino
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify affected domains
+        env:
+          DOMAIN_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failures="$(
+            jq -r '
+              to_entries[]
+              | select(.value.result != "success" and .value.result != "skipped")
+              | "\(.key)=\(.value.result)"
+            ' <<< "$DOMAIN_RESULTS"
+          )"
+          if [ -n "$failures" ]; then
+            echo "$failures"
+            exit 1
+          fi
+
+  images:
+    name: Publish affected images
+    needs: [changes, gate]
+    if: >-
+      needs.gate.result == 'success'
+      && needs.changes.outputs.publish_images != '[]'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      mode: main
+      images: ${{ needs.changes.outputs.publish_images }}
+      publish_latest: true
+    secrets: inherit
+
+  helm:
+    name: Publish affected Helm chart
+    needs: [changes, gate]
+    if: >-
+      needs.gate.result == 'success'
+      && needs.changes.outputs.helm == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/helm-publish.yml
+    with:
+      mode: main
+    secrets: inherit

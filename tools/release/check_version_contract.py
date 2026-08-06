@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -25,8 +26,7 @@ CANDLE_CARGO_PATH = REPO_ROOT / "candle-binding/Cargo.toml"
 CANDLE_LOCK_PATH = REPO_ROOT / "candle-binding/Cargo.lock"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
-DOCKER_RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-release.yml"
-OPERATOR_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/operator-ci.yml"
+DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 PUBLISH_CRATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/publish-crate.yml"
@@ -36,10 +36,7 @@ HELM_CHART_REF = "oci://ghcr.io/vllm-project/charts/semantic-router"
 
 
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
-TAGGED_IMAGE_RE = re.compile(
-    r"semantic-router/([a-z0-9-]+):\$\{\{\s*steps\.extract_tag\.outputs\.tag\s*\}\}"
-)
-OPERATOR_TAGGED_IMAGE_RE = re.compile(r"semantic-router/([a-z0-9-]+):\$\{TAG\}")
+RELEASE_IMAGES_RE = re.compile(r"^\s+images:\s+'(\[[^']+\])'", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -107,13 +104,18 @@ def parse_chart_key(path: Path, key: str) -> str:
 
 
 def parse_release_images() -> tuple[str, ...]:
-    images = sorted(
-        set(TAGGED_IMAGE_RE.findall(read_text(DOCKER_RELEASE_WORKFLOW_PATH)))
-        | set(OPERATOR_TAGGED_IMAGE_RE.findall(read_text(OPERATOR_WORKFLOW_PATH)))
-    )
-    if not images:
+    match = RELEASE_IMAGES_RE.search(read_text(RELEASE_WORKFLOW_PATH))
+    if match is None:
         raise ValueError(
-            "could not find tagged release images in docker or operator workflows"
+            "could not find the release image inventory in release workflow"
+        )
+    images = sorted(json.loads(match.group(1)))
+    docker_workflow = read_text(DOCKER_PUBLISH_WORKFLOW_PATH)
+    missing = [image for image in images if f"{image})" not in docker_workflow]
+    if missing:
+        raise ValueError(
+            "release images are missing from the canonical Docker publisher: "
+            + ", ".join(missing)
         )
     return tuple(images)
 
@@ -163,13 +165,13 @@ def validate_helm_workflow(errors: list[str]) -> None:
         errors,
         HELM_WORKFLOW_PATH,
         "Helm release chart version",
-        'CHART_VERSION="${GITHUB_REF#refs/tags/v}"',
+        'CHART_VERSION="$RELEASE_VERSION"',
     )
     require_contains(
         errors,
         HELM_WORKFLOW_PATH,
         "Helm release app version",
-        'APP_VERSION="${GITHUB_REF#refs/tags/}"',
+        'APP_VERSION="$RELEASE_TAG"',
     )
     require_contains(
         errors,
