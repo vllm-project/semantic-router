@@ -54,8 +54,61 @@
   position: sticky;
   top: calc(var(--site-header-height) + 1.25rem);
   display: grid;
-  gap: 0.1rem;
+  gap: 1.5rem;
   align-content: start;
+}
+
+.sidebarNav {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.sidebarCard {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.85rem;
+  background: var(--site-surface);
+}
+
+.sidebarCardLabel {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sidebarCardLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--site-text);
+  font-size: 0.85rem;
+  font-weight: 550;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.sidebarCardLink span {
+  color: var(--site-muted);
+  font-size: 0.85rem;
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.sidebarCardLink:hover {
+  color: var(--site-accent);
+  text-decoration: none;
+}
+
+.sidebarCardLink:hover span {
+  color: var(--site-accent);
+  transform: translate(2px, -2px);
 }
 
 .navLink {
@@ -96,6 +149,10 @@
 
   .sidebar {
     position: static;
+    gap: 1rem;
+  }
+
+  .sidebarNav {
     display: flex;
     flex-wrap: nowrap;
     gap: 0.5rem;
@@ -105,7 +162,7 @@
     scrollbar-width: none;
   }
 
-  .sidebar::-webkit-scrollbar {
+  .sidebarNav::-webkit-scrollbar {
     display: none;
   }
 
