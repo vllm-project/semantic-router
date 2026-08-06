@@ -1,7 +1,7 @@
 ---
 slug: multi-objective-mom-on-amd-developer-cloud
-title: "Three ROCm Models, Five Routing Objectives on AMD Developer Cloud"
-description: Deploy a three-tier open-weight Qwen model pool on AMD Instinct MI300X and route five isolated optimization objectives across real physical backends.
+title: "Eight MI300X GPUs, Six Open Models, Five Routing Objectives"
+description: Co-design an eight-GPU AMD model pool with current Qwen, Gemma 4, and DeepSeek V4 checkpoints, then validate five isolated routing objectives end to end.
 authors: [Xunzhuo]
 tags: [amd, rocm, deployment, mixture-of-models, vllm, semantic-router]
 image: /img/amd-deploy-0.png
@@ -19,10 +19,11 @@ Router in front of a balance-oriented ROCm backend. The maintained
 objective they want, while the router keeps each objective's signals,
 projections, decisions, algorithms, and plugins isolated.
 
-This guide deploys three physical ROCm models, exposes five honest local routing
-lanes, and presents five stable Mixture-of-Models entrypoints. Requests now move
-between models with materially different memory, latency, and quality profiles
-instead of simulating those differences with aliases on one backend.
+This guide deploys six physical open models across seven serving GPUs, reserves
+the eighth GPU for router classifiers, and presents five stable
+Mixture-of-Models entrypoints. Requests move between checkpoints with different
+architectures, latency, tool-use, and quality profiles instead of simulating
+those differences with aliases on one backend.
 
 <!-- truncate -->
 
@@ -52,34 +53,35 @@ Client model
   -> signals and projections
   -> decision and algorithm
   -> logical backend alias
-  -> one of three physical ROCm models
+  -> one of six physical ROCm models
 ```
 
-## The Three-tier Model Pool
+## The Eight-GPU Model Pool
 
-An 8×MI300X host has enough HBM to run independent single-GPU tiers while
-leaving capacity for replicas, experiments, or a larger tensor-parallel model.
-This deployment uses three GPUs:
+The pool assigns every GPU a measured responsibility. Redundancy is used only
+where it improves interactive capacity; architecture diversity is used where a
+stable judge can resolve disagreements.
 
 | GPU | Physical model | Local lanes | Role |
 | --- | --- | --- | --- |
-| 0 | `Qwen/Qwen3.5-122B-A10B-FP8` | `local/qwen3.5-122b-frontier` | Highest-quality local synthesis and review. |
-| 1 | `Qwen/Qwen3.5-9B` | `local/qwen3.5-9b-economy`, `local/qwen3.5-9b-private` | Lowest-cost interactive and isolated privacy traffic. |
-| 2 | `Qwen/Qwen3.6-35B-A3B-FP8` | `local/qwen3.6-35b-flash`, `local/qwen3.6-35b-balanced` | Latest flash-class MoE for coding and general reasoning. |
+| 0 | `Qwen/Qwen3.5-122B-A10B-FP8` | `local/qwen3.5-122b-frontier` | Stable direct model and judge. |
+| 1 | `Qwen/Qwen3.5-9B` | economy, private | Low-cost primary. |
+| 2 | `Qwen/Qwen3.6-35B-A3B-FP8` | `local/qwen3.6-35b-flash` | Flash-class MoE. |
+| 3 | `deepseek-ai/DeepSeek-V4-Flash-0731` | `local/deepseek-v4-flash-analyst` | Current MIT-licensed analyst behind the stable judge. |
+| 4 | `Qwen/Qwen3.6-27B` | `local/qwen3.6-27b-coder` | Dense coding, planning, and structured output. |
+| 5 | `google/gemma-4-26B-A4B-it` | `local/gemma4-26b-balanced` | Fast architecture-diverse balanced tier. |
+| 6 | `Qwen/Qwen3.5-9B` | `local/qwen3.5-9b-economy-replica` | Independent speed/load replica. |
+| 7 | Router signal models | internal | Isolated classification and projection runtime. |
 
-Qwen3.6-35B-A3B activates roughly 3B parameters per token and has AMD Day-0
-support in vLLM. It is the fast reasoning tier. Qwen3.5-9B remains useful because
-small dense models have low scheduling and memory overhead. Qwen3.5-122B-A10B
-provides the stronger escalation target without relying on a remote API.
+DeepSeek V4 is intentionally an analyst, not the direct default. Its pinned
+MI300X stack passed long-context, tools, structured output, and concurrency
+gates, but scored 11/12 on the arithmetic calibration where Qwen3.6, Gemma 4,
+and Qwen3.5-122B scored 12/12. The stable 122B model therefore remains the
+judge. This is co-design from measurements, not release-date routing.
 
-Aliases are used only where two policy lanes share one physical checkpoint. The
-names stay under the `local/` namespace and never impersonate a proprietary
-vendor model. This allows privacy and balanced traffic to have independent
-telemetry and pricing metadata while retaining an explicit physical mapping.
-
-The smaller backends use a 32K serving limit to preserve predictable single-GPU
-KV-cache capacity. The large backend retains its 262K serving limit. These are
-deployment limits; they do not redefine each checkpoint's architectural maximum.
+The smaller backends use a 32K serving limit for predictable single-GPU
+capacity. Qwen3.5-122B and DeepSeek V4 retain 262K limits. These are deployment
+limits, not architectural claims.
 
 ## Step 1: Start the ROCm Backends
 
@@ -122,6 +124,8 @@ sudo docker run -d \
     --host 0.0.0.0 \
     --port 8000 \
     --served-model-name qwen/qwen3.5-rocm \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
     --max-model-len 262144 \
     --language-model-only \
@@ -157,6 +161,8 @@ sudo docker run -d \
     --served-model-name \
       local/qwen3.5-9b-economy \
       local/qwen3.5-9b-private \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
     --max-model-len 32768 \
     --language-model-only \
@@ -165,7 +171,7 @@ sudo docker run -d \
     --gpu-memory-utilization 0.50
 ```
 
-Start the Qwen3.6 flash/balanced backend on GPU 2:
+Start the Qwen3.6 flash backend on GPU 2:
 
 ```bash
 sudo docker run -d \
@@ -189,9 +195,9 @@ sudo docker run -d \
     --model Qwen/Qwen3.6-35B-A3B-FP8 \
     --host 0.0.0.0 \
     --port 8000 \
-    --served-model-name \
-      local/qwen3.6-35b-flash \
-      local/qwen3.6-35b-balanced \
+    --served-model-name local/qwen3.6-35b-flash \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
     --max-model-len 32768 \
     --language-model-only \
@@ -200,9 +206,95 @@ sudo docker run -d \
     --gpu-memory-utilization 0.60
 ```
 
+DeepSeek V4 on MI300X requires FNUZ-aware correctness overlays that are not in
+the generic ROCm image. Use the checksum-pinned production stack on GPU 3:
+
+```bash
+git clone https://github.com/ryanzhou/deepseek-v4-flash-mi300x.git
+cd deepseek-v4-flash-mi300x
+git checkout 7c06e57
+sha256sum -c SHA256SUMS
+mkdir -p aiter-cache crash-dumps
+chmod +x vllm-entrypoint.sh
+
+cat > compose.semantic-router.yaml <<'YAML'
+services:
+  inference:
+    container_name: vllm-deepseek-v4
+    environment:
+      ROCR_VISIBLE_DEVICES: "3"
+    ports: ["127.0.0.1:8093:8000"]
+    volumes:
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface:ro
+    networks: [vllm-sr-network]
+networks:
+  vllm-sr-network:
+    external: true
+YAML
+
+docker compose -f compose.yaml -f compose.semantic-router.yaml up -d inference
+cd ..
+```
+
+Use the same pinned current-generation ROCm image for Qwen3.6-27B and Gemma 4:
+
+```bash
+export VLLM_NEXT_IMAGE='vllm/vllm-openai-rocm@sha256:e68d18b2ba50298661bfc49baf01158fbf036645c2362cccf3e8a7a79fe6c69a'
+```
+
+Start the dense Qwen3.6 coding tier on GPU 4:
+
+```bash
+sudo docker run -d \
+  --name vllm-qwen36-coder \
+  --network vllm-sr-network \
+  --restart unless-stopped \
+  -p 127.0.0.1:8094:8000 \
+  -v "$VLLM_HF_CACHE:/root/.cache/huggingface" \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  --ipc host --security-opt seccomp=unconfined --shm-size 32G \
+  -e ROCR_VISIBLE_DEVICES=4 -e VLLM_ROCM_USE_AITER=1 \
+  --entrypoint python3 "$VLLM_NEXT_IMAGE" \
+  -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3.6-27B \
+    --host 0.0.0.0 --port 8000 \
+    --served-model-name local/qwen3.6-27b-coder \
+    --enable-auto-tool-choice --tool-call-parser qwen3_coder \
+    --reasoning-parser qwen3 --language-model-only \
+    --max-model-len 32768 --max-num-seqs 128 \
+    --kv-cache-dtype fp8 --gpu-memory-utilization 0.65
+```
+
+Start Gemma 4 on GPU 5. Its GELU-Tanh MoE is not supported by the AITER
+unquantized MoE kernel, so this tier explicitly uses Triton:
+
+```bash
+sudo docker run -d \
+  --name vllm-gemma4-balanced \
+  --network vllm-sr-network \
+  --restart unless-stopped \
+  -p 127.0.0.1:8095:8000 \
+  -v "$VLLM_HF_CACHE:/root/.cache/huggingface" \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  --ipc host --security-opt seccomp=unconfined --shm-size 32G \
+  -e ROCR_VISIBLE_DEVICES=5 -e VLLM_ROCM_USE_AITER=0 \
+  --entrypoint python3 "$VLLM_NEXT_IMAGE" \
+  -m vllm.entrypoints.openai.api_server \
+    --model google/gemma-4-26B-A4B-it \
+    --host 0.0.0.0 --port 8000 \
+    --served-model-name local/gemma4-26b-balanced \
+    --language-model-only --moe-backend triton \
+    --max-model-len 32768 --max-num-seqs 128 \
+    --kv-cache-dtype fp8 --gpu-memory-utilization 0.65
+```
+
+Finally, repeat the GPU 1 Qwen3.5-9B command on GPU 6 with container name
+`vllm-qwen35-economy-replica`, host port `8096`, and the single served name
+`local/qwen3.5-9b-economy`. This is a separate model-selection candidate, not a
+second endpoint hidden inside one Envoy `LOGICAL_DNS` cluster.
+
 The host ports are intentionally bound to loopback. Semantic Router reaches
-`vllm:8000`, `vllm-qwen35-economy:8000`, and
-`vllm-qwen36-flash:8000` on the shared Docker network.
+the seven serving containers over `vllm-sr-network`.
 
 Confirm that all physical tiers and aliases are present:
 
@@ -210,6 +302,10 @@ Confirm that all physical tiers and aliases are present:
 curl -sS http://127.0.0.1:8090/v1/models
 curl -sS http://127.0.0.1:8091/v1/models
 curl -sS http://127.0.0.1:8092/v1/models
+curl -sS http://127.0.0.1:8093/v1/models
+curl -sS http://127.0.0.1:8094/v1/models
+curl -sS http://127.0.0.1:8095/v1/models
+curl -sS http://127.0.0.1:8096/v1/models
 ```
 
 ## Step 2: Install and Start vLLM Semantic Router
@@ -237,10 +333,14 @@ Validate and start the maintained recipe:
 vllm-sr validate \
   --config "$HOME/.config/vllm-sr/recipes/multi-objective.yaml"
 
-vllm-sr serve \
+VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve \
   --platform amd \
   --config "$HOME/.config/vllm-sr/recipes/multi-objective.yaml"
 ```
+
+The visibility override applies only to the Router container. Dashboard and
+Envoy do not inherit it, while router-internal classifiers stay off the serving
+GPUs.
 
 The maintained recipe points Looper back through
 `vllm-sr-envoy-container:8899`. This is required for Fusion, ReMoM, and Router
@@ -291,8 +391,9 @@ curl -sS http://127.0.0.1:8899/v1/chat/completions \
   }'
 ```
 
-Use the frontier objective when the request benefits from bounded
-multi-response orchestration:
+Use the frontier objective when the request benefits from multi-response
+orchestration. Frontier subrequests inherit the client token setting rather than
+adding a recipe-owned completion limit:
 
 ```bash
 curl -sS http://127.0.0.1:8899/v1/chat/completions \
@@ -332,10 +433,10 @@ vllm-sr eval \
 
 The maintained
 [`probes.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/probes.yaml)
-contains 102 backend-independent cases used by repository CI and recipe
+contains 103 backend-independent cases used by repository CI and recipe
 calibration. It checks:
 
-- all 15 decisions
+- all 16 decisions
 - multilingual and preference-conflict boundaries
 - PII and jailbreak containment
 - tool and multi-turn request shapes
@@ -345,22 +446,26 @@ calibration. It checks:
 ### Validated MI300X Run
 
 The maintained commands were exercised on an 8×MI300X host with vLLM
-`0.19.0+rocm721`. The final run verified:
+`0.19.0+rocm721` for the Qwen3.5/3.6 flash tiers and a pinned
+`0.26.1rc1` ROCm image for current-generation models. The final run verified:
 
-- all three physical backends returned concurrent OpenAI-compatible completions
+- all seven serving endpoints and the GPU-7 router runtime were isolated as designed
+- every checkpoint passed instruction, multilingual, coding, structured-output,
+  long-context needle, and 8-request concurrency gates
+- Qwen3.6-35B, Qwen3.6-27B, Qwen3.5-122B, and Gemma 4 scored 12/12 on the
+  arithmetic calibration; Qwen3.5-9B and DeepSeek V4 scored 11/12
+- tool calling passed on every tool-enabled Qwen and DeepSeek endpoint
 - all five public entrypoints generated non-empty final answers
-- balanced selected the Qwen3.6 balanced lane
-- flash and economy selected the 9B low-latency lane
-- privacy selected the isolated 9B private alias with reasoning disabled
-- frontier Fusion used all three physical tiers and the 122B judge
-- the 102-probe suite matched all 15 decisions with 0 errors
+- the real Playground accuracy tool flow stayed direct, then used the
+  tool-result synthesis lane without a repeated search
+- the 103-probe suite matched all 16 decisions with 0 errors
 
-The backend-independent routing evaluation completed at 32.229 requests per
-second with p50 79.431 ms and p95 2062.777 ms. A representative generated
-request took 0.183 seconds for economy, 0.336 seconds for flash, 0.637 seconds
-for privacy, 3.590 seconds for balanced, and 44.654 seconds for three-model
-frontier Fusion. These are validation observations from one host, not general
-performance guarantees.
+Representative generated requests took 0.181 seconds for economy, 0.333 seconds
+for flash, 0.650 seconds for privacy, 4.342 seconds for balanced direct,
+8.025 seconds for balanced deliberate, 4.700 seconds for frontier direct,
+31.417 seconds for Fusion, and 23.074 seconds for ReMoM. An explicit unbounded
+Workflow produced a roughly 10K-character answer in 111.784 seconds. These are
+validation observations from one host, not general performance guarantees.
 
 ## Operating the Pool
 
