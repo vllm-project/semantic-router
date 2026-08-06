@@ -14,7 +14,10 @@ func (c *ValkeyCache) FindExact(partition string, fingerprint string) (LookupRes
 		context.Background(),
 		[]string{"GET", exactCacheStorageKey(partition, fingerprint)},
 	)
-	if err != nil || raw == nil {
+	if err != nil {
+		return LookupResult{}, fmt.Errorf("valkey exact lookup failed: %w", err)
+	}
+	if raw == nil {
 		return LookupResult{}, nil
 	}
 	var responseBody []byte

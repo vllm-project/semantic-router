@@ -27,7 +27,8 @@ func (r *OpenAIRouter) performExactCacheLookup(
 	partition := semanticCachePartition(ctx, ctx.CacheRequestModel)
 	start := time.Now()
 	result, err := exactBackend.FindExact(partition, ctx.CacheExactFingerprint)
-	lookupTime := time.Since(start).Milliseconds()
+	lookupDuration := time.Since(start)
+	lookupTime := lookupDuration.Milliseconds()
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "exact_cache_lookup_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -42,11 +43,13 @@ func (r *OpenAIRouter) performExactCacheLookup(
 
 	ctx.VSRCacheHit = true
 	ctx.VSRCacheSimilarity = 1
+	applyCacheHitSelectedModel(ctx)
 	if categoryName != "" {
 		ctx.VSRSelectedDecisionName = categoryName
 	}
 	metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "exact-cache")
 	r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
+	r.reportCacheHitTelemetry(ctx, result.ResponseBody, lookupDuration)
 	response := r.createCacheHitResponse(
 		ctx,
 		result.ResponseBody,

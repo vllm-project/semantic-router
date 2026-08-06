@@ -92,6 +92,16 @@ func (h *HybridCache) LookupSimilarWithThreshold(model string, query string, thr
 	return LookupResult{}, nil
 }
 
+// FindExact is unavailable when CGO support is disabled.
+func (h *HybridCache) FindExact(string, string) (LookupResult, error) {
+	return LookupResult{}, nil
+}
+
+// AddExact is unavailable when CGO support is disabled.
+func (h *HybridCache) AddExact(string, string, []byte, int) error {
+	return nil
+}
+
 // RebuildFromMilvus rebuilds the in-memory HNSW index
 func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	return nil

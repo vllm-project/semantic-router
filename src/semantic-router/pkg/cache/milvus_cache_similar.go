@@ -21,8 +21,9 @@ func milvusStringLiteral(value string) string {
 
 func milvusActiveEntryFilterExpr(model string) string {
 	return fmt.Sprintf(
-		`model == %s && response_body != "" && (expires_at == 0 || expires_at > %d)`,
+		`model == %s && query != %s && response_body != "" && (expires_at == 0 || expires_at > %d)`,
 		milvusStringLiteral(model),
+		milvusStringLiteral(exactCacheQueryMarker),
 		time.Now().Unix(),
 	)
 }

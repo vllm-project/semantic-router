@@ -579,3 +579,32 @@ func TestBuildReconstructedStreamingResponseSkipsToolCallsOnlyForCache(t *testin
 	_, err := buildReconstructedStreamingResponse(ctx, openai.CompletionUsage{}, false)
 	assert.ErrorIs(t, err, errSkipStreamingCache)
 }
+
+func TestCacheStreamingResponseStoresToolOnlyPayload(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:         "req-tool-only",
+		RequestModel:      "test-model",
+		RequestQuery:      "look up weather",
+		StreamingComplete: true,
+		StreamingMetadata: map[string]interface{}{
+			"id":            "chatcmpl-tool",
+			"model":         "test-model",
+			"created":       int64(1234567890),
+			"finish_reason": "tool_calls",
+		},
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather",
+				Name:      "get_weather",
+				Arguments: `{"location":"San Francisco"}`,
+			},
+		},
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+
+	assert.NoError(t, err)
+	assert.True(t, mockCache.addEntryCalled)
+}

@@ -13,9 +13,6 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 	if requestBypassesRouting(ctx) {
 		return false
 	}
-	if ctx != nil && ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		return false
-	}
 	if ctx != nil && ctx.VSRSelectedDecision != nil {
 		return r.Config.IsCacheEnabledForDecisionObject(ctx.VSRSelectedDecision)
 	}

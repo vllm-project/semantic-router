@@ -224,7 +224,8 @@ func (r *OpenAIRouter) performCacheLookup(
 	lookupResult, cacheErr := r.Cache.LookupSimilarWithThreshold(partition, cacheQuery, threshold)
 	cachedResponse := lookupResult.ResponseBody
 	found := lookupResult.Found
-	lookupTime := time.Since(startTime).Milliseconds()
+	lookupDuration := time.Since(startTime)
+	lookupTime := lookupDuration.Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
@@ -242,6 +243,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	} else if found {
 		ctx.VSRCacheHit = true
 		ctx.VSRCacheSimilarity = lookupResult.Similarity
+		applyCacheHitSelectedModel(ctx)
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
@@ -251,6 +253,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
+		r.reportCacheHitTelemetry(ctx, cachedResponse, lookupDuration)
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      requestModel,
@@ -284,6 +287,9 @@ func (r *OpenAIRouter) createCacheHitResponse(
 	matchedKeywords []string,
 	similarity float32,
 ) *ext_proc.ProcessingResponse {
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		hydrateAnthropicCacheUsage(ctx, cachedResponse)
+	}
 	response := http.CreateCacheHitResponse(
 		cachedResponse,
 		ctx.ExpectStreamingResponse,
@@ -292,6 +298,9 @@ func (r *OpenAIRouter) createCacheHitResponse(
 		matchedKeywords,
 		similarity,
 	)
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		response = translateAnthropicCacheHit(ctx, response)
+	}
 	if isResponseAPIRequest(ctx) {
 		if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
 			ctx,
@@ -306,6 +315,12 @@ func (r *OpenAIRouter) createCacheHitResponse(
 	}
 	appendRecipeHeaderToImmediateResponse(response, ctx)
 	return response
+}
+
+func applyCacheHitSelectedModel(ctx *RequestContext) {
+	if ctx != nil && ctx.CacheSelectedModel != "" {
+		ctx.RequestModel = ctx.CacheSelectedModel
+	}
 }
 
 func cacheRequestBodyForContext(ctx *RequestContext) []byte {
