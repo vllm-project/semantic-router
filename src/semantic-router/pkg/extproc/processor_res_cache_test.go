@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/openai/openai-go"
@@ -22,10 +23,16 @@ type mockStreamingCache struct {
 	updateRequestID    string
 	updateResponseBody []byte
 	addEntryErr        error
+	addEntryModel      string
+	addEntryQuery      string
 	updateErr          error
 	lastTTLSeconds     int
 	addPendingModel    string
 	findSimilarModel   string
+	exactResponse      []byte
+	exactHit           bool
+	exactFindCalled    bool
+	exactAdded         bool
 }
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
@@ -54,13 +61,15 @@ func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody [
 
 func (m *mockStreamingCache) AddEntry(
 	_ string,
-	_ string,
-	_ string,
+	model string,
+	query string,
 	_ []byte,
 	_ []byte,
 	ttlSeconds int,
 ) error {
 	m.addEntryCalled = true
+	m.addEntryModel = model
+	m.addEntryQuery = query
 	m.lastTTLSeconds = ttlSeconds
 	return m.addEntryErr
 }
@@ -79,7 +88,37 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	return nil, false, nil
 }
 
+func (m *mockStreamingCache) LookupSimilarWithThreshold(
+	model string,
+	_ string,
+	_ float32,
+) (cache.LookupResult, error) {
+	m.findSimilarCalled = true
+	m.findSimilarModel = model
+	return cache.LookupResult{}, nil
+}
+
 func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }
+
+func (m *mockStreamingCache) FindExact(_ string, _ string) (cache.LookupResult, error) {
+	m.exactFindCalled = true
+	return cache.LookupResult{
+		ResponseBody: m.exactResponse,
+		Found:        m.exactHit,
+		Similarity:   1,
+	}, nil
+}
+
+func (m *mockStreamingCache) AddExact(
+	_ string,
+	_ string,
+	_ []byte,
+	ttlSeconds int,
+) error {
+	m.exactAdded = true
+	m.lastTTLSeconds = ttlSeconds
+	return nil
+}
 
 func (m *mockStreamingCache) Close() error { return nil }
 
@@ -102,6 +141,67 @@ func withSelectedDecision(ctx *RequestContext, decision *config.Decision) *Reque
 	return ctx
 }
 
+func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
+	mockCache, router, decision := cacheRouterForDecision(config.Decision{
+		Name:      "exact-cache-decision",
+		ModelRefs: []config.ModelRef{{Model: "test"}},
+		Plugins: []config.DecisionPlugin{{
+			Type: "semantic-cache",
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    "exact_then_semantic",
+			}),
+		}},
+	})
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:                     "req-exact-write",
+		CacheRequestModel:             "auto",
+		CacheSelectedModel:            "test",
+		CacheExactFingerprint:         "fingerprint",
+		CacheCompatibilityFingerprint: "compatibility",
+		CacheSemanticSafe:             true,
+		CacheQuery:                    "hello",
+		OriginalRequestBody:           []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}]}`),
+	}, decision)
+
+	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
+
+	assert.True(t, mockCache.addEntryCalled)
+	assert.False(t, mockCache.updateCalled)
+	assert.True(t, mockCache.exactAdded)
+	assert.True(t, strings.HasPrefix(mockCache.addEntryModel, "v2:"))
+	assert.Equal(t, "hello", mockCache.addEntryQuery)
+}
+
+func TestUpdateResponseCache_NoStoreControlSkipsSemanticAndExactWrites(t *testing.T) {
+	mockCache, router, decision := cacheRouterForDecision(config.Decision{
+		Name:      "controlled-cache-decision",
+		ModelRefs: []config.ModelRef{{Model: "test"}},
+		Plugins: []config.DecisionPlugin{{
+			Type: "semantic-cache",
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    "exact_then_semantic",
+			}),
+		}},
+	})
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:                     "req-no-store",
+		CacheRequestModel:             "auto",
+		CacheSelectedModel:            "test",
+		CacheExactFingerprint:         "fingerprint",
+		CacheCompatibilityFingerprint: "compatibility",
+		CacheSemanticSafe:             true,
+		CacheWriteBypass:              true,
+	}, decision)
+
+	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
+
+	assert.False(t, mockCache.addEntryCalled)
+	assert.False(t, mockCache.updateCalled)
+	assert.False(t, mockCache.exactAdded)
+}
+
 // =====================================================================
 // NON-STREAMING: updateResponseCache
 // =====================================================================
@@ -111,10 +211,15 @@ func TestUpdateResponseCache_SkipsWhenDecisionCacheDisabled(t *testing.T) {
 		Name:      "no-cache-decision",
 		ModelRefs: []config.ModelRef{{Model: "test"}},
 	})
-	ctx := withSelectedDecision(&RequestContext{RequestID: "req-1"}, decision)
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:           "req-1",
+		RequestModel:        "test",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`),
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.False(t, mockCache.updateCalled, "should not store response when decision has no semantic-cache plugin")
+	assert.False(t, mockCache.addEntryCalled, "should not store response when decision has no semantic-cache plugin")
 }
 
 func TestUpdateResponseCache_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing.T) {
@@ -126,10 +231,15 @@ func TestUpdateResponseCache_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing
 			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
 		}},
 	})
-	ctx := withSelectedDecision(&RequestContext{RequestID: "req-1"}, decision)
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:           "req-1",
+		RequestModel:        "test",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`),
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.False(t, mockCache.updateCalled, "should not store response when decision has semantic-cache disabled")
+	assert.False(t, mockCache.addEntryCalled, "should not store response when decision has semantic-cache disabled")
 }
 
 func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
@@ -141,10 +251,15 @@ func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
 			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
 		}},
 	})
-	ctx := withSelectedDecision(&RequestContext{RequestID: "req-1"}, decision)
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:           "req-1",
+		RequestModel:        "test",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`),
+	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.True(t, mockCache.updateCalled, "should store response when decision has semantic-cache enabled")
+	assert.True(t, mockCache.addEntryCalled, "should store response when decision has semantic-cache enabled")
 }
 
 func TestUpdateResponseCache_StoresWhenNoDecisionSelectedAndNoDecisionsConfigured(t *testing.T) {
@@ -155,11 +270,14 @@ func TestUpdateResponseCache_StoresWhenNoDecisionSelectedAndNoDecisionsConfigure
 	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
 		RequestID:               "req-1",
+		RequestModel:            "test",
+		RequestQuery:            "hello",
+		OriginalRequestBody:     []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`),
 		VSRSelectedDecisionName: "",
 	}
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.True(t, mockCache.updateCalled, "should store response when no decision is selected (global cache applies)")
+	assert.True(t, mockCache.addEntryCalled, "should store response when no decision is selected (global cache applies)")
 }
 
 func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t *testing.T) {
@@ -182,16 +300,14 @@ func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t
 	}
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.False(t, mockCache.updateCalled, "should not store response when decisions exist but no decision matched")
+	assert.False(t, mockCache.addEntryCalled, "should not store response when decisions exist but no decision matched")
 }
 
 // =====================================================================
 // STREAMING: cacheReconstructedStreamingResponse
 // =====================================================================
 
-// Regression for #2030: streaming finalize must update the pending entry in
-// place (by request_id), not mint a new key via AddEntry that orphans it.
-func TestCacheReconstructedStreamingResponseUpdatesInPlace(t *testing.T) {
+func TestCacheReconstructedStreamingResponseAddsCompletedEntry(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{Cache: mockCache}
 	ctx := &RequestContext{
@@ -202,10 +318,8 @@ func TestCacheReconstructedStreamingResponseUpdatesInPlace(t *testing.T) {
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.updateCalled, "streaming finalize must update the pending entry in place")
-	assert.False(t, mockCache.addEntryCalled, "streaming finalize must not mint a new cache key via AddEntry")
-	assert.Equal(t, "req-1", mockCache.updateRequestID)
-	assert.JSONEq(t, `{"ok":true}`, string(mockCache.updateResponseBody))
+	assert.True(t, mockCache.addEntryCalled, "streaming finalize must write one completed entry")
+	assert.False(t, mockCache.updateCalled, "streaming cache must not depend on shared pending state")
 }
 
 // Regression for #2030: ctx.RequestModel is overwritten from the client alias
@@ -221,9 +335,8 @@ func TestCacheReconstructedStreamingResponseUpdatesAfterModelResolved(t *testing
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.updateCalled)
-	assert.False(t, mockCache.addEntryCalled)
-	assert.Equal(t, "req-1", mockCache.updateRequestID)
+	assert.True(t, mockCache.addEntryCalled)
+	assert.False(t, mockCache.updateCalled)
 }
 
 func TestCacheReconstructedStreamingResponseUpdatesWithoutQueryMetadata(t *testing.T) {
@@ -234,7 +347,7 @@ func TestCacheReconstructedStreamingResponseUpdatesWithoutQueryMetadata(t *testi
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
 	assert.False(t, mockCache.addEntryCalled)
-	assert.True(t, mockCache.updateCalled)
+	assert.False(t, mockCache.updateCalled)
 }
 
 func TestCacheReconstructedStreamingResponseSkipsWithoutRequestID(t *testing.T) {
@@ -307,8 +420,8 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.updateCalled, "should finalize the pending entry when decision has semantic-cache enabled")
-	assert.False(t, mockCache.addEntryCalled, "should not mint a new cache key via AddEntry")
+	assert.True(t, mockCache.addEntryCalled, "should write a completed cache entry")
+	assert.False(t, mockCache.updateCalled)
 }
 
 // =====================================================================
@@ -386,8 +499,9 @@ func TestCacheStreamingAllowedForGenericRequest(t *testing.T) {
 
 	err := router.cacheStreamingResponse(ctx)
 	assert.NoError(t, err)
-	assert.True(t, mockCache.updateCalled,
+	assert.True(t, mockCache.addEntryCalled,
 		"cache write must proceed for generic requests without personalized context")
+	assert.False(t, mockCache.updateCalled)
 }
 
 func TestBuildReconstructedStreamingResponseIncludesToolCallsForReplay(t *testing.T) {
@@ -464,4 +578,33 @@ func TestBuildReconstructedStreamingResponseSkipsToolCallsOnlyForCache(t *testin
 
 	_, err := buildReconstructedStreamingResponse(ctx, openai.CompletionUsage{}, false)
 	assert.ErrorIs(t, err, errSkipStreamingCache)
+}
+
+func TestCacheStreamingResponseStoresToolOnlyPayload(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{Cache: mockCache}
+	ctx := &RequestContext{
+		RequestID:         "req-tool-only",
+		RequestModel:      "test-model",
+		RequestQuery:      "look up weather",
+		StreamingComplete: true,
+		StreamingMetadata: map[string]interface{}{
+			"id":            "chatcmpl-tool",
+			"model":         "test-model",
+			"created":       int64(1234567890),
+			"finish_reason": "tool_calls",
+		},
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather",
+				Name:      "get_weather",
+				Arguments: `{"location":"San Francisco"}`,
+			},
+		},
+	}
+
+	err := router.cacheStreamingResponse(ctx)
+
+	assert.NoError(t, err)
+	assert.True(t, mockCache.addEntryCalled)
 }

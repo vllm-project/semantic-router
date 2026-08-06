@@ -17,6 +17,7 @@ type InMemoryCache struct {
 	SimilarityTracker   // embedded — provides LastSimilarity()
 	entries             []CacheEntry
 	entryMap            map[string]int // requestID -> index for O(1) lookup
+	exactEntries        map[string]exactMemoryEntry
 	mu                  sync.RWMutex
 	similarityThreshold float32
 	maxEntries          int
@@ -148,6 +149,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
 		entryMap:            make(map[string]int),
+		exactEntries:        make(map[string]exactMemoryEntry),
 		similarityThreshold: options.SimilarityThreshold,
 		maxEntries:          options.MaxEntries,
 		ttlSeconds:          options.TTLSeconds,

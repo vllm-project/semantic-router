@@ -12,6 +12,20 @@ global:
   router:
     auto_model_names:
       - vllm-sr/auto
+    learning:
+      enabled: true
+      adaptation:
+        enabled: false
+        strategy: routing_sampling
+        candidate_set: decision
+      protection:
+        enabled: true
+        scope: conversation
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
 providers:
   defaults:
     default_model: qwen/qwen3.5-rocm
@@ -33,6 +47,16 @@ providers:
         currency: USD
         prompt_per_1m: 0
       provider_model_id: qwen/qwen3.5-rocm
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
       reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
@@ -46,6 +70,17 @@ providers:
         currency: USD
         prompt_per_1m: 0.01
       provider_model_id: google/gemini-2.5-flash-lite
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
+      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -58,6 +93,17 @@ providers:
         currency: USD
         prompt_per_1m: 0.48
       provider_model_id: google/gemini-3.1-pro
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
+      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -70,6 +116,17 @@ providers:
         currency: USD
         prompt_per_1m: 1.2
       provider_model_id: openai/gpt5.4
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
+      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -82,11 +139,25 @@ providers:
         currency: USD
         prompt_per_1m: 1.8
       provider_model_id: anthropic/claude-opus-4.6
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
+      reasoning_family: qwen3
 routing:
   decisions:
     - description: Premium-only route for high-value legal and compliance analysis.
       modelRefs:
         - model: anthropic/claude-opus-4.6
+          reasoning_effort: high
+          use_reasoning: true
+        - model: openai/gpt5.4
           reasoning_effort: high
           use_reasoning: true
       name: premium_legal
@@ -124,6 +195,9 @@ routing:
     - description: Narrow premium reasoning lane for formal math proofs and derivations.
       modelRefs:
         - model: openai/gpt5.4
+          reasoning_effort: high
+          use_reasoning: true
+        - model: anthropic/claude-opus-4.6
           reasoning_effort: high
           use_reasoning: true
       name: formal_math_proof
@@ -173,6 +247,9 @@ routing:
     - description: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
       modelRefs:
         - model: google/gemini-3.1-pro
+          reasoning_effort: high
+          use_reasoning: true
+        - model: openai/gpt5.4
           reasoning_effort: high
           use_reasoning: true
       name: reasoning_deep
@@ -280,6 +357,9 @@ routing:
         - model: google/gemini-3.1-pro
           reasoning_effort: high
           use_reasoning: true
+        - model: openai/gpt5.4
+          reasoning_effort: high
+          use_reasoning: true
       name: complex_specialist
       plugins:
         - configuration:
@@ -362,6 +442,9 @@ routing:
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
+        - model: google/gemini-3.1-pro
+          reasoning_effort: medium
+          use_reasoning: true
       name: feedback_wrong_answer_verified
       plugins:
         - configuration:
@@ -395,6 +478,8 @@ routing:
         - model: qwen/qwen3.5-rocm
           reasoning_effort: medium
           use_reasoning: true
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: medium_code_general
       plugins:
         - configuration:
@@ -452,6 +537,9 @@ routing:
         - model: google/gemini-3.1-pro
           reasoning_effort: medium
           use_reasoning: true
+        - model: anthropic/claude-opus-4.6
+          reasoning_effort: medium
+          use_reasoning: true
       name: verified_health
       plugins:
         - configuration:
@@ -504,6 +592,9 @@ routing:
       modelRefs:
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
+        - model: google/gemini-3.1-pro
+          reasoning_effort: medium
+          use_reasoning: true
       name: verified_explainer
       plugins:
         - configuration:
@@ -570,6 +661,8 @@ routing:
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: feedback_need_clarification
       plugins:
         - configuration:
@@ -607,6 +700,8 @@ routing:
         - model: qwen/qwen3.5-rocm
           reasoning_effort: medium
           use_reasoning: true
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: medium_explainer
       plugins:
         - configuration:
@@ -689,6 +784,8 @@ routing:
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: medium_creative
       plugins:
         - configuration:
@@ -744,6 +841,8 @@ routing:
     - description: Short English or Chinese factual questions, including explicit verification asks, that should stay on the cheap lane.
       modelRefs:
         - model: qwen/qwen3.5-rocm
+          use_reasoning: false
+        - model: google/gemini-2.5-flash-lite
           use_reasoning: false
       name: fast_qa
       plugins:
@@ -859,6 +958,8 @@ routing:
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: simple_general
       plugins:
         - configuration:
@@ -950,6 +1051,8 @@ routing:
     - description: Absolute final fallback that guarantees a routing decision when no earlier balance lane matches.
       modelRefs:
         - model: qwen/qwen3.5-rocm
+          use_reasoning: false
+        - model: google/gemini-2.5-flash-lite
           use_reasoning: false
       name: casual_chat
       plugins:
@@ -1166,9 +1269,6 @@ routing:
           - name: numbered_steps
             type: structure
             weight: 0.08
-          - name: first_then_flow
-            type: structure
-            weight: 0.1
           - name: constraint_dense
             type: structure
             weight: 0.06
@@ -1524,7 +1624,16 @@ routing:
             - interpret contract clauses with risk trade-offs
         name: legal_risk
         threshold: 0.12
-      - description: Workflow and execution difficulty boundary for agentic requests.
+      - composer:
+          conditions:
+            - name: agentic_request_markers
+              type: keyword
+            - name: multi_step_markers
+              type: keyword
+            - name: agentic_workflows
+              type: embedding
+          operator: OR
+        description: Workflow and execution difficulty boundary for agentic requests.
         easy:
           candidates:
             - give me a short checklist

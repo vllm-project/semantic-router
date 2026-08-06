@@ -242,7 +242,7 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 
 	// Parse request body
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
+	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
 		return fmt.Errorf("failed to parse request: %w", err)
 	}
 
@@ -330,7 +330,7 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx.OriginalRequestBody = updatedBody
+	ctx.setWorkingRequestBody(updatedBody)
 	ctx.RAGRetrievedContext = context
 	ctx.HasToolsForFactCheck = true
 	ctx.ToolResultsContext = context // Store for hallucination detection
@@ -389,7 +389,7 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx.OriginalRequestBody = updatedBody
+	ctx.setWorkingRequestBody(updatedBody)
 	ctx.RAGRetrievedContext = context
 	// Note: For system_prompt mode, we don't set HasToolsForFactCheck
 	// as context is in system prompt, not tool messages

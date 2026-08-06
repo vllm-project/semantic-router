@@ -45,6 +45,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	// OriginalRequestBody is the immutable canonical request. Response API
+	// requests use their translated Chat Completions body so routing and cache
+	// identity share one stable representation; later mutations use the working
+	// body carried separately on the request context.
+	ctx.OriginalRequestBody = requestBody
+	ctx.WorkingRequestBody = nil
 	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
 		return validationResp, nil
 	}
@@ -76,6 +82,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	requestBody = requestBodyAfterPreRouting(requestBody, ctx)
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
 	if earlyResponse != nil {
@@ -96,6 +103,15 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		decisionState.selectedModel,
 		ctx,
 	)
+}
+
+func requestBodyAfterPreRouting(requestBody []byte, ctx *RequestContext) []byte {
+	if ctx != nil {
+		if workingBody := ctx.workingRequestBody(); len(workingBody) > 0 {
+			return workingBody
+		}
+	}
+	return requestBody
 }
 
 // handleModelRouting handles model selection and routing logic
@@ -197,9 +213,10 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	matchedModel := selectedModel
 
 	if matchedModel == originalModel || matchedModel == "" {
-		// No model change needed
+		// No model change is needed, but route-local request plugins may still
+		// have changed the provider-bound body.
 		ctx.RequestModel = originalModel
-		return response, nil
+		return attachWorkingBodyMutation(response, ctx), nil
 	}
 
 	// Record routing decision with tracing

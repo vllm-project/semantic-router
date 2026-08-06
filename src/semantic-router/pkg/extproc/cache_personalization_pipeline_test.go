@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,15 @@ func (s *spyCache) FindSimilarWithThreshold(_ string, query string, _ float32) (
 		return s.hitResponse, true, nil
 	}
 	return nil, false, nil
+}
+
+func (s *spyCache) LookupSimilarWithThreshold(_ string, query string, _ float32) (cache.LookupResult, error) {
+	s.findCalled = true
+	s.findQuery = query
+	if s.shouldHit {
+		return cache.LookupResult{ResponseBody: s.hitResponse, Found: true}, nil
+	}
+	return cache.LookupResult{}, nil
 }
 
 func makeOpenAIRequestBody(model, content string) []byte {
@@ -618,4 +628,35 @@ func TestMemoryContextClearedOnInjectionFailure(t *testing.T) {
 		"on injection failure, original body must be returned unchanged")
 	assert.Empty(t, ctx.MemoryContext,
 		"MemoryContext must be cleared on injection failure to prevent stale forced body mutation")
+}
+
+func TestRequestBodyAfterPreRoutingUsesRAGMutation(t *testing.T) {
+	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
+	ragBody := []byte(`{"model":"test","messages":[{"role":"system","content":"retrieved context"},{"role":"user","content":"hello"}]}`)
+	ctx := &RequestContext{OriginalRequestBody: ragBody}
+
+	assert.Equal(t, ragBody, requestBodyAfterPreRouting(original, ctx))
+}
+
+func TestAutoRoutingDoesNotInjectMemoryTwice(t *testing.T) {
+	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
+	const memoryContext = "project deadline is Friday"
+	injected, err := injectMemoryMessages(original, memoryContext)
+	require.NoError(t, err)
+	request, err := parseOpenAIRequest(injected)
+	require.NoError(t, err)
+	ctx := &RequestContext{
+		MemoryContext: memoryContext,
+	}
+
+	modified, err := (&OpenAIRouter{}).modifyRequestBodyForAutoRouting(
+		request,
+		"test",
+		"",
+		false,
+		nil,
+		ctx,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(modified), memoryContext))
 }
