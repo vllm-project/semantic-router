@@ -358,16 +358,22 @@ func (c *QdrantCache) FindSimilar(model, query string) ([]byte, bool, error) {
 }
 
 func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold float32) ([]byte, bool, error) {
+	result, err := c.LookupSimilarWithThreshold(model, query, threshold)
+	return result.ResponseBody, result.Found, err
+}
+
+// LookupSimilarWithThreshold returns response data and similarity atomically.
+func (c *QdrantCache) LookupSimilarWithThreshold(model, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	emb, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	now := time.Now().Unix()
@@ -379,6 +385,7 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 					Filter: &qdrant.Filter{
 						MustNot: []*qdrant.Condition{
 							qdrant.NewMatchKeyword("response_body", pendingResponseMarker),
+							qdrant.NewMatchKeyword("query", exactCacheQueryMarker),
 						},
 					},
 				},
@@ -402,13 +409,13 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 	if err != nil {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	if len(scored) == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 
 	best := scored[0]
@@ -418,14 +425,18 @@ func (c *QdrantCache) FindSimilarWithThreshold(model, query string, threshold fl
 	if responseBody == "" || responseBody == pendingResponseMarker {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{Similarity: best.Score}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
 	logging.Debugf("QdrantCache: CACHE HIT similarity=%.4f threshold=%.4f response_size=%d",
 		best.Score, threshold, len(responseBody))
 	metrics.RecordCacheOperation("qdrant", "find_similar", "hit", time.Since(start).Seconds())
-	return []byte(responseBody), true, nil
+	return LookupResult{
+		ResponseBody: []byte(responseBody),
+		Found:        true,
+		Similarity:   best.Score,
+	}, nil
 }
 
 func (c *QdrantCache) GetStats() CacheStats {

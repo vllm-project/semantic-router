@@ -150,6 +150,7 @@ func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 }
 
 func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+	configureRouterLearningStateStore(cfg)
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, err

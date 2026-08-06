@@ -265,6 +265,8 @@ export type PluginType =
   | 'response_jailbreak'
   | 'tools'
   | 'tool_selection'
+  | 'provider_prompt_cache'
+  | 'context_compression'
 
 export interface PluginConfig {
   type: PluginType

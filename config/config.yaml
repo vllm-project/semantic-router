@@ -22,6 +22,16 @@ providers:
       reasoning_family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
       pricing:
         currency: USD
         prompt_per_1m: 0.18
@@ -629,8 +639,27 @@ routing:
         - type: semantic-cache
           configuration:
             enabled: true
+            mode: exact_then_semantic
+            allow_request_controls: true
+            control_header: x-vsr-cache-control
             similarity_threshold: 0.82
             ttl_seconds: 7200
+        - type: provider_prompt_cache
+          configuration:
+            enabled: true
+            system: true
+            tools: true
+            last_user: false
+            ttl: 5m
+            allow_request_controls: true
+            control_header: x-vsr-provider-cache-control
+        - type: context_compression
+          configuration:
+            enabled: true
+            min_tokens: 2000
+            target_tokens: 1000
+            bypass_header: x-vsr-compression-bypass
+            compress_rag: false
         - type: tools
           configuration:
             enabled: true
@@ -1557,6 +1586,15 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          password: redis-secret
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
 
   services:
     api:

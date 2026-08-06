@@ -206,20 +206,23 @@ func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
-	if mockCache.updateCalled {
-		t.Fatalf("retention.drop must skip non-streaming cache UpdateWithResponse")
+	if mockCache.addEntryCalled {
+		t.Fatalf("retention.drop must skip non-streaming cache write")
 	}
 }
 
 func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:        "req-retention-keep",
-		EmittedRetention: &config.RetentionDirective{Drop: retBool(false)},
+		RequestID:           "req-retention-keep",
+		RequestModel:        "test-model",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`),
+		EmittedRetention:    &config.RetentionDirective{Drop: retBool(false)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
-	if !mockCache.updateCalled {
+	if !mockCache.addEntryCalled {
 		t.Fatalf("drop=false must preserve non-streaming cache write")
 	}
 }
@@ -299,12 +302,15 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:        "req-retention-ttl",
-		EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)},
+		RequestID:           "req-retention-ttl",
+		RequestModel:        "test-model",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`),
+		EmittedRetention:    &config.RetentionDirective{TTLTurns: intPtr(2)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
-	if !mockCache.updateCalled {
+	if !mockCache.addEntryCalled {
 		t.Fatalf("ttl_turns must still write the cache entry")
 	}
 	if mockCache.lastTTLSeconds != 2*retentionDefaultSecondsPerTurn {

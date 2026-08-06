@@ -39,6 +39,17 @@ export interface ProviderModel {
     cache_write_per_1m?: number
     completion_per_1m?: number
   }
+  reliability?: {
+    lb_policy?: 'round_robin' | 'least_request'
+    retry_count?: number
+    retry_on?: string
+    consecutive_5xx?: number
+    base_ejection_time?: string
+    max_ejection_percent?: number
+    health_check_path?: string
+    health_check_interval?: string
+    health_check_timeout?: string
+  }
 }
 
 export interface ProviderDefaults {
@@ -318,6 +329,8 @@ export interface PluginConfig {
     | 'tools'
     | 'request_params'
     | 'response_jailbreak'
+    | 'provider_prompt_cache'
+    | 'context_compression'
   configuration: Record<string, unknown>
 }
 

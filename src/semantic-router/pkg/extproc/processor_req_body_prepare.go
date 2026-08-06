@@ -182,7 +182,7 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 		ctx.RateLimitCtx = &rlCtx
 	}
 
-	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+	if response, shouldReturn := r.handleCaching(ctx, decisionName, selectedModel); shouldReturn {
 		logging.ComponentDebugEvent("extproc", "cache_short_circuit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   decisionName,
@@ -232,11 +232,11 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	if ctx.MemoryContext != "" {
-		ctx.OriginalRequestBody = requestBody
-	}
+	ctx.setWorkingRequestBody(requestBody)
+	requestBody = r.applyContextCompression(ctx, requestBody)
+	ctx.setWorkingRequestBody(requestBody)
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)
-	openAIRequest = r.reparseRequestWithMemory(requestBody, openAIRequest, ctx)
+	openAIRequest = r.reparseRequestAfterMutation(requestBody, openAIRequest, ctx)
 
 	return openAIRequest, nil, nil
 }
@@ -271,25 +271,25 @@ func (r *OpenAIRouter) refreshResponseAPITranslatedBody(ctx *RequestContext, req
 	}
 }
 
-func (r *OpenAIRouter) reparseRequestWithMemory(
+func (r *OpenAIRouter) reparseRequestAfterMutation(
 	requestBody []byte,
 	openAIRequest *openai.ChatCompletionNewParams,
 	ctx *RequestContext,
 ) *openai.ChatCompletionNewParams {
-	if ctx.MemoryContext == "" {
+	if ctx.MemoryContext == "" && !ctx.ContextCompressionApplied {
 		return openAIRequest
 	}
 
 	updatedReq, err := parseRequestForProtocol(ctx, requestBody)
 	if err != nil {
-		logging.ComponentErrorEvent("extproc", "memory_request_reparse_failed", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "mutated_request_reparse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      err.Error(),
 		})
 		return openAIRequest
 	}
 
-	logging.ComponentDebugEvent("extproc", "memory_request_reparsed", map[string]interface{}{
+	logging.ComponentDebugEvent("extproc", "mutated_request_reparsed", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"body_len":   len(requestBody),
 	})

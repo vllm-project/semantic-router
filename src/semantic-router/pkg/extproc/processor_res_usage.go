@@ -229,7 +229,7 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	}
 	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
 	if !ok {
-		return usage
+		return mergeProviderStreamingUsage(ctx, usage)
 	}
 
 	if promptTokens, ok := usageMap["prompt_tokens"].(float64); ok {
@@ -241,7 +241,7 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
 		usage.TotalTokens = int64(totalTokens)
 	}
-	return usage
+	return mergeProviderStreamingUsage(ctx, usage)
 }
 
 func streamingPromptTokenDetails(ctx *RequestContext, promptTokens int) (cached int, cachedReported bool, cacheWrite int, cacheWriteReported bool) {
@@ -270,6 +270,13 @@ func streamingPromptTokenDetails(ctx *RequestContext, promptTokens int) (cached 
 			}
 		}
 	}
+	cached, cachedReported, cacheWrite, cacheWriteReported = mergeProviderStreamingTokenDetails(
+		ctx,
+		cached,
+		cachedReported,
+		cacheWrite,
+		cacheWriteReported,
+	)
 	normalized := normalizeResponseUsage(responseUsageMetrics{
 		promptTokens:       promptTokens,
 		cachedPromptTokens: cached,

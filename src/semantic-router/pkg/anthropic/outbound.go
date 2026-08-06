@@ -288,7 +288,7 @@ func orderedThinkingBlockIDs(ext *ir.IRExtensions) []string {
 // distinguish a legitimately uncached response from a translation gap.
 func buildAnthropicUsage(usage openai.CompletionUsage, ext *ir.IRExtensions) anthropicUsageResponse {
 	out := anthropicUsageResponse{
-		InputTokens:  usage.PromptTokens,
+		InputTokens:  anthropicInputTokens(usage, ext),
 		OutputTokens: usage.CompletionTokens,
 	}
 	if ext == nil {
@@ -323,6 +323,21 @@ func buildAnthropicUsage(usage openai.CompletionUsage, ext *ir.IRExtensions) ant
 	}
 
 	return out
+}
+
+func anthropicInputTokens(
+	usage openai.CompletionUsage,
+	ext *ir.IRExtensions,
+) int64 {
+	inputTokens := usage.PromptTokens
+	if ext == nil {
+		return inputTokens
+	}
+	cacheTokens := ext.CacheReadInputTokens + ext.CacheCreationInputTokens
+	if cacheTokens > 0 && inputTokens >= cacheTokens {
+		return inputTokens - cacheTokens
+	}
+	return inputTokens
 }
 
 // mapOpenAIFinishReasonToAnthropic maps the OpenAI finish_reason

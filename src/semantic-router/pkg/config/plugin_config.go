@@ -6,6 +6,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+const (
+	SemanticCacheModeSemantic          = "semantic"
+	SemanticCacheModeExact             = "exact"
+	SemanticCacheModeExactThenSemantic = "exact_then_semantic"
+)
+
 // DecisionPlugin represents a plugin configuration for a decision.
 // Type is the plugin identifier; the authoritative supported set is registered in
 // routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
@@ -18,9 +24,32 @@ type DecisionPlugin struct {
 
 // SemanticCachePluginConfig represents configuration for semantic-cache plugin.
 type SemanticCachePluginConfig struct {
-	Enabled             bool     `json:"enabled" yaml:"enabled"`
-	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
-	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+	Enabled              bool     `json:"enabled" yaml:"enabled"`
+	Mode                 string   `json:"mode,omitempty" yaml:"mode,omitempty"`
+	AllowRequestControls bool     `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
+	ControlHeader        string   `json:"control_header,omitempty" yaml:"control_header,omitempty"`
+	SimilarityThreshold  *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+	TTLSeconds           *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+}
+
+// ProviderPromptCachePluginConfig controls provider-native prompt cache markers.
+type ProviderPromptCachePluginConfig struct {
+	Enabled              bool   `json:"enabled" yaml:"enabled"`
+	System               bool   `json:"system,omitempty" yaml:"system,omitempty"`
+	Tools                bool   `json:"tools,omitempty" yaml:"tools,omitempty"`
+	LastUser             bool   `json:"last_user,omitempty" yaml:"last_user,omitempty"`
+	TTL                  string `json:"ttl,omitempty" yaml:"ttl,omitempty"`
+	AllowRequestControls bool   `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
+	ControlHeader        string `json:"control_header,omitempty" yaml:"control_header,omitempty"`
+}
+
+// ContextCompressionPluginConfig controls route-local upstream tool-output compression.
+type ContextCompressionPluginConfig struct {
+	Enabled      bool   `json:"enabled" yaml:"enabled"`
+	MinTokens    int    `json:"min_tokens,omitempty" yaml:"min_tokens,omitempty"`
+	TargetTokens int    `json:"target_tokens,omitempty" yaml:"target_tokens,omitempty"`
+	BypassHeader string `json:"bypass_header,omitempty" yaml:"bypass_header,omitempty"`
+	CompressRAG  bool   `json:"compress_rag,omitempty" yaml:"compress_rag,omitempty"`
 }
 
 // MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
@@ -137,6 +166,18 @@ func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error 
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	result := &SemanticCachePluginConfig{}
 	return decodeDecisionPlugin(d, "semantic-cache", result)
+}
+
+// GetProviderPromptCacheConfig returns provider-native prompt cache settings.
+func (d *Decision) GetProviderPromptCacheConfig() *ProviderPromptCachePluginConfig {
+	result := &ProviderPromptCachePluginConfig{}
+	return decodeDecisionPlugin(d, "provider_prompt_cache", result)
+}
+
+// GetContextCompressionConfig returns route-local tool-output compression settings.
+func (d *Decision) GetContextCompressionConfig() *ContextCompressionPluginConfig {
+	result := &ContextCompressionPluginConfig{}
+	return decodeDecisionPlugin(d, "context_compression", result)
 }
 
 // GetSystemPromptConfig returns the system_prompt plugin configuration.

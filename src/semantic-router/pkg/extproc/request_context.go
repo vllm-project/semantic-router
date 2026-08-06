@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -48,15 +49,35 @@ type StreamingToolCallState struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
-	Headers             map[string]string
-	RequestID           string
+	Headers   map[string]string
+	RequestID string
+	// OriginalRequestBody is the immutable canonical request used by routing,
+	// cache identity, replay, and diagnostics. Response API requests store their
+	// translated Chat Completions representation here.
 	OriginalRequestBody []byte
-	RequestModel        string
-	RequestQuery        string
+	// WorkingRequestBody is the provider-bound request after RAG, memory, and
+	// route-local plugin mutation. Empty means the original body is unchanged.
+	WorkingRequestBody []byte
+	RequestModel       string
+	RequestQuery       string
+	CacheRequestModel  string
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
-	CacheQuery          string
-	StartTime           time.Time
-	ProcessingStartTime time.Time
+	CacheQuery                    string
+	CacheExactFingerprint         string
+	CacheCompatibilityFingerprint string
+	CacheSelectedModel            string
+	CacheSemanticSafe             bool
+	CacheReadBypass               bool
+	CacheWriteBypass              bool
+	ContextCompressionApplied     bool
+	ContextCompressionBefore      int
+	ContextCompressionAfter       int
+	ContextCompressionMessages    int
+	ContextCompressionFormat      string
+	ContextCompressionOmitted     int
+	ContextCompressionSkipReason  string
+	StartTime                     time.Time
+	ProcessingStartTime           time.Time
 
 	// Streaming detection
 	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
@@ -307,6 +328,33 @@ type RequestContext struct {
 	// so that any later mutation does not poison the read-only config tree.
 	// nil means the matched decision had no EMIT retention block.
 	EmittedRetention *config.RetentionDirective
+}
+
+func (ctx *RequestContext) setWorkingRequestBody(body []byte) {
+	if ctx == nil {
+		return
+	}
+	if bytes.Equal(body, ctx.OriginalRequestBody) {
+		ctx.WorkingRequestBody = nil
+		return
+	}
+	ctx.WorkingRequestBody = body
+}
+
+func (ctx *RequestContext) workingRequestBody() []byte {
+	if ctx == nil {
+		return nil
+	}
+	if len(ctx.WorkingRequestBody) > 0 {
+		return ctx.WorkingRequestBody
+	}
+	return ctx.OriginalRequestBody
+}
+
+func (ctx *RequestContext) requestBodyMutated() bool {
+	return ctx != nil &&
+		len(ctx.WorkingRequestBody) > 0 &&
+		!bytes.Equal(ctx.WorkingRequestBody, ctx.OriginalRequestBody)
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific

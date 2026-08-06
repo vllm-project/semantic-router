@@ -233,6 +233,11 @@ def generate_envoy_config_from_user_config(
                 "has_https": has_https,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
+                "reliability": (
+                    model.reliability.model_dump()
+                    if model.reliability is not None
+                    else {}
+                ),
             }
         )
 
