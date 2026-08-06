@@ -9,7 +9,7 @@
 Router configuration is intentionally separate:
 
 - complete use cases: `config/recipes/`;
-- reusable config fragments: `config/{signal,decision,algorithm,plugin}/`;
+- reusable config fragments: `config/fragments/{signal,decision,algorithm,plugin}/`;
 - runtime backend examples: `config/runtime/`;
 - development utilities and auxiliary servers: `tools/`.
 

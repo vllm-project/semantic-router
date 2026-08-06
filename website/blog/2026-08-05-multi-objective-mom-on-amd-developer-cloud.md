@@ -98,7 +98,7 @@ sudo docker run -d \
   --name vllm \
   --network=vllm-sr-network \
   --restart unless-stopped \
-  -p "${VLLM_PORT_122B:-8090}:8000" \
+  -p "127.0.0.1:${VLLM_PORT_122B:-8090}:8000" \
   -v "${VLLM_HF_CACHE:-/mnt/data/huggingface-cache}:/root/.cache/huggingface" \
   --device=/dev/kfd \
   --device=/dev/dri \
@@ -131,6 +131,10 @@ sudo docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
+The host port is intentionally bound to loopback. Semantic Router reaches the
+backend as `vllm:8000` on the shared Docker network, so the backend API does not
+need to be exposed publicly.
+
 Confirm that all aliases are present:
 
 ```bash
@@ -139,23 +143,32 @@ curl -sS http://127.0.0.1:8090/v1/models
 
 ## Step 2: Install and Start vLLM Semantic Router
 
-Install the CLI in a virtual environment:
+Install the released CLI as an isolated `uv` tool:
 
 ```bash
-python3 -m venv vsr
-source vsr/bin/activate
-curl -fsSL https://vllm-sr.ai/install.sh | bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install --upgrade vllm-sr
 ```
 
-For a source checkout, validate and start the maintained recipe:
+Download the maintained recipe from `main` after the release containing this
+recipe is published:
+
+```bash
+mkdir -p "$HOME/.config/vllm-sr/recipes"
+curl -fsSLo "$HOME/.config/vllm-sr/recipes/multi-objective.yaml" \
+  https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/multi-objective/config.yaml
+```
+
+Validate and start the maintained recipe:
 
 ```bash
 vllm-sr validate \
-  --config config/recipes/multi-objective/config.yaml
+  --config "$HOME/.config/vllm-sr/recipes/multi-objective.yaml"
 
 vllm-sr serve \
   --platform amd \
-  --config config/recipes/multi-objective/config.yaml
+  --config "$HOME/.config/vllm-sr/recipes/multi-objective.yaml"
 ```
 
 The local split runtime converts the recipe's loopback Looper endpoint into the
@@ -201,7 +214,8 @@ curl -sS http://127.0.0.1:8899/v1/chat/completions \
     "model": "vllm-sr/mom-flash-v1",
     "messages": [
       {"role": "user", "content": "Summarize this incident in three bullets."}
-    ]
+    ],
+    "max_tokens": 512
   }'
 ```
 
@@ -218,7 +232,8 @@ curl -sS http://127.0.0.1:8899/v1/chat/completions \
         "role": "user",
         "content": "Compare several approaches, challenge the assumptions, and synthesize the strongest recommendation."
       }
-    ]
+    ],
+    "max_tokens": 512
   }'
 ```
 
@@ -226,18 +241,27 @@ Response headers expose the selected recipe, decision, and logical model. Router
 Replay persists the same recipe identity, so debugging and aggregate analysis
 remain scoped to the objective the client selected.
 
-## Step 5: Run the Maintained Evaluation Matrix
+## Step 5: Evaluate the Deployed Objectives
 
-The recipe ships with backend-independent probes covering all five objectives:
+The installed CLI can evaluate objective selection without generating a
+completion:
 
 ```bash
-python tools/agent/scripts/router_calibration_loop.py \
-  eval \
-  --router-url http://127.0.0.1:8080 \
-  --probes config/recipes/multi-objective/probes.yaml
+vllm-sr eval \
+  --endpoint http://127.0.0.1:8080 \
+  --model vllm-sr/mom-flash-v1 \
+  --prompt "Summarize this incident in three bullets."
+
+vllm-sr eval \
+  --endpoint http://127.0.0.1:8080 \
+  --model vllm-sr/mom-private-v1 \
+  --prompt "Keep this customer record private: user@example.com."
 ```
 
-The manifest checks:
+The maintained
+[`probes.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/probes.yaml)
+contains 102 backend-independent cases used by repository CI and recipe
+calibration. It checks:
 
 - all 15 decisions
 - multilingual and preference-conflict boundaries
@@ -245,14 +269,6 @@ The manifest checks:
 - tool and multi-turn request shapes
 - long-input behavior
 - entrypoint, recipe, algorithm, plugin, and signal evidence
-
-You can also validate the DSL authoring surface:
-
-```bash
-(cd src/semantic-router && \
-  go run ./cmd/dsl validate \
-    ../../config/recipes/multi-objective/recipe.dsl)
-```
 
 ## Operating Beyond the Demonstration
 
