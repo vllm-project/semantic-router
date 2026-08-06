@@ -48,8 +48,8 @@ selection without advertising unavailable response analysis.
 
 `recipe.dsl` uses first-class `ENTRYPOINT` and `RECIPE` scopes. Compiling it
 over `config.yaml` reproduces the same five mappings and five isolated routing
-programs. The probe suite contains 102 multilingual, negative, collision,
-multi-turn, tool-shape, PII/jailbreak, and long-input cases across all 15
+programs. The probe suite contains 103 multilingual, negative, collision,
+multi-turn, tool-shape, PII/jailbreak, and long-input cases across all 16
 decisions.
 
 ```bash
@@ -61,7 +61,7 @@ python tools/agent/scripts/router_calibration_loop.py \
   --probes config/recipes/multi-objective/probes.yaml
 ```
 
-The manifest runs these 102 cases with bounded concurrency and includes
+The manifest runs these 103 cases with bounded concurrency and includes
 end-to-end latency percentiles, throughput, and error count in the JSON report.
 This exercises recipe isolation under load without invoking an inference
 backend.

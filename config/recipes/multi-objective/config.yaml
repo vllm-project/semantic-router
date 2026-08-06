@@ -972,10 +972,10 @@ recipes:
           value_source: confidence
         - type: conversation
           name: unified_frontier_tooling_available
-          weight: 0.4
+          weight: 0.1
         - type: conversation
           name: unified_frontier_active_tool_loop
-          weight: 0.5
+          weight: 0.1
         - type: structure
           name: unified_frontier_ordered_workflow
           weight: 0.25
@@ -1087,6 +1087,12 @@ recipes:
         conditions:
         - type: projection
           name: unified_frontier_use_workflow
+        - operator: OR
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+          - type: structure
+            name: unified_frontier_ordered_workflow
       modelRefs:
       - model: local/qwen3.6-35b-balanced
         use_reasoning: true
@@ -1112,10 +1118,34 @@ recipes:
           min_successful_responses: 2
           include_intermediate_responses: false
           on_error: skip
+    - name: unified_frontier_tool_result_synthesis
+      description: Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.
+      priority: 375
+      tier: 2
+      rules:
+        operator: AND
+        conditions:
+        - type: conversation
+          name: unified_frontier_active_tool_loop
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+      modelRefs:
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: true
+        reasoning_effort: medium
+      algorithm:
+        type: static
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
     - name: unified_frontier_fusion
       description: Use independent expert answers plus a frontier judge when disagreement resolution matters.
       priority: 350
-      tier: 2
+      tier: 3
       rules:
         operator: AND
         conditions:
@@ -1151,7 +1181,7 @@ recipes:
     - name: unified_frontier_verified_answer
       description: Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.
       priority: 325
-      tier: 3
+      tier: 4
       rules:
         operator: OR
         conditions:
@@ -1181,7 +1211,7 @@ recipes:
     - name: unified_frontier_remom
       description: Use bounded multi-round search and synthesis for deep reasoning tasks.
       priority: 300
-      tier: 4
+      tier: 5
       rules:
         operator: AND
         conditions:
@@ -1218,7 +1248,7 @@ recipes:
     - name: unified_accuracy_first_route
       description: Use the strongest direct model when orchestration would add little value.
       priority: 100
-      tier: 5
+      tier: 6
       rules:
         operator: AND
         conditions: []

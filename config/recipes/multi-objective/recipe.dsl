@@ -550,7 +550,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   PROJECTION score unified_frontier_workflow_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_workflow_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_workflow_intent", value_source: "confidence" }, { type: "conversation", weight: 0.4, name: "unified_frontier_tooling_available" }, { type: "conversation", weight: 0.5, name: "unified_frontier_active_tool_loop" }, { type: "structure", weight: 0.25, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
+    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_workflow_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_workflow_intent", value_source: "confidence" }, { type: "conversation", weight: 0.1, name: "unified_frontier_tooling_available" }, { type: "conversation", weight: 0.1, name: "unified_frontier_active_tool_loop" }, { type: "structure", weight: 0.25, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
   }
 
   PROJECTION score unified_frontier_fusion_score {
@@ -591,7 +591,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_workflow (description = "Use Router Flow for explicit investigate-plan-execute tasks with separable roles.") {
     PRIORITY 400
     TIER 1
-    WHEN projection("unified_frontier_use_workflow")
+    WHEN projection("unified_frontier_use_workflow") AND (keyword("unified_frontier_workflow_markers") OR structure("unified_frontier_ordered_workflow"))
     MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
           "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
           "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
@@ -609,9 +609,21 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     }
   }
 
+  ROUTE unified_frontier_tool_result_synthesis (description = "Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.") {
+    PRIORITY 375
+    TIER 2
+    WHEN conversation("unified_frontier_active_tool_loop") AND NOT keyword("unified_frontier_workflow_markers")
+    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, effort = "medium")
+    ALGORITHM static
+    PLUGIN tools {
+      enabled: true
+      mode: "none"
+    }
+  }
+
   ROUTE unified_frontier_fusion (description = "Use independent expert answers plus a frontier judge when disagreement resolution matters.") {
     PRIORITY 350
-    TIER 2
+    TIER 3
     WHEN projection("unified_frontier_use_fusion")
     MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
           "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
@@ -633,7 +645,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   ROUTE unified_frontier_verified_answer (description = "Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.") {
     PRIORITY 325
-    TIER 3
+    TIER 4
     WHEN (keyword("unified_frontier_verification_markers") OR fact_check("unified_frontier_fact_check"))
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
           "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
@@ -649,7 +661,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   ROUTE unified_frontier_remom (description = "Use bounded multi-round search and synthesis for deep reasoning tasks.") {
     PRIORITY 300
-    TIER 4
+    TIER 5
     WHEN projection("unified_frontier_deliberate")
     MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
           "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
@@ -672,7 +684,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   ROUTE unified_accuracy_first_route (description = "Use the strongest direct model when orchestration would add little value.") {
     PRIORITY 100
-    TIER 5
+    TIER 6
     MODEL "local/qwen3.6-35b-balanced" (reasoning = true, effort = "high"),
           "local/qwen3.6-35b-flash" (reasoning = true, effort = "high"),
           "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
