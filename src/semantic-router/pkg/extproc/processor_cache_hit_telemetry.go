@@ -46,14 +46,14 @@ func (r *OpenAIRouter) reportCacheHitTelemetry(
 		replayUsage,
 	)
 	logging.LogEvent("llm_usage", map[string]interface{}{
-		"request_id":       ctx.RequestID,
-		"model":            ctx.RequestModel,
-		"prompt_tokens":    usage.promptTokens,
+		"request_id":        ctx.RequestID,
+		"model":             ctx.RequestModel,
+		"prompt_tokens":     usage.promptTokens,
 		"completion_tokens": usage.completionTokens,
-		"total_tokens":     totalTokens,
-		"cost":             0.0,
-		"from_cache":       true,
-		"cache_hit":        true,
+		"total_tokens":      totalTokens,
+		"cost":              0.0,
+		"from_cache":        true,
+		"cache_hit":         true,
 	})
 }
 

@@ -98,10 +98,10 @@ func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
 	}
 	milvusConfig := milvusExactTestConfig(host, port)
 	cache, err := NewHybridCache(HybridCacheOptions{
-		Enabled:        true,
-		TTLSeconds:     60,
-		EmbeddingModel: "bert",
-		Milvus:         milvusConfig,
+		Enabled:                 true,
+		TTLSeconds:              60,
+		EmbeddingModel:          "bert",
+		Milvus:                  milvusConfig,
 		DisableRebuildOnStartup: true,
 	})
 	if err != nil {
