@@ -53,10 +53,21 @@ type RequestContext struct {
 	OriginalRequestBody []byte
 	RequestModel        string
 	RequestQuery        string
+	CacheRequestModel   string
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
-	CacheQuery          string
-	StartTime           time.Time
-	ProcessingStartTime time.Time
+	CacheQuery                    string
+	CacheExactFingerprint         string
+	CacheCompatibilityFingerprint string
+	CacheSelectedModel            string
+	CacheSemanticSafe             bool
+	CacheReadBypass               bool
+	CacheWriteBypass              bool
+	ContextCompressionApplied     bool
+	ContextCompressionBefore      int
+	ContextCompressionAfter       int
+	ContextCompressionMessages    int
+	StartTime                     time.Time
+	ProcessingStartTime           time.Time
 
 	// Streaming detection
 	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter

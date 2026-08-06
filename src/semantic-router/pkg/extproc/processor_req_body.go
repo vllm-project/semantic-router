@@ -45,6 +45,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	// From this point onward OriginalRequestBody is the canonical working body.
+	// Response API requests must use their translated Chat Completions body so
+	// downstream RAG, memory, cache identity, and body mutation share one source.
+	ctx.OriginalRequestBody = requestBody
 	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
 		return validationResp, nil
 	}
@@ -76,6 +80,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	requestBody = requestBodyAfterPreRouting(requestBody, ctx)
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
 	if earlyResponse != nil {
@@ -96,6 +101,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		decisionState.selectedModel,
 		ctx,
 	)
+}
+
+func requestBodyAfterPreRouting(requestBody []byte, ctx *RequestContext) []byte {
+	if ctx != nil && len(ctx.OriginalRequestBody) > 0 {
+		return ctx.OriginalRequestBody
+	}
+	return requestBody
 }
 
 // handleModelRouting handles model selection and routing logic

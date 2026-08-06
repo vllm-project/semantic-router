@@ -33,6 +33,8 @@ decisions:
   - id: formal_math_proof
     expected_decision: formal_math_proof
     expected_alias: openai/gpt5.4
+    expected_signals:
+      projection: [balance_reasoning]
     objective: Narrow formal-math overlay for rigorous proofs and derivations that justify the expensive reasoning tier.
     variants:
       - id: irrationality_proof
@@ -63,6 +65,8 @@ decisions:
   - id: complex_specialist
     expected_decision: complex_specialist
     expected_alias: google/gemini-3.1-pro
+    expected_signals:
+      projection: [balance_complex]
     objective: Multi-step execution planning, systems design, and specialist STEM synthesis on the complex tier.
     variants:
       - id: migration_runbook
@@ -162,6 +166,8 @@ decisions:
   - id: medium_explainer
     expected_decision: medium_explainer
     expected_alias: qwen/qwen3.5-rocm
+    expected_signals:
+      projection: [balance_medium]
     objective: Business, history, and psychology explanation without explicit verification overlays.
     variants:
       - id: plg_vs_slg
@@ -252,6 +258,8 @@ decisions:
   - id: simple_general
     expected_decision: simple_general
     expected_alias: qwen/qwen3.5-rocm
+    expected_signals:
+      projection: [balance_simple]
     objective: Short general explanations and lightweight everyday drafting that should avoid fast-QA and specialist routes.
     variants:
       - id: casual_greeting

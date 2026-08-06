@@ -25,6 +25,10 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if !r.semanticCacheEnabledForRequest(ctx) {
 		return
 	}
+	if ctx.CacheWriteBypass {
+		metrics.RecordCacheWriteSkipped("request_no_store")
+		return
+	}
 
 	// Status gate: never cache a non-2xx upstream body. Caching an error
 	// (4xx/5xx/3xx) would let a later cache hit replay it as an HTTP 200,
@@ -66,10 +70,12 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	// Retention ttl_turns (when set) overrides the decision/global default,
 	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
-	if err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds); err != nil {
-		logging.Errorf("Error updating cache: %v", err)
-		return
+	if semanticCacheWriteAllowed(ctx) {
+		if err := r.addSemanticCacheEntry(ctx, responseBody, ttlSeconds); err != nil {
+			logging.Errorf("Error adding semantic cache entry: %v", err)
+		}
 	}
+	r.updateExactResponseCache(ctx, responseBody, ttlSeconds)
 	logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 }
 
@@ -84,6 +90,10 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 	}
 
 	if !r.semanticCacheEnabledForRequest(ctx) {
+		return nil
+	}
+	if ctx.CacheWriteBypass {
+		metrics.RecordCacheWriteSkipped("request_no_store")
 		return nil
 	}
 
@@ -280,20 +290,38 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 		return nil
 	}
 
-	// Must finalize in place (by request_id) like the non-streaming path.
-	// AddEntry would mint a new key and orphan the empty pending entry,
-	// which then shadows KNN lookups and causes cache misses (issue #2030).
-	return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
+	if semanticCacheWriteAllowed(ctx) {
+		if err := r.addSemanticCacheEntry(ctx, reconstructedJSON, ttlSeconds); err != nil {
+			return err
+		}
+	}
+	r.updateExactResponseCache(ctx, reconstructedJSON, ttlSeconds)
+	return nil
 }
 
-func (r *OpenAIRouter) updateStreamingCacheEntry(
-	requestID string,
-	reconstructedJSON []byte,
+func semanticCacheWriteAllowed(ctx *RequestContext) bool {
+	return ctx != nil && (ctx.CacheSemanticSafe || ctx.CacheExactFingerprint == "")
+}
+
+func (r *OpenAIRouter) addSemanticCacheEntry(
+	ctx *RequestContext,
+	responseBody []byte,
 	ttlSeconds int,
 ) error {
-	if err := r.Cache.UpdateWithResponse(requestID, reconstructedJSON, ttlSeconds); err != nil {
-		logging.Errorf("Cache update failed for streaming %s: %v", requestID, err)
-		return err
+	query := cacheQueryForContext(ctx)
+	if query == "" {
+		return nil
 	}
-	return nil
+	requestModel := ctx.CacheRequestModel
+	if requestModel == "" {
+		requestModel = ctx.RequestModel
+	}
+	return r.Cache.AddEntry(
+		ctx.RequestID,
+		semanticCachePartition(ctx, requestModel),
+		query,
+		cacheRequestBodyForContext(ctx),
+		responseBody,
+		ttlSeconds,
+	)
 }

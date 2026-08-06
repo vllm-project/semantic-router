@@ -328,6 +328,7 @@ func canonicalProviderModelFromRuntime(
 		ReasoningFamily:  params.ReasoningFamily,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
+		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
 		BackendRefs: canonicalProviderBackendRefs(
 			name,

@@ -132,6 +132,10 @@ type RouteDiagnostics struct {
 	MemoryFallbackReason         string                 `json:"memory_fallback_reason,omitempty"`
 	MemoryFailOpen               bool                   `json:"memory_fail_open,omitempty"`
 	MemoryResultCount            int                    `json:"memory_result_count,omitempty"`
+	ContextCompressionApplied    bool                   `json:"context_compression_applied,omitempty"`
+	ContextCompressionBefore     int                    `json:"context_compression_tokens_before,omitempty"`
+	ContextCompressionAfter      int                    `json:"context_compression_tokens_after,omitempty"`
+	ContextCompressionMessages   int                    `json:"context_compression_messages,omitempty"`
 	Annotations                  map[string]interface{} `json:"annotations,omitempty"`
 	SignalErrors                 map[string]string      `json:"signal_errors,omitempty"`
 }

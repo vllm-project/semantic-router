@@ -353,7 +353,7 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	if err := rejectUnknownMapFields(
 		"global.router.learning",
 		learning,
-		[]string{"enabled", "adaptation", "protection"},
+		[]string{"enabled", "adaptation", "protection", "state_store"},
 	); err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func rejectUnsupportedGlobalRouterLearningFields(raw map[string]interface{}) err
 	); err != nil {
 		return err
 	}
-	return nil
+	return rejectUnsupportedRouterLearningStateStoreFields(learning)
 }
 
 func rejectUnsupportedDecisionAdaptationFields(raw map[string]interface{}) error {

@@ -37,6 +37,8 @@ export const PLUGIN_TYPES = [
   'tool_selection',
   'request_params',
   'response_jailbreak',
+  'provider_prompt_cache',
+  'context_compression',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -53,6 +55,8 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
   request_params: 'Mutate request parameters before forwarding to the model',
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
+  provider_prompt_cache: 'Inject provider-native prompt cache markers after model selection',
+  context_compression: 'Compress large tool outputs before provider dispatch',
 }
 
 export const BACKEND_TYPES = [

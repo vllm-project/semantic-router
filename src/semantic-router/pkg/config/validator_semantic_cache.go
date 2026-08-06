@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // validateSemanticCacheContracts validates the semantic-cache similarity
 // threshold wherever it can be configured: the global semantic_cache block and
@@ -39,11 +42,30 @@ func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {
 			continue
 		}
 		scope := fmt.Sprintf("decision %q semantic-cache plugin", decision.Name)
+		if err := validateCacheMode(pluginCfg.Mode, scope); err != nil {
+			return err
+		}
 		if err := validateCacheThreshold(pluginCfg.SimilarityThreshold, scope); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validateCacheMode(mode string, scope string) error {
+	switch strings.TrimSpace(mode) {
+	case "", SemanticCacheModeSemantic, SemanticCacheModeExact, SemanticCacheModeExactThenSemantic:
+		return nil
+	default:
+		return fmt.Errorf(
+			"%s mode must be one of %q, %q, or %q, got %q",
+			scope,
+			SemanticCacheModeSemantic,
+			SemanticCacheModeExact,
+			SemanticCacheModeExactThenSemantic,
+			mode,
+		)
+	}
 }
 
 // validateCacheThreshold enforces that a configured cache similarity threshold
