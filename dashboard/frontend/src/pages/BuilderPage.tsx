@@ -505,7 +505,10 @@ const BuilderPage: React.FC = () => {
     pluginCount,
     recipeCount,
     entrypointCount,
-  } = useMemo(() => summarizeBuilderRoutingScopes(ast, symbols), [ast, symbols]);
+  } = useMemo(
+    () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),
+    [ast, symbols, dslSource],
+  );
   const isValid = errorCount === 0 && wasmReady;
   const lineCount = dslSource.split("\n").length;
 

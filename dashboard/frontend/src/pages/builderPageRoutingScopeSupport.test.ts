@@ -78,13 +78,21 @@ describe('summarizeBuilderRoutingScopes', () => {
       ],
     } as unknown as ASTProgram
 
-    expect(() => summarizeBuilderRoutingScopes(ast, null)).not.toThrow()
-    expect(summarizeBuilderRoutingScopes(ast, null)).toMatchObject({
-      signalCount: 0,
-      routeCount: 0,
+    const source = `
+ENTRYPOINT { model_names: ["vllm-sr/balanced"] recipe: "balanced" }
+RECIPE balanced {
+  SIGNAL keyword intent { keywords: ["hello"] }
+  PROJECTION score effort { method: "weighted_sum" }
+  ROUTE balanced_route { MODEL shared }
+}`
+    expect(() => summarizeBuilderRoutingScopes(ast, null, source)).not.toThrow()
+    expect(summarizeBuilderRoutingScopes(ast, null, source)).toMatchObject({
+      signalCount: 1,
+      routeCount: 1,
       pluginCount: 0,
       recipeCount: 1,
-      entrypointCount: 0,
+      entrypointCount: 1,
+      projectionScoreCount: 1,
     })
   })
 })
