@@ -16,6 +16,15 @@ func repoRel(parts ...string) string {
 	return filepath.Join(parts...)
 }
 
+// apiserverDocNeedles is shared by the English page and its zh-Hans translation.
+// These stay unfenced so the assertion survives the page moving an endpoint between
+// prose and a table, which is what broke it in #2773.
+var apiserverDocNeedles = []string{
+	"http://localhost:8080",
+	"/openapi.json",
+	"/config/router",
+}
+
 var configContractRequiredDocs = []docNeedles{
 	{
 		path: "config/README.md",
@@ -132,12 +141,8 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "api", "apiserver.md"),
-		needles: []string{
-			"`http://localhost:8080`",
-			"`GET /openapi.json`",
-			"`GET /config/router`",
-		},
+		path:    repoRel("website", "docs", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
 	},
 	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
@@ -209,12 +214,8 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
-		needles: []string{
-			"`http://localhost:8080`",
-			"`GET /openapi.json`",
-			"`GET /config/router`",
-		},
+		path:    repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "api", "apiserver.md"),
+		needles: apiserverDocNeedles,
 	},
 	{
 		path: repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "proposals", "nvidia-dynamo-integration.md"),

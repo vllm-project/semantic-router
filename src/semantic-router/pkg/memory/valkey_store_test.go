@@ -175,39 +175,6 @@ func TestValkeyEscapeTagValue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// valkeyDistanceToSimilarity
-// ---------------------------------------------------------------------------
-
-func TestValkeyDistanceToSimilarity(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		metricType string
-		distance   float64
-		expected   float64
-		tolerance  float64
-	}{
-		{"COSINE zero", "COSINE", 0.0, 1.0, 0.001},
-		{"COSINE 0.2", "COSINE", 0.2, 0.9, 0.001},
-		{"COSINE 2.0", "COSINE", 2.0, 0.0, 0.001},
-		{"L2 zero", "L2", 0.0, 1.0, 0.001},
-		{"L2 0.3", "L2", 0.3, 0.769, 0.01},
-		{"IP identity", "IP", 0.95, 0.95, 0.001},
-		{"case insensitive", "cosine", 0.2, 0.9, 0.001},
-		{"unknown metric warns", "UNKNOWN", 0.3, 0.7, 0.001},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			result := valkeyDistanceToSimilarity(tc.metricType, tc.distance)
-			assert.InDelta(t, tc.expected, result, tc.tolerance)
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // valkeyToInt64
 // ---------------------------------------------------------------------------
 

@@ -30,19 +30,31 @@ const (
 )
 
 type RouterOutcome struct {
-	ReplayID  string
-	Source    RouterOutcomeSource
-	Target    RouterOutcomeTarget
-	TargetRef string
-	Verdict   RouterOutcomeVerdict
-	Reason    string
-	Score     float64
-	Metadata  map[string]string
+	ReplayID       string
+	Source         RouterOutcomeSource
+	Target         RouterOutcomeTarget
+	TargetRef      string
+	Verdict        RouterOutcomeVerdict
+	Reason         string
+	Score          float64
+	Metadata       map[string]string
+	IdempotencyKey string
 }
+
+// Outcome result codes returned by OutcomeRuntime.UpdateOutcome.
+const (
+	RouterOutcomeCodeOK                = ""
+	RouterOutcomeCodeDuplicate         = "duplicate"
+	RouterOutcomeCodeReplayNotFound    = "replay_not_found"
+	RouterOutcomeCodeOwnershipMismatch = "ownership_mismatch"
+	RouterOutcomeCodeInvalid           = "invalid_outcome"
+)
 
 type RouterOutcomeResult struct {
 	Updated  int
 	Recorded bool
+	Code     string
+	Message  string
 }
 
 type OutcomeRuntime interface {
