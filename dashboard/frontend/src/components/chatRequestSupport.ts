@@ -1,5 +1,7 @@
 import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
 import { buildPromptWithAttachments, type PlaygroundAttachment } from './playgroundFileAttachments'
+import { normalizeToolCallArguments } from './chatToolCallSupport'
+import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 export interface OutboundChatMessage {
   role: string
@@ -83,8 +85,44 @@ export const buildChatMessages = (
       continue
     }
 
-    if (message.role === 'assistant' && message.content) {
-      chatMessages.push({ role: 'assistant', content: message.content })
+    if (message.role === 'assistant') {
+      const resultsByCallId = new Map(
+        (message.toolResults ?? []).map((result) => [result.callId, result]),
+      )
+      const completedToolCalls = (message.toolCalls ?? []).filter(
+        (toolCall) =>
+          resultsByCallId.has(toolCall.id) &&
+          Boolean(toolCall.function.name) &&
+          Boolean(toolCall.function.arguments),
+      )
+
+      if (completedToolCalls.length > 0) {
+        chatMessages.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: completedToolCalls.map((toolCall) => ({
+            id: toolCall.id,
+            type: 'function',
+            function: {
+              name: toolCall.function.name,
+              arguments: normalizeToolCallArguments(toolCall.function.arguments),
+            },
+          })),
+        })
+        completedToolCalls.forEach((toolCall) => {
+          const result = resultsByCallId.get(toolCall.id)
+          if (!result) return
+          chatMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: serializeToolResultForModel(result),
+          })
+        })
+      }
+
+      if (message.content) {
+        chatMessages.push({ role: 'assistant', content: message.content })
+      }
     }
   }
 
