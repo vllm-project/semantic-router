@@ -46,6 +46,11 @@ type RedisCacheOptions struct {
 	Config              *config.RedisConfig
 	ConfigPath          string
 	EmbeddingModel      string
+
+	// closeClient overrides how a partially constructed client is released when
+	// a constructor step fails. Unexported: in-package tests inject a recorder to
+	// prove the cleanup ran, which has no black-box signal (#2473).
+	closeClient func(*redis.Client)
 }
 
 // NewRedisCache initializes a new Redis-backed semantic cache instance
@@ -104,21 +109,25 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
+	releaseClient := func() { _ = redisClient.Close() }
+	if options.closeClient != nil {
+		releaseClient = func() { options.closeClient(redisClient) }
+	}
+
 	// Test connection using the new CheckConnection method
-	if err := cache.CheckConnection(context.Background()); err != nil {
+	if err := releaseOnFailure(
+		func() error { return cache.CheckConnection(context.Background()) },
+		releaseClient,
+	); err != nil {
 		logging.Debugf("RedisCache: failed to connect: %v", err)
-		// Close the partially constructed client so a failed constructor leaks
-		// no connection/goroutine resources (#2473).
-		_ = redisClient.Close()
 		return nil, err
 	}
 	logging.Debugf("RedisCache: successfully connected to Redis")
 
 	// Set up the index for vector search
 	logging.Debugf("RedisCache: initializing index '%s'", redisConfig.Index.Name)
-	if err := cache.initializeIndex(); err != nil {
+	if err := releaseOnFailure(cache.initializeIndex, releaseClient); err != nil {
 		logging.Debugf("RedisCache: failed to initialize index: %v", err)
-		_ = redisClient.Close()
 		return nil, fmt.Errorf("failed to initialize index: %w", err)
 	}
 	logging.Debugf("RedisCache: initialization complete")

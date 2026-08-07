@@ -56,6 +56,24 @@ func contextErrorOnFailure(ctx context.Context, operationErr error) error {
 	return ctxErr(ctx)
 }
 
+// releaseOnFailure runs one post-construction setup step and releases the
+// partially built client when that step fails, so a failed constructor leaks no
+// connection, pool, or background goroutine (#2473).
+//
+// Backends route their setup steps through it because the cleanup itself has no
+// black-box signal: a constructor that leaks the client still returns
+// (nil, err), and a network-level probe cannot tell either — the underlying
+// drivers already drop a connection whose command failed. Centralizing the
+// contract here keeps it testable for every backend, including the ones whose
+// client cannot be built at all without a live server.
+func releaseOnFailure(step func() error, release func()) error {
+	if err := step(); err != nil {
+		release()
+		return err
+	}
+	return nil
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active

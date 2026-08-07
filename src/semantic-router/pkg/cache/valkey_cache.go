@@ -42,6 +42,11 @@ type ValkeyCacheOptions struct {
 	Enabled             bool
 	Config              *routerconfig.ValkeyConfig
 	EmbeddingModel      string
+
+	// closeClient overrides how a partially constructed client is released when
+	// a constructor step fails. Unexported: in-package tests inject a recorder to
+	// prove the cleanup ran, which has no black-box signal (#2473).
+	closeClient func(*glide.Client)
 }
 
 // NewValkeyCache initializes a new Valkey-backed semantic cache instance
@@ -109,19 +114,23 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
-	if err := cache.CheckConnection(context.Background()); err != nil {
+	releaseClient := func() { valkeyClient.Close() }
+	if options.closeClient != nil {
+		releaseClient = func() { options.closeClient(valkeyClient) }
+	}
+
+	if err := releaseOnFailure(
+		func() error { return cache.CheckConnection(context.Background()) },
+		releaseClient,
+	); err != nil {
 		logging.Debugf("ValkeyCache: failed to connect: %v", err)
-		// Close the partially constructed client so a failed constructor leaks
-		// no connection/goroutine resources (#2473).
-		valkeyClient.Close()
 		return nil, err
 	}
 	logging.Debugf("ValkeyCache: successfully connected to Valkey")
 
 	logging.Debugf("ValkeyCache: initializing index '%s'", valkeyConfig.Index.Name)
-	if err := cache.initializeSearchIndex(); err != nil {
+	if err := releaseOnFailure(cache.initializeSearchIndex, releaseClient); err != nil {
 		logging.Debugf("ValkeyCache: initialization failed: %v", err)
-		valkeyClient.Close()
 		return nil, err
 	}
 	logging.Debugf("ValkeyCache: initialization complete")
