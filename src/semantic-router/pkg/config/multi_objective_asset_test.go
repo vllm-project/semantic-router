@@ -147,8 +147,8 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	accuracy, _ := cfg.RecipeByName("accuracy-first")
-	if rules := accuracy.Profile.Signals.FactCheckRules; len(rules) != 1 || rules[0].Name != "needs_fact_check" {
-		t.Fatalf("accuracy fact-check rules must use the runtime classifier label: %+v", rules)
+	if rules := accuracy.Profile.Signals.FactCheckRules; len(rules) != 0 {
+		t.Fatalf("accuracy recipe must not let learned fact-check classification drive orchestration: %+v", rules)
 	}
 	if rules := accuracy.Profile.Signals.ComplexityRules; len(rules) != 1 || rules[0].Threshold != 0.15 {
 		t.Fatalf("accuracy complexity threshold must use a calibrated margin: %+v", rules)
@@ -158,6 +158,7 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	if accuracyWeights.Quality != 1.0 {
 		t.Fatalf("accuracy-first recipe lost its quality-only selector: %+v", accuracyWeights)
 	}
+	assertMultiObjectiveVerifiedDecision(t, accuracy)
 	for decisionName, algorithmType := range map[string]string{
 		"unified_frontier_verified_answer": DecisionAlgorithmConfidence,
 		"unified_frontier_workflow":        DecisionAlgorithmWorkflows,
@@ -176,6 +177,27 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		}
 	}
 	assertMultiObjectiveLanguageCodes(t, accuracy, []string{"zh", "es", "fr", "ja", "de"})
+}
+
+func assertMultiObjectiveVerifiedDecision(t *testing.T, accuracy *RoutingRecipe) {
+	t.Helper()
+	verified := multiObjectiveDecision(t, accuracy, "unified_frontier_verified_answer")
+	if len(verified.Rules.Conditions) != 1 ||
+		verified.Rules.Conditions[0].Type != SignalTypeKeyword ||
+		verified.Rules.Conditions[0].Name != "unified_frontier_verification_markers" {
+		t.Fatalf("frontier verification must require explicit user intent: %+v", verified.Rules)
+	}
+	if verified.Algorithm == nil || verified.Algorithm.Confidence == nil ||
+		verified.Algorithm.Confidence.ConfidenceMethod != "avg_logprob" {
+		t.Fatalf("frontier verification must use supported streaming confidence: %+v", verified.Algorithm)
+	}
+	verifiedModels := make([]string, 0, len(verified.ModelRefs))
+	for _, ref := range verified.ModelRefs {
+		verifiedModels = append(verifiedModels, ref.Model)
+	}
+	if len(verifiedModels) != 4 || slices.Contains(verifiedModels, "local/gemma4-26b-balanced") {
+		t.Fatalf("frontier verification contains a non-tool-compatible candidate: %v", verifiedModels)
+	}
 }
 
 func requireMultiObjectiveAlgorithmType(t *testing.T, algorithm *AlgorithmConfig, expected, context string) {

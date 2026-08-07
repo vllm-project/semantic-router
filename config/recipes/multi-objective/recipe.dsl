@@ -488,13 +488,13 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL keyword unified_frontier_fusion_markers {
     operator: "OR"
-    keywords: ["independent analyses", "compare multiple expert opinions", "cross-check the answer", "panel of experts", "resolve disagreements", "独立分析", "比较多个专家意见", "交叉验证答案", "解决分歧", "análisis independientes", "comparar opiniones de expertos", "analyses indépendantes", "comparer plusieurs avis d'experts", "独立した分析", "複数の専門家の意見を比較", "unabhängige analysen"]
+    keywords: ["independent analyses", "compare multiple expert opinions", "cross-check the answer", "panel of experts", "resolve disagreements", "compare several independent viewpoints", "ask multiple models", "get a second and third opinion", "synthesize competing answers", "独立分析", "比较多个专家意见", "交叉验证答案", "解决分歧", "análisis independientes", "comparar opiniones de expertos", "analyses indépendantes", "comparer plusieurs avis d'experts", "独立した分析", "複数の専門家の意見を比較", "unabhängige analysen"]
     method: "regex"
   }
 
   SIGNAL keyword unified_frontier_deep_markers {
     operator: "OR"
-    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
+    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "think deeply before answering", "solve this thoroughly", "reason through alternative paths", "do a deep analysis", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
     method: "regex"
   }
 
@@ -520,10 +520,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     threshold: 0.78
     candidates: ["Explore several reasoning paths and synthesize the strongest rigorous solution.", "Build a careful derivation from first principles for a difficult problem.", "从多个推理路径探索难题并综合最强答案。", "Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.", "複数の推論経路を探索し、最も厳密な解答を統合してください。"]
     aggregation_method: "max"
-  }
-
-  SIGNAL fact_check needs_fact_check {
-    description: "Detect factual requests that benefit from independent verification."
   }
 
   SIGNAL language zh {
@@ -598,12 +594,12 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   PROJECTION score unified_frontier_fusion_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.15, name: "needs_fact_check" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
+    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
   }
 
   PROJECTION score unified_frontier_deliberation_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.2, name: "needs_fact_check" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
+    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
   }
 
   PROJECTION mapping unified_frontier_workflow_band {
@@ -689,14 +685,13 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_verified_answer (description = "Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.") {
     PRIORITY 325
     TIER 4
-    WHEN (keyword("unified_frontier_verification_markers") OR fact_check("needs_fact_check"))
+    WHEN keyword("unified_frontier_verification_markers")
     MODEL "local/qwen3.5-9b-economy" (reasoning = false),
           "local/qwen3.6-27b-coder" (reasoning = false),
           "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
           "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM confidence {
-      confidence_method: "hybrid"
+      confidence_method: "avg_logprob"
       escalation_order: "small_to_large"
       on_error: "skip"
       threshold: 0.72
