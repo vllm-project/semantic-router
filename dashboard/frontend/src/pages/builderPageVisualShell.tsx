@@ -1,35 +1,18 @@
 import React, { useCallback, useMemo, useState } from "react";
 
-import type {
-  Diagnostic,
-  EditorMode,
-  DSLFieldObject,
-} from "@/types/dsl";
+import type { Diagnostic, EditorMode, DSLFieldObject } from "@/types/dsl";
 import { useDSLStore } from "@/stores/dslStore";
 import type { RouteInput } from "@/lib/dslMutations";
 
 import styles from "./BuilderPage.module.css";
-import {
-  ModelIcon,
-  PluginIcon,
-  RouteIcon,
-  SignalIcon,
-} from "./builderPageFormPrimitives";
-import {
-  AddModelForm,
-  AddPluginForm,
-  AddSignalForm,
-} from "./builderPageEntityForms";
+import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from "./builderPageFormPrimitives";
+import { AddModelForm, AddPluginForm, AddSignalForm } from "./builderPageEntityForms";
 import {
   AddProjectionMappingForm,
   AddProjectionPartitionForm,
   AddProjectionScoreForm,
 } from "./builderPageProjectionEditors";
-import {
-  DashboardView,
-  EntityListView,
-  SidebarSection,
-} from "./builderPageDashboardViews";
+import { DashboardView, EntityListView, SidebarSection } from "./builderPageDashboardViews";
 import { EntityDetailView } from "./builderPageEntityDetailView";
 import { AddRouteForm } from "./builderPageRouteForms";
 import { BuilderValidationPanel } from "./builderPageValidationPanel";
@@ -39,6 +22,8 @@ import type {
   SectionState,
   Selection,
 } from "./builderPageTypes";
+import type { BuilderRoutingScope } from "./builderPageRoutingScopeSupport";
+import { BuilderRoutingScopeBar } from "./builderPageRoutingScopeBar";
 
 interface VisualModeProps {
   ast: ReturnType<typeof useDSLStore.getState>["ast"];
@@ -62,44 +47,25 @@ interface VisualModeProps {
   onSetAddingEntity: (kind: EntityKind | null) => void;
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
   onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateSignalFields: (
-    signalType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
+  onUpdateSignalFields: (signalType: string, name: string, fields: DSLFieldObject) => void;
   onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateProjectionScoreFields: (
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdateProjectionMappingFields: (
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdatePluginFields: (
-    name: string,
-    pluginType: string,
-    fields: DSLFieldObject,
-  ) => void;
+  onUpdateProjectionScoreFields: (name: string, fields: DSLFieldObject) => void;
+  onUpdateProjectionMappingFields: (name: string, fields: DSLFieldObject) => void;
+  onUpdatePluginFields: (name: string, pluginType: string, fields: DSLFieldObject) => void;
   onAddModel: (name: string, fields: DSLFieldObject) => void;
-  onAddSignal: (
-    signalType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
+  onAddSignal: (signalType: string, name: string, fields: DSLFieldObject) => void;
   onAddProjectionPartition: (name: string, fields: DSLFieldObject) => void;
   onAddProjectionScore: (name: string, fields: DSLFieldObject) => void;
   onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void;
-  onAddPlugin: (
-    name: string,
-    pluginType: string,
-    fields: DSLFieldObject,
-  ) => void;
+  onAddPlugin: (name: string, pluginType: string, fields: DSLFieldObject) => void;
   onUpdateRoute: (name: string, input: RouteInput) => void;
   onAddRoute: (name: string, input: RouteInput) => void;
   errorCount: number;
   isValid: boolean;
   onModeSwitch: (mode: EditorMode) => void;
+  routingScopes: BuilderRoutingScope[];
+  activeRoutingScopeId: string;
+  onRoutingScopeChange: (scopeId: string) => void;
 }
 
 const VisualMode: React.FC<VisualModeProps> = ({
@@ -139,6 +105,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
   errorCount,
   isValid,
   onModeSwitch,
+  routingScopes,
+  activeRoutingScopeId,
+  onRoutingScopeChange,
 }) => {
   // Collect available signal names for expression builder
   // Complexity signals are referenced as "<name>:easy", "<name>:medium", "<name>:hard" in route conditions
@@ -162,9 +131,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
   }, [ast?.signals, ast?.projectionMappings]);
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(
-    () =>
-      ast?.plugins?.map((p) => ({ name: p.name, pluginType: p.pluginType })) ??
-      [],
+    () => ast?.plugins?.map((p) => ({ name: p.name, pluginType: p.pluginType })) ?? [],
     [ast?.plugins],
   );
   const semanticModels = useMemo(
@@ -174,7 +141,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
   // Collect available model names for route selection.
   const availableModels = useMemo(() => {
     if (semanticModels.length > 0) {
-      return [...semanticModels].sort()
+      return [...semanticModels].sort();
     }
     const modelSet = new Set<string>();
     ast?.routes?.forEach((r) =>
@@ -187,14 +154,8 @@ const VisualMode: React.FC<VisualModeProps> = ({
 
   // Validation panel state
   const [validationOpen, setValidationOpen] = useState(true);
-  const errorDiags = useMemo(
-    () => diagnostics.filter((d) => d.level === "error"),
-    [diagnostics],
-  );
-  const warnDiags = useMemo(
-    () => diagnostics.filter((d) => d.level === "warning"),
-    [diagnostics],
-  );
+  const errorDiags = useMemo(() => diagnostics.filter((d) => d.level === "error"), [diagnostics]);
+  const warnDiags = useMemo(() => diagnostics.filter((d) => d.level === "warning"), [diagnostics]);
   const constraintDiags = useMemo(
     () => diagnostics.filter((d) => d.level === "constraint"),
     [diagnostics],
@@ -209,13 +170,8 @@ const VisualMode: React.FC<VisualModeProps> = ({
     const lineContent = lines[diag.line - 1];
     let startCol = diag.column;
     let endCol = diag.column;
-    while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2]))
-      startCol--;
-    while (
-      endCol <= lineContent.length &&
-      /[\w\-.]/.test(lineContent[endCol - 1])
-    )
-      endCol++;
+    while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2])) startCol--;
+    while (endCol <= lineContent.length && /[\w\-.]/.test(lineContent[endCol - 1])) endCol++;
 
     const before = lineContent.slice(0, startCol - 1);
     const after = lineContent.slice(endCol - 1);
@@ -229,15 +185,18 @@ const VisualMode: React.FC<VisualModeProps> = ({
 
   return (
     <div className={styles.visualContainer}>
+      <BuilderRoutingScopeBar
+        scopes={routingScopes}
+        activeScopeId={activeRoutingScopeId}
+        onChange={onRoutingScopeChange}
+      />
       <div className={styles.visualRow}>
         {/* Sidebar */}
         <div className={styles.sidebar}>
           {/* Dashboard home link */}
           <div
             className={
-              selection === null && !addingEntity
-                ? styles.sidebarHomeActive
-                : styles.sidebarHome
+              selection === null && !addingEntity ? styles.sidebarHomeActive : styles.sidebarHome
             }
             onClick={() => {
               onSetAddingEntity(null);
@@ -337,8 +296,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <li
                 key={partition.name}
                 className={
-                  selection?.kind === "projection-partition" &&
-                  selection.name === partition.name
+                  selection?.kind === "projection-partition" && selection.name === partition.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
@@ -368,8 +326,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <li
                 key={score.name}
                 className={
-                  selection?.kind === "projection-score" &&
-                  selection.name === score.name
+                  selection?.kind === "projection-score" && selection.name === score.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
@@ -399,8 +356,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
               <li
                 key={mapping.name}
                 className={
-                  selection?.kind === "projection-mapping" &&
-                  selection.name === mapping.name
+                  selection?.kind === "projection-mapping" && selection.name === mapping.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
@@ -477,7 +433,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
               </li>
             ))}
           </SidebarSection>
-
         </div>
 
         {/* Main panel */}
@@ -491,15 +446,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
 
           <div className={styles.mainPanelContent}>
             {addingEntity === "model" ? (
-              <AddModelForm
-                onAdd={onAddModel}
-                onCancel={() => onSetAddingEntity(null)}
-              />
+              <AddModelForm onAdd={onAddModel} onCancel={() => onSetAddingEntity(null)} />
             ) : addingEntity === "signal" ? (
-              <AddSignalForm
-                onAdd={onAddSignal}
-                onCancel={() => onSetAddingEntity(null)}
-              />
+              <AddSignalForm onAdd={onAddSignal} onCancel={() => onSetAddingEntity(null)} />
             ) : addingEntity === "projection-partition" ? (
               <AddProjectionPartitionForm
                 onAdd={onAddProjectionPartition}
@@ -516,10 +465,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onCancel={() => onSetAddingEntity(null)}
               />
             ) : addingEntity === "plugin" ? (
-              <AddPluginForm
-                onAdd={onAddPlugin}
-                onCancel={() => onSetAddingEntity(null)}
-              />
+              <AddPluginForm onAdd={onAddPlugin} onCancel={() => onSetAddingEntity(null)} />
             ) : addingEntity === "route" ? (
               <AddRouteForm
                 onAdd={onAddRoute}
