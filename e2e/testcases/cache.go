@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -44,6 +45,7 @@ type CacheResult struct {
 	Error            string
 }
 
+//nolint:cyclop,gocognit // Existing E2E orchestration branches by request outcome.
 func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing semantic cache functionality")
@@ -146,6 +148,9 @@ func evaluateCacheAssertions(results []CacheResult, totalRequests, cacheHits int
 		return fmt.Errorf("cache test executed zero similar-question requests (%d setup failures); "+
 			"nothing was asserted", len(setupFailures))
 	}
+	if cacheHits == 0 {
+		return fmt.Errorf("cache test observed zero cache hits across %d requests; per-request similarity was never asserted", totalRequests)
+	}
 	if len(assertionFailures) > 0 {
 		return fmt.Errorf("cache per-request similarity assertions failed (%d of %d requests):\n  %s",
 			len(assertionFailures), totalRequests, strings.Join(assertionFailures, "\n  "))
@@ -224,10 +229,9 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 //
 // The header rides the x-vsr-debug surface (opted into by sendChatRequest) and
 // is per-request (#2473): a hit surfaces a positive score that, because a hit is
-// returned only when similarity >= the configured threshold, lands in (0,1]; a
-// warm-cache miss may carry this request's own best-observed score, which is
-// below threshold and so in [0,1), never a leaked hit value. An absent header on
-// a miss is valid (cold cache, no candidate scored).
+// returned only when similarity >= the configured threshold, lands in (0,1]. A
+// miss may omit the header or surface zero, but must not publish a candidate
+// score.
 func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if simHeader == "" {
 		if cacheHit {
@@ -239,16 +243,19 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if err != nil {
 		return 0, fmt.Sprintf("unparsable x-vsr-cache-similarity %q: %v", simHeader, err)
 	}
+	if math.IsNaN(sim) || math.IsInf(sim, 0) {
+		return 0, fmt.Sprintf("non-finite x-vsr-cache-similarity %q", simHeader)
+	}
 	if cacheHit {
 		if sim <= 0.0 || sim > 1.0 {
 			return 0, fmt.Sprintf("cache-hit similarity %.4f out of expected (0,1] range", sim)
 		}
 		return sim, ""
 	}
-	if sim < 0.0 || sim >= 1.0 {
-		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1) range", sim)
+	if sim != 0 {
+		return 0, fmt.Sprintf("cache miss surfaced similarity %.4f; misses must not publish a candidate score", sim)
 	}
-	return sim, ""
+	return 0, ""
 }
 
 func sendChatRequest(ctx context.Context, question, localPort string, verbose bool) (*http.Response, error) {
@@ -289,6 +296,7 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 	return resp, nil
 }
 
+//nolint:cyclop,funlen,gocognit // Existing reporting branches by category, miss, and error.
 func printCacheResults(results []CacheResult, totalRequests, cacheHits int, hitRate float64) {
 	separator := "================================================================================"
 	fmt.Println("\n" + separator)

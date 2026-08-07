@@ -28,13 +28,6 @@ linters:
       min-complexity: 4
   exclusions:
     rules:
-      # #2473 cache per-lookup similarity PR: skip agent complexity linters on the
-      # pre-existing testCache / printCacheResults helpers in this touched E2E file.
-      - linters:
-          - cyclop
-          - gocognit
-          - funlen
-        path: (^|/)e2e/testcases/cache\.go$
       # #2473: benchmark.go is only touched to thread context.Context through its
       # cache calls; its pre-existing scenario helpers exceed the complexity budgets.
       - linters:
