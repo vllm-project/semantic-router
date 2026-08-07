@@ -70,7 +70,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert

@@ -1,11 +1,12 @@
 package extproc
 
 import (
-	"strings"
+	"encoding/json"
 	"testing"
 
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -138,6 +139,9 @@ func cacheRouterForDecision(decision config.Decision) (*mockStreamingCache, *Ope
 func withSelectedDecision(ctx *RequestContext, decision *config.Decision) *RequestContext {
 	ctx.VSRSelectedDecision = decision
 	ctx.VSRSelectedDecisionName = decision.Name
+	if ctx.Headers == nil {
+		ctx.Headers = map[string]string{"x-authz-user-id": "cache-test-user"}
+	}
 	return ctx
 }
 
@@ -169,7 +173,7 @@ func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
 	assert.True(t, mockCache.addEntryCalled)
 	assert.False(t, mockCache.updateCalled)
 	assert.True(t, mockCache.exactAdded)
-	assert.True(t, strings.HasPrefix(mockCache.addEntryModel, "v2:"))
+	assert.Contains(t, mockCache.addEntryModel, "exact-cache-decision")
 	assert.Equal(t, "hello", mockCache.addEntryQuery)
 }
 
@@ -607,4 +611,31 @@ func TestCacheStreamingResponseStoresToolOnlyPayload(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, mockCache.addEntryCalled)
+}
+
+func TestBuildReconstructedStreamingResponsePreservesChoiceIndexes(t *testing.T) {
+	ctx := &RequestContext{
+		StreamingMetadata: map[string]interface{}{
+			"id":      "chatcmpl-multi",
+			"model":   "test-model",
+			"created": int64(123),
+		},
+		StreamingChoices: map[int]*StreamingChoiceState{
+			0: {Content: "first", FinishReason: "stop"},
+			1: {Content: "second", FinishReason: "length"},
+		},
+	}
+	body, err := buildReconstructedStreamingResponse(ctx, openai.CompletionUsage{}, true)
+	require.NoError(t, err)
+	var decoded struct {
+		Choices []struct {
+			Index        int    `json:"index"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	require.NoError(t, json.Unmarshal(body, &decoded))
+	require.Len(t, decoded.Choices, 2)
+	assert.Equal(t, 0, decoded.Choices[0].Index)
+	assert.Equal(t, 1, decoded.Choices[1].Index)
+	assert.Equal(t, "length", decoded.Choices[1].FinishReason)
 }

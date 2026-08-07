@@ -101,23 +101,8 @@ func parseYAMLBytesWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	if rejectErr := rejectDeprecatedUserConfigFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedTaxonomyLegacyFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedDecisionToolFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectRemovedRouterLearningFields(raw); rejectErr != nil {
-		return nil, rejectErr
-	}
-	if rejectErr := rejectUnsupportedRouterLearningFields(raw); rejectErr != nil {
-		return nil, rejectErr
+	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
+		return nil, normalizeErr
 	}
 
 	if expandEnvironment {
@@ -148,6 +133,24 @@ func parseYAMLBytesWithOptions(
 		"base_dir":       baseDir,
 	})
 	return cfg, nil
+}
+
+func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
+	validators := []func(map[string]interface{}) error{
+		normalizeResponseCacheAliases,
+		rejectDeprecatedUserConfigFields,
+		rejectRemovedStructureFields,
+		rejectRemovedTaxonomyLegacyFields,
+		rejectRemovedDecisionToolFields,
+		rejectRemovedRouterLearningFields,
+		rejectUnsupportedRouterLearningFields,
+	}
+	for _, validate := range validators {
+		if err := validate(raw); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {

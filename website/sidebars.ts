@@ -213,7 +213,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
-                'tutorials/plugin/semantic-cache',
+                'tutorials/plugin/response-cache',
               ],
             },
             {

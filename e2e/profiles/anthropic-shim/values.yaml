@@ -70,7 +70,7 @@ config:
           concurrency_threshold: 5
           max_concurrency: 8
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:

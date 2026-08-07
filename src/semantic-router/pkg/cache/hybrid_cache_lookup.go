@@ -68,7 +68,6 @@ func (h *HybridCache) findSimilar(
 
 	responseBody, candidate, found := h.fetchResponseFromCandidates(logPrefix, model, candidatesWithIDs)
 	if found {
-		h.StoreSimilarity(candidate.similarity)
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
 		return LookupResult{
 			ResponseBody: responseBody,
@@ -88,7 +87,6 @@ func (h *HybridCache) findSimilar(
 	}
 	if milvusResult.Found {
 		candidate = candidateWithID{similarity: milvusResult.Similarity}
-		h.StoreSimilarity(candidate.similarity)
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
 		return milvusResult, nil
 	}

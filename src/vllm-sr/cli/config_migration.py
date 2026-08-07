@@ -39,6 +39,7 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     routing.pop("models", None)
 
     _move_legacy_global_blocks(source, providers, global_config)
+    _normalize_response_cache_contract(routing, global_config)
     _persist_provider_models(providers, provider_models)
 
     canonical: dict[str, Any] = {
@@ -58,8 +59,53 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical["entrypoints"] = deepcopy(source["entrypoints"])
     if "recipes" in source:
         canonical["recipes"] = deepcopy(source["recipes"])
+    _normalize_response_cache_plugins(canonical)
 
     return canonical
+
+
+def _normalize_response_cache_contract(
+    routing: dict[str, Any], global_config: dict[str, Any]
+) -> None:
+    stores = _as_dict(global_config.get("stores"))
+    if "response_cache" in stores and "semantic_cache" in stores:
+        raise ValueError(
+            "global.stores.response_cache conflicts with global.stores.semantic_cache"
+        )
+    if "semantic_cache" in stores:
+        stores["response_cache"] = stores.pop("semantic_cache")
+    if stores:
+        global_config["stores"] = stores
+    _normalize_response_cache_plugins(routing)
+
+
+def _normalize_response_cache_plugins(value: Any) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _normalize_response_cache_plugins(item)
+        return
+    if not isinstance(value, dict):
+        return
+    plugins = value.get("plugins")
+    if isinstance(plugins, list):
+        seen: set[str] = set()
+        for plugin in plugins:
+            if not isinstance(plugin, dict):
+                continue
+            plugin_type = plugin.get("type")
+            if plugin_type in {
+                "semantic-cache",
+                "semantic_cache",
+                "response-cache",
+            }:
+                plugin["type"] = "response_cache"
+            normalized = plugin.get("type")
+            if normalized in seen:
+                raise ValueError(f"duplicate plugin after normalization: {normalized}")
+            if isinstance(normalized, str):
+                seen.add(normalized)
+    for child in value.values():
+        _normalize_response_cache_plugins(child)
 
 
 def _prepare_blocks(
@@ -556,6 +602,7 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
     }
     direct_store_keys = {
         "semantic_cache",
+        "response_cache",
         "memory",
         "vector_store",
     }

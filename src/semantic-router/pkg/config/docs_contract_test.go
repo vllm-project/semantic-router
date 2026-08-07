@@ -525,7 +525,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 			"`config/fragments/plugin/`",
 			"`routing.decisions[].plugins`",
 			"[Fast Response](./fast-response)",
-			"[Semantic Cache](./semantic-cache)",
+			"[Response Cache](./response-cache)",
 		},
 	},
 	{

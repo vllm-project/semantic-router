@@ -7,9 +7,14 @@ import (
 )
 
 const (
-	SemanticCacheModeSemantic          = "semantic"
-	SemanticCacheModeExact             = "exact"
-	SemanticCacheModeExactThenSemantic = "exact_then_semantic"
+	ResponseCacheModeSemantic          = "semantic"
+	ResponseCacheModeExact             = "exact"
+	ResponseCacheModeExactThenSemantic = "exact_then_semantic"
+
+	// Deprecated compatibility names.
+	SemanticCacheModeSemantic          = ResponseCacheModeSemantic
+	SemanticCacheModeExact             = ResponseCacheModeExact
+	SemanticCacheModeExactThenSemantic = ResponseCacheModeExactThenSemantic
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
@@ -22,14 +27,72 @@ type DecisionPlugin struct {
 	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty"`
 }
 
-// SemanticCachePluginConfig represents configuration for semantic-cache plugin.
-type SemanticCachePluginConfig struct {
-	Enabled              bool     `json:"enabled" yaml:"enabled"`
-	Mode                 string   `json:"mode,omitempty" yaml:"mode,omitempty"`
+// ResponseCacheSemanticConfig controls the semantic lookup tier.
+type ResponseCacheSemanticConfig struct {
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+}
+
+// ResponseCacheRequestControlsConfig authorizes bounded request-level cache directives.
+type ResponseCacheRequestControlsConfig struct {
+	Enabled       bool     `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Header        string   `json:"header,omitempty" yaml:"header,omitempty"`
+	Allowed       []string `json:"allowed,omitempty" yaml:"allowed,omitempty"`
+	MaxTTLSeconds *int     `json:"max_ttl_seconds,omitempty" yaml:"max_ttl_seconds,omitempty"`
+}
+
+// ResponseCachePersonalizedConfig controls post-enrichment response caching.
+type ResponseCachePersonalizedConfig struct {
+	Mode string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
+type ResponseCacheRevisionConfig struct {
+	CacheEpoch     string `json:"cache_epoch,omitempty" yaml:"cache_epoch,omitempty"`
+	ModelRevision  string `json:"model_revision,omitempty" yaml:"model_revision,omitempty"`
+	PromptRevision string `json:"prompt_revision,omitempty" yaml:"prompt_revision,omitempty"`
+	PolicyRevision string `json:"policy_revision,omitempty" yaml:"policy_revision,omitempty"`
+}
+
+// ResponseCachePluginConfig represents route-local response reuse policy.
+type ResponseCachePluginConfig struct {
+	Enabled         bool                                `json:"enabled" yaml:"enabled"`
+	Mode            string                              `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Scope           string                              `json:"scope,omitempty" yaml:"scope,omitempty"`
+	Semantic        *ResponseCacheSemanticConfig        `json:"semantic,omitempty" yaml:"semantic,omitempty"`
+	RequestControls *ResponseCacheRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
+	Personalized    *ResponseCachePersonalizedConfig    `json:"personalized,omitempty" yaml:"personalized,omitempty"`
+	Revision        *ResponseCacheRevisionConfig        `json:"revision,omitempty" yaml:"revision,omitempty"`
+	// Deprecated flat compatibility fields. New config should use semantic and
+	// request_controls.
 	AllowRequestControls bool     `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
 	ControlHeader        string   `json:"control_header,omitempty" yaml:"control_header,omitempty"`
 	SimilarityThreshold  *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
 	TTLSeconds           *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+}
+
+// SemanticCachePluginConfig is retained for source compatibility.
+type SemanticCachePluginConfig = ResponseCachePluginConfig
+
+func (c *ResponseCachePluginConfig) EffectiveSimilarityThreshold() *float32 {
+	if c == nil {
+		return nil
+	}
+	if c.Semantic != nil && c.Semantic.SimilarityThreshold != nil {
+		return c.Semantic.SimilarityThreshold
+	}
+	return c.SimilarityThreshold
+}
+
+func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequestControlsConfig {
+	if c == nil {
+		return ResponseCacheRequestControlsConfig{}
+	}
+	if c.RequestControls != nil {
+		return *c.RequestControls
+	}
+	return ResponseCacheRequestControlsConfig{
+		Enabled: c.AllowRequestControls,
+		Header:  c.ControlHeader,
+	}
 }
 
 // ProviderPromptCachePluginConfig controls provider-native prompt cache markers.
@@ -162,10 +225,16 @@ func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error 
 	return config.DecodeInto(target)
 }
 
-// GetSemanticCacheConfig returns the semantic-cache plugin configuration.
+// GetResponseCacheConfig returns route-local response cache settings.
+func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
+	result := &ResponseCachePluginConfig{}
+	return decodeDecisionPlugin(d, DecisionPluginResponseCache, result)
+}
+
+// GetSemanticCacheConfig is retained for source compatibility.
+// Deprecated: use GetResponseCacheConfig.
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
-	result := &SemanticCachePluginConfig{}
-	return decodeDecisionPlugin(d, "semantic-cache", result)
+	return d.GetResponseCacheConfig()
 }
 
 // GetProviderPromptCacheConfig returns provider-native prompt cache settings.

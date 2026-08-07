@@ -447,7 +447,8 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":     "semantic_cache",
+	"semantic-cache":     "response_cache",
+	"response-cache":     "response_cache",
 	"system-prompt":      "system_prompt",
 	"header-mutation":    "header_mutation",
 	"router-replay":      "router_replay",

@@ -126,7 +126,6 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 
 	hit := &searchResult[0]
 	bestScore := hit.Scores[0]
-	c.StoreSimilarity(bestScore)
 	if bestScore < threshold {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",

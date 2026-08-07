@@ -81,7 +81,13 @@ func assertSupportedPluginsInReferenceConfig(t testingT, decisions []interface{}
 }
 
 func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]map[string]interface{}) {
-	assertPluginConfigCoverage(t, pluginsByType["semantic-cache"], reflect.TypeOf(SemanticCachePluginConfig{}), "semantic-cache")
+	responseCachePlugins := pluginsByType["response_cache"]
+	assertPluginConfigCoverage(t, responseCachePlugins, reflect.TypeOf(responseCacheReferenceConfig{}), "response_cache")
+	responseCacheConfigs := collectChildMapsFromSlice(t, responseCachePlugins, "configuration", "plugins(response_cache)")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "semantic", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheSemanticConfig{}), "plugins(response_cache).configuration.semantic")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "request_controls", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRequestControlsConfig{}), "plugins(response_cache).configuration.request_controls")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "personalized", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCachePersonalizedConfig{}), "plugins(response_cache).configuration.personalized")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "revision", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRevisionConfig{}), "plugins(response_cache).configuration.revision")
 	assertPluginConfigCoverage(t, pluginsByType["memory"], reflect.TypeOf(MemoryPluginConfig{}), "memory")
 	assertPluginConfigCoverage(t, pluginsByType["fast_response"], reflect.TypeOf(FastResponsePluginConfig{}), "fast_response")
 	assertPluginConfigCoverage(t, pluginsByType["system_prompt"], reflect.TypeOf(SystemPromptPluginConfig{}), "system_prompt")
@@ -91,6 +97,17 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tool_selection"], reflect.TypeOf(ToolSelectionPluginConfig{}), "tool_selection")
+}
+
+type responseCacheReferenceConfig struct {
+	Enabled         bool                                `yaml:"enabled"`
+	Mode            string                              `yaml:"mode,omitempty"`
+	Scope           string                              `yaml:"scope,omitempty"`
+	Semantic        *ResponseCacheSemanticConfig        `yaml:"semantic,omitempty"`
+	RequestControls *ResponseCacheRequestControlsConfig `yaml:"request_controls,omitempty"`
+	Personalized    *ResponseCachePersonalizedConfig    `yaml:"personalized,omitempty"`
+	Revision        *ResponseCacheRevisionConfig        `yaml:"revision,omitempty"`
+	TTLSeconds      *int                                `yaml:"ttl_seconds,omitempty"`
 }
 
 func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]map[string]interface{}) {

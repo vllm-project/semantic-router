@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,17 +67,19 @@ func TestHandleCaching_PartitionsNamedRecipeWithoutChangingSemanticQuery(t *test
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
 	assert.False(t, hit)
-	assert.True(t, strings.HasPrefix(mockCache.findSimilarModel, "v2:"))
-	assert.Len(t, mockCache.findSimilarModel, 67)
-	assert.NotContains(t, mockCache.findSimilarModel, "privacy")
+	assert.Contains(t, mockCache.findSimilarModel, "privacy")
+	assert.Contains(t, mockCache.findSimilarModel, "MoM")
 	assert.Equal(t, "hello", ctx.CacheQuery, "recipe identity must not pollute the embedding input")
 }
 
-func TestSemanticCachePartition_PreservesDefaultRecipeKey(t *testing.T) {
+func TestResponseCachePartitionIncludesDefaultRecipeAndProtocol(t *testing.T) {
 	ctx := &RequestContext{}
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 
-	assert.Equal(t, "MoM", semanticCachePartition(ctx, "MoM"))
+	partition := semanticCachePartition(ctx, "MoM")
+	assert.Contains(t, partition, "default")
+	assert.Contains(t, partition, "MoM")
+	assert.Contains(t, partition, "openai%3Abody")
 }
 
 func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
@@ -107,6 +108,7 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 		},
 	}
 	ctx := &RequestContext{
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "req-exact",
 		OriginalRequestBody: []byte(`{"model":"MoM","messages":[{"role":"user","content":"hello"}]}`),
 		VSRSelectedDecision: &router.Config.Decisions[0],
@@ -154,6 +156,7 @@ func TestHandleCaching_ReplaysExactHitForAnthropicClient(t *testing.T) {
 		},
 	}
 	ctx := &RequestContext{
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		ClientProtocol:      config.ClientProtocolAnthropic,
 		RequestID:           "req-anthropic",
 		OriginalRequestBody: []byte(`{"model":"claude","messages":[{"role":"user","content":"hello"}]}`),
@@ -217,15 +220,32 @@ func TestHandleCaching_NoCacheControlSkipsReadsButKeepsWritePath(t *testing.T) {
 func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "cache-scope-test-secret")
 	mockCache := &mockStreamingCache{}
+	decision := config.Decision{
+		Name:      "tenant-route",
+		ModelRefs: []config.ModelRef{{Model: "frontier"}},
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"scope":   "user",
+			}),
+		}},
+	}
 	router := &OpenAIRouter{
-		Cache:  mockCache,
-		Config: &config.RouterConfig{SemanticCache: config.SemanticCache{Enabled: true}},
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{decision},
+			},
+		},
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{
 			"x-authz-user-id": "alice",
 		},
-		RequestID: "req-1",
+		RequestID:           "req-1",
+		VSRSelectedDecision: &router.Config.Decisions[0],
 		OriginalRequestBody: []byte(
 			`{"model":"MoM","messages":[{"role":"system","content":"be precise"},{"role":"user","content":"hello"}]}`,
 		),
@@ -235,12 +255,9 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 	resp, hit := router.handleCaching(ctx, "", "frontier")
 	assert.Nil(t, resp)
 	assert.False(t, hit)
-	assert.True(t, strings.HasPrefix(mockCache.findSimilarModel, "v2:"))
-	assert.Len(t, mockCache.findSimilarModel, 67)
 	assert.NotContains(t, mockCache.findSimilarModel, "alice")
-	assert.NotContains(t, mockCache.findSimilarModel, "privacy")
-	assert.NotContains(t, mockCache.findSimilarModel, "frontier")
-	assert.NotContains(t, mockCache.findSimilarModel, "|none|")
+	assert.Contains(t, mockCache.findSimilarModel, "privacy")
+	assert.Contains(t, mockCache.findSimilarModel, "frontier")
 
 	alicePartition := mockCache.findSimilarModel
 	bobCtx := &RequestContext{
@@ -249,6 +266,7 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 		},
 		RequestID:           "req-2",
 		OriginalRequestBody: ctx.OriginalRequestBody,
+		VSRSelectedDecision: &router.Config.Decisions[0],
 	}
 	bobCtx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
 	_, _ = router.handleCaching(bobCtx, "", "frontier")

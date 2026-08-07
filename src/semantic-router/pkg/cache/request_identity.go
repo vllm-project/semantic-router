@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-const semanticQueryPlaceholder = "[semantic-cache-query]"
+const semanticQueryPlaceholder = "[response-cache-query]"
 
 // RequestIdentity contains cache keys derived from one normalized request.
 type RequestIdentity struct {
@@ -22,15 +22,12 @@ type RequestIdentity struct {
 // BuildRequestIdentity derives exact and semantic-compatibility fingerprints
 // from an OpenAI Chat Completions request.
 func BuildRequestIdentity(requestBody []byte) (RequestIdentity, error) {
-	model, query, err := ExtractQueryFromOpenAIRequest(requestBody)
-	if err != nil {
-		return RequestIdentity{}, err
-	}
-
 	request, err := decodeJSONMap(requestBody)
 	if err != nil {
 		return RequestIdentity{}, fmt.Errorf("invalid request body: %w", err)
 	}
+	model, _ := request["model"].(string)
+	query := requestSemanticQuery(request)
 
 	exactRequest := cloneJSONMap(request)
 	exactFingerprint, err := fingerprintJSON(exactRequest)
@@ -40,7 +37,7 @@ func BuildRequestIdentity(requestBody []byte) (RequestIdentity, error) {
 
 	compatibilityRequest := cloneJSONMap(exactRequest)
 	delete(compatibilityRequest, "model")
-	semanticSafe := replaceLastUserText(compatibilityRequest)
+	semanticSafe := replaceSemanticQuery(compatibilityRequest)
 	compatibilityFingerprint, err := fingerprintJSON(compatibilityRequest)
 	if err != nil {
 		return RequestIdentity{}, err
@@ -53,6 +50,73 @@ func BuildRequestIdentity(requestBody []byte) (RequestIdentity, error) {
 		CompatibilityFingerprint: compatibilityFingerprint,
 		SemanticSafe:             semanticSafe,
 	}, nil
+}
+
+func requestSemanticQuery(request map[string]interface{}) string {
+	if messages, ok := request["messages"].([]interface{}); ok {
+		return lastRoleText(messages, "user")
+	}
+	switch input := request["input"].(type) {
+	case string:
+		return input
+	case []interface{}:
+		return lastRoleText(input, "user")
+	default:
+		return ""
+	}
+}
+
+func lastRoleText(items []interface{}, role string) string {
+	for index := len(items) - 1; index >= 0; index-- {
+		item, ok := items[index].(map[string]interface{})
+		if !ok || item["role"] != role {
+			continue
+		}
+		return textContent(item["content"])
+	}
+	return ""
+}
+
+func textContent(content interface{}) string {
+	switch typed := content.(type) {
+	case string:
+		return typed
+	case []interface{}:
+		var combined string
+		for _, rawPart := range typed {
+			part, ok := rawPart.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			partType, _ := part["type"].(string)
+			if partType != "text" && partType != "input_text" {
+				continue
+			}
+			text, _ := part["text"].(string)
+			if combined != "" && text != "" {
+				combined += "\n"
+			}
+			combined += text
+		}
+		return combined
+	default:
+		return ""
+	}
+}
+
+func replaceSemanticQuery(request map[string]interface{}) bool {
+	if rawMessages, ok := request["messages"].([]interface{}); ok {
+		return replaceLastRoleText(rawMessages, "user")
+	}
+	switch input := request["input"].(type) {
+	case string:
+		request["input"] = semanticQueryPlaceholder
+		return true
+	case []interface{}:
+		return replaceLastRoleText(input, "user")
+	default:
+		return false
+	}
 }
 
 func cloneJSONMap(value map[string]interface{}) map[string]interface{} {
@@ -77,21 +141,34 @@ func decodeJSONMap(encoded []byte) (map[string]interface{}, error) {
 	return decoded, nil
 }
 
-func replaceLastUserText(request map[string]interface{}) bool {
-	rawMessages, ok := request["messages"].([]interface{})
-	if !ok {
-		return false
-	}
+func replaceLastRoleText(rawMessages []interface{}, role string) bool {
 	for index := len(rawMessages) - 1; index >= 0; index-- {
 		message, ok := rawMessages[index].(map[string]interface{})
-		if !ok || message["role"] != "user" {
+		if !ok || message["role"] != role {
 			continue
 		}
-		if _, ok := message["content"].(string); !ok {
+		switch content := message["content"].(type) {
+		case string:
+			message["content"] = semanticQueryPlaceholder
+			return true
+		case []interface{}:
+			replaced := false
+			for _, rawPart := range content {
+				part, ok := rawPart.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				partType, _ := part["type"].(string)
+				if partType != "text" && partType != "input_text" {
+					continue
+				}
+				part["text"] = semanticQueryPlaceholder
+				replaced = true
+			}
+			return replaced
+		default:
 			return false
 		}
-		message["content"] = semanticQueryPlaceholder
-		return true
 	}
 	return false
 }

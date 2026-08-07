@@ -1,0 +1,62 @@
+.page {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.header,
+.formRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.header p,
+.panel p,
+.card span {
+  color: var(--color-text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.card,
+.panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 1rem;
+}
+
+.card {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.card strong {
+  font-size: 1.4rem;
+}
+
+.formRow input {
+  min-width: 180px;
+  padding: 0.6rem;
+}
+
+.panel pre {
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.danger {
+  background: var(--color-danger);
+  color: white;
+}

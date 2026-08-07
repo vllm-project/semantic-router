@@ -13,6 +13,10 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 	if requestBypassesRouting(ctx) {
 		return false
 	}
+	if responseCacheScope(ctx) != "global" &&
+		strings.TrimSpace(responseCacheScopeIdentity(ctx)) == "" {
+		return false
+	}
 	if ctx != nil && ctx.VSRSelectedDecision != nil {
 		return r.Config.IsCacheEnabledForDecisionObject(ctx.VSRSelectedDecision)
 	}
@@ -24,21 +28,21 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 
 func responseCacheModeForRequest(ctx *RequestContext) string {
 	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return config.SemanticCacheModeSemantic
+		return config.ResponseCacheModeSemantic
 	}
-	pluginConfig := ctx.VSRSelectedDecision.GetSemanticCacheConfig()
+	pluginConfig := ctx.VSRSelectedDecision.GetResponseCacheConfig()
 	if pluginConfig == nil || strings.TrimSpace(pluginConfig.Mode) == "" {
-		return config.SemanticCacheModeSemantic
+		return config.ResponseCacheModeSemantic
 	}
 	return strings.TrimSpace(pluginConfig.Mode)
 }
 
 func exactCacheEnabledForRequest(ctx *RequestContext) bool {
 	mode := responseCacheModeForRequest(ctx)
-	return mode == config.SemanticCacheModeExact ||
-		mode == config.SemanticCacheModeExactThenSemantic
+	return mode == config.ResponseCacheModeExact ||
+		mode == config.ResponseCacheModeExactThenSemantic
 }
 
 func semanticLookupEnabledForRequest(ctx *RequestContext) bool {
-	return responseCacheModeForRequest(ctx) != config.SemanticCacheModeExact
+	return responseCacheModeForRequest(ctx) != config.ResponseCacheModeExact
 }

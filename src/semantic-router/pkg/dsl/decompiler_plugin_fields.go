@@ -10,7 +10,7 @@ type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"system_prompt":      pluginFieldsSystemPrompt,
-	"semantic-cache":     pluginFieldsSemanticCache,
+	"response_cache":     pluginFieldsResponseCache,
 	"router_replay":      pluginFieldsRouterReplay,
 	"memory":             pluginFieldsMemory,
 	"hallucination":      pluginFieldsHallucination,
@@ -25,7 +25,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
-	if fn, ok := pluginFieldsDecoders[p.Type]; ok {
+	if fn, ok := pluginFieldsDecoders[config.NormalizeDecisionPluginType(p.Type)]; ok {
 		return fn(p)
 	}
 	return map[string]Value{}
@@ -49,22 +49,12 @@ func pluginFieldsSystemPrompt(p *config.DecisionPlugin) map[string]Value {
 	return fields
 }
 
-func pluginFieldsSemanticCache(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+func pluginFieldsResponseCache(p *config.DecisionPlugin) map[string]Value {
+	object, ok := structuredPayloadObjectValue(p.Configuration)
 	if !ok {
-		return fields
+		return map[string]Value{}
 	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.TTLSeconds != nil {
-		fields["ttl_seconds"] = IntValue{V: *cfg.TTLSeconds}
-	}
-	return fields
+	return object.Fields
 }
 
 func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {

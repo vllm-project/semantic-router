@@ -37,15 +37,15 @@ func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {
 	decisions := cfg.Decisions
 	for i := range decisions {
 		decision := &decisions[i]
-		pluginCfg := decision.GetSemanticCacheConfig()
+		pluginCfg := decision.GetResponseCacheConfig()
 		if pluginCfg == nil {
 			continue
 		}
-		scope := fmt.Sprintf("decision %q semantic-cache plugin", decision.Name)
+		scope := fmt.Sprintf("decision %q response_cache plugin", decision.Name)
 		if err := validateCacheMode(pluginCfg.Mode, scope); err != nil {
 			return err
 		}
-		if err := validateCacheThreshold(pluginCfg.SimilarityThreshold, scope); err != nil {
+		if err := validateCacheThreshold(pluginCfg.EffectiveSimilarityThreshold(), scope); err != nil {
 			return err
 		}
 	}
@@ -54,15 +54,15 @@ func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {
 
 func validateCacheMode(mode string, scope string) error {
 	switch strings.TrimSpace(mode) {
-	case "", SemanticCacheModeSemantic, SemanticCacheModeExact, SemanticCacheModeExactThenSemantic:
+	case "", ResponseCacheModeSemantic, ResponseCacheModeExact, ResponseCacheModeExactThenSemantic:
 		return nil
 	default:
 		return fmt.Errorf(
 			"%s mode must be one of %q, %q, or %q, got %q",
 			scope,
-			SemanticCacheModeSemantic,
-			SemanticCacheModeExact,
-			SemanticCacheModeExactThenSemantic,
+			ResponseCacheModeSemantic,
+			ResponseCacheModeExact,
+			ResponseCacheModeExactThenSemantic,
 			mode,
 		)
 	}

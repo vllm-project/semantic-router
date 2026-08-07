@@ -63,7 +63,7 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:

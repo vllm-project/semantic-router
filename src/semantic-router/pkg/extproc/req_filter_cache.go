@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -79,6 +80,7 @@ func (r *OpenAIRouter) handleCaching(
 	)
 	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
 	ctx.CacheSemanticSafe = identity.SemanticSafe
+	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	applyRequestCacheControls(ctx)
 	if !ctx.CacheReadBypass {
@@ -142,6 +144,7 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 	)
 	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
 	ctx.CacheSemanticSafe = identity.SemanticSafe
+	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
 	return nil, false
 }
 
@@ -170,33 +173,53 @@ func responseCachePolicyFingerprint(ctx *RequestContext) string {
 	return fingerprint
 }
 
-// semanticCachePartition keeps recipe identity out of the text passed to the
-// embedding model. Cache backends treat model as an exact partition key, so
-// named recipes cannot read each other's entries while the default recipe
-// preserves the legacy model key and semantic similarity behavior.
 func semanticCachePartition(ctx *RequestContext, model string) string {
 	if ctx == nil {
 		return model
 	}
-	basePartition := config.RoutingNamespaceKey(ctx.Routing.RecipeName(), model)
-	scopeNamespace := cache.UserScopeNamespace(cacheScopeUserID(ctx))
-	if ctx.CacheSelectedModel == "" &&
-		ctx.CacheCompatibilityFingerprint == "" &&
-		scopeNamespace == "" {
-		return basePartition
+	return responseCacheIdentity(ctx, model).Partition.Key()
+}
+
+func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
+	protocol := strings.TrimSpace(ctx.ClientProtocol)
+	if protocol == "" {
+		protocol = "openai"
 	}
-	partitionParts := []string{
-		basePartition,
-		strings.TrimSpace(ctx.CacheSelectedModel),
-		scopeNamespace,
-		strings.TrimSpace(ctx.CacheCompatibilityFingerprint),
+	if ctx.ExpectStreamingResponse {
+		protocol += ":stream"
+	} else {
+		protocol += ":body"
 	}
-	for index, value := range partitionParts {
-		if value == "" {
-			partitionParts[index] = "none"
+	decision := ""
+	revision := ""
+	if ctx.VSRSelectedDecision != nil {
+		decision = ctx.VSRSelectedDecision.Name
+		if plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig(); plugin != nil &&
+			plugin.Revision != nil {
+			if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
+				revision = value
+			}
 		}
 	}
-	return "v2:" + cache.CombineFingerprints(partitionParts...)
+	scope := responseCacheScope(ctx)
+	scopeIdentity := responseCacheScopeIdentity(ctx)
+	if scopeIdentity != "" {
+		scopeIdentity = scope + ":" + scopeIdentity
+	}
+	return cache.CacheIdentity{
+		Partition: cache.CachePartition{
+			Recipe:        string(ctx.Routing.RecipeName()),
+			Decision:      decision,
+			RequestModel:  strings.TrimSpace(model),
+			SelectedModel: strings.TrimSpace(ctx.CacheSelectedModel),
+			Protocol:      protocol,
+			Namespace:     cache.UserScopeNamespace(scopeIdentity),
+			Epoch:         revision,
+		},
+		ExactFingerprint:         ctx.CacheExactFingerprint,
+		CompatibilityFingerprint: ctx.CacheCompatibilityFingerprint,
+		SemanticQuery:            cacheQueryForContext(ctx),
+	}
 }
 
 // performCacheLookup searches for a cached response matching the request query.
@@ -217,11 +240,26 @@ func (r *OpenAIRouter) performCacheLookup(
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
 		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
-	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
+	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "response_cache", categoryName)
 
 	startTime := time.Now()
-	partition := semanticCachePartition(ctx, requestModel)
-	lookupResult, cacheErr := r.Cache.LookupSimilarWithThreshold(partition, cacheQuery, threshold)
+	identity := ctx.CacheIdentity
+	if identity.ExactFingerprint == "" {
+		identity = responseCacheIdentity(ctx, requestModel)
+	}
+	identity.SemanticQuery = cacheQuery
+	lookupContext := ctx.TraceContext
+	if lookupContext == nil {
+		lookupContext = context.Background()
+	}
+	service := r.responseCacheService()
+	if service == nil {
+		return nil, false
+	}
+	lookupResult, cacheErr := service.LookupSemantic(lookupContext, cache.SemanticLookup{
+		Identity:  identity,
+		Threshold: threshold,
+	})
 	cachedResponse := lookupResult.ResponseBody
 	found := lookupResult.Found
 	lookupDuration := time.Since(startTime)
@@ -243,13 +281,16 @@ func (r *OpenAIRouter) performCacheLookup(
 	} else if found {
 		ctx.VSRCacheHit = true
 		ctx.VSRCacheSimilarity = lookupResult.Similarity
+		ctx.VSRCacheHitKind = string(lookupResult.HitKind)
+		ctx.VSRCacheSource = string(lookupResult.Source)
+		ctx.VSRCacheEntryAgeSeconds = lookupResult.Age.Seconds()
 		applyCacheHitSelectedModel(ctx)
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
 		}
 
-		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "semantic-cache")
+		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
@@ -271,7 +312,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		return response, true
 	} else {
 		ctx.VSRCacheSimilarity = lookupResult.Similarity
-		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
+		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
 	ctx.TraceContext = spanCtx

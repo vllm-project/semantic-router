@@ -625,15 +625,15 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	// conversion regression reports all three queries rather than aborting on
 	// the first one.
 	for i, entry := range entries {
-		foundResponse, hit, err := cache.FindSimilar("gpt-4", entry.query)
+		result, err := cache.LookupSimilarWithThreshold("gpt-4", entry.query, 0.8)
 		if !assert.NoError(t, err, "FindSimilar should not error for %s", entry.query) {
 			continue
 		}
-		if !assert.True(t, hit, "repeating %q verbatim must hit (similarity=%.4f, threshold=0.8)",
-			entry.query, cache.LastSimilarity()) {
+		if !assert.True(t, result.Found, "repeating %q verbatim must hit (similarity=%.4f, threshold=0.8)",
+			entry.query, result.Similarity) {
 			continue
 		}
-		assert.JSONEq(t, storedResponses[i], string(foundResponse))
+		assert.JSONEq(t, storedResponses[i], string(result.ResponseBody))
 	}
 }
 
@@ -697,11 +697,11 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test L2 metric")
+	result, err := cache.LookupSimilarWithThreshold("gpt-4", "test L2 metric", 0.5)
 	require.NoError(t, err, "FindSimilar should work with L2 metric")
-	require.True(t, hit, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
-		cache.LastSimilarity())
-	assert.JSONEq(t, `{"result":"L2"}`, string(response))
+	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		result.Similarity)
+	assert.JSONEq(t, `{"result":"L2"}`, string(result.ResponseBody))
 }
 
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
@@ -712,9 +712,9 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "test IP metric")
+	result, err := cache.LookupSimilarWithThreshold("gpt-4", "test IP metric", 0.5)
 	require.NoError(t, err, "FindSimilar should work with IP metric")
-	require.True(t, hit, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
-		cache.LastSimilarity())
-	assert.JSONEq(t, `{"result":"IP"}`, string(response))
+	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
+		result.Similarity)
+	assert.JSONEq(t, `{"result":"IP"}`, string(result.ResponseBody))
 }

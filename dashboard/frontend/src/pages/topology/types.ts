@@ -252,7 +252,7 @@ export interface GenericAlgorithmConfig {
 
 // ============== Plugin Types ==============
 export type PluginType =
-  | 'semantic-cache'
+  | 'response_cache'
   | 'memory'
   | 'system_prompt'
   | 'header_mutation'
@@ -307,7 +307,7 @@ export interface PricingConfig {
 
 // ============== Global Plugin Types ==============
 export interface GlobalPluginConfig {
-  type: 'prompt_guard' | 'pii_detection' | 'semantic_cache'
+  type: 'prompt_guard' | 'pii_detection' | 'response_cache'
   enabled: boolean
   modelId?: string
   threshold?: number
@@ -438,6 +438,12 @@ export interface ConfigData {
       use_modernbert?: boolean
       threshold?: number
     }
+  }
+  response_cache?: {
+    enabled: boolean
+    backend_type?: string
+    similarity_threshold?: number
+    ttl_seconds?: number
   }
   semantic_cache?: {
     enabled: boolean
@@ -761,6 +767,12 @@ export interface ConfigData {
       strategy?: 'priority' | 'confidence'
     }
     stores?: {
+      response_cache?: {
+        enabled?: boolean
+        backend_type?: string
+        similarity_threshold?: number
+        ttl_seconds?: number
+      }
       semantic_cache?: {
         enabled?: boolean
         backend_type?: string
