@@ -222,6 +222,20 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 	}, true, []config.ModelRef{{Model: "model-a"}})
 	request.OriginalRequest.MaxTokens = openai.Int(128)
 	request.OriginalRequest.MaxCompletionTokens = openai.Int(256)
+	var toolRequest openai.ChatCompletionNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "search",
+				"description": "Search",
+				"parameters": {"type": "object"}
+			}
+		}],
+		"tool_choice": "auto"
+	}`), &toolRequest))
+	request.OriginalRequest.Tools = toolRequest.Tools
+	request.OriginalRequest.ToolChoice = toolRequest.ToolChoice
 
 	response, err := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
 		context.Background(),
@@ -238,6 +252,8 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 		require.NotNil(t, request.MaxCompletionTokens)
 		assert.Equal(t, int64(640), *request.MaxCompletionTokens)
 		assert.Nil(t, request.MaxTokens, "ReMoM max_completion_tokens must override legacy max_tokens")
+		assert.Empty(t, request.Tools, "ReMoM private rounds must not expose callable schemas")
+		assert.Nil(t, request.ToolChoice, "ReMoM private rounds must not expose tool_choice")
 	}
 }
 
@@ -428,6 +444,8 @@ type remomTestRequestPayload struct {
 	MaxTokens           *int64                   `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int64                   `json:"max_completion_tokens,omitempty"`
 	Messages            []map[string]interface{} `json:"messages"`
+	Tools               []json.RawMessage        `json:"tools,omitempty"`
+	ToolChoice          interface{}              `json:"tool_choice,omitempty"`
 }
 
 func decodeReMoMTestRequest(t *testing.T, r *http.Request) remomTestRequestPayload {
