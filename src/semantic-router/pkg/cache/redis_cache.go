@@ -25,6 +25,7 @@ import (
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	client              *redis.Client
+	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
 	indexName           string
 	similarityThreshold float32
@@ -668,23 +669,28 @@ func (c *RedisCache) FindSimilarWithThreshold(ctx context.Context, model string,
 
 	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
 
-	searchResult, err := c.client.FTSearchWithArgs(ctx,
-		c.indexName,
-		knnQuery,
-		&redis.FTSearchOptions{
-			Return: []redis.FTSearchReturn{
-				{FieldName: "vector_distance"},
-				{FieldName: "response_body"},
-			},
-			DialectVersion: 2,
-			Params: map[string]interface{}{
-				"vec": embeddingBytes,
-			},
+	searchOptions := &redis.FTSearchOptions{
+		Return: []redis.FTSearchReturn{
+			{FieldName: "vector_distance"},
+			{FieldName: "response_body"},
 		},
-	).Result()
+		DialectVersion: 2,
+		Params: map[string]interface{}{
+			"vec": embeddingBytes,
+		},
+	}
+	var searchResult redis.FTSearchResult
+	if c.searchFn != nil {
+		searchResult, err = c.searchFn(ctx, c.indexName, knnQuery, searchOptions)
+	} else {
+		searchResult, err = c.client.FTSearchWithArgs(ctx, c.indexName, knnQuery, searchOptions).Result()
+	}
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 

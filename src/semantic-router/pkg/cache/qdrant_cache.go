@@ -20,6 +20,7 @@ const pendingResponseMarker = "__pending__"
 
 type QdrantCache struct {
 	client              *qdrant.Client
+	searchFn            func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
 	cfg                 *config.QdrantConfig
 	collectionName      string
 	similarityThreshold float32
@@ -412,17 +413,26 @@ func (c *QdrantCache) FindSimilarWithThreshold(ctx context.Context, model, query
 		},
 	}
 
-	scored, err := c.client.Query(ctx, &qdrant.QueryPoints{
+	queryPoints := &qdrant.QueryPoints{
 		CollectionName: c.collectionName,
 		Query:          qdrant.NewQueryDense(emb),
 		Limit:          qdrant.PtrOf(uint64(1)), //nolint:gosec
 		ScoreThreshold: &threshold,
 		WithPayload:    qdrant.NewWithPayload(true),
 		Filter:         filter,
-	})
+	}
+	var scored []*qdrant.ScoredPoint
+	if c.searchFn != nil {
+		scored, err = c.searchFn(ctx, queryPoints)
+	} else {
+		scored, err = c.client.Query(ctx, queryPoints)
+	}
 	if err != nil {
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("qdrant", "find_similar", "error", time.Since(start).Seconds())
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 

@@ -22,6 +22,7 @@ import (
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
 type ValkeyCache struct {
 	client              *glide.Client
+	searchFn            func(context.Context, []string) (any, error)
 	config              *routerconfig.ValkeyConfig
 	indexName           string
 	similarityThreshold float32
@@ -546,10 +547,18 @@ func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string
 	embeddingBytes := floatsToBytes(queryEmbedding)
 	searchCmd := c.buildKNNSearchCmd(model, embeddingBytes)
 
-	searchResult, err := c.client.CustomCommand(ctx, searchCmd)
+	var searchResult any
+	if c.searchFn != nil {
+		searchResult, err = c.searchFn(ctx, searchCmd)
+	} else {
+		searchResult, err = c.client.CustomCommand(ctx, searchCmd)
+	}
 	if err != nil {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 

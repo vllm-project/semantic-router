@@ -51,6 +51,13 @@ func ctxErr(ctx context.Context) error {
 	return ctx.Err()
 }
 
+func contextErrorOnFailure(ctx context.Context, operationErr error) error {
+	if operationErr == nil {
+		return nil
+	}
+	return ctxErr(ctx)
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active

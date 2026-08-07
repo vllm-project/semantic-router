@@ -22,6 +22,7 @@ import (
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
 	client              client.Client
+	searchFn            func(context.Context, string, []float32) ([]client.SearchResult, error)
 	config              *config.MilvusConfig
 	collectionName      string
 	similarityThreshold float32

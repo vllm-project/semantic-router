@@ -58,6 +58,9 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 	model string,
 	queryEmbedding []float32,
 ) ([]client.SearchResult, error) {
+	if c.searchFn != nil {
+		return c.searchFn(ctx, model, queryEmbedding)
+	}
 	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
 	if err != nil {
 		return nil, err
@@ -108,6 +111,9 @@ func (c *MilvusCache) FindSimilarWithThreshold(ctx context.Context, model string
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 
