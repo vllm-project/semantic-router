@@ -2,7 +2,8 @@
 
 Forwards every request as-is to the configured upstream after applying
 the inbound translations from :mod:`anthropic_shim.translate`, then
-post-processes the response to synthesise prompt-cache usage counters.
+post-processes the response to synthesise prompt-cache usage counters
+and to correct ``stop_reason`` when a stop sequence triggered.
 
 The proxy is intentionally minimal: it covers ``/v1/messages`` and the
 streaming sibling, and passes everything else (``/health``, ``/v1/models``,
@@ -25,6 +26,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from .translate import (
     apply_cache_usage,
     cache_prefix_hash,
+    fix_stop_reason,
     has_cache_control,
     join_system_array,
     join_tool_result_content,
@@ -246,6 +248,9 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             headers=response_headers,
             media_type=upstream_response.headers.get("content-type"),
         )
+
+    if isinstance(response_payload, dict):
+        fix_stop_reason(response_payload)
 
     if request_had_cache_control and isinstance(response_payload, dict):
         prefix_seen = app.state.tracker.mark(session_id, prefix_hash)
