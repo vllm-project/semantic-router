@@ -10,17 +10,18 @@ import {
 import type { OutboundChatMessage } from './chatRequestSupport'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
+import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 type UpdateConversationMessages = (
   conversationId: string,
-  updater: (prev: Message[]) => Message[]
+  updater: (prev: Message[]) => Message[],
 ) => void
 
 type ExecuteTools = (
   toolCalls: ToolCall[],
-  context: { signal?: AbortSignal }
+  context: { signal?: AbortSignal },
 ) => Promise<ToolResult[]>
 
 interface RunToolLoopOptions {
@@ -35,7 +36,7 @@ interface RunToolLoopOptions {
   mergeToolCallsIntoState: (
     parsedToolCalls: ParsedToolCallChunk[],
     idPrefix: string,
-    status: ToolCall['status']
+    status: ToolCall['status'],
   ) => boolean
   setExpandedToolCards: Dispatch<SetStateAction<Set<string>>>
   syncAssistantToolCalls: () => void
@@ -72,43 +73,43 @@ export const runToolLoop = async ({
     const currentToolCalls = iteration === 1 ? allToolCalls : Array.from(toolCallsMap.values())
     if (currentToolCalls.length === 0) break
 
-    currentToolCalls.forEach(tc => { tc.status = 'running' })
+    currentToolCalls.forEach((tc) => {
+      tc.status = 'running'
+    })
     const uiToolCalls = [...allToolCalls]
     if (iteration > 1) {
-      currentToolCalls.forEach(tc => {
-        if (!uiToolCalls.find(existingToolCall => existingToolCall.id === tc.id)) {
+      currentToolCalls.forEach((tc) => {
+        if (!uiToolCalls.find((existingToolCall) => existingToolCall.id === tc.id)) {
           uiToolCalls.push(tc)
         }
       })
       allToolCalls = uiToolCalls
     }
 
-    updateConversationMessages(task.conversationId, prev =>
-      prev.map(message =>
-        message.id === assistantMessageId
-          ? { ...message, toolCalls: [...uiToolCalls] }
-          : message
-      )
+    updateConversationMessages(task.conversationId, (prev) =>
+      prev.map((message) =>
+        message.id === assistantMessageId ? { ...message, toolCalls: [...uiToolCalls] } : message,
+      ),
     )
 
     const toolResults = await executeTools(currentToolCalls, {
       signal: abortSignal,
     })
 
-    toolResults.forEach(result => {
-      const matchingToolCall = currentToolCalls.find(toolCall => toolCall.id === result.callId)
+    toolResults.forEach((result) => {
+      const matchingToolCall = currentToolCalls.find((toolCall) => toolCall.id === result.callId)
       if (matchingToolCall) {
         matchingToolCall.status = result.error ? 'failed' : 'completed'
       }
     })
 
     allToolResults = [...allToolResults, ...toolResults]
-    updateConversationMessages(task.conversationId, prev =>
-      prev.map(message =>
+    updateConversationMessages(task.conversationId, (prev) =>
+      prev.map((message) =>
         message.id === assistantMessageId
           ? { ...message, toolCalls: [...uiToolCalls], toolResults: allToolResults }
-          : message
-      )
+          : message,
+      ),
     )
 
     if (uiToolCalls.length > 0 && expandedToolCardCount === 0) {
@@ -120,16 +121,16 @@ export const runToolLoop = async ({
       {
         role: 'assistant',
         content: null,
-        tool_calls: currentToolCalls.map(toolCall => ({
+        tool_calls: currentToolCalls.map((toolCall) => ({
           id: toolCall.id,
           type: 'function',
           function: {
             name: toolCall.function.name,
-            arguments: toolCall.function.arguments,
+            arguments: normalizeToolCallArguments(toolCall.function.arguments),
           },
         })),
       },
-      ...toolResults.map(toolResult => ({
+      ...toolResults.map((toolResult) => ({
         role: 'tool',
         tool_call_id: toolResult.callId,
         content: serializeToolResultForModel(toolResult),
@@ -168,17 +169,17 @@ export const runToolLoop = async ({
       }
       if (!followUpContent && !followUpThinking) return
 
-      updateConversationMessages(task.conversationId, prev =>
-        prev.map(message =>
+      updateConversationMessages(task.conversationId, (prev) =>
+        prev.map((message) =>
           message.id === assistantMessageId
             ? {
-              ...message,
-              content: followUpContent || message.content,
-              thinkingProcess: followUpThinking || message.thinkingProcess,
-              isStreaming: streaming,
-            }
-            : message
-        )
+                ...message,
+                content: followUpContent || message.content,
+                thinkingProcess: followUpThinking || message.thinkingProcess,
+                isStreaming: streaming,
+              }
+            : message,
+        ),
       )
     }
 
@@ -196,7 +197,10 @@ export const runToolLoop = async ({
       commitFollowUpMessage(false)
     }
 
-    const applyFollowUpCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
+    const applyFollowUpCompletion = (
+      parsedCompletion: ParsedChatCompletion,
+      streaming: boolean,
+    ) => {
       const resolvedFinishReason = parsedCompletion.choices[0]?.finishReason
       if (resolvedFinishReason) {
         streamFinishReason = resolvedFinishReason
@@ -237,13 +241,28 @@ export const runToolLoop = async ({
       }
     } else {
       if (!followUpResponse.body) break
-      await consumeEventStream(followUpResponse.body, data => {
+      await consumeEventStream(followUpResponse.body, (data) => {
         const parsedFollowUpChunk = parseChatCompletionPayload(data)
         if (!parsedFollowUpChunk || parsedFollowUpChunk.errorMessage) {
           return
         }
         applyFollowUpCompletion(parsedFollowUpChunk, true)
       })
+    }
+
+    if (activeTools.length > 0) {
+      const textualToolCalls = extractTextToolCalls(followUpContent)
+      if (textualToolCalls.toolCalls.length > 0) {
+        followUpContent = textualToolCalls.content
+        hasMoreToolCalls = true
+        streamFinishReason = 'tool_calls'
+        if (
+          mergeToolCallsIntoState(textualToolCalls.toolCalls, `text-tool-${iteration}`, 'pending')
+        ) {
+          syncAssistantToolCalls()
+        }
+        syncFollowUpMessage(false)
+      }
     }
 
     if (followUpContent) {
@@ -259,27 +278,24 @@ export const runToolLoop = async ({
   }
 
   if (finalContent) {
-    updateConversationMessages(task.conversationId, prev =>
-      prev.map(message =>
-        message.id === assistantMessageId
-          ? { ...message, content: finalContent }
-          : message
-      )
+    updateConversationMessages(task.conversationId, (prev) =>
+      prev.map((message) =>
+        message.id === assistantMessageId ? { ...message, content: finalContent } : message,
+      ),
     )
     return finalContent
   }
 
   let fallbackContent = 'The model did not generate a response. Please try again.'
   if (allToolResults.length > 0) {
-    const successResults = allToolResults.filter(result => !result.error)
-    const failedResults = allToolResults.filter(result => result.error)
+    const successResults = allToolResults.filter((result) => !result.error)
+    const failedResults = allToolResults.filter((result) => result.error)
     if (successResults.length > 0) {
       fallbackContent = 'Based on the tool results, here is the relevant information:\n\n'
-      successResults.forEach(result => {
+      successResults.forEach((result) => {
         if (typeof result.content === 'string' && result.content.length > 0) {
-          const summary = result.content.length > 500
-            ? `${result.content.substring(0, 500)}...`
-            : result.content
+          const summary =
+            result.content.length > 500 ? `${result.content.substring(0, 500)}...` : result.content
           fallbackContent += `${summary}\n\n`
         }
       })
@@ -288,12 +304,10 @@ export const runToolLoop = async ({
     }
   }
 
-  updateConversationMessages(task.conversationId, prev =>
-    prev.map(message =>
-      message.id === assistantMessageId
-        ? { ...message, content: fallbackContent }
-        : message
-    )
+  updateConversationMessages(task.conversationId, (prev) =>
+    prev.map((message) =>
+      message.id === assistantMessageId ? { ...message, content: fallbackContent } : message,
+    ),
   )
   return ''
 }

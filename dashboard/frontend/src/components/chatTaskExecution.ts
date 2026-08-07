@@ -11,21 +11,26 @@ import {
   type ParsedChatCompletion,
   type ParsedToolCallChunk,
 } from './chatResponseParsing'
-import { buildChatMessages, buildChatRequestBody, collectResponseHeaders } from './chatRequestSupport'
+import {
+  buildChatMessages,
+  buildChatRequestBody,
+  collectResponseHeaders,
+} from './chatRequestSupport'
 import { toPlaygroundAttachmentSummaries } from './playgroundFileAttachments'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import { runToolLoop } from './chatTaskToolLoop'
+import { extractTextToolCalls, mergeToolCallArgumentChunk } from './chatToolCallSupport'
 import type { Choice, Message, PlaygroundTask, ReMoMRoundResponse } from './ChatComponentTypes'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 
 type UpdateConversationMessages = (
   conversationId: string,
-  updater: (prev: Message[]) => Message[]
+  updater: (prev: Message[]) => Message[],
 ) => void
 
 type ExecuteTools = (
   toolCalls: ToolCall[],
-  context: { signal?: AbortSignal }
+  context: { signal?: AbortSignal },
 ) => Promise<ToolResult[]>
 
 interface RunPlaygroundTaskOptions {
@@ -43,7 +48,7 @@ interface RunPlaygroundTaskOptions {
   setConversationHeaderReveal: (
     conversationId: string,
     headers: Record<string, string> | null,
-    visible?: boolean
+    visible?: boolean,
   ) => void
   setConversationThinking: (conversationId: string, visible: boolean) => void
   setExpandedToolCards: Dispatch<SetStateAction<Set<string>>>
@@ -83,9 +88,8 @@ export const runPlaygroundTask = async ({
     id: generateId(),
     role: 'user',
     content: trimmedInput,
-    attachments: taskAttachments.length > 0
-      ? toPlaygroundAttachmentSummaries(taskAttachments)
-      : undefined,
+    attachments:
+      taskAttachments.length > 0 ? toPlaygroundAttachmentSummaries(taskAttachments) : undefined,
     playgroundAttachments: taskAttachments.length > 0 ? taskAttachments : undefined,
     timestamp: new Date(),
   }
@@ -97,7 +101,11 @@ export const runPlaygroundTask = async ({
     isStreaming: true,
   }
 
-  updateConversationMessages(task.conversationId, prev => [...prev, userMessage, assistantMessage])
+  updateConversationMessages(task.conversationId, (prev) => [
+    ...prev,
+    userMessage,
+    assistantMessage,
+  ])
   registerAbortController(task.conversationId, abortController)
   setConversationHeaderReveal(task.conversationId, null)
   setConversationThinking(task.conversationId, true)
@@ -110,7 +118,7 @@ export const runPlaygroundTask = async ({
       getConversationMessagesSnapshot(task.conversationId),
       trimmedInput,
       task.requestOptions.enableClawMode && !clawManagementDisabled,
-      taskAttachments
+      taskAttachments,
     )
     const requestBody = buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
     const response = await fetch(endpoint, {
@@ -132,7 +140,7 @@ export const runPlaygroundTask = async ({
       setConversationHeaderReveal(
         task.conversationId,
         responseHeaders,
-        task.conversationId === getCurrentConversationId()
+        task.conversationId === getCurrentConversationId(),
       )
       setConversationThinking(task.conversationId, false)
     }
@@ -145,24 +153,22 @@ export const runPlaygroundTask = async ({
 
     const syncAssistantToolCalls = () => {
       const currentToolCalls = Array.from(toolCallsMap.values())
-      updateConversationMessages(task.conversationId, prev =>
-        prev.map(message =>
-          message.id === assistantMessageId
-            ? { ...message, toolCalls: currentToolCalls }
-            : message
-        )
+      updateConversationMessages(task.conversationId, (prev) =>
+        prev.map((message) =>
+          message.id === assistantMessageId ? { ...message, toolCalls: currentToolCalls } : message,
+        ),
       )
     }
 
     const mergeToolCallsIntoState = (
       parsedToolCalls: ParsedToolCallChunk[],
       idPrefix: string,
-      status: ToolCall['status']
+      status: ToolCall['status'],
     ): boolean => {
       if (parsedToolCalls.length === 0) return false
       hasToolCalls = true
 
-      parsedToolCalls.forEach(parsedToolCall => {
+      parsedToolCalls.forEach((parsedToolCall) => {
         const toolCallIndex = parsedToolCall.index
         if (!toolCallsMap.has(toolCallIndex)) {
           toolCallsMap.set(toolCallIndex, {
@@ -182,7 +188,10 @@ export const runPlaygroundTask = async ({
           existingToolCall.function.name = parsedToolCall.functionName
         }
         if (parsedToolCall.functionArguments) {
-          existingToolCall.function.arguments += parsedToolCall.functionArguments
+          existingToolCall.function.arguments = mergeToolCallArgumentChunk(
+            existingToolCall.function.arguments,
+            parsedToolCall.functionArguments,
+          )
         }
         if (parsedToolCall.id) {
           existingToolCall.id = parsedToolCall.id
@@ -197,23 +206,24 @@ export const runPlaygroundTask = async ({
 
       if (isRatingsMode) {
         const choicesArray = buildChoicesArray(choiceContents)
-        const thinkingProcess = getFirstChoice(choiceContents)?.reasoningContent || latestThinkingProcessRef.current
+        const thinkingProcess =
+          getFirstChoice(choiceContents)?.reasoningContent || latestThinkingProcessRef.current
         if (thinkingProcess) {
           latestThinkingProcessRef.current = thinkingProcess
         }
 
-        updateConversationMessages(task.conversationId, prev =>
-          prev.map(message =>
+        updateConversationMessages(task.conversationId, (prev) =>
+          prev.map((message) =>
             message.id === assistantMessageId
               ? {
-                ...message,
-                content: choicesArray[0]?.content || '',
-                choices: choicesArray,
-                thinkingProcess: thinkingProcess || message.thinkingProcess,
-                isStreaming: streaming,
-              }
-              : message
-          )
+                  ...message,
+                  content: choicesArray[0]?.content || '',
+                  choices: choicesArray,
+                  thinkingProcess: thinkingProcess || message.thinkingProcess,
+                  isStreaming: streaming,
+                }
+              : message,
+          ),
         )
         return
       }
@@ -224,17 +234,17 @@ export const runPlaygroundTask = async ({
         latestThinkingProcessRef.current = firstChoice.reasoningContent
       }
 
-      updateConversationMessages(task.conversationId, prev =>
-        prev.map(message =>
+      updateConversationMessages(task.conversationId, (prev) =>
+        prev.map((message) =>
           message.id === assistantMessageId
             ? {
-              ...message,
-              content: firstChoice.content,
-              thinkingProcess: firstChoice.reasoningContent || message.thinkingProcess,
-              isStreaming: streaming,
-            }
-            : message
-        )
+                ...message,
+                content: firstChoice.content,
+                thinkingProcess: firstChoice.reasoningContent || message.thinkingProcess,
+                isStreaming: streaming,
+              }
+            : message,
+        ),
       )
     }
 
@@ -263,8 +273,10 @@ export const runPlaygroundTask = async ({
       mergeParsedChoices(choiceContents, parsedCompletion.choices)
 
       let shouldSyncToolCalls = false
-      parsedCompletion.choices.forEach(parsedChoice => {
-        if (mergeToolCallsIntoState(parsedChoice.toolCalls, 'tool', streaming ? 'running' : 'pending')) {
+      parsedCompletion.choices.forEach((parsedChoice) => {
+        if (
+          mergeToolCallsIntoState(parsedChoice.toolCalls, 'tool', streaming ? 'running' : 'pending')
+        ) {
           shouldSyncToolCalls = true
         }
       })
@@ -282,12 +294,23 @@ export const runPlaygroundTask = async ({
       applyParsedCompletion(parsedResponse, false)
     } else {
       if (!response.body) throw new Error('No response body')
-      await consumeEventStream(response.body, data => {
+      await consumeEventStream(response.body, (data) => {
         const parsedChunk = parseChatCompletionPayload(data)
         if (!parsedChunk) return
         if (parsedChunk.errorMessage) throw new Error(parsedChunk.errorMessage)
         applyParsedCompletion(parsedChunk, true)
       })
+    }
+
+    const firstChoice = getFirstChoice(choiceContents)
+    if (firstChoice && activeTools.length > 0) {
+      const textualToolCalls = extractTextToolCalls(firstChoice.content)
+      if (textualToolCalls.toolCalls.length > 0) {
+        firstChoice.content = textualToolCalls.content
+        mergeToolCallsIntoState(textualToolCalls.toolCalls, 'text-tool', 'pending')
+        syncAssistantToolCalls()
+        syncAssistantChoices(false)
+      }
     }
 
     if (hasToolCalls) {
@@ -309,23 +332,26 @@ export const runPlaygroundTask = async ({
       })
     }
 
-    const finalChoices: Choice[] | undefined = isRatingsMode ? buildChoicesArray(choiceContents) : undefined
-    const finalThinkingProcess = latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
+    const finalChoices: Choice[] | undefined = isRatingsMode
+      ? buildChoicesArray(choiceContents)
+      : undefined
+    const finalThinkingProcess =
+      latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
     setConversationThinking(task.conversationId, false)
     streamingChoiceSync.drain()
-    updateConversationMessages(task.conversationId, prev =>
-      prev.map(message =>
+    updateConversationMessages(task.conversationId, (prev) =>
+      prev.map((message) =>
         message.id === assistantMessageId
           ? {
-            ...message,
-            isStreaming: false,
-            headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-            choices: finalChoices,
-            thinkingProcess: finalThinkingProcess || message.thinkingProcess,
-            reasoning_mom_responses: reasoningMomResponses,
-          }
-          : message
-      )
+              ...message,
+              isStreaming: false,
+              headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
+              choices: finalChoices,
+              thinkingProcess: finalThinkingProcess || message.thinkingProcess,
+              reasoning_mom_responses: reasoningMomResponses,
+            }
+          : message,
+      ),
     )
   } catch (err) {
     cancelStreamingChoiceSync()
@@ -333,8 +359,8 @@ export const runPlaygroundTask = async ({
       return
     }
     setConversationError(task.conversationId, err instanceof Error ? err.message : 'Unknown error')
-    updateConversationMessages(task.conversationId, prev =>
-      prev.filter(message => message.id !== assistantMessageId)
+    updateConversationMessages(task.conversationId, (prev) =>
+      prev.filter((message) => message.id !== assistantMessageId),
     )
   } finally {
     cancelStreamingChoiceSync()
