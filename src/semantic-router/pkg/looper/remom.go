@@ -104,7 +104,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 	defer func() { <-sem }()
 
-	msgCopy := cloneRequest(messages)
+	msgCopy := toolFreeLooperRequest(messages)
 	if cfg.Temperature > 0 {
 		msgCopy.Temperature = openai.Float(cfg.Temperature)
 	}
