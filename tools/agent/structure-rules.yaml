@@ -68,6 +68,13 @@ ignore_globs:
 
 structure_exceptions:
   - paths:
+      # runBenchmarkScenario is a pre-existing 140-line scenario driver; #2473
+      # only threads context.Context through its cache calls. Unlike the
+      # golangci complexity budgets, this gate has no inline directive, so the
+      # exception has to live here.
+      - src/semantic-router/pkg/cache/benchmark.go
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go
       - src/semantic-router/pkg/config/validator.go
@@ -126,11 +133,6 @@ structure_exceptions:
       - src/semantic-router/pkg/cache/cache_test.go
       - src/semantic-router/pkg/modelselection/selector_test.go
     file_checks: relaxed
-    function_checks: relaxed
-  - paths:
-      # Pre-existing benchmark scenario helpers exceed the per-function limit;
-      # #2473 only threads context.Context through their cache calls.
-      - src/semantic-router/pkg/cache/benchmark.go
     function_checks: relaxed
   - paths:
       - deploy/operator/api/v1alpha1/sample_validation_test.go

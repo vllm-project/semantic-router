@@ -28,14 +28,6 @@ linters:
       min-complexity: 4
   exclusions:
     rules:
-      # #2473: benchmark.go is only touched to thread context.Context through its
-      # cache calls; its pre-existing scenario helpers exceed the complexity budgets.
-      - linters:
-          - cyclop
-          - gocognit
-          - funlen
-          - nestif
-        path: (^|/)src/semantic-router/pkg/cache/benchmark\.go$
       # long-prompt / extproc panic-recovery PR: skip agent complexity linters only on these touched paths.
       - linters:
           - cyclop
