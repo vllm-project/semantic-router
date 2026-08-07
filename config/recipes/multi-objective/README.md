@@ -32,6 +32,9 @@ maintained provider entries resolve to a measured local pool:
   architecture diversity.
 - `Qwen3.5-122B-A10B-FP8` remains the stable direct model and orchestration
   judge.
+  Its vLLM service must use `--tool-call-parser qwen3_xml`; the model emits
+  Qwen's tagged function/parameter protocol rather than the Qwen3 Coder JSON
+  envelope.
 - `DeepSeek-V4-Flash-0731` contributes a current, MIT-licensed analysis path
   behind the stable judge; it is not the direct default because the MI300X
   correctness gate scored below the stable models.
