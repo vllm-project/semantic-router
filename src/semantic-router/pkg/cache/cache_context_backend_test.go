@@ -15,13 +15,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// Every remote backend must turn a search failure that happened under a
+// cancelled request into the request's context error, while an ordinary backend
+// outage stays a fail-open miss.
+//
+// The bare-error assertion pins the call site: this error comes from
+// contextErrorOnFailure after the search, whereas an embedding-path
+// short-circuit would surface it wrapped as "failed to generate embedding: ...".
 var _ = DescribeTable("backend search cancellation wiring",
 	func(findSimilar func(context.Context) (LookupResult, error)) {
-		ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: 2}
+		ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: errAfterPostEmbedGuard}
 
 		result, err := findSimilar(ctx)
 
-		Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
+		Expect(err).To(Equal(context.Canceled),
 			"backend search failure must surface the request cancellation, got %v", err)
 		Expect(result).To(Equal(LookupResult{}))
 

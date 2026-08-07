@@ -96,10 +96,16 @@ func specBelowThresholdMissReturnsZero(newSeededBackend func() CacheBackend, thr
 // request cancelled in that window must return the context error and leave no
 // orphaned state.
 //
-// cancelAfterEmbedCtx trips exactly on the post-embed guard: generateEmbedding
-// calls ctxErr once (sees nil and proceeds), then the write method's guard calls
-// ctxErr again and observes cancellation — simulating a context that was
-// cancelled while the CGO embed was running.
+// cancelAfterEmbedCtx trips on the post-embed guard: generateEmbedding calls
+// ctxErr once (sees nil and proceeds), then the write method's guard calls
+// ctxErr again and observes cancellation — simulating a context cancelled while
+// the CGO embed was running.
+//
+// The specs assert the *bare* context error rather than errors.Is, which is what
+// pins the call site: an embedding-path short-circuit would surface it wrapped
+// as "failed to generate embedding: context canceled". So if a future change
+// adds another ctxErr call before the embed — making the fake trip at the wrong
+// site — these specs fail instead of silently covering a different branch.
 func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
 	Context("with a context cancelled during the CGO embedding", func() {
 		It("AddEntry returns the context error and publishes no entry", func() {
@@ -107,12 +113,12 @@ func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
 			defer func() { _ = backend.Close() }()
 			before := backend.GetStats().TotalEntries
 
-			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: 2}
+			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: errAfterPostEmbedGuard}
 			err := backend.AddEntry(ctx, "orphan-1", "m", "a brand new distinct query",
 				[]byte("req"), []byte("resp"), -1)
 
-			Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
-				"expected context.Canceled, got %v", err)
+			Expect(err).To(Equal(context.Canceled),
+				"expected the post-embed guard's bare context error, got %v", err)
 			Expect(backend.GetStats().TotalEntries).To(Equal(before),
 				"cancelled AddEntry must not publish an entry")
 		})
@@ -122,17 +128,22 @@ func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
 			defer func() { _ = backend.Close() }()
 			before := backend.GetStats().TotalEntries
 
-			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: 2}
+			ctx := &cancelAfterEmbedCtx{Context: context.Background(), errAfter: errAfterPostEmbedGuard}
 			err := backend.AddPendingRequest(ctx, "orphan-2", "m", "another distinct query",
 				[]byte("req"), -1)
 
-			Expect(errors.Is(err, context.Canceled)).To(BeTrue(),
-				"expected context.Canceled, got %v", err)
+			Expect(err).To(Equal(context.Canceled),
+				"expected the post-embed guard's bare context error, got %v", err)
 			Expect(backend.GetStats().TotalEntries).To(Equal(before),
 				"cancelled AddPendingRequest must not publish a pending entry")
 		})
 	})
 }
+
+// errAfterPostEmbedGuard is the Err() call index of the guard under test: call
+// #1 is generateEmbedding's pre-embed short-circuit, call #2 is the write
+// method's post-embed re-check.
+const errAfterPostEmbedGuard = 2
 
 // cancelAfterEmbedCtx reports no error until the errAfter-th Err() call, then
 // context.Canceled. It lets a test deterministically trip the post-embedding
