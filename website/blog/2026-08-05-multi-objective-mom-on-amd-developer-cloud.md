@@ -353,6 +353,10 @@ For dashboard-first onboarding, import:
 
 The first visit presents the initial administrator registration flow. After
 that account is created, public first-admin registration closes automatically.
+In Config Builder, Visual mode presents a routing-scope selector for the five
+entrypoint recipes. Models remain shared, while signals, projections, routes,
+and plugins are viewed and edited only inside the selected recipe instead of
+being flattened into one misleading aggregate.
 
 ## Step 3: Verify the Public Model Catalog
 
@@ -455,9 +459,13 @@ The maintained commands were exercised on an 8×MI300X host with vLLM
 - Qwen3.6-35B, Qwen3.6-27B, Qwen3.5-122B, and Gemma 4 scored 12/12 on the
   arithmetic calibration; Qwen3.5-9B and DeepSeek V4 scored 11/12
 - tool calling passed on every tool-enabled Qwen and DeepSeek endpoint
+- Qwen3.5-122B returned structured tool calls with `qwen3_xml` both directly
+  and through Envoy; a two-turn call/result/final-answer replay completed
+  without raw XML or JSON argument errors
 - all five public entrypoints generated non-empty final answers
 - the real Playground accuracy tool flow stayed direct, then used the
-  tool-result synthesis lane without a repeated search
+  tool-result synthesis lane without a repeated search; Playground also
+  preserved tool calls and results when the user continued the conversation
 - the 114-probe suite matched all 16 decisions with 0 errors
 - 570 deterministic framing/whitespace stress cases passed at 74.313 requests
   per second with p50 238.822 ms, p95 381.197 ms, and 0 errors
