@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { FieldConfig } from '../components/EditModal'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
 import ConfigPageRecipeDecisionsEditor from './ConfigPageRecipeDecisionsEditor'
@@ -315,7 +316,9 @@ export default function ConfigPageEntrypointsRecipesSection({
             {decisions.map((decision) => (
               <article key={decision.name} className={pageStyles.poolDecisionCard}>
                 <div className={pageStyles.poolDecisionHeader}>
-                  <strong>{decision.name}</strong>
+                  <strong>
+                    {formatRoutingMetadataValue('x-vsr-selected-decision', decision.name)}
+                  </strong>
                   <span>P{decision.priority}</span>
                 </div>
                 <p>{decision.description || 'No decision description'}</p>

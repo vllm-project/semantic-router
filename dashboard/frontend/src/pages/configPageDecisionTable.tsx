@@ -1,4 +1,5 @@
 import type { Column } from '../components/DataTable'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import styles from './ConfigPage.module.css'
 import type { DecisionConfig } from './configPageSupport'
 import { TABLE_COLUMN_WIDTH } from './configPageSupport'
@@ -8,7 +9,11 @@ export const decisionColumns: Column<DecisionConfig>[] = [
     key: 'name',
     header: 'Name',
     sortable: true,
-    render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
+    render: (row) => (
+      <span style={{ fontWeight: 600 }}>
+        {formatRoutingMetadataValue('x-vsr-selected-decision', row.name)}
+      </span>
+    ),
   },
   {
     key: 'priority',
