@@ -4,6 +4,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -60,7 +61,7 @@ func (h *HybridCache) findSimilar(
 	logging.Debugf("%s: HNSW returned %d candidates, %d above threshold",
 		logPrefix, totalCandidates, len(candidatesWithIDs))
 
-	responseBody, candidate, found := h.fetchResponseFromCandidates(ctx, logPrefix, model, candidatesWithIDs)
+	responseBody, candidate, found, fetchErr := h.fetchResponseFromCandidates(ctx, logPrefix, model, candidatesWithIDs)
 	if found {
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
 		return LookupResult{Body: responseBody, Found: true, Similarity: candidate.similarity}, nil
@@ -82,15 +83,10 @@ func (h *HybridCache) findSimilar(
 	}
 
 	h.recordLookupMiss(start, metricOp, logPrefix, threshold, model, totalCandidates, len(candidatesWithIDs))
-	// Every above-threshold candidate existed in the index but its Milvus fetch
-	// failed: this is an upstream-storage error, not an ordinary below-threshold
-	// miss. Per the LookupResult contract (see cache_interface.go), an upstream
-	// error returns zero similarity and a non-nil error — surfacing the
-	// above-threshold candidate score here would leak a hit-level score as a
-	// miss and let callers publish it as x-vsr-cache-similarity (#2473).
-	return LookupResult{}, fmt.Errorf(
-		"%s: all %d above-threshold candidates failed to fetch from storage",
-		logPrefix, len(candidatesWithIDs))
+	if fetchErr != nil {
+		return LookupResult{}, fmt.Errorf("%s: candidate fetch failed: %w", logPrefix, fetchErr)
+	}
+	return LookupResult{}, nil
 }
 
 func (h *HybridCache) searchCandidates(queryEmbedding []float32, threshold float32) ([]candidateWithID, int) {
@@ -125,27 +121,32 @@ func (h *HybridCache) fetchResponseFromCandidates(
 	logPrefix string,
 	model string,
 	candidates []candidateWithID,
-) ([]byte, candidateWithID, bool) {
+) ([]byte, candidateWithID, bool, error) {
 	if parent == nil {
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 
+	var fetchErr error
 	for _, candidate := range candidates {
 		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
 		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID, model)
 		fetchCancel()
 		if err != nil {
+			if errors.Is(err, errMilvusCacheEntryNotFound) {
+				continue
+			}
 			logging.Debugf("%s: Milvus GetByID failed for %s: %v", logPrefix, candidate.milvusID, err)
+			fetchErr = errors.Join(fetchErr, err)
 			continue
 		}
 		if responseBody != nil {
-			return responseBody, candidate, true
+			return responseBody, candidate, true, nil
 		}
 	}
 
-	return nil, candidateWithID{}, false
+	return nil, candidateWithID{}, false, fetchErr
 }
 
 func (h *HybridCache) recordLookupHit(

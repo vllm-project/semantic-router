@@ -23,6 +23,7 @@ import (
 type MilvusCache struct {
 	client              client.Client
 	searchFn            func(context.Context, string, []float32) ([]client.SearchResult, error)
+	queryByIDFn         func(context.Context, string, string) (client.ResultSet, error)
 	config              *config.MilvusConfig
 	collectionName      string
 	similarityThreshold float32
