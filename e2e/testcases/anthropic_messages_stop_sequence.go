@@ -22,26 +22,18 @@ func init() {
 	})
 }
 
-// testAnthropicMessagesStopSequence asserts that the outbound emitter maps
-// the upstream finish_reason to "stop_sequence" when the request carried
-// stop_sequences and the model's output triggered one.
+// testAnthropicMessagesStopSequence asserts that the response carries
+// stop_reason "stop_sequence" (not "end_turn") when the request's
+// stop_sequences triggered generation stop, exercising the router's
+// Anthropic outbound translation of stop_sequences end to end.
 //
-// The system prompt directs the tiny Qwen model to emit "STOP" verbatim,
-// which — if followed — causes llama-server to set finish_reason=stop and
-// return the stop token in stop_reason. The shim passes this through; the
-// router's mapOpenAIFinishReasonToAnthropic must then label the response
-// stop_reason as "stop_sequence" (not "end_turn").
-//
-// NOTE: This test depends on the tiny Qwen2.5-0.5B model in the
-// anthropic-shim profile following the "say STOP exactly" instruction. If
-// the model does not reliably emit the sentinel in CI, prefer replacing
-// "STOP" with a sentinel the model emits unconditionally (e.g. the EOS
-// token) over adding retry loops or sleeps.
-//
-// TODO: If this test flakes due to model instruction-following variability,
-// swap the stop_sequences value for a string the model outputs in all
-// completions (e.g. a fixed suffix in the system prompt) rather than
-// introducing any retry or timing-based workaround.
+// The stop sequences are single vowels, which any English completion emits
+// within its first few tokens regardless of instruction-following — the
+// tiny Qwen2.5-0.5B model in this profile cannot be trusted to emit an
+// agreed sentinel like "STOP" (in CI it answered in 3 tokens and hit EOS
+// first). With unconditional stop strings, a failure means the
+// stop_sequences never reached llama-server or the stop_reason mapping is
+// wrong, not that the model ignored the prompt.
 //
 // Requires the anthropic-shim profile.
 func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -56,12 +48,16 @@ func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.C
 	defer stop()
 
 	body := stopSequenceRequestBody{
-		Model:         "MoM",
-		MaxTokens:     50,
-		StopSequences: []string{"STOP"},
-		System:        "You must end every response with the word STOP in capital letters, on its own line.",
+		Model:     "MoM",
+		MaxTokens: 50,
+		// Single vowels: emitted unconditionally by any English output, so
+		// triggering does not depend on the 0.5B model following
+		// instructions. Four entries stay within the OpenAI stop-list cap
+		// that the router's internal representation is translated through.
+		StopSequences: []string{"e", "a", "i", "o"},
+		System:        "You are a helpful assistant.",
 		Messages: []anthropicMessage{
-			{Role: "user", Content: "Please respond and end with STOP."},
+			{Role: "user", Content: "Introduce yourself in one short English sentence."},
 		},
 	}
 
@@ -111,9 +107,9 @@ func testAnthropicMessagesStopSequence(ctx context.Context, client *kubernetes.C
 	if parsed.StopReason != "stop_sequence" {
 		return fmt.Errorf(
 			"expected stop_reason=stop_sequence, got %q — "+
-				"the model may not have emitted the sentinel; "+
-				"if this flakes in CI replace the stop string with "+
-				"a sentinel the model emits unconditionally",
+				"the stop strings are unconditional vowels, so either "+
+				"stop_sequences were dropped in the router's outbound "+
+				"translation or the upstream stop_reason mapping is wrong",
 			parsed.StopReason,
 		)
 	}
