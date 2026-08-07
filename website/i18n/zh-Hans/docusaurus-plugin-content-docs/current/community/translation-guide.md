@@ -49,7 +49,7 @@
 - **preference** - 偏好信号
 
 #### 插件类型（Plugin Types）
-- **semantic-cache** - 语义缓存插件
+- **response_cache** - 语义缓存插件
 - **jailbreak** - 越狱检测插件
 - **pii** / **PII** (Personally Identifiable Information) - 个人身份信息
 - **system_prompt** - 系统提示词插件
