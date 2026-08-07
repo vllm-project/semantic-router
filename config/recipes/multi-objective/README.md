@@ -43,12 +43,12 @@ Only Qwen backends use the Qwen3 reasoning request contract. The configured 32K
 limits for the smaller tiers are deployment limits chosen for predictable
 single-GPU capacity, not the models' architectural maximum.
 
-The balanced effort score gives explicit reasoning markers a `0.46` contribution
-and limits the learned terse-preference penalty to `-0.10`. Explicit reasoning
-therefore remains above the `0.32` deliberate threshold even when the terse
-classifier also matches, while concise-only and simple-marker probes remain in
-the standard band. The probe manifest covers this boundary with multilingual
-preference-conflict positives and concise negatives.
+The balanced effort score gives explicit reasoning markers a `0.85`
+contribution and limits deterministic terse markers to `-0.10`. Explicit
+reasoning therefore remains above the `0.30` deliberate threshold even in
+concise requests, while a dedicated negated-reasoning suppressor keeps “do not
+analyze” requests direct. The probe manifest covers this boundary with
+multilingual concise/reasoning conflicts and negation negatives.
 
 Response-side hallucination plugins are intentionally absent from maintained
 routes because this recipe does not include a supported detector runtime.
@@ -66,11 +66,19 @@ as a client-compatible stream. Dashboard surfaces turn stable internal IDs
 such as `unified_frontier_verified_answer` into readable labels such as
 “Frontier Verified Answer” without changing replay or API identity.
 
+Looper tool behavior is explicit: Workflow owns stateful tool interruption and
+resume; Fusion and Confidence may publish only the final selected model's tool
+call; ReMoM, Ratings, RL-driven, and fallback multi-model aggregation strip
+callable schemas from private candidate requests because they cannot safely
+merge multiple independent tool trajectories. A deep request with tools
+attached can still use ReMoM, while a request that explicitly says to call a
+tool and then synthesize is routed to Workflow.
+
 ## DSL and evaluation
 
 `recipe.dsl` uses first-class `ENTRYPOINT` and `RECIPE` scopes. Compiling it
 over `config.yaml` reproduces the same five mappings and five isolated routing
-programs. The probe suite contains 117 multilingual, negative, collision,
+programs. The probe suite contains 120 multilingual, negative, collision,
 multi-turn, tool-shape, PII/jailbreak, and long-input cases across all 16
 decisions.
 
@@ -83,12 +91,12 @@ python tools/agent/scripts/router_calibration_loop.py \
   --probes config/recipes/multi-objective/probes.yaml
 ```
 
-The manifest runs these 117 cases with bounded concurrency and includes
+The manifest runs these 120 cases with bounded concurrency and includes
 end-to-end latency percentiles, throughput, and error count in the JSON report.
 This exercises recipe isolation under load without invoking an inference
 backend.
 
-The AMD pool acceptance additionally expands these probes into 570 deterministic
+The AMD pool acceptance additionally expands these probes into 600 deterministic
 framing/whitespace stress cases and runs 126 real generated requests across
 English, Chinese, Spanish, French, Japanese, and German.
 

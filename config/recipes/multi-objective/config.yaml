@@ -298,6 +298,33 @@ recipes:
         - kurz antworten
         case_sensitive: false
         method: regex
+      - name: unified_balance_terse_markers
+        operator: OR
+        keywords:
+        - concise and direct
+        - brief and direct
+        - 简洁直接
+        - 简短直接
+        - breve y directa
+        - brève et directe
+        - 簡潔で直接的
+        - kurz und direkt
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_negated_reasoning
+        operator: OR
+        keywords:
+        - do not analyze
+        - don't analyze
+        - without analysis
+        - 不要分析
+        - 无需分析
+        - no analices
+        - sans analyse
+        - 分析しない
+        - nicht analysieren
+        case_sensitive: false
+        method: regex
       - name: unified_balance_reasoning_markers
         operator: OR
         keywords:
@@ -374,16 +401,6 @@ recipes:
         description: Detect an immediate semantic repeat after an unsatisfactory answer.
         threshold: 0.8
         lookback_turns: 1
-      preferences:
-      - name: unified_balance_terse_preference
-        description: Detect a durable preference for concise, direct answers beyond exact trigger phrases.
-        examples:
-        - Keep the answer concise and direct.
-        - 请保持回答简洁直接。
-        - Responde de forma breve y directa.
-        - Réponds de manière brève et directe.
-        - 簡潔で直接的に答えてください。
-        threshold: 0.72
       language:
       - name: zh
         description: Chinese-language requests.
@@ -456,13 +473,17 @@ recipes:
           name: unified_balance_simple_markers
           weight: -0.35
           value_source: confidence
-        - type: preference
-          name: unified_balance_terse_preference
+        - type: keyword
+          name: unified_balance_terse_markers
           weight: -0.1
           value_source: confidence
         - type: keyword
+          name: unified_balance_negated_reasoning
+          weight: -1
+          value_source: confidence
+        - type: keyword
           name: unified_balance_reasoning_markers
-          weight: 0.46
+          weight: 0.85
           value_source: confidence
         - type: keyword
           name: unified_balance_verification_markers
@@ -493,7 +514,7 @@ recipes:
           weight: 0.4
         - type: complexity
           name: unified_balance_difficulty:easy
-          weight: -0.2
+          weight: -0.05
         - type: conversation
           name: unified_balance_multi_turn
           weight: 0.08
@@ -521,9 +542,9 @@ recipes:
           slope: 10
         outputs:
         - name: unified_balance_standard
-          lt: 0.32
+          lt: 0.3
         - name: unified_balance_deliberate
-          gte: 0.32
+          gte: 0.3
     decisions:
     - name: unified_balance_recovery
       description: Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.
@@ -883,6 +904,11 @@ recipes:
         - multi-agent workflow
         - delegate to agents
         - coordinate multiple agents
+        - use tools
+        - use search_web
+        - search then synthesize
+        - research and synthesize
+        - call the tool then
         - 调查并实现
         - 规划并执行
         - 多智能体工作流
@@ -933,8 +959,10 @@ recipes:
         - difficult result
         - multiple possible derivations
         - think deeply before answering
+        - think deeply
         - solve this thoroughly
         - reason through alternative paths
+        - alternative paths
         - do a deep analysis
         - 探索多种方法
         - 多条推理路径
@@ -946,6 +974,8 @@ recipes:
         - explorer plusieurs approches
         - preuve rigoureuse
         - 複数のアプローチを探索
+        - 複数のアプローチと推論経路を探索
+        - 推論経路を探索
         - 厳密な証明
         - mehrere ansätze untersuchen
         - denkwege untersuchen
