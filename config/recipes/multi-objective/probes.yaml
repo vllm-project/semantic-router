@@ -345,6 +345,9 @@ decisions:
       - id: basic_fact
         query: Rewrite "hello world" in uppercase.
         tags: [recipe:accuracy-first, language:en, direct]
+      - id: greeting_stays_direct
+        query: How are you?
+        tags: [recipe:accuracy-first, language:en, class:negative, direct]
       - id: available_tools_do_not_imply_workflow
         query: Tell me something about vllm-sr.
         expected_signals:
@@ -458,11 +461,11 @@ decisions:
       - id: evidence_ja
         query: 証拠で検証し、信頼できる情報源を示してください。
         tags: [recipe:accuracy-first, language:ja, signal:keyword, looper:confidence]
-      - id: semantic_fact_check
+      - id: disputed_claim
         query: The Great Wall is visible from the Moon with the naked eye. Is that claim accurate?
         expected_signals:
-          fact_check: [needs_fact_check]
-        tags: [recipe:accuracy-first, language:en, signal:fact-check, looper:confidence]
+          keywords: [unified_frontier_verification_markers]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:confidence]
 
   - id: frontier_remom
     model: vllm-sr/mom-frontier-v1
@@ -493,6 +496,12 @@ decisions:
       - id: reasoning_paths_de
         query: Mehrere Ansätze untersuchen und die stärkste Lösung synthetisieren.
         tags: [recipe:accuracy-first, language:de, signal:keyword, looper:remom]
+      - id: natural_deep_request
+        query: Think deeply before answering and reason through alternative paths.
+        expected_signals:
+          keywords: [unified_frontier_deep_markers]
+          projection: [unified_frontier_deliberate]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:remom]
       - id: long_context_reasoning
         query: Explore several approaches in this long system-design context.
         expected_signals:
@@ -524,6 +533,12 @@ decisions:
           embeddings: [unified_frontier_fusion_intent]
           projection: [unified_frontier_use_fusion]
         tags: [recipe:accuracy-first, language:en, looper:fusion]
+      - id: natural_multiple_models
+        query: Ask multiple models, compare several independent viewpoints, and synthesize the best answer.
+        expected_signals:
+          keywords: [unified_frontier_fusion_markers]
+          projection: [unified_frontier_use_fusion]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:fusion]
       - id: cross_check_zh
         query: 请比较多个专家意见，交叉验证答案，并解决各个独立分析之间的分歧。
         tags: [recipe:accuracy-first, language:zh, looper:fusion]

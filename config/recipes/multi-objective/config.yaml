@@ -904,6 +904,10 @@ recipes:
         - cross-check the answer
         - panel of experts
         - resolve disagreements
+        - compare several independent viewpoints
+        - ask multiple models
+        - get a second and third opinion
+        - synthesize competing answers
         - 独立分析
         - 比较多个专家意见
         - 交叉验证答案
@@ -928,6 +932,10 @@ recipes:
         - hard reasoning problem
         - difficult result
         - multiple possible derivations
+        - think deeply before answering
+        - solve this thoroughly
+        - reason through alternative paths
+        - do a deep analysis
         - 探索多种方法
         - 多条推理路径
         - 第一性原理
@@ -988,9 +996,6 @@ recipes:
         - 从多个推理路径探索难题并综合最强答案。
         - Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.
         - 複数の推論経路を探索し、最も厳密な解答を統合してください。
-      fact_check:
-      - name: needs_fact_check
-        description: Detect factual requests that benefit from independent verification.
       language:
       - name: zh
         description: Chinese-language requests.
@@ -1123,9 +1128,6 @@ recipes:
           name: unified_frontier_fusion_intent
           weight: 0.55
           value_source: confidence
-        - type: fact_check
-          name: needs_fact_check
-          weight: 0.15
         - type: structure
           name: unified_frontier_direct_reference
           weight: -0.9
@@ -1140,9 +1142,6 @@ recipes:
           name: unified_frontier_deep_intent
           weight: 0.35
           value_source: confidence
-        - type: fact_check
-          name: needs_fact_check
-          weight: 0.2
         - type: context
           name: unified_frontier_long_context
           weight: 0.2
@@ -1310,12 +1309,10 @@ recipes:
       priority: 325
       tier: 4
       rules:
-        operator: OR
+        operator: AND
         conditions:
         - type: keyword
           name: unified_frontier_verification_markers
-        - type: fact_check
-          name: needs_fact_check
       modelRefs:
       - model: local/qwen3.5-9b-economy
         use_reasoning: false
@@ -1323,14 +1320,12 @@ recipes:
         use_reasoning: false
       - model: local/qwen3.6-35b-flash
         use_reasoning: false
-      - model: local/gemma4-26b-balanced
-        use_reasoning: false
       - model: local/qwen3.5-122b-frontier
         use_reasoning: false
       algorithm:
         type: confidence
         confidence:
-          confidence_method: hybrid
+          confidence_method: avg_logprob
           threshold: 0.72
           escalation_order: small_to_large
           on_error: skip

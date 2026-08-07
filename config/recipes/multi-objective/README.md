@@ -52,14 +52,25 @@ preference-conflict positives and concise negatives.
 
 Response-side hallucination plugins are intentionally absent from maintained
 routes because this recipe does not include a supported detector runtime.
-Evidence-sensitive routes retain fact-check signals and confidence-based
-selection without advertising unavailable response analysis.
+Evidence-sensitive routes require explicit verification language and use
+confidence-based selection without letting a learned fact-check false positive
+escalate an ordinary request.
+
+Frontier orchestration is intentionally explicit and reachable with natural
+requests: ordinary conversation stays direct; “verify with evidence” selects
+confidence; “ask multiple models” selects Fusion; “think deeply and reason
+through alternative paths” selects ReMoM; and investigate/implement/validate
+requests select Workflow. Confidence evaluates candidates non-streaming so
+log-probability thresholds are real, then publishes only the selected answer
+as a client-compatible stream. Dashboard surfaces turn stable internal IDs
+such as `unified_frontier_verified_answer` into readable labels such as
+“Frontier Verified Answer” without changing replay or API identity.
 
 ## DSL and evaluation
 
 `recipe.dsl` uses first-class `ENTRYPOINT` and `RECIPE` scopes. Compiling it
 over `config.yaml` reproduces the same five mappings and five isolated routing
-programs. The probe suite contains 114 multilingual, negative, collision,
+programs. The probe suite contains 117 multilingual, negative, collision,
 multi-turn, tool-shape, PII/jailbreak, and long-input cases across all 16
 decisions.
 
@@ -72,7 +83,7 @@ python tools/agent/scripts/router_calibration_loop.py \
   --probes config/recipes/multi-objective/probes.yaml
 ```
 
-The manifest runs these 114 cases with bounded concurrency and includes
+The manifest runs these 117 cases with bounded concurrency and includes
 end-to-end latency percentiles, throughput, and error count in the JSON report.
 This exercises recipe isolation under load without invoking an inference
 backend.
