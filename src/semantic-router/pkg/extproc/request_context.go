@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
@@ -47,6 +48,14 @@ type StreamingToolCallState struct {
 	Arguments string
 }
 
+type StreamingChoiceState struct {
+	Content      string
+	Reasoning    string
+	Refusal      string
+	FinishReason string
+	ToolCalls    map[int]*StreamingToolCallState
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers   map[string]string
@@ -65,10 +74,13 @@ type RequestContext struct {
 	CacheQuery                    string
 	CacheExactFingerprint         string
 	CacheCompatibilityFingerprint string
+	CacheIdentity                 cache.CacheIdentity
 	CacheSelectedModel            string
 	CacheSemanticSafe             bool
 	CacheReadBypass               bool
 	CacheWriteBypass              bool
+	CacheMaxAgeSeconds            *int
+	CacheWriteTTLSeconds          *int
 	ContextCompressionApplied     bool
 	ContextCompressionBefore      int
 	ContextCompressionAfter       int
@@ -107,8 +119,9 @@ type RequestContext struct {
 	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
-	StreamingComplete  bool                            // True when [DONE] marker received
-	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
+	StreamingChoices   map[int]*StreamingChoiceState
+	StreamingComplete  bool // True when [DONE] marker received
+	StreamingAborted   bool // True if stream ended abnormally (EOF, cancel, timeout)
 
 	// Response API streaming translation state. When /v1/responses is backed by
 	// an upstream Chat Completions stream, these fields track the outbound
@@ -184,8 +197,12 @@ type RequestContext struct {
 	VSRLearningConversationID       string                                      // Client-declared conversation identity used by Router Learning
 	VSRCacheHit                     bool                                        // Whether this request hit the cache
 	VSRCacheSimilarity              float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRInjectedSystemPrompt         bool                                        // Whether a system prompt was injected into the request
-	VSRSelectedDecision             *config.Decision                            // The decision object selected by DecisionEngine (for plugins)
+	VSRCacheHitKind                 string
+	VSRCacheSource                  string
+	VSRCacheEntryAgeSeconds         float64
+	VSRCacheTTLSeconds              int
+	VSRInjectedSystemPrompt         bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision             *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*

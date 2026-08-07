@@ -14,4 +14,18 @@ describe('capability plugin field schemas', () => {
     ])
     expect(fields?.find((field) => field.key === 'compress_rag')?.type).toBe('boolean')
   })
+
+  it('exposes canonical response cache fields', () => {
+    const fields = getCapabilityPluginFieldSchema('response_cache')
+    expect(fields?.map((field) => field.key)).toEqual([
+      'enabled',
+      'mode',
+      'scope',
+      'semantic',
+      'ttl_seconds',
+      'request_controls',
+      'personalized',
+      'revision',
+    ])
+  })
 })

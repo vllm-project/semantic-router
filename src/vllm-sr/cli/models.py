@@ -2,6 +2,7 @@
 
 import json
 import math
+import warnings
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -652,7 +653,7 @@ class Rules(BaseModel):
 class PluginType(str, Enum):
     """Supported plugin types."""
 
-    SEMANTIC_CACHE = "semantic-cache"
+    RESPONSE_CACHE = "response_cache"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
@@ -669,11 +670,41 @@ class PluginType(str, Enum):
     CONTEXT_COMPRESSION = "context_compression"
 
 
-class SemanticCachePluginConfig(BaseModel):
-    """Configuration for semantic-cache plugin."""
+class ResponseCacheSemanticConfig(BaseModel):
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ResponseCacheRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["no-cache", "no-store", "bypass", "max-age", "ttl"]] = Field(
+        default_factory=list
+    )
+    max_ttl_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class ResponseCachePersonalizedConfig(BaseModel):
+    mode: Literal["disabled", "exact"] = "disabled"
+
+
+class ResponseCacheRevisionConfig(BaseModel):
+    cache_epoch: Optional[str] = None
+    model_revision: Optional[str] = None
+    prompt_revision: Optional[str] = None
+    policy_revision: Optional[str] = None
+
+
+class ResponseCachePluginConfig(BaseModel):
+    """Configuration for response_cache plugin."""
 
     enabled: bool
     mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
+    scope: Literal["user", "team", "tenant", "global"] = "user"
+    semantic: Optional[ResponseCacheSemanticConfig] = None
+    request_controls: Optional[ResponseCacheRequestControlsConfig] = None
+    personalized: Optional[ResponseCachePersonalizedConfig] = None
+    revision: Optional[ResponseCacheRevisionConfig] = None
+    # Deprecated flat compatibility fields.
     allow_request_controls: bool = False
     control_header: Optional[str] = None
     similarity_threshold: Optional[float] = Field(
@@ -685,6 +716,23 @@ class SemanticCachePluginConfig(BaseModel):
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
+
+    @model_validator(mode="after")
+    def validate_compatibility_fields(self):
+        if self.semantic is not None and self.similarity_threshold is not None:
+            raise ValueError(
+                "semantic.similarity_threshold conflicts with similarity_threshold"
+            )
+        if self.request_controls is not None and (
+            self.allow_request_controls or self.control_header is not None
+        ):
+            raise ValueError(
+                "request_controls conflicts with deprecated request-control fields"
+            )
+        return self
+
+
+SemanticCachePluginConfig = ResponseCachePluginConfig
 
 
 class ProviderPromptCachePluginConfig(BaseModel):
@@ -998,6 +1046,23 @@ class PluginConfig(BaseModel):
 
     type: PluginType
     configuration: Dict[str, Any]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_response_cache_aliases(cls, value):
+        if isinstance(value, dict) and value.get("type") in {
+            "semantic-cache",
+            "semantic_cache",
+            "response-cache",
+        }:
+            warnings.warn(
+                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            value = dict(value)
+            value["type"] = PluginType.RESPONSE_CACHE.value
+        return value
 
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""

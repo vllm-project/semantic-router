@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -94,7 +95,25 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if err != nil {
 		return nil, err
 	}
+	return r.handleModelRoutingWithPersonalizedCache(
+		openAIRequest,
+		originalModel,
+		decisionState,
+		ctx,
+	)
+}
 
+func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	decisionState requestDecisionState,
+	ctx *RequestContext,
+) (*ext_proc.ProcessingResponse, error) {
+	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
+		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return response, nil
+	}
 	return r.handleModelRouting(
 		openAIRequest,
 		originalModel,

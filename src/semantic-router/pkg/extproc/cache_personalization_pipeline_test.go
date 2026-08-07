@@ -92,7 +92,7 @@ func TestCacheBypassWhenRAGEnabled(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-bypass-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What are my recent orders?"),
@@ -122,7 +122,7 @@ func TestCacheBypassWhenMemoryEnabledGlobally(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-bypass-memory-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What did we discuss yesterday?"),
@@ -231,7 +231,7 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-normal-cache-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What is 2+2?"),
@@ -271,7 +271,7 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "mem-disabled-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("m", "Quick question"),

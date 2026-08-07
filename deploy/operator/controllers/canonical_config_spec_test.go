@@ -69,6 +69,21 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
 }
 
+func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
+	legacy := &vllmv1alpha1.SemanticCacheConfig{Enabled: true}
+	got, err := operatorResponseCacheConfig(vllmv1alpha1.ConfigSpec{SemanticCache: legacy})
+	if err != nil || got != legacy {
+		t.Fatalf("legacy response cache = %v, %v", got, err)
+	}
+	_, err = operatorResponseCacheConfig(vllmv1alpha1.ConfigSpec{
+		ResponseCache: legacy,
+		SemanticCache: legacy.DeepCopy(),
+	})
+	if err == nil {
+		t.Fatal("operatorResponseCacheConfig() accepted canonical and legacy fields")
+	}
+}
+
 func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 	r := &SemanticRouterReconciler{}
 	sr := &vllmv1alpha1.SemanticRouter{

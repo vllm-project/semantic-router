@@ -24,6 +24,77 @@ func TestBuildRequestIdentitySeparatesStreamingResponseMode(t *testing.T) {
 	}
 }
 
+func TestBuildRequestIdentitySupportsMultipartWithoutEmbeddingBinaryParts(t *testing.T) {
+	first, err := BuildRequestIdentity([]byte(`{
+		"model":"vision",
+		"messages":[{"role":"user","content":[
+			{"type":"text","text":"describe this"},
+			{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}
+		]}]
+	}`))
+	if err != nil {
+		t.Fatalf("BuildRequestIdentity() error = %v", err)
+	}
+	second, err := BuildRequestIdentity([]byte(`{
+		"model":"vision",
+		"messages":[{"role":"user","content":[
+			{"type":"text","text":"what is shown"},
+			{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}
+		]}]
+	}`))
+	if err != nil {
+		t.Fatalf("BuildRequestIdentity() error = %v", err)
+	}
+	if first.Query != "describe this" || !first.SemanticSafe {
+		t.Fatalf("multipart identity = %#v", first)
+	}
+	if first.CompatibilityFingerprint != second.CompatibilityFingerprint {
+		t.Fatal("text replacement did not preserve the shared image digest")
+	}
+}
+
+func TestBuildRequestIdentitySupportsResponsesInput(t *testing.T) {
+	identity, err := BuildRequestIdentity([]byte(`{
+		"model":"gpt",
+		"input":[{"role":"user","content":[
+			{"type":"input_text","text":"hello"},
+			{"type":"input_file","file_id":"file-secret"}
+		]}]
+	}`))
+	if err != nil {
+		t.Fatalf("BuildRequestIdentity() error = %v", err)
+	}
+	if identity.Query != "hello" || !identity.SemanticSafe {
+		t.Fatalf("responses identity = %#v", identity)
+	}
+}
+
+func TestBuildRequestIdentityPreservesAnthropicToolBlocks(t *testing.T) {
+	first, err := BuildRequestIdentity([]byte(`{
+		"model":"claude",
+		"messages":[{"role":"user","content":[
+			{"type":"tool_result","tool_use_id":"tool-1","content":"private result"},
+			{"type":"text","text":"summarize"}
+		]}]
+	}`))
+	if err != nil {
+		t.Fatalf("BuildRequestIdentity() error = %v", err)
+	}
+	second, err := BuildRequestIdentity([]byte(`{
+		"model":"claude",
+		"messages":[{"role":"user","content":[
+			{"type":"tool_result","tool_use_id":"tool-2","content":"different result"},
+			{"type":"text","text":"summarize differently"}
+		]}]
+	}`))
+	if err != nil {
+		t.Fatalf("BuildRequestIdentity() error = %v", err)
+	}
+	if first.CompatibilityFingerprint == second.CompatibilityFingerprint {
+		t.Fatal("tool block digest was omitted from compatibility identity")
+	}
+}
+
 func TestBuildRequestIdentitySemanticCompatibilityIgnoresOnlyCurrentUserText(t *testing.T) {
 	firstBody := []byte(`{"model":"auto","messages":[{"role":"system","content":"be concise"},{"role":"user","content":"hello"}],"tools":[{"type":"function","function":{"name":"lookup"}}]}`)
 	secondBody := []byte(`{"model":"auto","messages":[{"role":"system","content":"be concise"},{"role":"user","content":"hi there"}],"tools":[{"type":"function","function":{"name":"lookup"}}]}`)
@@ -78,14 +149,14 @@ func TestBuildRequestIdentityPreservesLargeJSONNumbersAndClientUser(t *testing.T
 	}
 }
 
-func TestBuildRequestIdentityMarksMultimodalCurrentUserUnsafeForSemanticCache(t *testing.T) {
+func TestBuildRequestIdentityUsesTextSemanticViewForMultimodalUser(t *testing.T) {
 	body := []byte(`{"model":"m","messages":[{"role":"user","content":[{"type":"text","text":"describe"},{"type":"image_url","image_url":{"url":"https://example.test/a.png"}}]}]}`)
 	identity, err := BuildRequestIdentity(body)
 	if err != nil {
 		t.Fatalf("BuildRequestIdentity: %v", err)
 	}
-	if identity.SemanticSafe {
-		t.Fatal("multimodal current user content must not enter text-only semantic cache")
+	if !identity.SemanticSafe || identity.Query != "describe" {
+		t.Fatalf("multimodal semantic view = %#v", identity)
 	}
 	if identity.ExactFingerprint == "" {
 		t.Fatal("exact fingerprint should still be available")

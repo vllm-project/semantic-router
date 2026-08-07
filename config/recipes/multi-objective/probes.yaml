@@ -123,7 +123,7 @@ decisions:
     expected_recipe: speed-first
     expected_decision: unified_speed_first_route
     expected_algorithm: multi_factor
-    expected_plugins: [semantic-cache]
+    expected_plugins: [response_cache]
     variants:
       - id: concise_summary
         query: Give me the fastest concise summary of this incident report.
@@ -186,7 +186,7 @@ decisions:
     expected_recipe: cost-first
     expected_decision: unified_cost_first_route
     expected_algorithm: static
-    expected_plugins: [semantic-cache]
+    expected_plugins: [response_cache]
     variants:
       - id: basic_definition
         query: Define eventual consistency in one paragraph.

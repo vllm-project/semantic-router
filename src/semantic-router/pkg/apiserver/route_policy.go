@@ -6,17 +6,20 @@ package apiserver
 type RoutePermission string
 
 const (
-	PermHealthRead     RoutePermission = "health.read"
-	PermReadyRead      RoutePermission = "ready.read"
-	PermDocsRead       RoutePermission = "docs.read"
-	PermClassifyInvoke RoutePermission = "classify.invoke"
-	PermConfigRead     RoutePermission = "config.read"
-	PermConfigWrite    RoutePermission = "config.write"
-	PermSecretView     RoutePermission = "secret_view"
-	PermLearningIngest RoutePermission = "learning.ingest"
-	PermDataRead       RoutePermission = "data.read"
-	PermDataWrite      RoutePermission = "data.write"
-	PermMetricsRead    RoutePermission = "metrics.read"
+	PermHealthRead      RoutePermission = "health.read"
+	PermReadyRead       RoutePermission = "ready.read"
+	PermDocsRead        RoutePermission = "docs.read"
+	PermClassifyInvoke  RoutePermission = "classify.invoke"
+	PermConfigRead      RoutePermission = "config.read"
+	PermConfigWrite     RoutePermission = "config.write"
+	PermSecretView      RoutePermission = "secret_view"
+	PermLearningIngest  RoutePermission = "learning.ingest"
+	PermDataRead        RoutePermission = "data.read"
+	PermDataWrite       RoutePermission = "data.write"
+	PermMetricsRead     RoutePermission = "metrics.read"
+	PermCacheRead       RoutePermission = "cache.read"
+	PermCacheInvalidate RoutePermission = "cache.invalidate"
+	PermCacheManage     RoutePermission = "cache.manage"
 )
 
 // RouteSensitivity classifies response risk for inventory and policy.
@@ -45,6 +48,8 @@ const (
 	AuditActionOutcomeIngest     RouteAuditAction = "outcome.ingest"
 	AuditActionMemoryDelete      RouteAuditAction = "memory.delete"
 	AuditActionDataWrite         RouteAuditAction = "data.write"
+	AuditActionCacheInvalidate   RouteAuditAction = "cache.invalidate"
+	AuditActionCacheFlush        RouteAuditAction = "cache.flush"
 )
 
 type routePolicy struct {

@@ -486,8 +486,8 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	p := cfg.Decisions[0].Plugins[0]
-	if p.Type != "semantic-cache" { // normalized
-		t.Errorf("expected plugin type semantic-cache, got %s", p.Type)
+	if p.Type != "response_cache" { // normalized
+		t.Errorf("expected plugin type response_cache, got %s", p.Type)
 	}
 }
 
@@ -2622,14 +2622,14 @@ ROUTE route_b {
 
 	// route_a: uses template as-is
 	pA := cfg.Decisions[0].Plugins[0]
-	if pA.Type != "semantic-cache" {
-		t.Errorf("route_a plugin type = %q, want semantic-cache", pA.Type)
+	if pA.Type != "response_cache" {
+		t.Errorf("route_a plugin type = %q, want response_cache", pA.Type)
 	}
 
 	// route_b: uses template with override
 	pB := cfg.Decisions[1].Plugins[0]
-	if pB.Type != "semantic-cache" {
-		t.Errorf("route_b plugin type = %q, want semantic-cache", pB.Type)
+	if pB.Type != "response_cache" {
+		t.Errorf("route_b plugin type = %q, want response_cache", pB.Type)
 	}
 }
 

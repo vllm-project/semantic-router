@@ -6,7 +6,7 @@ listeners:
     timeout: 1200s
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
   router:

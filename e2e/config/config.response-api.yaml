@@ -44,7 +44,7 @@ global:
       ttl_seconds: 86400
       max_responses: 1000
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

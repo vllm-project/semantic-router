@@ -2,7 +2,7 @@
 # This configuration file contains settings for using Valkey with vector search as the semantic cache backend.
 # To use this configuration:
 # 1. Set backend_type: "valkey" in your main config.yaml
-# 2. Set global.stores.semantic_cache.backend_type: "valkey" and inline the Valkey settings from this file into your canonical config.yaml
+# 2. Set global.stores.response_cache.backend_type: "valkey" and inline the Valkey settings from this file into your canonical config.yaml
 # 3. Ensure Valkey server with search module is running and accessible
 # 4. Valkey with vector search capability is required
 

@@ -48,7 +48,7 @@ global:
           switch_margin: 0.05
           stability_weight: 1.0
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
 

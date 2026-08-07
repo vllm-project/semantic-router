@@ -167,7 +167,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
-			SemanticCache: cfg.SemanticCache,
+			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 		},

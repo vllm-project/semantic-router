@@ -7,9 +7,7 @@ import (
 )
 
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
-	if pluginType == "semantic_cache" {
-		pluginType = "semantic-cache"
-	}
+	pluginType = config.NormalizeDecisionPluginType(pluginType)
 	dp := &config.DecisionPlugin{Type: pluginType}
 	cfg, ok := c.buildPluginConfigValue(pluginType, fields)
 	if !ok {
@@ -37,11 +35,9 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"system_prompt": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileSystemPromptPluginConfig(fields), true
 	},
-	"semantic_cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileSemanticCachePluginConfig(fields), true
-	},
-	"semantic-cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileSemanticCachePluginConfig(fields), true
+	"response_cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ResponseCachePluginConfig{}
+		return compilePluginFields(c, fields, cfg)
 	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
@@ -156,20 +152,6 @@ func (c *Compiler) compileSystemPromptPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getStringField(fields, "mode"); ok {
 		cfg.Mode = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileSemanticCachePluginConfig(fields map[string]Value) config.SemanticCachePluginConfig {
-	cfg := config.SemanticCachePluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
-		cfg.SimilarityThreshold = &v
-	}
-	if v, ok := getIntField(fields, "ttl_seconds"); ok {
-		cfg.TTLSeconds = &v
 	}
 	return cfg
 }

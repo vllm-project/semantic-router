@@ -317,7 +317,7 @@ export interface ModelRef {
 
 export interface PluginConfig {
   type:
-    | 'semantic-cache'
+    | 'response_cache'
     | 'memory'
     | 'system_prompt'
     | 'header_mutation'
@@ -415,13 +415,21 @@ export interface LegacyConfig {
     pii_model?: LegacyModelConfig
   }
   prompt_guard?: LegacyModelConfig & { enabled: boolean }
-  semantic_cache?: {
+  response_cache?: {
     enabled: boolean
     backend_type?: string
     similarity_threshold: number
     max_entries: number
     ttl_seconds: number
     eviction_policy?: string
+  }
+  /** @deprecated Use response_cache. */
+  semantic_cache?: {
+    enabled: boolean
+    backend_type?: string
+    similarity_threshold?: number
+    max_entries?: number
+    ttl_seconds?: number
   }
   tools?: {
     enabled: boolean

@@ -19,7 +19,6 @@ import (
 const pendingResponseMarker = "__pending__"
 
 type QdrantCache struct {
-	SimilarityTracker
 	client              *qdrant.Client
 	cfg                 *config.QdrantConfig
 	collectionName      string
@@ -419,7 +418,6 @@ func (c *QdrantCache) LookupSimilarWithThreshold(model, query string, threshold 
 	}
 
 	best := scored[0]
-	c.StoreSimilarity(best.Score)
 
 	responseBody := best.Payload["response_body"].GetStringValue()
 	if responseBody == "" || responseBody == pendingResponseMarker {

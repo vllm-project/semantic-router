@@ -37,7 +37,7 @@ routing:
   decisions:
     - name: cached_support
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
 ```
@@ -60,7 +60,7 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 - [Memory](./memory)
 - [RAG](./rag)
 - [Router Replay](./router-replay)
-- [Semantic Cache](./semantic-cache)
+- [Response Cache](./response-cache)
 
 ### Safety and Generation
 

@@ -765,7 +765,12 @@ development:
 			It("should return information about available backends", func() {
 				backends := GetAvailableCacheBackends()
 
-				Expect(backends).To(HaveLen(4)) // Memory, Milvus, Redis, and Valkey
+				Expect(backends).To(HaveLen(6))
+				for _, backend := range backends {
+					Expect(backend.Capabilities.Backend).To(Equal(backend.Type))
+					Expect(backend.Capabilities.Exact).To(BeTrue())
+					Expect(backend.Capabilities.Semantic).To(BeTrue())
+				}
 
 				// Check memory backend info
 				memoryBackend := backends[0]
@@ -795,7 +800,7 @@ development:
 	})
 
 	Describe("InMemoryCache", func() {
-		var inMemoryCache CacheBackend
+		var inMemoryCache LegacyCacheBackend
 
 		BeforeEach(func() {
 			options := InMemoryCacheOptions{

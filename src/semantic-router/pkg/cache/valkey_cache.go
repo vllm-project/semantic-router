@@ -21,7 +21,6 @@ import (
 
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
 type ValkeyCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              *glide.Client
 	config              *routerconfig.ValkeyConfig
 	indexName           string
@@ -550,7 +549,6 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(model string, query string, thr
 	}
 
 	similarity := float32(valkeyutil.DistanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance))
-	c.StoreSimilarity(similarity)
 
 	if similarity < threshold {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",

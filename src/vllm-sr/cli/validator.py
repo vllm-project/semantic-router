@@ -5,7 +5,7 @@ from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
-    SemanticCachePluginConfig,
+    ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
     ResponseJailbreakPluginConfig,
@@ -25,7 +25,6 @@ from cli.validation_error import ValidationError
 from cli.validator_classifier import validate_classifier_contracts
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
-    validate_latency_compatibility,
 )
 from cli.validator_prompt import validate_prompt_dependencies
 from cli.validator_projection_embedding import (
@@ -407,7 +406,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
 
     # Map plugin types to their configuration models
     config_models = {
-        PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
+        PluginType.RESPONSE_CACHE.value: ResponseCachePluginConfig,
         PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
         PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
         PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,

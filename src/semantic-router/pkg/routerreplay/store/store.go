@@ -240,7 +240,11 @@ type Record struct {
 	//
 	// CacheSimilarity is the semantic-cache lookup similarity (0 = no lookup),
 	// formerly the x-vsr-cache-similarity header.
-	CacheSimilarity float32 `json:"cache_similarity,omitempty"`
+	CacheSimilarity      float32 `json:"cache_similarity,omitempty"`
+	CacheHitKind         string  `json:"cache_hit_kind,omitempty"`
+	CacheSource          string  `json:"cache_source,omitempty"`
+	CacheEntryAgeSeconds float64 `json:"cache_entry_age_seconds,omitempty"`
+	CacheTTLSeconds      int     `json:"cache_ttl_seconds,omitempty"`
 	// ContextTokenCount is the request context token count used for
 	// context-based routing, formerly the x-vsr-context-token-count header.
 	ContextTokenCount int `json:"context_token_count,omitempty"`

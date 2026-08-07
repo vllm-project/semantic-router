@@ -272,7 +272,11 @@ type ConfigSpec struct {
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
 
-	// Semantic cache configuration
+	// Response cache configuration.
+	// +optional
+	ResponseCache *SemanticCacheConfig `json:"response_cache,omitempty"`
+
+	// SemanticCache is the deprecated response-cache field.
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
 

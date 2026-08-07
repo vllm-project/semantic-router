@@ -210,7 +210,7 @@ type MilvusConfig struct {
 	} `json:"development" yaml:"development"`
 }
 
-type SemanticCache struct {
+type ResponseCacheStoreConfig struct {
 	BackendType         string        `yaml:"backend_type,omitempty"`
 	Enabled             bool          `yaml:"enabled"`
 	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
@@ -223,6 +223,9 @@ type SemanticCache struct {
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
+
+// SemanticCache is retained for source compatibility.
+type SemanticCache = ResponseCacheStoreConfig
 
 // QdrantConfig defines the complete configuration structure for Qdrant cache backend.
 type QdrantConfig struct {

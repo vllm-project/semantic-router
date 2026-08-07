@@ -213,8 +213,6 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		return LookupResult{}, nil
 	}
 
-	c.StoreSimilarity(bestSimilarity)
-
 	if bestSimilarity >= threshold {
 		atomic.AddInt64(&c.hitCount, 1)
 

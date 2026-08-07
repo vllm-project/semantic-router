@@ -24,7 +24,6 @@ import (
 
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
-	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              *redis.Client
 	config              *config.RedisConfig
 	indexName           string
@@ -684,7 +683,6 @@ func (c *RedisCache) LookupSimilarWithThreshold(model string, query string, thre
 
 	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
 	// Store similarity for callers (e.g., x-vsr-cache-similarity response header)
-	c.StoreSimilarity(similarity)
 	if !ok {
 		c.recordCacheMiss("error", time.Since(start))
 		return LookupResult{Similarity: similarity}, nil

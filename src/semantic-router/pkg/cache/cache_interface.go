@@ -1,8 +1,6 @@
 package cache
 
 import (
-	"math"
-	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,27 +47,8 @@ type CacheBackend interface {
 	// For local caches (in-memory), this may be a no-op
 	CheckConnection() error
 
-	// AddPendingRequest is retained for backend compatibility. New request
-	// paths keep pending state request-local and write only complete entries.
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
-
-	// UpdateWithResponse is retained for legacy callers that still own a
-	// backend pending entry.
-	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
-
 	// AddEntry stores a complete request-response pair in the cache
 	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
-
-	// FindSimilar searches for semantically similar cached requests inside the
-	// exact model partition.
-	// Returns the cached response, match status, and any error
-	FindSimilar(model string, query string) ([]byte, bool, error)
-
-	// FindSimilarWithThreshold searches inside the exact model partition using
-	// a specific threshold.
-	// This allows category-specific similarity thresholds
-	// Returns the cached response, match status, and any error
-	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 
 	// LookupSimilarWithThreshold returns response data and similarity from the
 	// same lookup operation. Request paths should use this method instead of
@@ -83,30 +62,33 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
-// SimilarityTracker preserves legacy backend diagnostics. Request paths must
-// use LookupResult instead because this value is shared across requests.
-type SimilarityTracker struct {
-	lastSimilarity uint64 // atomic; stores float32 bits
-}
-
-// StoreSimilarity records a similarity score (thread-safe).
-func (t *SimilarityTracker) StoreSimilarity(similarity float32) {
-	atomic.StoreUint64(&t.lastSimilarity, uint64(math.Float32bits(similarity)))
-}
-
-// LastSimilarity returns the most recently stored similarity score.
-func (t *SimilarityTracker) LastSimilarity() float32 {
-	bits := atomic.LoadUint64(&t.lastSimilarity)
-	return math.Float32frombits(uint32(bits & 0xFFFFFFFF)) //nolint:gosec // intentional: float32 bits fit in 32 bits
+// LegacyCacheBackend is the temporary backend-implementation seam. New request
+// paths depend on TypedCacheStore; only backend tests and migration adapters
+// should use these two-phase and convenience methods.
+type LegacyCacheBackend interface {
+	CacheBackend
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
+	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
+	FindSimilar(model string, query string) ([]byte, bool, error)
+	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 }
 
 // CacheStats holds performance metrics and usage statistics for cache operations
 type CacheStats struct {
-	TotalEntries    int        `json:"total_entries"`
-	HitCount        int64      `json:"hit_count"`
-	MissCount       int64      `json:"miss_count"`
-	HitRatio        float64    `json:"hit_ratio"`
-	LastCleanupTime *time.Time `json:"last_cleanup_time,omitempty"`
+	TotalEntries        int        `json:"total_entries"`
+	HitCount            int64      `json:"hit_count"`
+	MissCount           int64      `json:"miss_count"`
+	HitRatio            float64    `json:"hit_ratio"`
+	LastCleanupTime     *time.Time `json:"last_cleanup_time,omitempty"`
+	ExactHitCount       int64      `json:"exact_hit_count"`
+	SemanticHitCount    int64      `json:"semantic_hit_count"`
+	L1HitCount          int64      `json:"l1_hit_count"`
+	L2HitCount          int64      `json:"l2_hit_count"`
+	L1Entries           int        `json:"l1_entries"`
+	SingleflightWaiters int64      `json:"singleflight_waiters"`
+	InvalidationCount   int64      `json:"invalidation_count"`
+	StaleMissCount      int64      `json:"stale_miss_count"`
+	FailOpenCount       int64      `json:"fail_open_count"`
 }
 
 // CacheBackendType defines the available cache backend implementations
