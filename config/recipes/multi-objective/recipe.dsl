@@ -142,6 +142,18 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     method: "regex"
   }
 
+  SIGNAL keyword unified_balance_terse_markers {
+    operator: "OR"
+    keywords: ["concise and direct", "brief and direct", "简洁直接", "简短直接", "breve y directa", "brève et directe", "簡潔で直接的", "kurz und direkt"]
+    method: "regex"
+  }
+
+  SIGNAL keyword unified_balance_negated_reasoning {
+    operator: "OR"
+    keywords: ["do not analyze", "don't analyze", "without analysis", "不要分析", "无需分析", "no analices", "sans analyse", "分析しない", "nicht analysieren"]
+    method: "regex"
+  }
+
   SIGNAL keyword unified_balance_reasoning_markers {
     operator: "OR"
     keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
@@ -172,12 +184,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     description: "Detect an immediate semantic repeat after an unsatisfactory answer."
     threshold: 0.8
     lookback_turns: 1
-  }
-
-  SIGNAL preference unified_balance_terse_preference {
-    description: "Detect a durable preference for concise, direct answers beyond exact trigger phrases."
-    examples: ["Keep the answer concise and direct.", "请保持回答简洁直接。", "Responde de forma breve y directa.", "Réponds de manière brève et directe.", "簡潔で直接的に答えてください。"]
-    threshold: 0.72
   }
 
   SIGNAL language zh {
@@ -232,14 +238,14 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.1, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.46, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
     source: "unified_balance_effort_score"
     method: "threshold_bands"
     calibration: { method: "sigmoid_distance", slope: 10 }
-    outputs: [{ name: "unified_balance_standard", lt: 0.32 }, { name: "unified_balance_deliberate", gte: 0.32 }]
+    outputs: [{ name: "unified_balance_standard", lt: 0.3 }, { name: "unified_balance_deliberate", gte: 0.3 }]
   }
 
   # =============================================================================
@@ -482,7 +488,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL keyword unified_frontier_workflow_markers {
     operator: "OR"
-    keywords: ["investigate and implement", "plan and execute", "multi-agent workflow", "delegate to agents", "coordinate multiple agents", "调查并实现", "规划并执行", "多智能体工作流", "协调多个智能体", "investigar e implementar", "planificar y ejecutar", "enquêter et implémenter", "planifier et exécuter", "調査して実装", "計画して実行", "untersuchen und implementieren"]
+    keywords: ["investigate and implement", "plan and execute", "multi-agent workflow", "delegate to agents", "coordinate multiple agents", "use tools", "use search_web", "search then synthesize", "research and synthesize", "call the tool then", "调查并实现", "规划并执行", "多智能体工作流", "协调多个智能体", "investigar e implementar", "planificar y ejecutar", "enquêter et implémenter", "planifier et exécuter", "調査して実装", "計画して実行", "untersuchen und implementieren"]
     method: "regex"
   }
 
@@ -494,7 +500,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL keyword unified_frontier_deep_markers {
     operator: "OR"
-    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "think deeply before answering", "solve this thoroughly", "reason through alternative paths", "do a deep analysis", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
+    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "think deeply before answering", "think deeply", "solve this thoroughly", "reason through alternative paths", "alternative paths", "do a deep analysis", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "複数のアプローチと推論経路を探索", "推論経路を探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
     method: "regex"
   }
 
