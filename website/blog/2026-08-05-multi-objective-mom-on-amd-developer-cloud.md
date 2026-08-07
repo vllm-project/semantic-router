@@ -433,6 +433,14 @@ Config, Topology, and Builder render stable routing identifiers as readable
 labels—for example, “Frontier Verified Answer”—while Replay and API contracts
 retain the original machine identifier.
 
+Looper tool semantics are deliberately different. Workflow owns stateful tool
+interrupt/resume. Confidence and Fusion may return the final selected model's
+tool call with `finish_reason: tool_calls`. ReMoM, Ratings, RL-driven, and
+fallback aggregation remove idle tool schemas from private candidate calls
+because independent tool trajectories cannot be merged safely. Consequently,
+a deep reasoning prompt can still use ReMoM when tools are merely attached,
+while “use search, then synthesize” is routed to Workflow.
+
 ## Step 5: Evaluate the Deployed Objectives
 
 The installed CLI can evaluate objective selection without generating a
@@ -452,7 +460,7 @@ vllm-sr eval \
 
 The maintained
 [`probes.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/probes.yaml)
-contains 117 backend-independent cases used by repository CI and recipe
+contains 120 backend-independent cases used by repository CI and recipe
 calibration. It checks:
 
 - all 16 decisions
@@ -484,9 +492,13 @@ The maintained commands were exercised on an 8×MI300X host with vLLM
 - a live Frontier regression kept a greeting direct, completed confidence in
   one iteration without duplicated text, and reached Fusion, ReMoM, and
   Workflow with natural-language requests
-- the 117-probe suite matched all 16 decisions with 0 errors
-- 570 deterministic framing/whitespace stress cases passed at 74.313 requests
-  per second with p50 238.822 ms, p95 381.197 ms, and 0 errors
+- live tool-contract checks returned canonical tool-call finish reasons from
+  Confidence and Fusion, produced resumable parallel calls from Workflow, and
+  kept ReMoM substantive when an unused tool schema was attached
+- the 120-probe suite matched all 16 decisions with 0 errors
+- 600 deterministic framing/whitespace stress cases passed at 7.747 requests
+  per second with p50 1339.273 ms, p95 2495.722 ms, and 0 errors while the
+  shared validation host was serving the full model pool
 - 126 real generated requests passed across all five entrypoints and all six
   maintained languages
 - a 24-request concurrent cost-reasoning gate split evenly across the two 9B
