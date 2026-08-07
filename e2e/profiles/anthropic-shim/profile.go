@@ -26,8 +26,9 @@ var (
 // Profile implements the anthropic-shim test profile.
 //
 // It deploys the anthropic-shim backend (llama.cpp + the Python translation
-// shim) and points the Envoy AI Gateway routing at it so that Anthropic-
-// protocol requests reach an endpoint that speaks Anthropic Messages natively.
+// shim) and routes gateway traffic straight to it via an HTTPRoute so that
+// Anthropic-protocol requests reach an endpoint that speaks Anthropic
+// Messages natively.
 // This is required for cache-cycle and stop-sequence assertions that exercise
 // the outbound emitter's buildAnthropicUsage and stop-reason mapping paths.
 type Profile struct {
