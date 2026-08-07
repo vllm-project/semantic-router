@@ -53,7 +53,7 @@ def test_detect_required_backends_skips_external_semantic_cache_milvus():
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "milvus",
                     "milvus": {
@@ -177,7 +177,7 @@ def test_detect_required_backends_excludes_milvus_when_memory_override():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "memory",
                 }
@@ -197,7 +197,7 @@ def test_detect_required_backends_excludes_milvus_when_cache_disabled():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 }
             }
@@ -214,7 +214,7 @@ def test_detect_required_backends_includes_postgres_for_vector_store_metadata():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -242,7 +242,7 @@ def test_detect_required_backends_ignores_disabled_vector_store_metadata():
                 },
             },
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -324,7 +324,7 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
 
     assert changed is True
     stores = config["global"]["stores"]
-    cache = stores["semantic_cache"]
+    cache = stores["response_cache"]
     assert cache["backend_type"] == "milvus"
     milvus = cache["milvus"]
     conn = milvus["connection"]
@@ -347,7 +347,7 @@ def test_inject_local_store_runtime_defaults_populates_vector_store_metadata_pos
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -375,7 +375,7 @@ def test_inject_local_store_runtime_defaults_backfills_vector_store_metadata_pos
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -404,7 +404,7 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "milvus",
                     "milvus": {
@@ -423,7 +423,7 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
 
     changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
 
-    milvus = config["global"]["stores"]["semantic_cache"]["milvus"]
+    milvus = config["global"]["stores"]["response_cache"]["milvus"]
     conn = milvus["connection"]
     assert conn["host"] == "custom-milvus-host"
     assert conn["port"] == 19531
@@ -433,12 +433,33 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
     assert changed is True
 
 
-def test_inject_local_store_runtime_defaults_skips_memory_backend():
+def test_inject_local_store_runtime_defaults_migrates_legacy_cache_key():
     config = {
         "version": "v0.3",
         "global": {
             "stores": {
                 "semantic_cache": {
+                    "enabled": True,
+                    "backend_type": "milvus",
+                }
+            }
+        },
+    }
+
+    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
+
+    stores = config["global"]["stores"]
+    assert changed is True
+    assert "semantic_cache" not in stores
+    assert stores["response_cache"]["milvus"]["connection"]["host"] == "vllm-sr-milvus"
+
+
+def test_inject_local_store_runtime_defaults_skips_memory_backend():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "stores": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "memory",
                 }
@@ -449,7 +470,7 @@ def test_inject_local_store_runtime_defaults_skips_memory_backend():
     changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
 
     assert changed is False
-    assert "milvus" not in config["global"]["stores"]["semantic_cache"]
+    assert "milvus" not in config["global"]["stores"]["response_cache"]
 
 
 def test_inject_local_store_runtime_defaults_keeps_setup_bootstrap_minimal():
