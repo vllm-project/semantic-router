@@ -10,9 +10,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Coverage for #2473: the request context now threads into the embedding work
-// of a lookup. The specs are registered by the helpers below; see each helper's
-// doc comment for the exact contract it pins.
+// Coverage for #2473: the request context threads into the embedding work of a
+// lookup. Each helper below documents the contract it pins.
 var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 	const threshold = float32(0.75)
 
@@ -40,10 +39,9 @@ var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 	specCGOEmbedCancellation(newSeededBackend)
 })
 
-// specCancelledContextShortCircuits pins that embedding is a synchronous CGO
-// call that cannot be interrupted mid-flight, so the contract is best-effort: an
-// already-cancelled context short-circuits BEFORE the expensive embed starts,
-// and the lookup returns the context error instead of a (potentially stale) hit.
+// specCancelledContextShortCircuits pins the best-effort half of the contract:
+// an already-cancelled context short-circuits before the embed starts, and the
+// lookup returns the context error instead of a possibly stale hit.
 func specCancelledContextShortCircuits(newSeededBackend func() CacheBackend, threshold float32) {
 	Context("with an already-cancelled context", func() {
 		It("short-circuits before embedding and returns context.Canceled, not a hit", func() {
@@ -90,22 +88,15 @@ func specBelowThresholdMissReturnsZero(newSeededBackend func() CacheBackend, thr
 	})
 }
 
-// specCGOEmbedCancellation covers write-path cancellation (#2473): embedding is
-// a synchronous CGO call that cannot be interrupted mid-flight, so cancellation
-// is re-checked AFTER the embed completes and BEFORE the entry is published. A
-// request cancelled in that window must return the context error and leave no
-// orphaned state.
+// specCGOEmbedCancellation covers the other half: the embed cannot be
+// interrupted mid-flight, so cancellation is re-checked after it returns and
+// before the entry is published. cancelAfterEmbedCtx trips exactly on that
+// second check.
 //
-// cancelAfterEmbedCtx trips on the post-embed guard: generateEmbedding calls
-// ctxErr once (sees nil and proceeds), then the write method's guard calls
-// ctxErr again and observes cancellation — simulating a context cancelled while
-// the CGO embed was running.
-//
-// The specs assert the *bare* context error rather than errors.Is, which is what
-// pins the call site: an embedding-path short-circuit would surface it wrapped
-// as "failed to generate embedding: context canceled". So if a future change
-// adds another ctxErr call before the embed — making the fake trip at the wrong
-// site — these specs fail instead of silently covering a different branch.
+// Asserting the bare context error, not errors.Is, is what pins the call site:
+// a short-circuit inside the embed would surface it wrapped as "failed to
+// generate embedding: ...", so a future ctxErr call added before the embed fails
+// these specs instead of silently moving them to another branch.
 func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
 	Context("with a context cancelled during the CGO embedding", func() {
 		It("AddEntry returns the context error and publishes no entry", func() {

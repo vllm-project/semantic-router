@@ -196,10 +196,7 @@ func (c *ValkeyCache) initializeIndex() error {
 }
 
 // getEmbedding generates an embedding based on the configured embedding model.
-//
-// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
-// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
-// short-circuits before the expensive embed work starts (#2473).
+// Cancellation is best-effort here; see ctxErr.
 func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if err := ctxErr(ctx); err != nil {
 		return nil, err
@@ -596,9 +593,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string
 	responseBody := extractResponseBody(match)
 	if responseBody == nil {
 		c.recordCacheMiss("error", time.Since(start))
-		// similarity is above threshold here (a qualifying match with a
-		// missing body). Per the LookupResult contract this data-error path
-		// carries zero similarity, not the hit-level score (#2473).
+		// similarity is above threshold here, but a miss carries no score.
 		return LookupResult{}, nil
 	}
 

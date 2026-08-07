@@ -112,8 +112,6 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	partition := semanticCachePartition(ctx, requestModel)
-	// Thread the request-scoped (span) context so cancellation of the request
-	// reaches the embedding work in the pending write, mirroring the lookup (#2473).
 	if err := r.Cache.AddPendingRequest(ctx.TraceContext, ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
@@ -141,9 +139,6 @@ func (r *OpenAIRouter) performCacheLookup(
 
 	startTime := time.Now()
 	partition := semanticCachePartition(ctx, requestModel)
-	// Similarity is carried on the returned LookupResult, not read from
-	// backend-owned state after the call — this prevents a concurrent lookup
-	// on the same backend from leaking its score into this request (#2473).
 	lookupResult, cacheErr := r.Cache.FindSimilarWithThreshold(spanCtx, partition, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 	cachedResponse := lookupResult.Body
@@ -190,10 +185,8 @@ func (r *OpenAIRouter) performCacheLookup(
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
-		// No similarity is recorded on a miss: every backend returns a zero
-		// LookupResult for misses and data errors, so a miss must leave the
-		// debug/Replay surface without a score rather than publish a candidate
-		// one (#2473).
+		// No similarity is recorded: a miss leaves the debug/Replay surface
+		// without a score (see LookupResult).
 		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}

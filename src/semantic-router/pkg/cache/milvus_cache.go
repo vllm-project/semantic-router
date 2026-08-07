@@ -249,10 +249,7 @@ func (c *MilvusCache) initializeCollection() error {
 }
 
 // getEmbedding generates an embedding based on the configured embedding model.
-//
-// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
-// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
-// short-circuits before the expensive embed work starts (#2473).
+// Cancellation is best-effort here; see ctxErr.
 func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if err := ctxErr(ctx); err != nil {
 		return nil, err

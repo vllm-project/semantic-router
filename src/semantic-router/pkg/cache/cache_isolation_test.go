@@ -10,17 +10,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Regression coverage for #2473: two concurrent lookups against the same cache
-// backend must each receive their own LookupResult. Before #2473 the score
-// was published through a shared SimilarityTracker on the backend and read
-// after the Find returned, so a concurrent lookup could overwrite the score
-// between one caller's Find and its LastSimilarity() read — leaking another
-// request's similarity into the reader's response header, debug surface, and
-// Replay record.
-//
-// The fix moves similarity into the return value of Find/FindSimilarWithThreshold
-// (a LookupResult), removing the shared-state read entirely. This spec pins
-// the new contract.
+// Regression coverage for #2473: similarity used to be published through a
+// shared tracker on the backend and read after Find returned, so a concurrent
+// lookup could overwrite it in between and leak another request's score into
+// this one's headers, debug surface, and Replay record. Returning it on
+// LookupResult removes the shared read; this spec pins that.
 var _ = Describe("Cache lookup isolation (regression #2473)", func() {
 	Context("concurrent lookups on the same in-memory backend", func() {
 		It("returns per-request similarity via LookupResult with no cross-request leak", func() {

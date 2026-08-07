@@ -147,10 +147,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(ctx context.Context, model string
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		// bestScore is above threshold here (an otherwise-qualifying match with a
-		// corrupt/missing body). Per the LookupResult contract this data-error
-		// path carries zero similarity, not the hit-level score — returning it
-		// would leak a hit score as a miss into headers/telemetry (#2473).
+		// bestScore is above threshold here, but a miss carries no score.
 		return LookupResult{}, nil
 	}
 

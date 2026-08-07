@@ -53,15 +53,10 @@ func refusedValkeyConfig() *config.ValkeyConfig {
 // #2473 acceptance: a constructor whose setup step fails must release the
 // partially built client instead of leaking it.
 //
-// The cleanup has no black-box signal, so these tests assert the release call
-// itself:
-//   - the constructor already returned (nil, err) before the fix, so asserting
-//     on return values alone passes either way;
-//   - a network probe does not distinguish it either — against a server that
-//     accepts the dial but never answers, go-redis drops the connection when the
-//     command times out, so the peer sees EOF with or without our Close.
-//
-// Deleting a release call therefore has to fail here, or it fails nowhere.
+// These tests assert the release call itself because the cleanup has no
+// black-box signal — the constructor returns (nil, err) either way, and against
+// a server that accepts the dial but never answers, go-redis drops the
+// connection on command timeout with or without our Close.
 
 func TestReleaseOnFailureReleasesOnlyWhenTheStepFails(t *testing.T) {
 	stepErr := errors.New("setup failed")

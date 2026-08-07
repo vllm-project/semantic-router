@@ -22,26 +22,24 @@ type CacheEntry struct {
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
-// LookupResult carries the outcome of a semantic cache lookup as a single
-// request-owned value.
+// LookupResult carries the outcome of one lookup as a request-owned value.
+// Found=true means Body holds the cached response and Similarity is this
+// lookup's matched score; Found=false means Body is nil and Similarity is zero,
+// on every path including below-threshold misses and upstream errors.
 //
-// Semantics:
-//   - Found=true: Body holds the cached response and Similarity is the matched
-//     score for this lookup.
-//   - Found=false: Body is nil and Similarity is zero.
-//
-// Callers must not read similarity from any global or backend-owned state:
-// two concurrent lookups against the same backend instance would otherwise
-// race and leak one caller's score into another (#2473).
+// Similarity must never be read from backend-owned state: concurrent lookups on
+// the same backend would leak one caller's score into another (#2473).
 type LookupResult struct {
 	Body       []byte
 	Found      bool
 	Similarity float32
 }
 
-// ctxErr reports a context's cancellation or deadline error, treating a nil
-// context as "no error". Cache backends call it to short-circuit a lookup or
-// write before starting synchronous embedding/storage work (#2473).
+// ctxErr treats a nil context as "no error".
+//
+// Backends call it around embedding, which is a synchronous CGO call that cannot
+// be interrupted mid-flight: cancellation is therefore best-effort, checked once
+// before the embed starts and again before any state is published (#2473).
 func ctxErr(ctx context.Context) error {
 	if ctx == nil {
 		return nil
@@ -57,15 +55,12 @@ func contextErrorOnFailure(ctx context.Context, operationErr error) error {
 }
 
 // releaseOnFailure runs one post-construction setup step and releases the
-// partially built client when that step fails, so a failed constructor leaks no
-// connection, pool, or background goroutine (#2473).
+// partially built client when it fails, so a failed constructor leaks no
+// connection or pool.
 //
-// Backends route their setup steps through it because the cleanup itself has no
-// black-box signal: a constructor that leaks the client still returns
-// (nil, err), and a network-level probe cannot tell either — the underlying
-// drivers already drop a connection whose command failed. Centralizing the
-// contract here keeps it testable for every backend, including the ones whose
-// client cannot be built at all without a live server.
+// It exists as a seam: a leaked client is invisible from the outside — the
+// constructor returns (nil, err) either way, and the drivers already drop a
+// connection whose command failed — so this is where the contract is tested.
 func releaseOnFailure(step func() error, release func()) error {
 	if err := step(); err != nil {
 		release()
@@ -113,16 +108,12 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
-// Compile-time assertions that every backend satisfies CacheBackend. They live
-// at the interface definition site (no build tag) so a future contract
-// migration — e.g. adding a parameter to a write method — fails to compile here
-// rather than silently drifting until a downstream build breaks.
+// Compile-time assertions, untagged so a contract change fails to compile here
+// rather than in a downstream build.
 //
-// Caveat worth knowing before relying on them for the windows||!cgo
-// InMemoryCache/HybridCache stubs: nothing in this repository compiles that
-// variant today. `CGO_ENABLED=0 go build ./pkg/cache/...` fails inside
-// valkey-glide, which itself requires cgo, and CI has no windows job. The stub
-// method sets are therefore still review-verified, not build-verified.
+// They do not cover the windows||!cgo stubs in practice: nothing compiles that
+// variant today — CGO_ENABLED=0 fails inside valkey-glide, which needs cgo, and
+// CI has no windows job — so those method sets stay review-verified.
 var (
 	_ CacheBackend = (*InMemoryCache)(nil)
 	_ CacheBackend = (*HybridCache)(nil)

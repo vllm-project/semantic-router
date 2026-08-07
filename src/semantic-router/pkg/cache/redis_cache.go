@@ -234,10 +234,7 @@ func (c *RedisCache) initializeIndex() error {
 }
 
 // getEmbedding generates an embedding based on the configured embedding model.
-//
-// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
-// ctx cancellation is honored on a best-effort basis: an already-cancelled ctx
-// short-circuits before the expensive embed work starts (#2473).
+// Cancellation is best-effort here; see ctxErr.
 func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if err := ctxErr(ctx); err != nil {
 		return nil, err
@@ -711,10 +708,8 @@ func (c *RedisCache) FindSimilarWithThreshold(ctx context.Context, model string,
 	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
 	if !ok {
 		c.recordCacheMiss("error", time.Since(start))
-		// A parse/data error (missing distance or empty response_body). The
-		// parsed similarity may be above threshold, so per the LookupResult
-		// contract this path carries zero similarity rather than leaking a
-		// hit-level score as a miss (#2473).
+		// Missing distance or empty response_body. The parsed similarity may be
+		// above threshold, but a miss carries no score.
 		return LookupResult{}, nil
 	}
 

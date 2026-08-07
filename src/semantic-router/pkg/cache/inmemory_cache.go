@@ -194,9 +194,9 @@ func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 // served from the embedding memo when the same text was embedded recently
 // (e.g. the lookup + pending-write pair of a single cache-miss request).
 //
-// The embedding is a synchronous CGO call that cannot be interrupted mid-flight,
-// so ctx cancellation is honored on a best-effort basis: an already-cancelled
-// ctx short-circuits before the expensive embed work starts (#2473).
+// Embedding is a synchronous CGO call that cannot be interrupted mid-flight, so
+// cancellation is best-effort: an already-cancelled ctx short-circuits before
+// the embed starts, and callers re-check after it returns (#2473).
 func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if err := ctxErr(ctx); err != nil {
 		return nil, err
@@ -287,9 +287,7 @@ func (c *InMemoryCache) AddPendingRequest(
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Re-check cancellation after the synchronous embedding (a CGO call that can
-	// block) and before mutating cache state: a request canceled mid-embedding
-	// must not publish an orphaned pending entry (#2473).
+	// Cancelled during the embed: publish nothing.
 	if err := ctxErr(ctx); err != nil {
 		metrics.RecordCacheOperation("memory", "add_pending", "canceled", time.Since(start).Seconds())
 		return err
@@ -358,13 +356,9 @@ func (c *InMemoryCache) UpdateWithResponse(ctx context.Context, requestID string
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Honor cancellation before mutating cache state so a canceled request does
-	// not complete a pending entry (#2473).
-	//
-	// The pending entry written earlier by AddPendingRequest is deliberately left
-	// alone: it carries no response, so entryEligible never returns it as a match,
-	// and it drains on its TTL. Deleting it here would need the request's own
-	// entry identity, which this method does not have on the cancel path.
+	// A cancelled request does not complete its pending entry. That entry is
+	// left behind on purpose: it has no response, so entryEligible never matches
+	// it, and it drains on its TTL.
 	if err := ctxErr(ctx); err != nil {
 		metrics.RecordCacheOperation("memory", "update_response", "canceled", time.Since(start).Seconds())
 		return err
@@ -455,9 +449,7 @@ func (c *InMemoryCache) AddEntry(
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Re-check cancellation after the synchronous embedding (a CGO call that can
-	// block) and before mutating cache state: a request canceled mid-embedding
-	// must not publish an orphaned entry (#2473).
+	// Cancelled during the embed: publish nothing.
 	if err := ctxErr(ctx); err != nil {
 		metrics.RecordCacheOperation("memory", "add_entry", "canceled", time.Since(start).Seconds())
 		return err

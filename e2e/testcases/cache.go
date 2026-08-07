@@ -86,9 +86,8 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 			if opts.Verbose {
 				fmt.Printf("[Test] Error sending original question: %v\n", err)
 			}
-			// A failed priming request means the similar questions below can
-			// never legitimately hit; record it so the test fails instead of
-			// silently skipping the case (#2473).
+			// Without a priming request the similar questions cannot hit, so
+			// record it instead of silently skipping the case.
 			setupFailures = append(setupFailures,
 				fmt.Sprintf("original question %q: %v", testCase.OriginalQuestion, err))
 			continue
@@ -133,31 +132,21 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 			cacheHits, totalRequests, hitRate)
 	}
 
-	// Turn the collected results into an explicit pass/fail verdict (#2473).
 	verdict := evaluateCacheAssertions(results, totalRequests, cacheHits, setupFailures)
 
-	// Cancellation acceptance (#2473) runs last so it cannot disturb the hit-rate
-	// measurement above.
+	// Cancellation runs last so it cannot disturb the hit-rate measurement above.
 	return errors.Join(verdict, runCacheCancellationCheck(ctx, localPort, opts.Verbose))
 }
 
-// runCacheCancellationCheck exercises the #2473 cancellation contract at the E2E
-// surface: a request abandoned mid-flight must not publish cache state, so the
-// same question asked again must still miss.
+// runCacheCancellationCheck pins the #2473 cancellation contract at the only
+// place E2E can see it: an abandoned request must publish no cache state — not
+// even the pending entry written before the upstream answers — so the same
+// question asked again must still miss. Error propagation and the write-path
+// guards are pinned at unit level.
 //
-// Scope of what E2E can observe: cancellation reaches the router as an aborted
-// ext_proc stream, which has no response of its own to assert on. Its observable
-// consequence is the absence of cached state — including the pending entry the
-// request path writes before the upstream answers, which must never be served as
-// a hit. Context-error propagation and the write-path guards themselves are
-// pinned at unit level (pkg/cache cancellation specs).
-//
-// The cancel window is timing-dependent, so a request that completes before the
-// deadline is reported and skipped rather than failed: this assertion must not
-// add a new flake class to the profile matrix.
+// A request that beats the cancel window is reported and skipped, not failed.
 func runCacheCancellationCheck(ctx context.Context, localPort string, verbose bool) error {
-	// Unique question: nothing else in the corpus may be semantically close to
-	// it, or a pre-existing entry would answer the follow-up lookup.
+	// Unique: anything semantically close in the corpus would answer the follow-up.
 	question := fmt.Sprintf("cancellation probe %d: describe the ripening of a persimmon", time.Now().UnixNano())
 
 	cancelCtx, cancel := context.WithTimeout(ctx, cacheCancelWindow)
@@ -177,8 +166,7 @@ func runCacheCancellationCheck(ctx context.Context, localPort string, verbose bo
 		fmt.Printf("[Test] cancellation probe: request abandoned after %s\n", cacheCancelWindow)
 	}
 
-	// Give the router the same settling time the priming requests get, so a
-	// wrongly published entry would be visible by now.
+	// Same settling time the priming requests get.
 	time.Sleep(1 * time.Second)
 
 	followUp, err := sendChatRequest(ctx, question, localPort, verbose)
@@ -198,21 +186,12 @@ func runCacheCancellationCheck(ctx context.Context, localPort string, verbose bo
 	return nil
 }
 
-// evaluateCacheAssertions converts the collected per-request results into an
-// explicit pass/fail verdict. Previously testCache returned nil unconditionally,
-// so a malformed/missing similarity header (recorded in CacheResult.Error) or a
-// run that executed zero requests still passed CI (#2473).
+// evaluateCacheAssertions makes the per-request verdicts from
+// parseCacheSimilarity affect the testcase result.
 //
-// The per-request acceptance condition itself lives in parseCacheSimilarity,
-// which is applied to every response: a hit must carry its own score in (0,1]
-// and a miss must carry none. This function is what makes those per-request
-// verdicts affect the testcase result.
-//
-// Hit *rate* is deliberately not gated here. It is a measurement, reported
-// through SetDetails, and the repository already enforces a floor for it in
-// e2e/pkg/testcases/acceptance_contracts.go ("semantic-cache" -> minimum
-// hit_rate) for the profile that owns that contract. Failing every profile on
-// zero hits would turn a baseline contract into a matrix-wide gate.
+// Hit rate is not gated here on purpose: it is a measurement reported through
+// SetDetails, and acceptance_contracts.go already enforces a floor for it on the
+// profile that owns that contract.
 func evaluateCacheAssertions(results []CacheResult, totalRequests, cacheHits int, setupFailures []string) error {
 	assertionFailures := append([]string{}, setupFailures...)
 	for _, r := range results {
@@ -274,8 +253,6 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 	cacheHitHeader := resp.Header.Get("x-vsr-cache-hit")
 	result.CacheHit = (cacheHitHeader == "true")
 
-	// Per-request similarity assertion (#2473): validate the request-owned
-	// x-vsr-cache-similarity header (see parseCacheSimilarity for the contract).
 	sim, simErr := parseCacheSimilarity(resp.Header.Get("x-vsr-cache-similarity"), result.CacheHit)
 	if simErr != "" {
 		result.Error = simErr
@@ -294,14 +271,12 @@ func testSingleCacheRequest(ctx context.Context, testCase CacheTestCase, questio
 	return result
 }
 
-// parseCacheSimilarity validates the request-owned x-vsr-cache-similarity header
-// for one lookup and returns the parsed score, or a non-empty error message.
+// parseCacheSimilarity validates one lookup's x-vsr-cache-similarity header and
+// returns the parsed score, or a non-empty error message.
 //
-// The header rides the x-vsr-debug surface (opted into by sendChatRequest) and
-// is per-request (#2473): a hit surfaces a positive score that, because a hit is
-// returned only when similarity >= the configured threshold, lands in (0,1]. A
-// miss may omit the header or surface zero, but must not publish a candidate
-// score.
+// The contract (#2473): a hit is only returned above the configured threshold,
+// so its score lands in (0,1]; a miss may omit the header or send zero, never a
+// candidate score. The header rides the x-vsr-debug surface.
 func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if simHeader == "" {
 		if cacheHit {
@@ -347,8 +322,7 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// Opt into the x-vsr-debug surface so the router emits the demoted
-	// x-vsr-cache-similarity header we assert on for #2473.
+	// x-vsr-cache-similarity is demoted to the debug surface; opt in.
 	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
