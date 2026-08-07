@@ -2,6 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import blogSearchIndexPlugin from './src/plugins/blogSearchIndex'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
@@ -119,6 +120,9 @@ const config: Config = {
   ],
 
   plugins: [
+    // Publishes every published blog post as global data so the blog list page can
+    // search the whole archive instead of just the posts on the current page.
+    blogSearchIndexPlugin,
     [
       '@docusaurus/plugin-client-redirects',
       {
