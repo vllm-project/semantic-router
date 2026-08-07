@@ -11,7 +11,7 @@ import (
 )
 
 // Regression coverage for #2473: two concurrent lookups against the same cache
-// backend must each receive their OWN similarity score. Before #2473 the score
+// backend must each receive their own LookupResult. Before #2473 the score
 // was published through a shared SimilarityTracker on the backend and read
 // after the Find returned, so a concurrent lookup could overwrite the score
 // between one caller's Find and its LastSimilarity() read — leaking another
@@ -77,12 +77,10 @@ var _ = Describe("Cache lookup isolation (regression #2473)", func() {
 			Expect(hitRes.Similarity).To(BeNumerically(">=", threshold),
 				"hit lookup similarity below threshold — cross-request leak from miss?")
 
-			// Miss lookup: no match. Similarity must be this request's own best
-			// score (well below threshold), never the concurrent hit's score.
-			Expect(missRes.Found).To(BeFalse(),
-				"miss lookup expected Found=false (similarity=%.4f)", missRes.Similarity)
-			Expect(missRes.Similarity).To(BeNumerically("<", threshold),
-				"miss lookup similarity >= threshold — cross-request leak from hit")
+			// Miss lookup: no matched response or candidate similarity is exposed.
+			Expect(missRes.Found).To(BeFalse())
+			Expect(missRes.Body).To(BeNil())
+			Expect(missRes.Similarity).To(BeZero())
 		})
 	})
 })

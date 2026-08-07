@@ -721,7 +721,7 @@ func (c *RedisCache) FindSimilarWithThreshold(ctx context.Context, model string,
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
-		return LookupResult{Similarity: similarity}, nil
+		return LookupResult{}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)

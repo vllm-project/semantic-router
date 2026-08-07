@@ -26,11 +26,9 @@ type CacheEntry struct {
 // request-owned value.
 //
 // Semantics:
-//   - Found=true : Body holds the cached response and Similarity is the score
-//     of the matched entry for THIS lookup.
-//   - Found=false: Body is nil. Similarity carries the best-observed score for
-//     THIS lookup (below the caller's threshold), or 0 when the lookup was
-//     short-circuited (backend disabled, no candidates, upstream error).
+//   - Found=true: Body holds the cached response and Similarity is the matched
+//     score for this lookup.
+//   - Found=false: Body is nil and Similarity is zero.
 //
 // Callers must not read similarity from any global or backend-owned state:
 // two concurrent lookups against the same backend instance would otherwise

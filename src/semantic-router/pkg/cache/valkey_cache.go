@@ -581,7 +581,7 @@ func (c *ValkeyCache) FindSimilarWithThreshold(ctx context.Context, model string
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
-		return LookupResult{Similarity: similarity}, nil
+		return LookupResult{}, nil
 	}
 
 	responseBody := extractResponseBody(match)

@@ -13,7 +13,7 @@ import (
 // Coverage for #2473: the request context now threads into the embedding work
 // of a lookup. The specs are registered by the helpers below; see each helper's
 // doc comment for the exact contract it pins.
-var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)", func() {
+var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 	const threshold = float32(0.75)
 
 	newSeededBackend := func() CacheBackend {
@@ -36,7 +36,7 @@ var _ = Describe("Cache lookup cancellation and per-request miss score (#2473)",
 	}
 
 	specCancelledContextShortCircuits(newSeededBackend, threshold)
-	specBelowThresholdMissScore(newSeededBackend, threshold)
+	specBelowThresholdMissReturnsZero(newSeededBackend, threshold)
 	specCGOEmbedCancellation(newSeededBackend)
 })
 
@@ -67,12 +67,11 @@ func specCancelledContextShortCircuits(newSeededBackend func() CacheBackend, thr
 	})
 }
 
-// specBelowThresholdMissScore pins the per-request "best-observed score"
-// semantics of a miss: a below-threshold lookup reports its OWN best similarity
-// (> 0, below threshold), never zero and never another request's leaked score.
-func specBelowThresholdMissScore(newSeededBackend func() CacheBackend, threshold float32) {
+// specBelowThresholdMissReturnsZero pins that a below-threshold lookup is a miss and
+// does not publish the rejected candidate's similarity.
+func specBelowThresholdMissReturnsZero(newSeededBackend func() CacheBackend, threshold float32) {
 	Context("with a below-threshold query", func() {
-		It("reports the request's own best-observed similarity (0 < sim < threshold)", func() {
+		It("returns an empty result with zero similarity", func() {
 			backend := newSeededBackend()
 			defer func() { _ = backend.Close() }()
 
@@ -84,11 +83,9 @@ func specBelowThresholdMissScore(newSeededBackend func() CacheBackend, threshold
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.Found).To(BeFalse())
-			// Best-observed score is this request's own, not zero (a candidate
-			// was scored) and not leaked from another lookup (below threshold).
-			Expect(res.Similarity).To(BeNumerically(">", float32(0)),
-				"miss should carry the best-observed score, not zero")
-			Expect(res.Similarity).To(BeNumerically("<", threshold))
+			Expect(res.Body).To(BeNil())
+			Expect(res.Similarity).To(BeZero(),
+				"a cache miss must not publish a candidate similarity")
 		})
 	})
 }

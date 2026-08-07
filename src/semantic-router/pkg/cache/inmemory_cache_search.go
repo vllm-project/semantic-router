@@ -238,5 +238,5 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-	return LookupResult{Similarity: bestSimilarity}, nil
+	return LookupResult{}, nil
 }

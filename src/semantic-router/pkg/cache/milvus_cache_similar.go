@@ -138,7 +138,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(ctx context.Context, model string
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		return LookupResult{Similarity: bestScore}, nil
+		return LookupResult{}, nil
 	}
 
 	idx := milvusResponseBodyFieldIndex(hit)
