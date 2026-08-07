@@ -6,6 +6,7 @@ import TableHeader from '../components/TableHeader'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import { DataTable, type Column } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
@@ -296,7 +297,6 @@ export default function ConfigPageSignalsSection({
       signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
       signal.summary.toLowerCase().includes(signalsSearch.toLowerCase()),
   )
-
   const signalKey = (signal: UnifiedSignal) => `${signal.type}-${signal.name}`
   const signalReferenceCount = (signal: UnifiedSignal) =>
     getSignalReferenceCountInRoutingProfile(
@@ -310,7 +310,7 @@ export default function ConfigPageSignalsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
+      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
     },
     {
       key: 'type',

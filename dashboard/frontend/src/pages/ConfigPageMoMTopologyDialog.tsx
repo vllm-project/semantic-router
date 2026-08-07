@@ -1,4 +1,5 @@
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import {
   collectDecisionTargetModels,
   collectRecipeTargetModels,
@@ -77,7 +78,9 @@ export default function ConfigPageMoMTopologyDialog({
             <div className={styles.nodeList}>
               {decisions.map((decision) => (
                 <div key={decision.name} className={`${styles.node} ${styles.decisionNode}`}>
-                  <strong>{decision.name}</strong>
+                  <strong>
+                    {formatRoutingMetadataValue('x-vsr-selected-decision', decision.name)}
+                  </strong>
                   <small>P{decision.priority}</small>
                   <div className={styles.decisionTargets}>
                     {collectDecisionTargetModels(decision).map((model) => (
