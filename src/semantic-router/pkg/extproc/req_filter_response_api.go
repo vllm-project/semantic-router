@@ -138,18 +138,32 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 		return nil, nil, err
 	}
 
-	// The SDK struct doesn't expose a Stream field (the SDK sets it via
-	// request options internally). We inject it so the downstream pipeline
-	// and the upstream backend see the correct "stream" flag.
-	if req.Stream {
-		if b, err := sjson.SetBytes(translatedBody, "stream", true); err == nil {
-			translatedBody = b
-		}
-	}
+	translatedBody = injectResponseAPITransportFields(translatedBody, &req)
 
 	respCtx.TranslatedBody = translatedBody
 
 	return respCtx, translatedBody, nil
+}
+
+func injectResponseAPITransportFields(
+	body []byte,
+	req *responseapi.ResponseAPIRequest,
+) []byte {
+	if req.Stream {
+		if updated, err := sjson.SetBytes(body, "stream", true); err == nil {
+			body = updated
+		}
+	}
+	if len(req.Metadata) > 0 {
+		if updated, err := sjson.SetBytes(
+			body,
+			"metadata",
+			req.Metadata,
+		); err == nil {
+			body = updated
+		}
+	}
+	return body
 }
 
 // TranslateResponse translates a Chat Completions response back to Response API format.

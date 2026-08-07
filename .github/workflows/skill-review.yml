@@ -6,9 +6,18 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    env:
+      TESSL_API_TOKEN: ${{ secrets.TESSL_API_TOKEN }}
     permissions:
       pull-requests: write
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: tesslio/skill-review@main
+      - name: Review changed skills
+        if: env.TESSL_API_TOKEN != ''
+        uses: tesslio/skill-review@main
+        with:
+          tessl-token: ${{ env.TESSL_API_TOKEN }}
+      - name: Skip review when Tessl is not configured
+        if: env.TESSL_API_TOKEN == ''
+        run: echo "Tessl skill review is disabled because TESSL_API_TOKEN is not configured."

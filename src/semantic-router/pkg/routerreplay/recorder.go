@@ -2,6 +2,8 @@ package routerreplay
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -23,6 +25,7 @@ const (
 
 type (
 	Signal                        = store.Signal
+	HallucinationSpan             = store.HallucinationSpan
 	LearningDiagnostics           = store.LearningDiagnostics
 	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
 	LearningCandidateScore        = store.LearningCandidateScore
@@ -45,6 +48,7 @@ type (
 type Recorder struct {
 	storage store.Storage
 
+	policyMu          sync.RWMutex
 	maxBodyBytes      int
 	maxToolTraceBytes int // 0 = no limit
 	maxToolTraceSteps int // 0 = no limit
@@ -64,6 +68,8 @@ func NewRecorder(storage store.Storage) *Recorder {
 }
 
 func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBodyBytes int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	r.captureRequestBody = captureRequest
 	r.captureResponseBody = captureResponse
 
@@ -78,6 +84,8 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 // fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 // A value of 0 disables truncation for those fields.
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceBytes = max
 	}
@@ -88,17 +96,39 @@ func (r *Recorder) SetMaxToolTraceBytes(max int) {
 // the most recent timeline) and ToolTrace.StepsTruncated is set. A value of
 // 0 disables step-count truncation. Negative values are ignored.
 func (r *Recorder) SetMaxToolTraceSteps(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceSteps = max
 	}
 }
 
 func (r *Recorder) ShouldCaptureRequest() bool {
-	return r.captureRequestBody
+	return r.policySnapshot().captureRequestBody
 }
 
 func (r *Recorder) ShouldCaptureResponse() bool {
-	return r.captureResponseBody
+	return r.policySnapshot().captureResponseBody
+}
+
+type recorderPolicy struct {
+	maxBodyBytes        int
+	maxToolTraceBytes   int
+	maxToolTraceSteps   int
+	captureRequestBody  bool
+	captureResponseBody bool
+}
+
+func (r *Recorder) policySnapshot() recorderPolicy {
+	r.policyMu.RLock()
+	defer r.policyMu.RUnlock()
+	return recorderPolicy{
+		maxBodyBytes:        r.maxBodyBytes,
+		maxToolTraceBytes:   r.maxToolTraceBytes,
+		maxToolTraceSteps:   r.maxToolTraceSteps,
+		captureRequestBody:  r.captureRequestBody,
+		captureResponseBody: r.captureResponseBody,
+	}
 }
 
 func (r *Recorder) SetMaxRecords(max int) {
@@ -108,28 +138,25 @@ func (r *Recorder) SetMaxRecords(max int) {
 }
 
 func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
+	policy := r.policySnapshot()
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now().UTC()
 	}
 
-	if r.captureRequestBody && len(rec.RequestBody) > r.maxBodyBytes {
-		rec.RequestBody = rec.RequestBody[:r.maxBodyBytes]
-		rec.RequestBodyTruncated = true
-	}
-
-	if r.captureResponseBody && len(rec.ResponseBody) > r.maxBodyBytes {
-		rec.ResponseBody = rec.ResponseBody[:r.maxBodyBytes]
-		rec.ResponseBodyTruncated = true
-	}
+	// Enforce capture switches and apply body truncation limits.
+	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
+		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
+	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
+		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
-	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
+	applyMaxToolTraceBytes(&rec, policy.maxToolTraceBytes)
 	// MaxToolTraceSteps is enforced separately so that an unbounded agent
 	// session that produces hundreds of steps per record can't keep growing
 	// the slice and OOM the router (see issue #1835).
-	capToolTraceStepCount(rec.ToolTrace, r.maxToolTraceSteps)
+	capToolTraceStepCount(rec.ToolTrace, policy.maxToolTraceSteps)
 
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
@@ -141,14 +168,8 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	if max <= 0 {
 		return
 	}
-	if len(rec.Prompt) > max {
-		rec.Prompt = rec.Prompt[:max]
-		rec.PromptTruncated = true
-	}
-	if len(rec.ToolDefinitions) > max {
-		rec.ToolDefinitions = rec.ToolDefinitions[:max]
-		rec.ToolDefinitionsTruncated = true
-	}
+	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
@@ -193,12 +214,11 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 // payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
-	if len(step.Arguments) > max {
-		step.Arguments = step.Arguments[:max]
-		step.Truncated = true
-	}
-	if len(step.Output) > max {
-		step.Output = step.Output[:max]
+	args, t1 := truncateString(step.Arguments, max)
+	out, t2 := truncateString(step.Output, max)
+	step.Arguments = args
+	step.Output = out
+	if t1 || t2 {
 		step.Truncated = true
 	}
 }
@@ -209,21 +229,23 @@ func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming
 }
 
 func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
-	if !r.captureRequestBody {
+	policy := r.policySnapshot()
+	if !policy.captureRequestBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(requestBody, r.maxBodyBytes)
+	body, truncated := truncateBody(requestBody, policy.maxBodyBytes)
 	ctx := context.Background()
 	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
-	if !r.captureResponseBody {
+	policy := r.policySnapshot()
+	if !policy.captureResponseBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(responseBody, r.maxBodyBytes)
+	body, truncated := truncateBody(responseBody, policy.maxBodyBytes)
 	ctx := context.Background()
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
@@ -234,9 +256,9 @@ func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string) error {
+func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
 	ctx := context.Background()
-	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans)
+	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails)
 }
 
 func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
@@ -245,14 +267,15 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	policy := r.policySnapshot()
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via
 	// this update path (see extproc.attachRouterReplayResponse) and therefore
 	// bypass the AddRecord truncation unless we cap them again. The same
 	// reasoning applies to MaxToolTraceSteps — a long agent session updates
 	// the trace through this method, so without a cap here the OOM scenario
 	// from #1835 can still happen even when AddRecord truncates correctly.
-	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
-	capToolTraceStepCount(&trace, r.maxToolTraceSteps)
+	truncateToolTraceSteps(&trace, policy.maxToolTraceBytes)
+	capToolTraceStepCount(&trace, policy.maxToolTraceSteps)
 	ctx := context.Background()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
@@ -287,11 +310,33 @@ func (r *Recorder) Close() error {
 	return r.storage.Close()
 }
 
+// applyBodyCapturePolicy enforces one capture switch on one body field. The
+// switch decides whether a body may reach storage at all, not just whether it
+// is truncated: when capture is off the body must be dropped entirely —
+// truncation alone only bounds a leak (see #2748). Within the limit the
+// caller's truncated flag is preserved.
+func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) (string, bool) {
+	if !capture {
+		return "", false
+	}
+	if len(body) > maxBytes {
+		return strings.Clone(body[:maxBytes]), true
+	}
+	return body, truncated
+}
+
 func truncateBody(body []byte, maxBytes int) (string, bool) {
 	if maxBytes <= 0 || len(body) <= maxBytes {
 		return string(body), false
 	}
 	return string(body[:maxBytes]), true
+}
+
+func truncateString(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s, false
+	}
+	return strings.Clone(s[:maxBytes]), true
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {

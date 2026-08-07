@@ -8,7 +8,7 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 
 ## Trigger
 
-- Change `AGENTS.md`, `docs/agent/*`, `tools/agent/*`, `tools/make/agent.mk`, or harness-facing CI/workflow classification
+- Change `AGENTS.md`, `tools/agent/docs/*`, `tools/agent/*`, `tools/make/agent.mk`, or harness-facing CI/workflow classification
 - Change contributor-facing wrappers that explain the harness, such as `README.md`, `CONTRIBUTING.md`, or the PR template
 
 ## Required Surfaces
@@ -41,9 +41,9 @@ description: Modifies the repository's agent contract including AGENTS.md, docs 
 
 ## Must Read
 
-- [docs/agent/README.md](../../../../docs/agent/README.md)
-- [docs/agent/governance.md](../../../../docs/agent/governance.md)
-- [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
+- [tools/agent/docs/README.md](../../../../tools/agent/docs/README.md)
+- [tools/agent/docs/governance.md](../../../../tools/agent/docs/governance.md)
+- [tools/agent/docs/plans/README.md](../../../../tools/agent/docs/plans/README.md)
 
 ## Standard Commands
 

@@ -11,6 +11,13 @@ import (
 // validator_modality.go and friends, and is wired into validateConfigStructure
 // so misconfigured rules fail at config-load time rather than at first use.
 func validateEmbeddingContracts(cfg *RouterConfig) error {
+	if err := validateEmbeddingModelContracts(cfg); err != nil {
+		return err
+	}
+	return validateEmbeddingSignalContracts(cfg)
+}
+
+func validateEmbeddingModelContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
@@ -19,6 +26,13 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 	}
 	if err := validateRemoteEmbeddingProviderConfig(cfg.EmbeddingModels); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateEmbeddingSignalContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
 	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType)
 }

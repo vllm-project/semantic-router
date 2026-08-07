@@ -2,7 +2,7 @@
 translation:
   source_commit: "0ee41b5f"
   source_file: "docs/api/router.md"
-  outdated: false
+  outdated: true
 title: Router API 参考
 description: 经 Envoy 暴露的数据面 HTTP 接口与前后端路由行为说明
 ---

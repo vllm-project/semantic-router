@@ -6,6 +6,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -18,6 +19,7 @@ type routerReplayAggregateResponse struct {
 	SignalDistribution   []routerReplayAggregateValue      `json:"signal_distribution"`
 	TokenVolume          routerReplayAggregateTokenVolume  `json:"token_volume"`
 	TokenBreakdown       routerReplayAggregateTokenBuckets `json:"token_breakdown"`
+	AvailableRecipes     []string                          `json:"available_recipes"`
 	AvailableDecisions   []string                          `json:"available_decisions"`
 	AvailableModels      []string                          `json:"available_models"`
 }
@@ -91,6 +93,7 @@ func buildRouterReplayAggregatePayload(
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
 		TokenVolume:          buildRouterReplayTokenVolume(filteredRecords),
 		TokenBreakdown:       buildRouterReplayTokenBreakdown(filteredRecords),
+		AvailableRecipes:     collectRouterReplayRecipeOptions(allRecords),
 		AvailableDecisions:   collectRouterReplayDecisionOptions(allRecords),
 		AvailableModels:      collectRouterReplayModelOptions(allRecords),
 	}
@@ -136,7 +139,7 @@ func buildRouterReplayDecisionDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := record.Decision
+		name := config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)
 		if name == "" {
 			name = "Unknown"
 		}
@@ -220,7 +223,7 @@ func buildRouterReplayTokenBreakdown(
 
 		accumulateRouterReplayTokenEntry(
 			decisionBuckets,
-			routerReplayFallbackName(record.Decision),
+			routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)),
 			promptTokens,
 			completionTokens,
 			totalTokens,
@@ -323,6 +326,16 @@ func collectRouterReplayDecisionOptions(records []routerreplay.RoutingRecord) []
 	for _, record := range records {
 		if record.Decision != "" {
 			values[record.Decision] = struct{}{}
+		}
+	}
+	return sortRouterReplayOptionSet(values)
+}
+
+func collectRouterReplayRecipeOptions(records []routerreplay.RoutingRecord) []string {
+	values := make(map[string]struct{})
+	for _, record := range records {
+		if record.Recipe != "" {
+			values[record.Recipe] = struct{}{}
 		}
 	}
 	return sortRouterReplayOptionSet(values)

@@ -69,6 +69,28 @@ config:
               ttl_turns: 0
               keep_current_model: true
               prefer_prefix_retention: true
+      - name: looper_metrics_probe_decision
+        description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
+        priority: 610
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_metrics_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+          - model: base-model
+            lora_name: math-expert
+            use_reasoning: false
+        algorithm:
+          type: confidence
+          confidence:
+            confidence_method: hybrid
+            threshold: 0.72
+            on_error: skip
+            escalation_order: small_to_large
       - name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
@@ -582,6 +604,11 @@ config:
           keywords:
             - __RETENTION_PROBE__
           case_sensitive: false
+        - name: looper_metrics_probe_keywords
+          operator: OR
+          keywords:
+            - __MULTI_MODEL_PROBE__
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -637,6 +664,64 @@ config:
           - name: general-expert
             description: General-purpose adapter for diverse topics
       - name: general-expert
+  entrypoints:
+    - model_names: ["vllm-sr/e2e-recipe-probe"]
+      recipe: entrypoint-probe
+    - model_names: ["vllm-sr/metadata-policy"]
+      recipe: metadata-policy
+    - model_names: ["vllm-sr/e2e-default-alias"]
+      recipe: default
+  recipes:
+    - name: entrypoint-probe
+      description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
+      routing:
+        strategy: priority
+        signals:
+          keywords:
+            # Intentionally reuses a signal name from the default recipe with
+            # a different definition. Recipe-local namespaces must keep the
+            # two definitions isolated at validation and request time.
+            - name: retention_probe_keywords
+              operator: OR
+              keywords:
+                - __ENTRYPOINT_RECIPE_PROBE__
+              case_sensitive: false
+        decisions:
+          - name: entrypoint_probe_decision
+            description: Route entrypoint-probe recipe traffic to the general-expert adapter.
+            priority: 100
+            rules:
+              operator: OR
+              conditions:
+                - type: keyword
+                  name: retention_probe_keywords
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
+    - name: metadata-policy
+      description: Deterministic recipe-local metadata routing probe.
+      routing:
+        strategy: priority
+        signals:
+          metadata:
+            - name: canary_cohort
+              key: cohort
+              predicate:
+                equals: canary
+        decisions:
+          - name: metadata_recipe_decision
+            description: Route canary metadata inside the selected recipe.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: metadata
+                  name: canary_cohort
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
   global:
     router:
       strategy: priority
@@ -711,6 +796,13 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+      # The canonical default (localhost:8899) assumes a router-owned listener
+      # that this profile's config.listeners: [] does not configure. Point the
+      # looper's per-call HTTP client directly at the same base-model backend
+      # the router itself routes to, reusing its existing LoRA adapters
+      # (issue #2694 e2e coverage) instead of standing up new infra.
+      looper:
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1/chat/completions
 toolsDb:
   - tool:
       type: function

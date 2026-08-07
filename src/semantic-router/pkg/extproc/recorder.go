@@ -19,7 +19,7 @@ import (
 func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
 	effortForMetrics := ""
 	if reasoningEnabled && decisionName != "" {
-		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
+		effortForMetrics = r.getReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
 	}
 
 	logging.ComponentEvent("extproc", "routing_decision", map[string]interface{}{
@@ -51,8 +51,8 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		"decision_reason":   reasoningDecision.DecisionReason,
 	})
 
-	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
-	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
+	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
+	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
 	// Keep legacy attributes for backward compatibility
 	tracing.SetSpanAttributes(routingSpan,
@@ -113,7 +113,7 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	populateReplaySessionIfNeeded(ctx)
 
-	recorder := r.resolveReplayRecorder(decisionName)
+	recorder := r.resolveReplayRecorder(ctx, decisionName)
 	if recorder == nil {
 		return
 	}
@@ -159,8 +159,12 @@ func populateReplaySessionIfNeeded(ctx *RequestContext) {
 	populateSessionTransitionFields(ctx)
 }
 
-func (r *OpenAIRouter) resolveReplayRecorder(decisionName string) *routerreplay.Recorder {
-	recorder := r.ReplayRecorders[decisionName]
+func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName string) *routerreplay.Recorder {
+	recipeName := config.DefaultRecipeName
+	if ctx != nil && ctx.Routing.RecipeName() != "" {
+		recipeName = ctx.Routing.RecipeName()
+	}
+	recorder := r.ReplayRecorders[config.RoutingDecisionKey(recipeName, decisionName)]
 	if recorder != nil {
 		return recorder
 	}
@@ -193,6 +197,7 @@ func buildReplayRoutingRecord(
 		SessionID:         ctx.SessionID,
 		TurnIndex:         ctx.TurnIndex,
 		Decision:          decisionName,
+		Recipe:            string(ctx.Routing.RecipeName()),
 		DecisionTier:      decisionTier,
 		DecisionPriority:  decisionPriority,
 		Category:          ctx.VSRSelectedCategory,
@@ -298,6 +303,8 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		KB:           ctx.VSRMatchedKB,
 		Conversation: ctx.VSRMatchedConversation,
 		Event:        ctx.VSRMatchedEvent,
+		Metadata:     ctx.VSRMatchedMetadata,
+		Classifier:   ctx.VSRMatchedClassifier,
 	}
 }
 
@@ -424,6 +431,29 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 }
 
+// hallucinationSpanDetailsForReplay converts NLI span analysis into the
+// replay store's shape. Returns nil when NLI detection did not run for this
+// request, so basic (non-NLI) detection continues to persist plain spans only.
+func hallucinationSpanDetailsForReplay(info *EnhancedHallucinationInfo) []routerreplay.HallucinationSpan {
+	if info == nil {
+		return nil
+	}
+	details := make([]routerreplay.HallucinationSpan, len(info.Spans))
+	for i, span := range info.Spans {
+		details[i] = routerreplay.HallucinationSpan{
+			Text:                    span.Text,
+			Start:                   span.Start,
+			End:                     span.End,
+			HallucinationConfidence: span.HallucinationConfidence,
+			NLILabel:                span.NLILabel,
+			NLIConfidence:           span.NLIConfidence,
+			Severity:                span.Severity,
+			Explanation:             span.Explanation,
+		}
+	}
+	return details
+}
+
 // updateRouterReplayHallucinationStatus updates the hallucination detection results in the replay record.
 func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext) {
 	if ctx == nil || ctx.RouterReplayID == "" {
@@ -452,6 +482,7 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		ctx.HallucinationDetected,
 		ctx.HallucinationConfidence,
 		ctx.HallucinationSpans,
+		hallucinationSpanDetailsForReplay(ctx.EnhancedHallucinationInfo),
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{

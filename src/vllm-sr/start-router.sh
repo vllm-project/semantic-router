@@ -8,6 +8,10 @@ CONFIG_FILE="${1:-/app/config.yaml}"
 echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
 
+# Container-local management listener: bind all interfaces for docker-network
+# peers (dashboard/envoy). Host publish remains a separate Phase 4 concern.
+export VLLM_SR_MANAGEMENT_INTERNAL_LISTENER=true
+
 # Preserve setup-mode behavior from the historical single-container entrypoint.
 if python3 -c "
 import sys, yaml
@@ -28,4 +32,5 @@ exec /usr/local/bin/router \
     -config="$CONFIG_FILE" \
     -port=50051 \
     -enable-api=true \
-    -api-port=8080
+    -api-port=8080 \
+    -api-bind=0.0.0.0

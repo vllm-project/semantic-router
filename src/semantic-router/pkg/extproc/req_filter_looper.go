@@ -96,7 +96,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.ModelSelector)
+	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.modelSelectorForRequest(reqCtx))
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
@@ -132,8 +132,10 @@ func (r *OpenAIRouter) handleLooperExecution(
 		looperReq.Fusion = fusionOverride
 	}
 
-	// Execute looper
-	resp, err := l.Execute(ctx, looperReq)
+	// Execute looper, recording the wall-clock latency of the full execution
+	// (all model calls plus algorithm overhead) on the response for the
+	// x-vsr-looper-latency-ms debug header (#2694).
+	resp, err := looper.ExecuteWithLatency(ctx, l, looperReq)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_execution_failed", map[string]interface{}{
 			"request_id": reqCtx.RequestID,

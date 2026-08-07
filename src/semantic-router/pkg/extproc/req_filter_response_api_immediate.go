@@ -302,6 +302,19 @@ func appendResponseAPIImmediateHeaders(procResp *ext_proc.ProcessingResponse, ex
 	headers.SetHeaders = append(headers.SetHeaders, extra...)
 }
 
+func appendRecipeHeaderToImmediateResponse(
+	procResp *ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+) {
+	if ctx == nil || ctx.Routing.RecipeName() == "" {
+		return
+	}
+	appendResponseAPIImmediateHeaders(
+		procResp,
+		rawHeaderOption(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName())),
+	)
+}
+
 func responseAPICacheHitHeaders(
 	category string,
 	decisionName string,

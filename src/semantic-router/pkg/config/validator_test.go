@@ -131,11 +131,14 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	})
 
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
-		Expect(sharedConfigContractValidators).NotTo(BeEmpty())
-		for _, validator := range sharedConfigContractValidators {
-			Expect(validator.name).NotTo(BeEmpty())
-			Expect(validator.scopes&configValidationScopeFile).NotTo(BeZero(), "validator %s must run for file config", validator.name)
-			Expect(validator.scopes&configValidationScopeKubernetes).NotTo(BeZero(), "validator %s must run after k8s CRD conversion", validator.name)
+		for _, validators := range [][]configContractValidator{
+			globalConfigContractValidators,
+			routingProfileContractValidators,
+		} {
+			Expect(validators).NotTo(BeEmpty())
+			for _, validator := range validators {
+				Expect(validator).NotTo(BeNil())
+			}
 		}
 	})
 
@@ -425,7 +428,7 @@ func registerValidateConfigStructureAlgorithmSpecs() {
 	registerValidateConfigStructureFusionSpecs()
 	registerValidateConfigStructureWorkflowsSpecs()
 	registerValidateConfigStructureAlgorithmTypeMismatchSpecs()
-	registerValidateConfigStructureLegacyLatencySpecs()
+	registerValidateConfigStructureSignalReferenceSpecs()
 }
 
 func registerValidateConfigStructureAlgorithmSchemaSpecs() {
@@ -1015,16 +1018,16 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 	})
 }
 
-func registerValidateConfigStructureLegacyLatencySpecs() {
-	It("rejects legacy latency conditions", func() {
+func registerValidateConfigStructureSignalReferenceSpecs() {
+	It("rejects unsupported signal condition types", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
-					Name: "legacy-latency",
+					Name: "unsupported-signal",
 					Rules: RuleCombination{
 						Operator: "AND",
 						Conditions: []RuleCondition{
-							{Type: "latency", Name: "low_latency"},
+							{Type: "unknown", Name: "unknown-signal"},
 						},
 					},
 					ModelRefs: []ModelRef{{
@@ -1038,45 +1041,7 @@ func registerValidateConfigStructureLegacyLatencySpecs() {
 
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
-	})
-
-	It("rejects mixed latency condition and latency_aware configurations", func() {
-		cfg := &RouterConfig{
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{
-					{
-						Name: "legacy-latency",
-						Rules: RuleCombination{
-							Operator: "AND",
-							Conditions: []RuleCondition{
-								{Type: "latency", Name: "low_latency"},
-							},
-						},
-						ModelRefs: []ModelRef{{
-							Model:                 "model-a",
-							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
-						}},
-						Algorithm: &AlgorithmConfig{Type: "static"},
-					},
-					{
-						Name: "new-latency-aware",
-						ModelRefs: []ModelRef{{
-							Model:                 "model-b",
-							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
-						}},
-						Algorithm: &AlgorithmConfig{
-							Type:         "latency_aware",
-							LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
-						},
-					},
-				},
-			},
-		}
-
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
+		Expect(err.Error()).To(ContainSubstring("unsupported signal type \"unknown\""))
 	})
 }
 

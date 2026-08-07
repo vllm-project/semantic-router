@@ -10,7 +10,7 @@ import (
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.Active() && c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
@@ -136,6 +136,8 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 
 	var detections []JailbreakDetection
 	hasJailbreak := false
+	failedCount := 0
+	var lastErr error
 
 	for i, content := range contentList {
 		if content == "" {
@@ -145,6 +147,8 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(content, threshold)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
+			failedCount++
+			lastErr = err
 			continue
 		}
 
@@ -163,12 +167,20 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 		}
 	}
 
+	// Fail closed: individual inference failures are tolerated as long as some
+	// content was actually classified, but if nothing could be classified the
+	// caller must not receive a benign "no jailbreak" verdict it cannot
+	// distinguish from a clean scan.
+	if failedCount > 0 && len(detections) == 0 {
+		return false, nil, fmt.Errorf("jailbreak classification failed for all %d content item(s): %w", failedCount, lastErr)
+	}
+
 	return hasJailbreak, detections, nil
 }
 
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
-	return c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	return c.Config.PIIModel.Active() && c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.

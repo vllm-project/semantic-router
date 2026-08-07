@@ -20,6 +20,8 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      operator:
+        value: ${{ jobs.filter.outputs.operator }}
       agent_text:
         value: ${{ jobs.filter.outputs.agent_text }}
       agent_exec:
@@ -81,6 +83,7 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      operator: ${{ steps.changes.outputs.operator }}
       agent_text: ${{ steps.changes.outputs.agent_text }}
       agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
@@ -120,8 +123,6 @@ jobs:
               - 'openvino-binding/**'
               - 'bench/**'
               - 'config/**'
-              - 'scripts/**'
-              - 'deploy/examples/**'
               - 'tools/**'
               - 'go.mod'
               - 'go.sum'
@@ -135,7 +136,6 @@ jobs:
             website:
               - 'website/**'
             docs:
-              - 'docs/**'
               - '**/*.md'
               - '**/*.mdx'
             helm:
@@ -156,8 +156,14 @@ jobs:
             make:
               - 'Makefile'
               - 'tools/make/**'
+            # PR-level gate for operator-ci.yml jobs (its pull_request trigger
+            # has no paths filter). The operator consumes the config package,
+            # so config contract changes must re-run operator checks. Keep in
+            # sync with the push paths in operator-ci.yml.
             operator:
               - 'deploy/operator/**'
+              - 'src/semantic-router/pkg/config/**'
+              - '.github/workflows/operator-ci.yml'
             perf:
               - 'perf/**'
             bindings:
@@ -166,7 +172,7 @@ jobs:
               - 'onnx-binding/**'
             agent_text:
               - 'AGENTS.md'
-              - 'docs/agent/**'
+              - 'tools/agent/docs/**'
               - 'tools/agent/skills/**'
               - 'src/fleet-sim/AGENTS.md'
               - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
@@ -251,7 +257,7 @@ jobs:
             e2e_multi_endpoint:
               - 'e2e/profiles/multi-endpoint/**'
               - 'e2e/config/config.multi-endpoint.yaml'
-              - 'scripts/multi-endpoint/**'
+              - 'tools/demos/multi-endpoint.sh'
             e2e_authz_rbac:
               - 'e2e/profiles/authz-rbac/**'
               - 'e2e/config/config.authz-rbac.yaml'

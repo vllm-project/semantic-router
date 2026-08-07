@@ -19,6 +19,7 @@ limitations under the License.
 package vectorstore
 
 import (
+	"context"
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -44,7 +45,14 @@ func NewCandleEmbedder(modelType string, dimension int) *CandleEmbedder {
 }
 
 // Embed generates an embedding vector for the given text using the configured model.
-func (e *CandleEmbedder) Embed(text string) ([]float32, error) {
+// The context is checked before the (potentially long-running) FFI call so a cancelled
+// lifecycle or request aborts before starting new embedding work. The underlying
+// candle_binding calls are synchronous and not themselves cancellable; interrupting a
+// call already in flight is tracked as a follow-up under #2474.
+func (e *CandleEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	switch e.modelType {
 	case "bert":
 		return candle_binding.GetEmbedding(text, 0)

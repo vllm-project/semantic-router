@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -124,7 +125,7 @@ func TestRuntimeRegistrySuppressesLegacySelectionGlobalUntilPublished(t *testing
 
 type fakeRuntimeEmbedder struct{}
 
-func (fakeRuntimeEmbedder) Embed(_ string) ([]float32, error) {
+func (fakeRuntimeEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	return []float32{1, 0}, nil
 }
 

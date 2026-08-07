@@ -30,6 +30,8 @@ type Signal struct {
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
 	Event        []string `json:"event,omitempty"`
+	Metadata     []string `json:"metadata,omitempty"`
+	Classifier   []string `json:"classifier,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -104,26 +106,47 @@ type ToolTraceStep struct {
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
-	Decision             string `json:"decision,omitempty"`
-	DecisionTier         int    `json:"decision_tier,omitempty"`
-	DecisionPriority     int    `json:"decision_priority,omitempty"`
-	SelectionMethod      string `json:"selection_method,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
-	ProposalModel        string `json:"proposal_model,omitempty"`
-	PreviousModel        string `json:"previous_model,omitempty"`
-	SelectedModel        string `json:"selected_model,omitempty"`
-	SessionPolicyApplied bool   `json:"session_policy_applied,omitempty"`
-	SessionAction        string `json:"session_action,omitempty"`
-	SessionPhase         string `json:"session_phase,omitempty"`
-	SessionReason        string `json:"session_reason,omitempty"`
-	HardLockReason       string `json:"hard_lock_reason,omitempty"`
-	DecisionReason       string `json:"decision_reason,omitempty"`
-	MemoryBackend        string `json:"memory_backend,omitempty"`
-	MemoryStatus         string `json:"memory_status,omitempty"`
-	MemoryReason         string `json:"memory_reason,omitempty"`
-	MemoryFallbackReason string `json:"memory_fallback_reason,omitempty"`
-	MemoryFailOpen       bool   `json:"memory_fail_open,omitempty"`
-	MemoryResultCount    int    `json:"memory_result_count,omitempty"`
+	Decision                     string                 `json:"decision,omitempty"`
+	DecisionTier                 int                    `json:"decision_tier,omitempty"`
+	DecisionPriority             int                    `json:"decision_priority,omitempty"`
+	SelectionMethod              string                 `json:"selection_method,omitempty"`
+	SelectionReasoning           string                 `json:"selection_reasoning,omitempty"`
+	PromptHelperModel            string                 `json:"prompt_helper_model,omitempty"`
+	PromptHelperPromptTokens     int64                  `json:"prompt_helper_prompt_tokens,omitempty"`
+	PromptHelperCompletionTokens int64                  `json:"prompt_helper_completion_tokens,omitempty"`
+	PromptHelperTotalTokens      int64                  `json:"prompt_helper_total_tokens,omitempty"`
+	PromptHelperLatencyMs        int64                  `json:"prompt_helper_latency_ms,omitempty"`
+	OriginalModel                string                 `json:"original_model,omitempty"`
+	ProposalModel                string                 `json:"proposal_model,omitempty"`
+	PreviousModel                string                 `json:"previous_model,omitempty"`
+	SelectedModel                string                 `json:"selected_model,omitempty"`
+	SessionPolicyApplied         bool                   `json:"session_policy_applied,omitempty"`
+	SessionAction                string                 `json:"session_action,omitempty"`
+	SessionPhase                 string                 `json:"session_phase,omitempty"`
+	SessionReason                string                 `json:"session_reason,omitempty"`
+	HardLockReason               string                 `json:"hard_lock_reason,omitempty"`
+	DecisionReason               string                 `json:"decision_reason,omitempty"`
+	MemoryBackend                string                 `json:"memory_backend,omitempty"`
+	MemoryStatus                 string                 `json:"memory_status,omitempty"`
+	MemoryReason                 string                 `json:"memory_reason,omitempty"`
+	MemoryFallbackReason         string                 `json:"memory_fallback_reason,omitempty"`
+	MemoryFailOpen               bool                   `json:"memory_fail_open,omitempty"`
+	MemoryResultCount            int                    `json:"memory_result_count,omitempty"`
+	Annotations                  map[string]interface{} `json:"annotations,omitempty"`
+	SignalErrors                 map[string]string      `json:"signal_errors,omitempty"`
+}
+
+// HallucinationSpan is a single unsupported span with its NLI explanation,
+// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+type HallucinationSpan struct {
+	Text                    string  `json:"text"`
+	Start                   int     `json:"start"`
+	End                     int     `json:"end"`
+	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	NLILabel                string  `json:"nli_label"`
+	NLIConfidence           float32 `json:"nli_confidence"`
+	Severity                int     `json:"severity"`
+	Explanation             string  `json:"explanation"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -135,6 +158,7 @@ type Record struct {
 	TurnIndex             int                    `json:"turn_index"`
 	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
 	ConversationID        string                 `json:"conversation_id,omitempty"`
+	Recipe                string                 `json:"recipe,omitempty"`
 	Decision              string                 `json:"decision,omitempty"`
 	DecisionTier          int                    `json:"decision_tier"`
 	DecisionPriority      int                    `json:"decision_priority"`
@@ -215,10 +239,11 @@ type Record struct {
 	ContextTokenCount int `json:"context_token_count,omitempty"`
 
 	// Hallucination Detection
-	HallucinationEnabled    bool     `json:"hallucination_enabled,omitempty"`
-	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
-	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
-	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
+	HallucinationEnabled     bool                `json:"hallucination_enabled,omitempty"`
+	HallucinationDetected    bool                `json:"hallucination_detected,omitempty"`
+	HallucinationConfidence  float32             `json:"hallucination_confidence,omitempty"`
+	HallucinationSpans       []string            `json:"hallucination_spans,omitempty"`
+	HallucinationSpanDetails []HallucinationSpan `json:"hallucination_span_details,omitempty"`
 
 	// Usage & Cost
 	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
@@ -263,7 +288,7 @@ type Reader interface {
 // Enricher updates derived signal analysis fields after the initial record write.
 type Enricher interface {
 	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
-	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error
+	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error
 
 	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
 	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
@@ -285,6 +310,13 @@ func cloneStringSlice(values []string) []string {
 		return nil
 	}
 	return append([]string(nil), values...)
+}
+
+func cloneHallucinationSpanDetails(values []HallucinationSpan) []HallucinationSpan {
+	if values == nil {
+		return nil
+	}
+	return append([]HallucinationSpan(nil), values...)
 }
 
 func cloneFloat64Map(values map[string]float64) map[string]float64 {
@@ -375,6 +407,9 @@ func cloneSignal(signal Signal) Signal {
 		PII:          cloneStringSlice(signal.PII),
 		KB:           cloneStringSlice(signal.KB),
 		Conversation: cloneStringSlice(signal.Conversation),
+		Event:        cloneStringSlice(signal.Event),
+		Metadata:     cloneStringSlice(signal.Metadata),
+		Classifier:   cloneStringSlice(signal.Classifier),
 	}
 }
 
@@ -393,6 +428,7 @@ func cloneRecord(record Record) Record {
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
+	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)
 	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
 	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
 	cloned.CacheWriteTokens = cloneIntPtr(record.CacheWriteTokens)
@@ -444,6 +480,8 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 		return nil
 	}
 	cloned := *value
+	cloned.Annotations = cloneInterfaceMap(value.Annotations)
+	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	return &cloned
 }
 

@@ -39,6 +39,27 @@ func TestDecisionEngine_EmptyANDActsAsCatchAll(t *testing.T) {
 	}
 }
 
+func TestDecisionEngine_OmittedRulesActsAsCatchAll(t *testing.T) {
+	engine := NewDecisionEngine(
+		nil,
+		nil,
+		nil,
+		[]config.Decision{{Name: "default-route", Priority: 10}},
+		config.RoutingStrategyPriority,
+	)
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
+	}
+	if result == nil || result.Decision.Name != "default-route" {
+		t.Fatalf("result = %#v, want default-route", result)
+	}
+	if result.Confidence != 0 {
+		t.Fatalf("confidence = %f, want 0", result.Confidence)
+	}
+}
+
 func TestDecisionEngine_EmptyANDActsAsFallbackInConfidenceMode(t *testing.T) {
 	engine := NewDecisionEngine(
 		nil,

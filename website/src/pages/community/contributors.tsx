@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import Layout from '@theme/Layout'
-import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { FaGithub } from 'react-icons/fa'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import {
   contributorRankData,
   contributorRankGeneratedAt,
@@ -12,15 +12,9 @@ import type {
   ContributorRankEntry,
   ContributorRankRange,
 } from '../../data/contributorRank.generated'
-import { committerStatsData } from '../../data/committerReviewStats.generated'
-import type { CommitterStatsRange } from '../../data/committerReviewStats.generated'
 import styles from './contributors.module.css'
 
 type SortBy = 'commits' | 'reviews'
-
-type ContributorWithReviews = ContributorRankEntry & {
-  reviews: number
-}
 
 type RangeOption = {
   id: ContributorRankRange
@@ -95,23 +89,10 @@ const ContributorsPage: React.FC = () => {
   const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('v03ToNow')
   const [sortBy, setSortBy] = useState<SortBy>('commits')
   const snapshot = contributorRankData[selectedRange]
-  const committerSnapshot = committerStatsData[selectedRange as CommitterStatsRange]
   const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
 
   const rankedEntries = useMemo(() => {
-    const reviewsByLogin = new Map<string, number>()
-    for (const entry of committerSnapshot.entries) {
-      if (entry.login) {
-        reviewsByLogin.set(entry.login.toLowerCase(), entry.reviews)
-      }
-    }
-
-    const entriesWithReviews: ContributorWithReviews[] = snapshot.entries.map(entry => ({
-      ...entry,
-      reviews: entry.login ? (reviewsByLogin.get(entry.login.toLowerCase()) ?? 0) : 0,
-    }))
-
-    const sorted = [...entriesWithReviews].sort((left, right) => {
+    const sorted = [...snapshot.entries].sort((left, right) => {
       if (sortBy === 'reviews') {
         if (right.reviews !== left.reviews) {
           return right.reviews - left.reviews
@@ -131,7 +112,7 @@ const ContributorsPage: React.FC = () => {
       ...entry,
       rank: index + 1,
     }))
-  }, [committerSnapshot.entries, snapshot.entries, sortBy])
+  }, [snapshot.entries, sortBy])
 
   const topContributors = rankedEntries.slice(0, 5)
 
@@ -146,23 +127,10 @@ const ContributorsPage: React.FC = () => {
         message: 'vLLM Semantic Router contributor leaderboard by recent and historical repository commit activity.',
       })}
     >
-      <main className={styles.container}>
-        <header className={styles.header}>
-          <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>
-              <Translate id="community.contributors.eyebrow">Community</Translate>
-            </p>
-            <div className={styles.titleRow}>
-              <h1>
-                <Translate id="community.contributors.h1">Contributor Leaderboard</Translate>
-              </h1>
-              <Link className={styles.contributeLink} to="/community/contributing">
-                <Translate id="community.contributors.startContributing">Start contributing</Translate>
-              </Link>
-            </div>
-          </div>
-        </header>
-
+      <CommunityLayout
+        activeKey="leaderboard"
+        title={<Translate id="community.contributors.h1">Contributor Leaderboard</Translate>}
+      >
         <section
           className={styles.metrics}
           aria-label={translate({ id: 'community.contributors.metrics.aria', message: 'Contributor rank summary' })}
@@ -277,11 +245,12 @@ const ContributorsPage: React.FC = () => {
                 entry={entry}
                 dateLocale={dateLocale}
                 numberLocale={numberLocale}
+                showNewContributorStatus={selectedRange !== 'all'}
               />
             ))}
           </div>
         </section>
-      </main>
+      </CommunityLayout>
     </Layout>
   )
 }
@@ -297,54 +266,46 @@ const TopContributorCard: React.FC<{ entry: ContributorRankEntry, numberLocale: 
   const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
 
   return (
-    <article className={`${styles.podiumCard} ${getPodiumClass(entry.rank)}`}>
-      <div className={styles.podiumGlow} aria-hidden="true" />
+    <article className={styles.podiumCard}>
       <span className={styles.podiumRank}>{formatRankNumber(entry.rank)}</span>
-      <ContributorAvatar entry={entry} size="large" />
+      <ContributorAvatar entry={entry} />
       <div className={styles.podiumIdentity}>
-        <h3>{entry.name}</h3>
-        {profileUrl && entry.login
-          ? (
-              <a href={profileUrl} target="_blank" rel="noopener noreferrer">
-                <FaGithub aria-hidden="true" />
-                {entry.login}
-              </a>
-            )
-          : (
-              <span>
-                <Translate id="community.contributors.gitAuthor">Git author</Translate>
-              </span>
-            )}
+        <span className={styles.podiumName}>{entry.name}</span>
+        {profileUrl && entry.login && (
+          <a href={profileUrl} target="_blank" rel="noopener noreferrer">
+            <FaGithub aria-hidden="true" />
+            {entry.login}
+          </a>
+        )}
       </div>
-      <div className={styles.podiumStats}>
-        <strong>{entry.commits.toLocaleString(numberLocale)}</strong>
-        <span>{formatPercent(entry.share)}</span>
-      </div>
+      <strong className={styles.podiumCommits}>{entry.commits.toLocaleString(numberLocale)}</strong>
     </article>
   )
 }
 
 const ContributorRow: React.FC<{
-  entry: ContributorWithReviews
+  entry: ContributorRankEntry
   numberLocale: string
   dateLocale: string
-}> = ({ entry, numberLocale, dateLocale }) => {
+  showNewContributorStatus: boolean
+}> = ({ entry, numberLocale, dateLocale, showNewContributorStatus }) => {
   const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
   const sharePercent = formatPercent(entry.share)
   const barWidth = `${Math.max(entry.share * 100, 1.5)}%`
+  const isNewContributor = showNewContributorStatus && entry.isNewContributorSinceRelease
 
   return (
-    <article className={`${styles.rankItem} ${entry.isNewContributorSinceRelease ? styles.rankItemNew : ''}`}>
+    <article className={`${styles.rankItem} ${isNewContributor ? styles.rankItemNew : ''}`}>
       <span className={styles.rankBadge}>
         {formatRankNumber(entry.rank)}
       </span>
 
       <div className={styles.contributor}>
-        <ContributorAvatar entry={entry} size="compact" />
+        <ContributorAvatar entry={entry} />
         <div className={styles.identity}>
           <span className={styles.nameLine}>
             <span className={styles.name}>{entry.name}</span>
-            {entry.isNewContributorSinceRelease && (
+            {isNewContributor && (
               <span className={styles.newContributorPill}>
                 <Translate id="community.contributors.newContributor">New Contributor</Translate>
               </span>
@@ -392,8 +353,7 @@ const ContributorRow: React.FC<{
 
 const ContributorAvatar: React.FC<{
   entry: ContributorRankEntry
-  size: 'compact' | 'large'
-}> = ({ entry, size }) => {
+}> = ({ entry }) => {
   const [didFail, setDidFail] = useState(false)
   const fallbackUrl = createFallbackAvatar(entry.avatarSeed || entry.name)
   const githubAvatarUrl = entry.avatarUrl ?? (entry.avatarLogin ? `https://github.com/${entry.avatarLogin}.png?size=160` : undefined)
@@ -401,7 +361,7 @@ const ContributorAvatar: React.FC<{
 
   return (
     <img
-      className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`}
+      className={styles.avatar}
       src={avatarUrl}
       alt={translate({
         id: 'community.contributors.avatarAlt',
@@ -439,26 +399,6 @@ function formatPercent(value: number): string {
   }
 
   return `${(value * 100).toFixed(1)}%`
-}
-
-function getPodiumClass(rank: number): string {
-  if (rank === 1) {
-    return styles.podiumFirst
-  }
-
-  if (rank === 2) {
-    return styles.podiumSecond
-  }
-
-  if (rank === 3) {
-    return styles.podiumThird
-  }
-
-  if (rank === 4) {
-    return styles.podiumFourth
-  }
-
-  return styles.podiumFifth
 }
 
 function formatRankNumber(rank: number): string {

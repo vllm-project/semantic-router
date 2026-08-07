@@ -420,7 +420,7 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 		return nil
 	}
 	if node.Type != "" {
-		return &SignalRefExpr{SignalType: node.Type, SignalName: node.Name}
+		return decompileSignalRefNode(node)
 	}
 	switch node.Operator {
 	case "AND":
@@ -449,6 +449,26 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 		}
 	}
 	return nil
+}
+
+func decompileSignalRefNode(
+	node *config.RuleCombination,
+) *SignalRefExpr {
+	fields := map[string]Value{}
+	if node.Label != "" {
+		fields["label"] = StringValue{V: node.Label}
+	}
+	if node.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(node.Predicate)
+	}
+	if node.OnError != "" {
+		fields["on_error"] = StringValue{V: node.OnError}
+	}
+	return &SignalRefExpr{
+		SignalType: node.Type,
+		SignalName: node.Name,
+		Fields:     fields,
+	}
 }
 
 func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr {

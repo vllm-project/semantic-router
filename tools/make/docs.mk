@@ -4,6 +4,8 @@
 
 ##@ Docs
 
+DOCS_TRANSLATION_LOCALE ?= zh-Hans
+
 docs-install: ## Install documentation website dependencies
 	@$(LOG_TARGET)
 	cd website && npm install
@@ -40,6 +42,20 @@ docs-contributors-rank: ## Generate contributor leaderboard data
 	@$(LOG_TARGET)
 	cd website && npm run contributors:rank
 
+docs-check-translations: ## Audit documentation translation coverage, metadata, and source drift
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE)
+
+docs-test-translation-sync: ## Test documentation translation status synchronization
+	@$(LOG_TARGET)
+	website/scripts/check-translation-sync.test.sh
+
+docs-fix-translation-status: ## Update unambiguous documentation translation outdated flags
+	@$(LOG_TARGET)
+	@website/scripts/check-translation-sync.sh --locale $(DOCS_TRANSLATION_LOCALE) --fix-status; \
+	exit_code=$$?; \
+	if [ $$exit_code -ne 0 ] && [ $$exit_code -ne 1 ]; then exit $$exit_code; fi
+
 ##@ CRD Documentation
 
 CRD_REF_DOCS_VERSION ?= latest
@@ -62,7 +78,7 @@ docs-crd: install-crd-ref-docs markdown-lint-fix ## Generate CRD API reference d
 	@if [ -d "src/semantic-router/pkg/apis/vllm.ai/v1alpha1" ]; then \
 		crd-ref-docs \
 			--source-path=./src/semantic-router/pkg/apis/vllm.ai/v1alpha1 \
-			--config=.crd-ref-docs.yaml \
+			--config=tools/crd/ref-docs.yaml \
 			--renderer=markdown \
 			--output-path=./website/docs/api/crd-reference.md; \
 		echo "CRD documentation generated at website/docs/api/crd-reference.md"; \

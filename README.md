@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference</strong></p>
+<p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
@@ -18,9 +18,9 @@
 
 ## About
 
-**We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference.**
+vLLM Semantic Router is a programmable routing layer for building Mixture-of-Models systems across heterogeneous LLM infrastructure. It evaluates request signals, user preferences, and application policies to select—or compose—the right model path for each request.
 
-**That is why we built vLLM Semantic Router**—to turn signals and preferences into executable model paths for every user, product, and workload.
+Use it to improve quality, cost, latency, privacy, and safety without hard-coding routing logic into applications.
 
 | Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
@@ -51,6 +51,7 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 
 ## Latest News
 
+- [2026/07/21] New Blog: [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm.ai/blog/2026-07-21-vllm-sr-new-chapter-mom)
 - [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
 - [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
 - [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
@@ -97,7 +98,7 @@ We host community meetings on the first and third Tuesday of each month to sync 
 
 If you want to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[docs/agent/README.md](docs/agent/README.md)** as the canonical index.
+For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[tools/agent/docs/README.md](tools/agent/docs/README.md)** as the canonical index.
 
 ## Citation
 
@@ -111,10 +112,6 @@ If you find Semantic Router helpful in your research or projects, please conside
   howpublished={\url{https://github.com/vllm-project/semantic-router}},
 }
 ```
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
 
 ## Sponsors
 

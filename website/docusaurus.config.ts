@@ -2,6 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import blogSearchIndexPlugin from './src/plugins/blogSearchIndex'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
@@ -119,6 +120,9 @@ const config: Config = {
   ],
 
   plugins: [
+    // Publishes every published blog post as global data so the blog list page can
+    // search the whole archive instead of just the posts on the current page.
+    blogSearchIndexPlugin,
     [
       '@docusaurus/plugin-client-redirects',
       {
@@ -206,88 +210,28 @@ const config: Config = {
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
-          position: 'left',
           label: 'Docs',
-          items: [
-            { label: 'Quick Start', to: '/docs/intro' },
-            { label: 'Installation', to: '/docs/installation/' },
-            {
-              label: 'Core Concepts',
-              to: '/docs/overview/semantic-router-overview',
-            },
-            { label: 'Tutorials', to: '/docs/tutorials/algorithm/overview' },
-            { label: 'API Reference', to: '/docs/api/router' },
-            {
-              label: 'Troubleshooting',
-              to: '/docs/troubleshooting/common-errors',
-            },
-          ],
+          to: '/docs/intro',
+          className: 'nav-primary',
+          position: 'left',
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
           label: 'Research',
+          to: '/publications',
+          className: 'nav-primary',
           position: 'left',
-          items: [
-            {
-              label: 'Papers & Talks',
-              to: '/publications',
-            },
-            {
-              label: 'White Paper',
-              to: '/white-paper',
-            },
-            {
-              label: 'Vision Paper',
-              to: '/vision-paper',
-            },
-            {
-              label: 'Engineering Blog',
-              to: '/blog',
-            },
-          ],
         },
         {
-          type: 'dropdown',
+          label: 'Blog',
+          to: '/blog',
           className: 'nav-primary',
-          label: 'Community',
           position: 'left',
-          items: [
-            {
-              label: 'Project Team',
-              to: '/community/team',
-            },
-            {
-              label: 'Steering Committee',
-              to: '/community/steering-committee',
-            },
-            {
-              label: 'Roles & Governance',
-              to: '/community/governance',
-            },
-            {
-              label: 'Working Groups',
-              to: '/community/work-groups',
-            },
-            {
-              label: 'Contributing Guide',
-              to: '/community/contributing',
-            },
-            {
-              label: 'Contributor Leaderboard',
-              to: '/community/contributors',
-            },
-            {
-              label: 'GitHub Repository',
-              href: 'https://github.com/vllm-project/semantic-router',
-            },
-            {
-              label: 'Models',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
-            },
-          ],
+        },
+        {
+          label: 'Community',
+          to: '/community/team',
+          className: 'nav-primary',
+          position: 'left',
         },
         {
           label: 'GitHub',

@@ -43,6 +43,7 @@ Manual-only profiles:
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
 - **rag-external-api**: Typed external RAG request construction and exact successful-response byte-limit coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
+- **hallucination**: Pluggable endpoint hallucination detection backend coverage, verifying fact-check gating and response warnings
 
 ### Coverage Ownership Matrix
 
@@ -68,6 +69,7 @@ Manual-only profiles:
 | `dynamo` | none | GPU and batching behavior |
 | `rag-external-api` | none | Typed external RAG requests and exact successful-response limits |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
+| `hallucination` | none | Pluggable endpoint hallucination detection backend coverage |
 
 ## Directory Structure
 

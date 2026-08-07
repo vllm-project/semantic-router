@@ -50,7 +50,6 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
   ```
 
 - Python packages for evaluation scripts:
-  - From the repo root: matplotlib in [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/requirements.txt)
   - From `/src/training/model_eval`: [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/requirements.txt)
 
   ```bash
@@ -367,7 +366,7 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
   model_catalog:
     embeddings:

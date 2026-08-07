@@ -32,14 +32,18 @@ class EvalRequest:
     """Request payload for /api/v1/eval."""
 
     messages: list[dict[str, Any]]
+    model: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         # The API endpoint forces evaluate_all_signals=true server-side, but it
         # does not hurt to be explicit.
-        return {
+        payload = {
             "messages": self.messages,
             "evaluate_all_signals": True,
         }
+        if self.model:
+            payload["model"] = self.model
+        return payload
 
 
 def _default_endpoint() -> str:
@@ -196,7 +200,15 @@ def _summarize_decision_result(
 ) -> list[str]:
     """Build summary lines for the decision_result (current EvalResponse format)."""
     lines: list[str] = []
+    if requested_model := payload.get("requested_model"):
+        lines.append(f"model: {requested_model}")
+    if recipe := payload.get("recipe"):
+        lines.append(f"recipe: {recipe}")
     lines.append(f"decision: {decision_result.get('decision_name') or '(none)'}")
+    if algorithm := decision_result.get("algorithm"):
+        lines.append(f"algorithm: {algorithm}")
+    if plugins := decision_result.get("plugins"):
+        lines.append(f"plugins: {', '.join(str(plugin) for plugin in plugins)}")
 
     used_signals = decision_result.get("used_signals", {})
     if used_signals:
@@ -300,11 +312,14 @@ def _summarize_response(payload: dict[str, Any]) -> str:
     help="OpenAI-style messages JSON array string.",
 )
 @click.option(
+    "--model",
+    default=None,
+    help="Routing model or entrypoint whose recipe should be evaluated.",
+)
+@click.option(
     "--endpoint",
     default=None,
-    help=(
-        "Router base URL or full eval endpoint. " f"Defaults to {_default_endpoint()}."
-    ),
+    help=(f"Router base URL or full eval endpoint. Defaults to {_default_endpoint()}."),
 )
 @click.option(
     "--json",
@@ -325,6 +340,7 @@ def eval(
     ctx: click.Context,
     prompt: str | None,
     messages_json: str | None,
+    model: str | None,
     endpoint: str | None,
     output_json: bool,
     timeout: int,
@@ -346,7 +362,7 @@ def eval(
 
     url = _normalize_endpoint(endpoint or "")
 
-    req = EvalRequest(messages=messages)
+    req = EvalRequest(messages=messages, model=(model or "").strip() or None)
 
     try:
         resp = requests.post(url, json=req.to_json(), timeout=timeout)

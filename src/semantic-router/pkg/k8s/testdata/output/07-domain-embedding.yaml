@@ -148,7 +148,9 @@ global:
           queue_depth_estimation: false
     authz: {}
     ratelimit: {}
-    router_replay: {}
+    management_api: {}
+    router_replay:
+      enabled: false
     startup_status:
       store_backend: ""
   stores:

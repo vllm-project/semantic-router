@@ -17,8 +17,8 @@ supported_envs:
     description: AMD ROCm local workflow.
     local_env: true
     smoke_config: e2e/config/config.agent-smoke.amd.yaml
-    deployment_reference: deploy/amd/README.md
-    example_config: deploy/recipes/balance.yaml
+    deployment_reference: website/docs/installation/amd-rocm.md
+    example_config: config/recipes/balance/config.yaml
   ci-k8s:
     aliases:
     - ci-k8s
@@ -54,7 +54,6 @@ subsystems:
   paths:
   - src/semantic-router/**
   - config/**
-  - scripts/**
   entrypoints:
   - src/semantic-router/cmd/main.go
 - name: rust-bindings
@@ -87,7 +86,7 @@ subsystems:
 - name: agent-contract
   paths:
   - AGENTS.md
-  - docs/agent/**
+  - tools/agent/docs/**
   - tools/agent/skills/**
   - tools/agent/*.yaml
   - tools/agent/scripts/**
@@ -97,7 +96,7 @@ subsystems:
   - .prowlabels.yaml
   entrypoints:
   - AGENTS.md
-  - docs/agent/README.md
+  - tools/agent/docs/README.md
   - tools/agent/scripts/agent_gate.py
 validation:
   smoke:
@@ -114,41 +113,43 @@ validation:
     - remote-embedding
 docs:
 - AGENTS.md
-- docs/agent/README.md
-- docs/agent/maintainer-ops.md
-- docs/agent/governance.md
-- docs/agent/context-management.md
-- docs/agent/plans/README.md
-- docs/agent/tech-debt-register.md
-- docs/agent/tech-debt/README.md
-- docs/agent/amd-local.md
-- docs/agent/nvidia-local.md
-- docs/agent/architecture-guardrails.md
-- docs/agent/openai-api-contracts.md
-- docs/agent/architecture-scorecard.md
-- docs/agent/change-surfaces.md
-- docs/agent/environments.md
-- docs/agent/feature-complete-checklist.md
-- docs/agent/glossary.md
-- docs/agent/local-rules.md
-- docs/agent/module-boundaries.md
-- docs/agent/repo-map.md
-- docs/agent/skill-catalog.md
-- docs/agent/testing-strategy.md
-- docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
-- docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
-- docs/agent/plans/pl-0034-fusion-api.md
-- docs/agent/plans/pl-0035-router-flow-workflows.md
-- docs/agent/plans/pl-0036-router-learning-followups.md
-- docs/agent/plans/pl-0037-router-flow-eval-campaign.md
-- docs/agent/tech-debt/td-006-structural-rule-exceptions.md
-- docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
-- docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
-- docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
-- docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
-- docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
-- docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
-- docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
+- tools/agent/docs/README.md
+- tools/agent/docs/maintainer-ops.md
+- tools/agent/docs/governance.md
+- tools/agent/docs/context-management.md
+- tools/agent/docs/plans/README.md
+- tools/agent/docs/tech-debt-register.md
+- tools/agent/docs/tech-debt/README.md
+- tools/agent/docs/amd-local.md
+- tools/agent/docs/nvidia-local.md
+- tools/agent/docs/architecture-guardrails.md
+- tools/agent/docs/openai-api-contracts.md
+- tools/agent/docs/architecture-scorecard.md
+- tools/agent/docs/architecture/state-taxonomy-and-inventory.md
+- tools/agent/docs/change-surfaces.md
+- tools/agent/docs/environments.md
+- tools/agent/docs/feature-complete-checklist.md
+- tools/agent/docs/glossary.md
+- tools/agent/docs/local-rules.md
+- tools/agent/docs/module-boundaries.md
+- tools/agent/docs/repo-map.md
+- tools/agent/docs/skill-catalog.md
+- tools/agent/docs/testing-strategy.md
+- tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
+- tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md
+- tools/agent/docs/plans/pl-0034-fusion-api.md
+- tools/agent/docs/plans/pl-0035-router-flow-workflows.md
+- tools/agent/docs/plans/pl-0036-router-learning-followups.md
+- tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
+- tools/agent/docs/plans/pl-0038-entrypoints-recipes.md
+- tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
+- tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+- tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
+- tools/agent/docs/tech-debt/td-020-classification-subsystem-boundary-collapse.md
+- tools/agent/docs/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
+- tools/agent/docs/tech-debt/td-042-ffi-embedding-structure-debt.md
+- tools/agent/docs/tech-debt/td-043-semantic-router-go-cyclop-debt.md
+- tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -208,109 +209,115 @@ doc_governance:
   - path: AGENTS.md
     steward: agent-contract
     freshness: update when the harness entrypoint, command set, or rule layering changes
-  - path: docs/agent/README.md
+  - path: tools/agent/docs/README.md
     steward: agent-contract
     freshness: update when canonical harness docs are added, removed, or reorganized
-  - path: docs/agent/maintainer-ops.md
+  - path: tools/agent/docs/maintainer-ops.md
     steward: agent-contract
     freshness: update when this canonical harness document changes materially
-  - path: docs/agent/governance.md
+  - path: tools/agent/docs/governance.md
     steward: agent-contract
     freshness: update when source-of-truth policy or rule layering changes
-  - path: docs/agent/context-management.md
+  - path: tools/agent/docs/context-management.md
     steward: agent-contract
     freshness: update when the task-first disclosure model or context-pack flow changes
-  - path: docs/agent/plans/README.md
+  - path: tools/agent/docs/plans/README.md
     steward: agent-contract
     freshness: update when canonical execution plans are added, removed, or reorganized
-  - path: docs/agent/tech-debt-register.md
+  - path: tools/agent/docs/tech-debt-register.md
     steward: agent-contract
     freshness: update when debt workflow or landing-page guidance changes
-  - path: docs/agent/tech-debt/README.md
+  - path: tools/agent/docs/tech-debt/README.md
     steward: agent-contract
     freshness: update when debt entry template or inventory changes
-  - path: docs/agent/amd-local.md
+  - path: tools/agent/docs/amd-local.md
     steward: agent-contract
     freshness: update when AMD-local workflow or deployment references change
-  - path: docs/agent/nvidia-local.md
+  - path: tools/agent/docs/nvidia-local.md
     steward: agent-contract
     freshness: update when NVIDIA-local workflow or deployment references change
-  - path: docs/agent/architecture-guardrails.md
+  - path: tools/agent/docs/architecture-guardrails.md
     steward: agent-contract
     freshness: update when structural or modularity guardrails change
-  - path: docs/agent/openai-api-contracts.md
+  - path: tools/agent/docs/openai-api-contracts.md
     steward: agent-contract
     freshness: update when OpenAI API type inventory, SDK alignment, or documented differences change
-  - path: docs/agent/architecture-scorecard.md
+  - path: tools/agent/docs/architecture-scorecard.md
     steward: agent-contract
     freshness: update when whole-repository architecture scores, score evidence, or PR-chain priorities change
-  - path: docs/agent/change-surfaces.md
+  - path: tools/agent/docs/architecture/state-taxonomy-and-inventory.md
+    steward: agent-contract
+    freshness: update when runtime state ownership or durability contracts change
+  - path: tools/agent/docs/change-surfaces.md
     steward: agent-contract
     freshness: update when surfaces or their mappings change
-  - path: docs/agent/environments.md
+  - path: tools/agent/docs/environments.md
     steward: agent-contract
     freshness: update when supported environments or default smoke paths change
-  - path: docs/agent/feature-complete-checklist.md
+  - path: tools/agent/docs/feature-complete-checklist.md
     steward: agent-contract
     freshness: update when done criteria or reporting fields change
-  - path: docs/agent/glossary.md
+  - path: tools/agent/docs/glossary.md
     steward: agent-contract
     freshness: update when harness terms or categories change
-  - path: docs/agent/local-rules.md
+  - path: tools/agent/docs/local-rules.md
     steward: agent-contract
     freshness: update when indexed local AGENTS files change
-  - path: docs/agent/module-boundaries.md
+  - path: tools/agent/docs/module-boundaries.md
     steward: agent-contract
     freshness: update when subsystem seams or local-rule boundaries change
-  - path: docs/agent/repo-map.md
+  - path: tools/agent/docs/repo-map.md
     steward: agent-contract
     freshness: update when core subsystems, hotspots, or entrypoints change
-  - path: docs/agent/skill-catalog.md
+  - path: tools/agent/docs/skill-catalog.md
     steward: agent-contract
     freshness: update when skill taxonomy or names change
-  - path: docs/agent/testing-strategy.md
+  - path: tools/agent/docs/testing-strategy.md
     steward: agent-contract
     freshness: update when gate sequencing or validation expectations change
-  - path: docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
+  - path: tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
     steward: agent-contract
     freshness: update at the start and end of each architecture scorecard ratchet loop and after each completed loop task
-  - path: docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
+  - path: tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md
     steward: agent-contract
     freshness: update when this canonical harness document changes materially
-  - path: docs/agent/plans/pl-0034-fusion-api.md
+  - path: tools/agent/docs/plans/pl-0034-fusion-api.md
     steward: router-core
     freshness: update while Fusion API implementation and AMD regression work is active
-  - path: docs/agent/plans/pl-0035-router-flow-workflows.md
+  - path: tools/agent/docs/plans/pl-0035-router-flow-workflows.md
     steward: router-core
     freshness: update while Router Flow implementation, eval, and AMD validation work is active
-  - path: docs/agent/plans/pl-0036-router-learning-followups.md
+  - path: tools/agent/docs/plans/pl-0036-router-learning-followups.md
     steward: router-core
     freshness: update while Router Learning follow-up implementation, eval, and AMD validation work is active
-  - path: docs/agent/plans/pl-0037-router-flow-eval-campaign.md
+  - path: tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
-  - path: docs/agent/tech-debt/td-006-structural-rule-exceptions.md
+  - path: tools/agent/docs/plans/pl-0038-entrypoints-recipes.md
+    steward: router-core
+    freshness: update while entrypoints and multi-recipe routing implementation is active
+  - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
-  - path: docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+  - path: tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
     steward: fleet-sim
     freshness: update when the TD016 debt record changes materially
-  - path: docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
+  - path: tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
     steward: fleet-sim
     freshness: update when the TD017 debt record changes materially
-  - path: docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
+  - path: tools/agent/docs/tech-debt/td-020-classification-subsystem-boundary-collapse.md
     steward: router-core
     freshness: update when the TD020 debt record changes materially
-  - path: docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
+  - path: tools/agent/docs/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
     steward: fleet-sim
     freshness: update when the TD027 debt record changes materially
-  - path: docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
+  - path: tools/agent/docs/tech-debt/td-042-ffi-embedding-structure-debt.md
     steward: candle-binding
     freshness: update when the TD042 debt record changes materially
-  - path: docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
+  - path: tools/agent/docs/tech-debt/td-043-semantic-router-go-cyclop-debt.md
     steward: candle-binding
     freshness: update when the TD043 debt record changes materially
-  - path: docs/agent/tech-debt/td-044-flow-tool-state-durability-gap.md
+  - path: tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
     steward: router-core
     freshness: update when the TD044 debt record changes materially
 skills:

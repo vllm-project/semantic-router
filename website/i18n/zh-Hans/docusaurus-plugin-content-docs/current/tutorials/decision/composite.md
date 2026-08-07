@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/decision/composite.md"
-  outdated: false
+  outdated: true
 ---
 
 # 组合决策

@@ -9,11 +9,13 @@ import (
 
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version   string             `yaml:"version,omitempty"`
-	Listeners []Listener         `yaml:"listeners,omitempty"`
-	Providers CanonicalProviders `yaml:"providers,omitempty"`
-	Routing   CanonicalRouting   `yaml:"routing,omitempty"`
-	Global    *CanonicalGlobal   `yaml:"global,omitempty"`
+	Version     string                `yaml:"version,omitempty"`
+	Listeners   []Listener            `yaml:"listeners,omitempty"`
+	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
+	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
@@ -24,28 +26,31 @@ type CanonicalRouting struct {
 	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
 	Projections CanonicalProjections `yaml:"projections,omitempty"`
 	Decisions   []Decision           `yaml:"decisions,omitempty"`
+	Strategy    RoutingStrategy      `yaml:"strategy,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
-	Domains       []Category         `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
-	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
-	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
-	Language      []LanguageRule     `yaml:"language,omitempty"`
-	Context       []ContextRule      `yaml:"context,omitempty"`
-	Structure     []StructureRule    `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule     `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PII           []PIIRule          `yaml:"pii,omitempty"`
-	KB            []KBSignalRule     `yaml:"kb,omitempty"`
-	Conversation  []ConversationRule `yaml:"conversation,omitempty"`
-	EventRules    []EventRule        `yaml:"events,omitempty"`
+	Keywords      []KeywordRule          `yaml:"keywords,omitempty"`
+	Embeddings    []EmbeddingRule        `yaml:"embeddings,omitempty"`
+	Domains       []Category             `yaml:"domains,omitempty"`
+	FactCheck     []FactCheckRule        `yaml:"fact_check,omitempty"`
+	UserFeedbacks []UserFeedbackRule     `yaml:"user_feedbacks,omitempty"`
+	Reasks        []ReaskRule            `yaml:"reasks,omitempty"`
+	Preferences   []PreferenceRule       `yaml:"preferences,omitempty"`
+	Language      []LanguageRule         `yaml:"language,omitempty"`
+	Context       []ContextRule          `yaml:"context,omitempty"`
+	Structure     []StructureRule        `yaml:"structure,omitempty"`
+	Complexity    []ComplexityRule       `yaml:"complexity,omitempty"`
+	Modality      []ModalityRule         `yaml:"modality,omitempty"`
+	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
+	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	PII           []PIIRule              `yaml:"pii,omitempty"`
+	KB            []KBSignalRule         `yaml:"kb,omitempty"`
+	Conversation  []ConversationRule     `yaml:"conversation,omitempty"`
+	EventRules    []EventRule            `yaml:"events,omitempty"`
+	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
+	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -90,6 +95,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	applyCanonicalRoutingState(&cfg, canonical)
+	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
+		return nil, err
+	}
 	if err := applyCanonicalProviderState(&cfg, canonical.Providers); err != nil {
 		return nil, err
 	}
@@ -107,6 +115,9 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
+	if canonical.Routing.Strategy != "" {
+		cfg.Strategy = canonical.Routing.Strategy
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -288,6 +299,8 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		KBRules:           append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
 		EventRules:        append([]EventRule(nil), signals.EventRules...),
+		MetadataRules:     append([]MetadataRule(nil), signals.Metadata...),
+		ClassifierRules:   append([]ClassifierSignalRule(nil), signals.Classifiers...),
 	}
 
 	if len(result.Categories) == 0 {

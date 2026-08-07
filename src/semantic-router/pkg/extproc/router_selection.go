@@ -13,7 +13,29 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+	lt, cancel := buildLookupTable(cfg, replayReader)
+	embed := resolveSelectionEmbeddingFunc(cfg)
+	registries := make(map[config.RecipeName]*selection.Registry)
+
+	if len(cfg.Recipes) == 0 {
+		registry := createModelSelectorRegistry(cfg, lt, embed)
+		registries[config.DefaultRecipeName] = registry
+		selection.GlobalRegistry = registry
+		return registries, registry, lt, cancel
+	}
+
+	for i := range cfg.Recipes {
+		recipe := &cfg.Recipes[i]
+		scopedConfig := cfg.ConfigForRecipe(recipe)
+		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
+	}
+	defaultRegistry := registries[config.DefaultRecipeName]
+	selection.GlobalRegistry = defaultRegistry
+	return registries, defaultRegistry, lt, cancel
+}
+
+func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage, embed func(string) ([]float32, error)) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -24,15 +46,12 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
-
-	lt, cancel := buildLookupTable(cfg, replayReader)
+	selectionFactory = selectionFactory.WithEmbeddingFunc(embed)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
 	registry := selectionFactory.CreateAll()
-	selection.GlobalRegistry = registry
 
 	// Collect algorithm methods actually configured in decisions
 	configuredMethods := collectConfiguredAlgorithmMethods(cfg)
@@ -44,7 +63,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
-	return registry, lt, cancel
+	return registry
 }
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
@@ -118,7 +137,7 @@ func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.Sel
 	seen := make(map[string]bool)
 	var methods []selection.SelectionMethod
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
 			continue
 		}
@@ -142,25 +161,23 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
-	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
+	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(nil)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
 	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
 	return modelSelectionCfg
 }
 
 type decisionScopedSelectionConfigs struct {
-	elo         *config.EloSelectionConfig
-	routerDC    *config.RouterDCSelectionConfig
-	rlDriven    *config.RLDrivenSelectionConfig
-	gmtRouter   *config.GMTRouterSelectionConfig
-	multiFactor *config.MultiFactorSelectionConfig
+	elo       *config.EloSelectionConfig
+	routerDC  *config.RouterDCSelectionConfig
+	rlDriven  *config.RLDrivenSelectionConfig
+	gmtRouter *config.GMTRouterSelectionConfig
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
-	intelligentRouting := cfg.IntelligentRouting
 	var result decisionScopedSelectionConfigs
 
-	for _, decision := range intelligentRouting.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.Algorithm == nil {
 			continue
 		}
@@ -183,11 +200,6 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.GMTRouter != nil &&
 			result.gmtRouter == nil {
 			result.gmtRouter = decision.Algorithm.GMTRouter
-		}
-		if decision.Algorithm.Type == "multi_factor" &&
-			decision.Algorithm.MultiFactor != nil &&
-			result.multiFactor == nil {
-			result.multiFactor = decision.Algorithm.MultiFactor
 		}
 	}
 
@@ -544,7 +556,7 @@ func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.Lookup
 
 	cancel := func() { _ = fs.Close() }
 	if ltCfg.AutoSaveInterval != "" {
-		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+		if interval, err := config.ParsePeriodicInterval(ltCfg.AutoSaveInterval, 0); err == nil {
 			fs.StartAutoSave(interval)
 		} else {
 			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
@@ -564,12 +576,17 @@ func maybePopulateFromReplay(
 	if !ltCfg.PopulateFromReplay || reader == nil {
 		return
 	}
-	go populateFromReplay(storage, reader)
+	// Same #1843 exposure as the periodic populator below: this one-shot
+	// call also parses replay-store entries, and it runs on every router
+	// build, including config reloads of a live router.
+	goSafely("lookup_table_populator_initial", func() {
+		populateFromReplay(storage, reader)
+	})
 
 	if ltCfg.PopulateInterval == "" {
 		return
 	}
-	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	interval, err := config.ParsePeriodicInterval(ltCfg.PopulateInterval, 0)
 	if err != nil {
 		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
 		return
@@ -617,10 +634,22 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 	})
 }
 
+// defaultPopulateInterval is the fallback cadence used when
+// startLookupTablePopulator is given a non-positive interval, so a
+// misconfigured value can neither panic time.NewTicker nor silently disable
+// periodic replay re-derivation.
+const defaultPopulateInterval = 15 * time.Minute
+
 // startLookupTablePopulator launches a background goroutine that periodically
 // re-derives lookup table entries from the replay store.
-// The returned cancel function stops the goroutine.
+// The returned cancel function stops the goroutine. A non-positive interval is
+// defensively replaced with defaultPopulateInterval (time.NewTicker panics on a
+// non-positive duration).
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	if interval <= 0 {
+		logging.Warnf("[RouterSelection] Non-positive lookup table populate interval %s; using default %s", interval, defaultPopulateInterval)
+		interval = defaultPopulateInterval
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	// goSafely so a panic in populateFromReplay (e.g. malformed
 	// replay-store entry) is logged instead of crashing the whole

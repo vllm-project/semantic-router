@@ -265,7 +265,7 @@ make perf-report
 ## 📚 Learn More
 
 - [Performance Testing README](../../README.md)
-- [Quick Start Guide](../../QUICKSTART.md)
+- [Quick Start Guide](../../README.md#quick-start)
 - [Configuration Reference](../../config/thresholds.yaml)
 - [Makefile Targets](../../../tools/make/performance.mk)
 

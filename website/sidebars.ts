@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/event',
+                'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
               ],
             },
@@ -92,6 +93,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Learned',
               items: [
+                'tutorials/signal/learned/classifier',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -147,6 +149,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/latency-aware',
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
+                'tutorials/algorithm/selection/prompt',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -221,6 +224,7 @@ const sidebars: SidebarsConfig = {
           label: 'Global',
           items: [
             'tutorials/global/overview',
+            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
@@ -270,6 +274,13 @@ const sidebars: SidebarsConfig = {
         'training/training-overview',
         'training/model-performance-eval',
         'training/ml-model-selection',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Benchmarking',
+      items: [
+        'benchmarking/overview',
       ],
     },
     {

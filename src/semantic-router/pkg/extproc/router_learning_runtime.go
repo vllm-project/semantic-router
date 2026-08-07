@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,65 +17,7 @@ type routerLearningRuntime struct {
 	replayRecorder  *routerreplay.Recorder
 	replayRecorders map[string]*routerreplay.Recorder
 	experience      map[string]*routerLearningModelExperience
-}
-
-func (rt *routerLearningRuntime) UpdateOutcome(
-	_ context.Context,
-	outcome *routerruntime.RouterOutcome,
-) routerruntime.RouterOutcomeResult {
-	result := routerruntime.RouterOutcomeResult{}
-	if rt == nil || outcome == nil || outcome.Target != routerruntime.RouterOutcomeTargetModel {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	verdict, ok := routerOutcomeVerdict(outcome.Verdict)
-	if !ok {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	model := rt.resolveOutcomeModel(outcome)
-	if model == "" {
-		result.Recorded = rt.appendReplayOutcome(outcome)
-		return result
-	}
-	outcome.TargetRef = model
-	result.Recorded = rt.appendReplayOutcome(outcome)
-	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
-	rt.recordModelExperience(
-		decisionName,
-		decisionTier,
-		model,
-		verdict,
-		outcome.Score,
-	)
-	result.Updated = 1
-	return result
-}
-
-func (rt *routerLearningRuntime) resolveOutcomeModel(outcome *routerruntime.RouterOutcome) string {
-	if outcome == nil {
-		return ""
-	}
-	if model := strings.TrimSpace(outcome.TargetRef); model != "" {
-		return model
-	}
-	if model := strings.TrimSpace(outcome.Metadata["model"]); model != "" {
-		return model
-	}
-	if model := strings.TrimSpace(outcome.Metadata["selected_model"]); model != "" {
-		return model
-	}
-	record, ok := rt.replayRecord(outcome.ReplayID)
-	if !ok {
-		return ""
-	}
-	if model := strings.TrimSpace(record.SelectedModel); model != "" {
-		return model
-	}
-	if record.RouteDiagnostics != nil {
-		return strings.TrimSpace(record.RouteDiagnostics.SelectedModel)
-	}
-	return ""
+	idempotencyKeys map[string]time.Time
 }
 
 func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerruntime.RouterOutcome) (string, int) {
@@ -84,27 +25,48 @@ func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerru
 		return "", 0
 	}
 	decision := strings.TrimSpace(outcome.Metadata["decision"])
+	recipe := config.RecipeName(strings.TrimSpace(outcome.Metadata["recipe"]))
 	tier := outcomeDecisionTier(outcome)
 	if decision != "" && tier != 0 {
-		return decision, tier
+		return outcomeDecisionKey(recipe, decision), tier
 	}
 	record, ok := rt.replayRecord(outcome.ReplayID)
 	if !ok {
-		return decision, tier
+		return outcomeDecisionKey(recipe, decision), tier
 	}
 	if decision == "" {
-		decision = strings.TrimSpace(record.Decision)
-		if record.RouteDiagnostics != nil && strings.TrimSpace(record.RouteDiagnostics.Decision) != "" {
-			decision = strings.TrimSpace(record.RouteDiagnostics.Decision)
-		}
+		decision = replayRecordDecision(record)
+	}
+	if recipe == "" {
+		recipe = config.RecipeName(strings.TrimSpace(record.Recipe))
 	}
 	if tier == 0 {
-		tier = record.DecisionTier
-		if record.RouteDiagnostics != nil && record.RouteDiagnostics.DecisionTier != 0 {
-			tier = record.RouteDiagnostics.DecisionTier
+		tier = replayRecordDecisionTier(record)
+	}
+	return outcomeDecisionKey(recipe, decision), tier
+}
+
+func replayRecordDecision(record routerreplay.RoutingRecord) string {
+	if record.RouteDiagnostics != nil {
+		if decision := strings.TrimSpace(record.RouteDiagnostics.Decision); decision != "" {
+			return decision
 		}
 	}
-	return decision, tier
+	return strings.TrimSpace(record.Decision)
+}
+
+func replayRecordDecisionTier(record routerreplay.RoutingRecord) int {
+	if record.RouteDiagnostics != nil && record.RouteDiagnostics.DecisionTier != 0 {
+		return record.RouteDiagnostics.DecisionTier
+	}
+	return record.DecisionTier
+}
+
+func outcomeDecisionKey(recipe config.RecipeName, decision string) string {
+	if decision == "" {
+		return ""
+	}
+	return config.RoutingDecisionKey(recipe, decision)
 }
 
 func (rt *routerLearningRuntime) replayRecord(replayID string) (routerreplay.RoutingRecord, bool) {
@@ -254,6 +216,7 @@ func newRouterLearningRuntime(
 		replayRecorder:  replayRecorder,
 		replayRecorders: replayRecorders,
 		experience:      map[string]*routerLearningModelExperience{},
+		idempotencyKeys: map[string]time.Time{},
 	}
 }
 

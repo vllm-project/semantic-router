@@ -61,12 +61,19 @@ global:
 
 ### DSL boundary
 
-DSL now owns only:
+DSL owns only routing semantics:
 
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
 - `routing.decisions`, including route-local `algorithm`, plugin references, emitted directives, and bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
+- optional `entrypoints` through `ENTRYPOINT` blocks
+- optional isolated `recipes[].routing` profiles through `RECIPE` blocks
+
+The signal surface includes deterministic metadata hints and reusable generic
+classifier labels. Decision leaves may apply bounded numeric predicates to
+signal values, and prompt-driven model choice remains a route-local algorithm
+over the decision's declared `modelRefs`.
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
@@ -86,6 +93,32 @@ Model semantics and deployment bindings are now separated explicitly:
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
 - `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
 
+### Entrypoints and multi-recipe routing
+
+Issue [#2331](https://github.com/vllm-project/semantic-router/issues/2331) adds
+an optional additive layer above `routing`:
+
+```yaml
+entrypoints:
+  - model_names: ["vllm-sr/privacy"]
+    recipe: privacy-first
+
+recipes:
+  - name: privacy-first
+    routing:
+      signals: {}
+      projections: {}
+      decisions: []
+      strategy: priority
+```
+
+- the top-level `routing` block is the `default` recipe; `recipes[]` adds named additional profiles
+- each `recipes[].routing` block keeps the complete recipe-level profile shape — `signals`, `projections`, `decisions`, and `strategy` — and never owns `modelCards` or provider bindings
+- signals (including PII, jailbreak, and authz role bindings), projections, decisions, algorithms, and route plugins are recipe-local; local names may repeat, references cannot cross recipes, and request/runtime state is namespaced by recipe
+- model cards, provider bindings, model assets, and service/store infrastructure remain shared without turning their consuming policy into global policy
+- `entrypoints[]` maps request-facing virtual model names onto recipes; the names behave like auto-model aliases, are listed by `/v1/models`, and never reach a backend
+- a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so single-profile configs keep working unchanged
+
 ## Global defaults
 
 Router-global defaults are now owned by the router itself, not by a second user-maintained defaults file.
@@ -100,9 +133,10 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations, including looper-owned ReMoM direct model slug registration for `vllm-sr/remom`, Fusion direct model slug registration for `vllm-sr/fusion`, and Router Flow direct model slug registration for `vllm-sr/flow`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.*.model_names`; breadth, judge, panel, workflow planning, worker policy, and output contracts remain on `routing.decisions[]`.
-- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
+- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
+- `global.model_catalog.modules.hallucination_mitigation.detector.backend` is a validated enum selecting the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` delegates to a generative span detector behind an OpenAI-compatible server and requires an absolute `http(s)` `detector.endpoint` plus a `detector.model_id`. An unknown backend fails config validation instead of silently falling back to `candle`.
 - omitted fields keep the built-in default
 
 This makes local, dashboard, Helm, and operator behavior converge on the same baseline.
@@ -115,7 +149,11 @@ Remote onboarding import can fetch and apply a full canonical YAML file. That ke
 
 ### DSL import
 
-DSL import still accepts a full router config YAML, but it decompiles only the `routing` section into DSL. Static deployment and global runtime settings stay in YAML.
+CLI DSL import accepts a full router config YAML and decompiles the default
+`routing` profile together with `ENTRYPOINT` and isolated `RECIPE` scopes.
+Static deployment and global runtime settings stay in YAML. The Dashboard
+visual DSL editor remains scoped to the default routing profile; its Config
+page owns multi-recipe lifecycle changes.
 
 The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. Legacy mixed layouts must go through explicit migration first.
 
@@ -131,7 +169,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
 - `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
-- runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
+- runtime support examples such as `config/runtime/semantic-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
 - `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
 

@@ -84,10 +84,10 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 		logging.Warnf("UpdateWithResponse: docID '%s' doesn't have expected prefix '%s'", entry.docID, prefix)
 	}
 
-	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query='%s'", entry.docID, entry.model, entry.query)
+	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query=%s", entry.docID, entry.model, logging.ContentDescriptor(entry.query))
 
 	if entry.model == "" || entry.query == "" {
-		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query='%s')", entry.model, entry.query)
+		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query=%s)", entry.model, logging.ContentDescriptor(entry.query))
 		return nil, fmt.Errorf("missing required fields in pending entry")
 	}
 
@@ -174,18 +174,16 @@ func escapeTagValue(s string) string {
 	return b.String()
 }
 
-// distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
-func distanceToSimilarity(metricType string, distance float64) float32 {
-	switch metricType {
-	case "COSINE":
-		return 1.0 - float32(distance)/2.0
-	case "IP":
-		return float32(distance)
-	case "L2":
-		return 1.0 / (1.0 + float32(distance))
-	default:
-		return 1.0 - float32(distance)
-	}
+// partitionedKNNQuery combines an exact model TAG filter with vector search.
+// The model field is the cache partition key, so omitting this filter can
+// return another model or recipe's response even when its vector is nearest.
+func partitionedKNNQuery(model string, topK int, vectorField string) string {
+	return fmt.Sprintf(
+		"(@model:{%s})=>[KNN %d @%s $vec AS vector_distance]",
+		escapeTagValue(model),
+		topK,
+		vectorField,
+	)
 }
 
 // extractResponseBody returns the response bytes from a search match, or nil if missing/empty.

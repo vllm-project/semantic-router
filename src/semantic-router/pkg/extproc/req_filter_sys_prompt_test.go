@@ -29,11 +29,12 @@ func TestAddSystemPromptUsesRouterConfigBeforeGlobal(t *testing.T) {
 		},
 	}
 
+	ctx := &RequestContext{VSRSelectedDecision: &router.Config.Decisions[0]}
 	body, err := router.addSystemPromptIfConfigured(
 		[]byte(`{"messages":[{"role":"user","content":"hello"}]}`),
 		"support",
 		"test-model",
-		&RequestContext{},
+		ctx,
 	)
 
 	require.NoError(t, err)

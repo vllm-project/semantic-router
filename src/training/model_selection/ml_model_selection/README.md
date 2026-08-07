@@ -50,7 +50,7 @@ The **Semantic Router Dashboard** provides a guided 3-step wizard for the entire
 3. **Step 2 — Train**: Select algorithms (KNN, K-Means, SVM, MLP), adjust hyperparameters in the advanced settings, and click **Train Models**. Trained models are saved to a fixed `ml-train/` directory.
 4. **Step 3 — Configure**: Define routing decisions (name, priority, algorithm, domains, model names) and click **Generate Config**. Downloads a deployment-ready `ml-model-selection-values.yaml`.
 
-The dashboard handles directory creation, progress tracking, and config generation automatically. See the [Dashboard README](../../dashboard/README.md) for setup instructions.
+The dashboard handles directory creation, progress tracking, and config generation automatically. See the [Dashboard README](../../../../dashboard/README.md) for setup instructions.
 
 ### Option 1: Download Pretrained Models from HuggingFace
 

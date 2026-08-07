@@ -19,8 +19,13 @@ import (
 // This keeps the classify endpoints aligned with their documented OpenAPI
 // contract ({200, 400}) and with sibling endpoints (combined/batch/embeddings).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
-	if errors.Is(err, services.ErrEmptyText) {
+	if errors.Is(err, services.ErrEmptyText) ||
+		errors.Is(err, services.ErrInvalidRequestFacts) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrUnknownRoutingModel) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
 		return
 	}
 	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
