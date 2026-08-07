@@ -1,6 +1,6 @@
 import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
 import { buildPromptWithAttachments, type PlaygroundAttachment } from './playgroundFileAttachments'
-import { normalizeToolCallArguments } from './chatToolCallSupport'
+import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 export interface OutboundChatMessage {
@@ -120,8 +120,11 @@ export const buildChatMessages = (
         })
       }
 
-      if (message.content) {
-        chatMessages.push({ role: 'assistant', content: message.content })
+      const assistantContent = /<tool_call/i.test(message.content)
+        ? extractTextToolCalls(message.content).content
+        : message.content
+      if (assistantContent) {
+        chatMessages.push({ role: 'assistant', content: assistantContent })
       }
     }
   }

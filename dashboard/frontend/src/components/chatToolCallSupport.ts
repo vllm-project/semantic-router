@@ -130,3 +130,12 @@ export const normalizeToolCallArguments = (value: string): string => {
 
   return '{}'
 }
+
+export const resolveAssistantContentUpdate = (
+  currentContent: string,
+  nextContent: string,
+  replaceWithEmpty: boolean,
+): string => {
+  if (replaceWithEmpty || nextContent) return nextContent
+  return currentContent
+}

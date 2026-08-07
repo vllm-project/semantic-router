@@ -4,6 +4,7 @@ import {
   extractTextToolCalls,
   mergeToolCallArgumentChunk,
   normalizeToolCallArguments,
+  resolveAssistantContentUpdate,
 } from './chatToolCallSupport'
 
 describe('extractTextToolCalls', () => {
@@ -73,5 +74,15 @@ describe('normalizeToolCallArguments', () => {
 
   it('uses an empty object when legacy arguments cannot be recovered', () => {
     expect(normalizeToolCallArguments('not-json')).toBe('{}')
+  })
+})
+
+describe('resolveAssistantContentUpdate', () => {
+  it('clears streamed XML when a tool-only response is normalized', () => {
+    expect(resolveAssistantContentUpdate('<tool_call>raw</tool_call>', '', true)).toBe('')
+  })
+
+  it('keeps prior content for an empty non-textual streaming delta', () => {
+    expect(resolveAssistantContentUpdate('Existing answer', '', false)).toBe('Existing answer')
   })
 })

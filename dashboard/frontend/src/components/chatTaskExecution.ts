@@ -19,7 +19,11 @@ import {
 import { toPlaygroundAttachmentSummaries } from './playgroundFileAttachments'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import { runToolLoop } from './chatTaskToolLoop'
-import { extractTextToolCalls, mergeToolCallArgumentChunk } from './chatToolCallSupport'
+import {
+  extractTextToolCalls,
+  mergeToolCallArgumentChunk,
+  resolveAssistantContentUpdate,
+} from './chatToolCallSupport'
 import type { Choice, Message, PlaygroundTask, ReMoMRoundResponse } from './ChatComponentTypes'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 
@@ -202,8 +206,6 @@ export const runPlaygroundTask = async ({
     }
 
     const commitAssistantChoices = (streaming: boolean) => {
-      if (hasToolCalls && !getFirstChoice(choiceContents)?.content) return
-
       if (isRatingsMode) {
         const choicesArray = buildChoicesArray(choiceContents)
         const thinkingProcess =
@@ -239,7 +241,11 @@ export const runPlaygroundTask = async ({
           message.id === assistantMessageId
             ? {
                 ...message,
-                content: firstChoice.content,
+                content: resolveAssistantContentUpdate(
+                  message.content,
+                  firstChoice.content,
+                  hasToolCalls,
+                ),
                 thinkingProcess: firstChoice.reasoningContent || message.thinkingProcess,
                 isStreaming: streaming,
               }

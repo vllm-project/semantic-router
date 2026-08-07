@@ -93,4 +93,25 @@ describe('buildChatMessages', () => {
     })
     expect(messages[3].content).toBe('The search results point to the architecture docs.')
   })
+
+  it('does not replay leaked textual tool markup into the next user turn', () => {
+    const messages = buildChatMessages(
+      [
+        {
+          id: 'assistant-legacy',
+          role: 'assistant',
+          content:
+            'I will search now.\n<tool_call><function=search_web><parameter=query>vllm-sr</parameter></function></tool_call>',
+          timestamp: new Date(),
+        },
+      ],
+      'continue',
+      false,
+    )
+
+    expect(messages).toEqual([
+      { role: 'assistant', content: 'I will search now.' },
+      { role: 'user', content: 'continue' },
+    ])
+  })
 })
