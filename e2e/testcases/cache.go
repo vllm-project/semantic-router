@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -17,6 +18,11 @@ import (
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
+
+// cacheCancelWindow is how long the cancellation probe lets a request run before
+// abandoning it. Long enough that the router has started the ext_proc exchange,
+// short enough that a real upstream answer is unlikely.
+const cacheCancelWindow = 250 * time.Millisecond
 
 func init() {
 	pkgtestcases.Register("semantic-cache", pkgtestcases.TestCase{
@@ -128,13 +134,85 @@ func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestca
 	}
 
 	// Turn the collected results into an explicit pass/fail verdict (#2473).
-	return evaluateCacheAssertions(results, totalRequests, cacheHits, setupFailures)
+	verdict := evaluateCacheAssertions(results, totalRequests, cacheHits, setupFailures)
+
+	// Cancellation acceptance (#2473) runs last so it cannot disturb the hit-rate
+	// measurement above.
+	return errors.Join(verdict, runCacheCancellationCheck(ctx, localPort, opts.Verbose))
+}
+
+// runCacheCancellationCheck exercises the #2473 cancellation contract at the E2E
+// surface: a request abandoned mid-flight must not publish cache state, so the
+// same question asked again must still miss.
+//
+// Scope of what E2E can observe: cancellation reaches the router as an aborted
+// ext_proc stream, which has no response of its own to assert on. Its observable
+// consequence is the absence of cached state — including the pending entry the
+// request path writes before the upstream answers, which must never be served as
+// a hit. Context-error propagation and the write-path guards themselves are
+// pinned at unit level (pkg/cache cancellation specs).
+//
+// The cancel window is timing-dependent, so a request that completes before the
+// deadline is reported and skipped rather than failed: this assertion must not
+// add a new flake class to the profile matrix.
+func runCacheCancellationCheck(ctx context.Context, localPort string, verbose bool) error {
+	// Unique question: nothing else in the corpus may be semantically close to
+	// it, or a pre-existing entry would answer the follow-up lookup.
+	question := fmt.Sprintf("cancellation probe %d: describe the ripening of a persimmon", time.Now().UnixNano())
+
+	cancelCtx, cancel := context.WithTimeout(ctx, cacheCancelWindow)
+	defer cancel()
+
+	resp, err := sendChatRequest(cancelCtx, question, localPort, verbose)
+	if err == nil {
+		resp.Body.Close()
+		fmt.Printf("[Test] cancellation probe: upstream answered within %s; no mid-flight cancel to assert on\n",
+			cacheCancelWindow)
+		return nil
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("cancellation probe failed for an unrelated reason: %w", err)
+	}
+	if verbose {
+		fmt.Printf("[Test] cancellation probe: request abandoned after %s\n", cacheCancelWindow)
+	}
+
+	// Give the router the same settling time the priming requests get, so a
+	// wrongly published entry would be visible by now.
+	time.Sleep(1 * time.Second)
+
+	followUp, err := sendChatRequest(ctx, question, localPort, verbose)
+	if err != nil {
+		return fmt.Errorf("cancellation probe follow-up request failed: %w", err)
+	}
+	defer followUp.Body.Close()
+
+	if followUp.Header.Get("x-vsr-cache-hit") == "true" {
+		return fmt.Errorf("cancelled request published cache state: the same question hit with similarity %q",
+			followUp.Header.Get("x-vsr-cache-similarity"))
+	}
+	if _, simErr := parseCacheSimilarity(followUp.Header.Get("x-vsr-cache-similarity"), false); simErr != "" {
+		return fmt.Errorf("cancellation probe follow-up: %s", simErr)
+	}
+
+	return nil
 }
 
 // evaluateCacheAssertions converts the collected per-request results into an
 // explicit pass/fail verdict. Previously testCache returned nil unconditionally,
 // so a malformed/missing similarity header (recorded in CacheResult.Error) or a
 // run that executed zero requests still passed CI (#2473).
+//
+// The per-request acceptance condition itself lives in parseCacheSimilarity,
+// which is applied to every response: a hit must carry its own score in (0,1]
+// and a miss must carry none. This function is what makes those per-request
+// verdicts affect the testcase result.
+//
+// Hit *rate* is deliberately not gated here. It is a measurement, reported
+// through SetDetails, and the repository already enforces a floor for it in
+// e2e/pkg/testcases/acceptance_contracts.go ("semantic-cache" -> minimum
+// hit_rate) for the profile that owns that contract. Failing every profile on
+// zero hits would turn a baseline contract into a matrix-wide gate.
 func evaluateCacheAssertions(results []CacheResult, totalRequests, cacheHits int, setupFailures []string) error {
 	assertionFailures := append([]string{}, setupFailures...)
 	for _, r := range results {
