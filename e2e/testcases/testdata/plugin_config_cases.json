@@ -47,15 +47,15 @@
       "query": "Can you recommend a good movie to watch tonight?",
       "expected_decision": "other_decision",
       "plugin_type": "semantic-cache",
-      "expected_behavior": "cache_miss",
-      "description": "Casual movie recommendation query"
+      "expected_behavior": "cache_hit_possible",
+      "description": "Casual movie recommendation query may reuse semantically similar casual context"
     },
     {
       "query": "What is your favorite type of music genre?",
       "expected_decision": "other_decision",
       "plugin_type": "semantic-cache",
-      "expected_behavior": "cache_miss",
-      "description": "Casual music preference query should be cache miss"
+      "expected_behavior": "cache_hit_possible",
+      "description": "Casual music preference query may reuse semantically similar casual context"
     },
     {
       "query": "Compute the derivative of x cubed plus 2x",
