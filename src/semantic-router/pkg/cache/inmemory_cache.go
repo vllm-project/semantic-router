@@ -360,6 +360,11 @@ func (c *InMemoryCache) UpdateWithResponse(ctx context.Context, requestID string
 
 	// Honor cancellation before mutating cache state so a canceled request does
 	// not complete a pending entry (#2473).
+	//
+	// The pending entry written earlier by AddPendingRequest is deliberately left
+	// alone: it carries no response, so entryEligible never returns it as a match,
+	// and it drains on its TTL. Deleting it here would need the request's own
+	// entry identity, which this method does not have on the cancel path.
 	if err := ctxErr(ctx); err != nil {
 		metrics.RecordCacheOperation("memory", "update_response", "canceled", time.Since(start).Seconds())
 		return err

@@ -116,8 +116,13 @@ type CacheBackend interface {
 // Compile-time assertions that every backend satisfies CacheBackend. They live
 // at the interface definition site (no build tag) so a future contract
 // migration — e.g. adding a parameter to a write method — fails to compile here
-// for every backend, including the windows||!cgo InMemoryCache/HybridCache
-// stubs, instead of silently drifting until a stub build breaks downstream.
+// rather than silently drifting until a downstream build breaks.
+//
+// Caveat worth knowing before relying on them for the windows||!cgo
+// InMemoryCache/HybridCache stubs: nothing in this repository compiles that
+// variant today. `CGO_ENABLED=0 go build ./pkg/cache/...` fails inside
+// valkey-glide, which itself requires cgo, and CI has no windows job. The stub
+// method sets are therefore still review-verified, not build-verified.
 var (
 	_ CacheBackend = (*InMemoryCache)(nil)
 	_ CacheBackend = (*HybridCache)(nil)

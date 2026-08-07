@@ -190,7 +190,10 @@ func (r *OpenAIRouter) performCacheLookup(
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
-		ctx.VSRCacheSimilarity = lookupResult.Similarity
+		// No similarity is recorded on a miss: every backend returns a zero
+		// LookupResult for misses and data errors, so a miss must leave the
+		// debug/Replay surface without a score rather than publish a candidate
+		// one (#2473).
 		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
