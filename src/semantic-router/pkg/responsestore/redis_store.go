@@ -429,10 +429,12 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 			}
 		}
 	} else if response.ConversationID != "" {
-		// ConversationID did not change, but we should refresh the TTL of the index
-		// since the response itself just had its TTL refreshed.
+		// ConversationID did not change, but we should ensure the response is in the index
+		// and refresh the TTL since the response itself just had its TTL refreshed.
 		idxKey := s.buildKey(ConversationIndexPrefix + response.ConversationID)
-		if s.ttl > 0 {
+		if err := s.client.SAdd(ctx, idxKey, response.ID).Err(); err != nil {
+			logging.Warnf("RedisStore: failed to refresh response %s in conversation index %s: %v", response.ID, response.ConversationID, err)
+		} else if s.ttl > 0 {
 			s.client.Expire(ctx, idxKey, s.ttl)
 		}
 	}
@@ -642,19 +644,26 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 		return ErrNotFound
 	}
 
+	idxKey := s.buildKey(ConversationIndexPrefix + conversationID)
+
 	// Optionally delete all responses in the conversation
 	if deleteResponses {
-		responses, err := s.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+		// Use SMembers directly to get ALL response IDs without list-limit truncation
+		responseIDs, err := s.client.SMembers(ctx, idxKey).Result()
 		if err != nil {
-			return fmt.Errorf("failed to list responses for deletion: %w", err)
-		}
-
-		for _, resp := range responses {
-			if err := s.DeleteResponse(ctx, resp.ID); err != nil && !errors.Is(err, ErrNotFound) {
-				logging.Warnf("RedisStore: failed to delete response %s: %v", resp.ID, err)
+			logging.Warnf("RedisStore: failed to get conversation index for deletion: %v", err)
+		} else {
+			for _, respID := range responseIDs {
+				respKey := s.buildKey(ResponseKeyPrefix + respID)
+				if err := s.client.Del(ctx, respKey).Err(); err != nil {
+					logging.Warnf("RedisStore: failed to delete response %s: %v", respID, err)
+				}
 			}
 		}
 	}
+
+	// Always clean up the index key itself
+	s.client.Del(ctx, idxKey)
 
 	return nil
 }
