@@ -418,6 +418,21 @@ Response headers expose the selected recipe, decision, and logical model. Router
 Replay persists the same recipe identity, so debugging and aggregate analysis
 remain scoped to the objective the client selected.
 
+Frontier escalation uses explicit, natural boundaries:
+
+- ordinary conversation such as “How are you?” stays on Frontier Direct
+- “verify with evidence” selects a confidence cascade
+- “ask multiple models” or “compare independent viewpoints” selects Fusion
+- “think deeply” and “reason through alternative paths” selects ReMoM
+- investigate/implement/validate requests select Workflow
+
+Confidence candidates are evaluated with real non-streaming log probabilities,
+then only the accepted answer is converted back to the client's streaming
+response. Rejected candidate streams are never concatenated. Dashboard badges,
+Config, Topology, and Builder render stable routing identifiers as readable
+labels—for example, “Frontier Verified Answer”—while Replay and API contracts
+retain the original machine identifier.
+
 ## Step 5: Evaluate the Deployed Objectives
 
 The installed CLI can evaluate objective selection without generating a
@@ -437,7 +452,7 @@ vllm-sr eval \
 
 The maintained
 [`probes.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/probes.yaml)
-contains 114 backend-independent cases used by repository CI and recipe
+contains 117 backend-independent cases used by repository CI and recipe
 calibration. It checks:
 
 - all 16 decisions
@@ -466,7 +481,10 @@ The maintained commands were exercised on an 8×MI300X host with vLLM
 - the real Playground accuracy tool flow stayed direct, then used the
   tool-result synthesis lane without a repeated search; Playground also
   preserved tool calls and results when the user continued the conversation
-- the 114-probe suite matched all 16 decisions with 0 errors
+- a live Frontier regression kept a greeting direct, completed confidence in
+  one iteration without duplicated text, and reached Fusion, ReMoM, and
+  Workflow with natural-language requests
+- the 117-probe suite matched all 16 decisions with 0 errors
 - 570 deterministic framing/whitespace stress cases passed at 74.313 requests
   per second with p50 238.822 ms, p95 381.197 ms, and 0 errors
 - 126 real generated requests passed across all five entrypoints and all six
