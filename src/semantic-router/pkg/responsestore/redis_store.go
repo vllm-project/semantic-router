@@ -36,6 +36,10 @@ const (
 	// ConversationKeyPrefix for conversation keys
 	// Combined with key_prefix (default "sr:"): sr:conversation:conv_xxxxx
 	ConversationKeyPrefix = "conversation:"
+
+	// ConversationIndexPrefix for conversation response indexes
+	// Combined with key_prefix: sr:index:conversation_responses:conv_xxxxx
+	ConversationIndexPrefix = "index:conversation_responses:"
 )
 
 // The function validates configuration, establishes connection, and tests connectivity.
@@ -336,6 +340,15 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return fmt.Errorf("failed to store response in Redis: %w", err)
 	}
 
+	if response.ConversationID != "" {
+		idxKey := s.buildKey(ConversationIndexPrefix + response.ConversationID)
+		if err := s.client.SAdd(ctx, idxKey, response.ID).Err(); err != nil {
+			logging.Warnf("RedisStore: failed to add response %s to conversation index %s: %v", response.ID, response.ConversationID, err)
+		} else if s.ttl > 0 {
+			s.client.Expire(ctx, idxKey, s.ttl)
+		}
+	}
+
 	return nil
 }
 
@@ -375,6 +388,13 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
+	// Fetch old response to check if ConversationID changed
+	oldResp, getErr := s.GetResponse(ctx, response.ID)
+	// We ignore NotFound here because the next Exists check will handle it
+	if getErr != nil && !errors.Is(getErr, ErrNotFound) {
+		return fmt.Errorf("failed to get old response for index cleanup: %w", getErr)
+	}
+
 	exists, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
 		return fmt.Errorf("failed to check response existence: %w", err)
@@ -392,6 +412,31 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 		return fmt.Errorf("failed to update response in Redis: %w", err)
 	}
 
+	// Maintain index and refresh TTL
+	if oldResp != nil && oldResp.ConversationID != response.ConversationID {
+		// ConversationID changed: remove from old index
+		if oldResp.ConversationID != "" {
+			oldIdx := s.buildKey(ConversationIndexPrefix + oldResp.ConversationID)
+			s.client.SRem(ctx, oldIdx, response.ID)
+		}
+		// Add to new index
+		if response.ConversationID != "" {
+			newIdx := s.buildKey(ConversationIndexPrefix + response.ConversationID)
+			if err := s.client.SAdd(ctx, newIdx, response.ID).Err(); err != nil {
+				logging.Warnf("RedisStore: failed to add response %s to conversation index %s: %v", response.ID, response.ConversationID, err)
+			} else if s.ttl > 0 {
+				s.client.Expire(ctx, newIdx, s.ttl)
+			}
+		}
+	} else if response.ConversationID != "" {
+		// ConversationID did not change, but we should refresh the TTL of the index
+		// since the response itself just had its TTL refreshed.
+		idxKey := s.buildKey(ConversationIndexPrefix + response.ConversationID)
+		if s.ttl > 0 {
+			s.client.Expire(ctx, idxKey, s.ttl)
+		}
+	}
+
 	return nil
 }
 
@@ -403,6 +448,13 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 		return ErrInvalidInput
 	}
 
+	// Need to get the response first to find its ConversationID for index cleanup
+	resp, getErr := s.GetResponse(ctx, responseID)
+	// We ignore NotFound here because if it's already gone we just try to delete the key anyway
+	if getErr != nil && !errors.Is(getErr, ErrNotFound) {
+		return fmt.Errorf("failed to get response for index cleanup: %w", getErr)
+	}
+
 	key := s.buildKey(ResponseKeyPrefix + responseID)
 
 	deleted, err := s.client.Del(ctx, key).Result()
@@ -411,6 +463,13 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 	}
 	if deleted == 0 {
 		return ErrNotFound
+	}
+
+	if resp != nil && resp.ConversationID != "" {
+		idxKey := s.buildKey(ConversationIndexPrefix + resp.ConversationID)
+		if err := s.client.SRem(ctx, idxKey, responseID).Err(); err != nil {
+			logging.Warnf("RedisStore: failed to remove response %s from conversation index %s: %v", responseID, resp.ConversationID, err)
+		}
 	}
 
 	return nil
@@ -458,32 +517,19 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
-	// Use SCAN to find all response keys
-	pattern := s.buildKey(ResponseKeyPrefix + "*")
-	var responses []*responseapi.StoredResponse
-
-	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
-	for iter.Next(ctx) {
-		key := iter.Val()
-
-		// Get response
-		data, err := s.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue // Skip errors (key might have expired)
-		}
-
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			continue
-		}
-
-		if response.ConversationID == conversationID {
-			responses = append(responses, &response)
-		}
+	idxKey := s.buildKey(ConversationIndexPrefix + conversationID)
+	responseIDs, err := s.client.SMembers(ctx, idxKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation responses index: %w", err)
 	}
 
-	if err := iter.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan responses: %w", err)
+	if len(responseIDs) == 0 {
+		return []*responseapi.StoredResponse{}, nil
+	}
+
+	responses, err := s.fetchResponsesPipelined(ctx, responseIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	responses = ApplyListOptions(responses, opts)
@@ -657,8 +703,15 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	// This is automatically handled by the conversation chain via previous_response_id
-	// This method can be used to update conversation metadata if needed
+	// Add to the conversation index so ListResponsesByConversation will return it
+	idxKey := s.buildKey(ConversationIndexPrefix + conversationID)
+	if err := s.client.SAdd(ctx, idxKey, responseID).Err(); err != nil {
+		return fmt.Errorf("failed to add response to conversation index: %w", err)
+	}
+	if s.ttl > 0 {
+		s.client.Expire(ctx, idxKey, s.ttl)
+	}
+
 	return nil
 }
 

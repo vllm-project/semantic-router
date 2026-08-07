@@ -325,6 +325,51 @@ func TestRedisStoreIntegration_ListOperations(t *testing.T) {
 		assert.NoError(t, err)
 		assert.LessOrEqual(t, len(responses), 3)
 	})
+
+	t.Run("Index is updated on delete", func(t *testing.T) {
+		// Delete one response
+		err := store.DeleteResponse(ctx, "resp_list_0")
+		assert.NoError(t, err)
+
+		// Check list again, it should have 4 responses
+		responses, err := store.ListResponsesByConversation(ctx, convID, ListOptions{})
+		assert.NoError(t, err)
+		assert.Len(t, responses, 4)
+	})
+
+	t.Run("Index is updated on UpdateResponse conversation change", func(t *testing.T) {
+		// Change conversation ID of resp_list_1
+		updatedResp := &responseapi.StoredResponse{
+			ID:             "resp_list_1",
+			ConversationID: "conv_list_new",
+			Status:         "updated",
+		}
+		err := store.UpdateResponse(ctx, updatedResp)
+		assert.NoError(t, err)
+
+		// Old conversation should now have 3 responses
+		oldResponses, err := store.ListResponsesByConversation(ctx, convID, ListOptions{})
+		assert.NoError(t, err)
+		assert.Len(t, oldResponses, 3)
+
+		// New conversation should have 1 response
+		newResponses, err := store.ListResponsesByConversation(ctx, "conv_list_new", ListOptions{})
+		assert.NoError(t, err)
+		assert.Len(t, newResponses, 1)
+		assert.Equal(t, "resp_list_1", newResponses[0].ID)
+	})
+
+	t.Run("Index is updated on AddResponseToConversation", func(t *testing.T) {
+		// Manually add a response to a conversation index
+		err := store.AddResponseToConversation(ctx, "conv_list_manual", "resp_list_2")
+		assert.NoError(t, err)
+
+		// Manual conversation should have 1 response
+		manualResponses, err := store.ListResponsesByConversation(ctx, "conv_list_manual", ListOptions{})
+		assert.NoError(t, err)
+		assert.Len(t, manualResponses, 1)
+		assert.Equal(t, "resp_list_2", manualResponses[0].ID)
+	})
 }
 
 func TestRedisStoreIntegration_ConcurrentAccess(t *testing.T) {
