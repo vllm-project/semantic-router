@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { formatRoutingMetadataValue } from './routingMetadataDisplay'
@@ -33,5 +34,41 @@ describe('formatRoutingMetadataValue', () => {
     expect(formatRoutingMetadataValue('x-vsr-selected-model', 'local/qwen3.5-122b-frontier')).toBe(
       'local/qwen3.5-122b-frontier',
     )
+  })
+
+  it('humanizes every decision, signal, and projection in the maintained recipe', () => {
+    const dsl = readFileSync(
+      new URL('../../../../config/recipes/multi-objective/recipe.dsl', import.meta.url),
+      'utf8',
+    )
+    const decisions = Array.from(dsl.matchAll(/^\s*ROUTE\s+([^\s(]+)/gm), (match) => match[1])
+    const signals = Array.from(dsl.matchAll(/^\s*SIGNAL\s+(\S+)\s+([^\s{]+)/gm), (match) => ({
+      type: match[1],
+      name: match[2],
+    }))
+    const projections = Array.from(
+      dsl.matchAll(/^\s*PROJECTION\s+(?:score|mapping)\s+([^\s{]+)/gm),
+      (match) => match[1],
+    )
+
+    expect(decisions).toHaveLength(16)
+    expect(signals.length).toBeGreaterThan(40)
+    expect(projections).toHaveLength(14)
+
+    for (const decision of decisions) {
+      expect(formatRoutingMetadataValue('x-vsr-selected-decision', decision)).not.toMatch(
+        /unified_|_/,
+      )
+    }
+    for (const signal of signals) {
+      expect(formatRoutingMetadataValue(`x-vsr-matched-${signal.type}`, signal.name)).not.toMatch(
+        /unified_|_/,
+      )
+    }
+    for (const projection of projections) {
+      expect(formatRoutingMetadataValue('x-vsr-matched-projections', projection)).not.toMatch(
+        /unified_|_/,
+      )
+    }
   })
 })
