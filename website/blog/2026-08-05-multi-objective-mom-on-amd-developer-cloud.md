@@ -125,7 +125,7 @@ sudo docker run -d \
     --port 8000 \
     --served-model-name qwen/qwen3.5-rocm \
     --enable-auto-tool-choice \
-    --tool-call-parser qwen3_coder \
+    --tool-call-parser qwen3_xml \
     --reasoning-parser qwen3 \
     --max-model-len 262144 \
     --language-model-only \
