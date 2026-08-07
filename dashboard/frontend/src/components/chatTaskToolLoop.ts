@@ -10,7 +10,11 @@ import {
 import type { OutboundChatMessage } from './chatRequestSupport'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
-import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
+import {
+  extractTextToolCalls,
+  normalizeToolCallArguments,
+  resolveAssistantContentUpdate,
+} from './chatToolCallSupport'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
@@ -161,20 +165,25 @@ export const runToolLoop = async ({
     let followUpThinking = ''
     let hasMoreToolCalls = false
     let streamFinishReason = ''
+    let replaceFollowUpContent = false
     toolCallsMap.clear()
 
     const commitFollowUpMessage = (streaming: boolean) => {
       if (followUpThinking) {
         latestThinkingProcessRef.current = followUpThinking
       }
-      if (!followUpContent && !followUpThinking) return
+      if (!replaceFollowUpContent && !followUpContent && !followUpThinking) return
 
       updateConversationMessages(task.conversationId, (prev) =>
         prev.map((message) =>
           message.id === assistantMessageId
             ? {
                 ...message,
-                content: followUpContent || message.content,
+                content: resolveAssistantContentUpdate(
+                  message.content,
+                  followUpContent,
+                  replaceFollowUpContent,
+                ),
                 thinkingProcess: followUpThinking || message.thinkingProcess,
                 isStreaming: streaming,
               }
@@ -254,6 +263,7 @@ export const runToolLoop = async ({
       const textualToolCalls = extractTextToolCalls(followUpContent)
       if (textualToolCalls.toolCalls.length > 0) {
         followUpContent = textualToolCalls.content
+        replaceFollowUpContent = true
         hasMoreToolCalls = true
         streamFinishReason = 'tool_calls'
         if (
