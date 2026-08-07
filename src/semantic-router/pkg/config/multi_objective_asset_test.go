@@ -115,15 +115,12 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	speed, _ := cfg.RecipeByName("speed-first")
 	speedAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_first_route").Algorithm
-	if speedAlgorithm == nil || speedAlgorithm.Type != DecisionAlgorithmMultiFactor ||
-		speedAlgorithm.MultiFactor == nil || speedAlgorithm.MultiFactor.Weights == nil ||
-		speedAlgorithm.MultiFactor.Weights.Latency != 0.85 {
-		t.Fatalf("speed-first recipe lost its latency-first selector: %+v", speedAlgorithm)
+	speedWeights := requireMultiObjectiveMultiFactorWeights(t, speedAlgorithm, "speed-first")
+	if speedWeights.Latency != 0.85 {
+		t.Fatalf("speed-first recipe lost its latency-first selector: %+v", speedWeights)
 	}
 	heavyAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_heavy_route").Algorithm
-	if heavyAlgorithm == nil || heavyAlgorithm.Type != DecisionAlgorithmLatencyAware {
-		t.Fatalf("speed-first heavy route must separate TTFT and TPOT: %+v", heavyAlgorithm)
-	}
+	requireMultiObjectiveAlgorithmType(t, heavyAlgorithm, DecisionAlgorithmLatencyAware, "speed-first heavy route")
 
 	cost, _ := cfg.RecipeByName("cost-first")
 	for _, decision := range cost.Profile.Decisions {
@@ -135,9 +132,12 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 		if !slices.Equal(models, []string{"local/qwen3.5-9b-economy", "local/qwen3.5-9b-economy-replica"}) {
 			t.Fatalf("cost-first decision %q must use both self-hosted economy replicas: %+v", decision.Name, decision.ModelRefs)
 		}
-		if decision.Algorithm == nil || decision.Algorithm.Type != DecisionAlgorithmMultiFactor {
-			t.Fatalf("cost-first decision %q must load-balance with multi-factor selection: %+v", decision.Name, decision.Algorithm)
-		}
+		requireMultiObjectiveAlgorithmType(
+			t,
+			decision.Algorithm,
+			DecisionAlgorithmMultiFactor,
+			"cost-first decision "+decision.Name,
+		)
 	}
 	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginSemanticCache) {
 		t.Fatal("cost-first direct route must reuse semantically equivalent answers")
@@ -154,10 +154,9 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		t.Fatalf("accuracy complexity threshold must use a calibrated margin: %+v", rules)
 	}
 	accuracyAlgorithm := multiObjectiveDecision(t, accuracy, "unified_frontier_direct").Algorithm
-	if accuracyAlgorithm == nil || accuracyAlgorithm.MultiFactor == nil ||
-		accuracyAlgorithm.MultiFactor.Weights == nil ||
-		accuracyAlgorithm.MultiFactor.Weights.Quality != 1.0 {
-		t.Fatalf("accuracy-first recipe lost its quality-only selector: %+v", accuracyAlgorithm)
+	accuracyWeights := requireMultiObjectiveMultiFactorWeights(t, accuracyAlgorithm, "accuracy-first")
+	if accuracyWeights.Quality != 1.0 {
+		t.Fatalf("accuracy-first recipe lost its quality-only selector: %+v", accuracyWeights)
 	}
 	for decisionName, algorithmType := range map[string]string{
 		"unified_frontier_verified_answer": DecisionAlgorithmConfidence,
@@ -166,9 +165,7 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		"unified_frontier_remom":           DecisionAlgorithmReMoM,
 	} {
 		algorithm := multiObjectiveDecision(t, accuracy, decisionName).Algorithm
-		if algorithm == nil || algorithm.Type != algorithmType {
-			t.Fatalf("accuracy-first decision %q algorithm = %+v, want %q", decisionName, algorithm, algorithmType)
-		}
+		requireMultiObjectiveAlgorithmType(t, algorithm, algorithmType, "accuracy-first decision "+decisionName)
 	}
 	for _, decision := range accuracy.Profile.Decisions {
 		if decision.HasPlugin(DecisionPluginHallucination) {
@@ -179,6 +176,32 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		}
 	}
 	assertMultiObjectiveLanguageCodes(t, accuracy, []string{"zh", "es", "fr", "ja", "de"})
+}
+
+func requireMultiObjectiveAlgorithmType(t *testing.T, algorithm *AlgorithmConfig, expected, context string) {
+	t.Helper()
+	if algorithm == nil {
+		t.Fatalf("%s algorithm is unavailable", context)
+	}
+	if algorithm.Type != expected {
+		t.Fatalf("%s algorithm = %+v, want %q", context, algorithm, expected)
+	}
+}
+
+func requireMultiObjectiveMultiFactorWeights(
+	t *testing.T,
+	algorithm *AlgorithmConfig,
+	context string,
+) *MultiFactorWeightsConfig {
+	t.Helper()
+	requireMultiObjectiveAlgorithmType(t, algorithm, DecisionAlgorithmMultiFactor, context)
+	if algorithm.MultiFactor == nil {
+		t.Fatalf("%s multi-factor configuration is unavailable", context)
+	}
+	if algorithm.MultiFactor.Weights == nil {
+		t.Fatalf("%s multi-factor weights are unavailable", context)
+	}
+	return algorithm.MultiFactor.Weights
 }
 
 func assertMultiObjectiveLanguageCodes(t *testing.T, recipe *RoutingRecipe, expected []string) {
