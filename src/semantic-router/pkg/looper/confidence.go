@@ -477,6 +477,10 @@ func (e *ConfidenceEvaluator) NeedsTopLogprobs() int {
 	}
 }
 
+func confidenceModelCallStreaming(clientStreaming bool, evaluator *ConfidenceEvaluator) bool {
+	return clientStreaming && !evaluator.NeedsLogprobs()
+}
+
 // Execute implements the confidence algorithm:
 // 1. Sort models by param_size in ascending order (smallest first)
 // 2. Try smallest model first
@@ -613,7 +617,15 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			"iteration": iteration,
 		})
 
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, logprobsCfg, accessKey)
+		resp, err := l.client.CallModel(
+			ctx,
+			req.OriginalRequest,
+			modelName,
+			confidenceModelCallStreaming(req.IsStreaming, evaluator),
+			iteration,
+			logprobsCfg,
+			accessKey,
+		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "confidence",
@@ -955,24 +967,4 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 
 	accepted := verifyResp.Confidence >= evaluator.Threshold
 	return verifyResp.Confidence, accepted, nil
-}
-
-// formatConfidenceJSONResponse creates response with confidence algorithm type
-func (l *ConfidenceLooper) formatConfidenceJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	resp, err := l.formatJSONResponse(agg, modelsUsed, iterations)
-	if err != nil {
-		return nil, err
-	}
-	resp.AlgorithmType = "confidence"
-	return resp, nil
-}
-
-// formatConfidenceStreamingResponse creates response with confidence algorithm type
-func (l *ConfidenceLooper) formatConfidenceStreamingResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	resp, err := l.formatStreamingResponse(agg, modelsUsed, iterations)
-	if err != nil {
-		return nil, err
-	}
-	resp.AlgorithmType = "confidence"
-	return resp, nil
 }

@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-本页汇总了编写**嵌入锚点包**的设计原则。嵌入锚点包是 `embedding` 信号规则用于余弦匹配的候选短语集。本页将随可选择启用的图像模态锚点包（`config/signal/embedding/image-routing.yaml`）一同引入的编写指南加以推广，使同一套思路同样适用于文本模态和图像模态锚点包。
+本页汇总了编写**嵌入锚点包**的设计原则。嵌入锚点包是 `embedding` 信号规则用于余弦匹配的候选短语集。本页将随可选择启用的图像模态锚点包（`config/fragments/signal/embedding/image-routing.yaml`）一同引入的编写指南加以推广，使同一套思路同样适用于文本模态和图像模态锚点包。
 
 请在阅读 [嵌入信号](./embedding) 教程后再阅读本页。该教程介绍具体机制（`candidates`、`threshold`、`aggregation_method`、`query_modality`）；本页则介绍如何构建能可靠路由的锚点包，而不是一个看似合理、在规模化应用中却会误判的锚点包。
 
@@ -80,6 +80,6 @@ translation:
 
 ### 参考：可选择启用的图像锚点包
 
-`config/signal/embedding/image-routing.yaml` 是五项原则的完整示例：三个类别（`identifier_document_imagery`、`code_or_terminal_imagery`、`ambient_office_imagery`），每类 8 个锚点，`aggregation_method: max`，以及针对模型校准的 `0.10` 阈值。将其内联到 `routing.signals.embeddings` 下，然后将 `ambient_office_imagery` 锚点替换为针对你自己的部署场景的内容，并重新校准。
+`config/fragments/signal/embedding/image-routing.yaml` 是五项原则的完整示例：三个类别（`identifier_document_imagery`、`code_or_terminal_imagery`、`ambient_office_imagery`），每类 8 个锚点，`aggregation_method: max`，以及针对模型校准的 `0.10` 阈值。将其内联到 `routing.signals.embeddings` 下，然后将 `ambient_office_imagery` 锚点替换为针对你自己的部署场景的内容，并重新校准。
 
 有关字段参考和完整的路由示例，请参阅 [嵌入信号](./embedding) 教程。

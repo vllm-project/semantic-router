@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`complexity` 估计提示是否需要更难推理路径或更便宜的简易路径。映射到 `config/signal/complexity/`，在 `routing.signals.complexity` 中声明。
+`complexity` 估计提示是否需要更难推理路径或更便宜的简易路径。映射到 `config/fragments/signal/complexity/`，在 `routing.signals.complexity` 中声明。
 
 该族为学习型：分类器用嵌入相似度将请求与难/易候选比较，并可选用多模态候选。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/complexity/`
+源片段族：`config/fragments/signal/complexity/`
 
 ```yaml
 routing:

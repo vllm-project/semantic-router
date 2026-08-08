@@ -258,7 +258,7 @@ func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[stri
 		// request time with a misleading upstream "401 No api key".
 		//
 		// Only enforced when the config declares a model surface (modelCards).
-		// Partial DSL fragments without modelCards (e.g. config/decision/**
+		// Partial DSL fragments without modelCards (e.g. config/fragments/decision/**
 		// examples) carry no model surface to validate against and are skipped,
 		// mirroring how default_model existence is only checked when set.
 		if len(modelCards) > 0 && !canonicalModelOrLoRAExists(modelsByName, modelCards, modelRef.Model) {

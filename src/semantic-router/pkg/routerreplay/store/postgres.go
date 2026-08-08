@@ -24,7 +24,7 @@ const DefaultPostgresTableName = "router_replay_records"
 // guarded by TestPostgresInsertQueryColumnArgsAlignment.
 const postgresInsertQueryTemplate = `
 		INSERT INTO %s (
-			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
+			id, timestamp, request_id, recipe, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
 			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 			request_body, response_body, response_status,
@@ -37,7 +37,7 @@ const postgresInsertQueryTemplate = `
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
 			cache_similarity, context_token_count, hallucination_span_details
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -45,6 +45,7 @@ const postgresCreateTableQueryTemplate = `
 			id VARCHAR(255) PRIMARY KEY,
 			timestamp TIMESTAMP NOT NULL,
 			request_id VARCHAR(255),
+			recipe TEXT,
 			decision VARCHAR(255),
 			decision_tier INTEGER DEFAULT 0,
 			decision_priority INTEGER DEFAULT 0,
@@ -97,6 +98,8 @@ const postgresCreateTableQueryTemplate = `
 			baseline_model VARCHAR(255),
 			created_at TIMESTAMP DEFAULT NOW()
 		);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;
+		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS projections JSONB;

@@ -1,4 +1,5 @@
 import { RuleCombination, RuleCondition, RuleNode, SignalType } from '../types'
+import { formatRoutingMetadataValue } from '../../../components/routingMetadataDisplay'
 
 export interface RulePreviewLine {
   key: string
@@ -29,9 +30,15 @@ export function collectRuleSignalTypes(rule: RuleCombination): SignalType[] {
   return Array.from(new Set(collectRuleConditions(rule).map((condition) => condition.type)))
 }
 
+function formatRuleCondition(node: RuleCondition): string {
+  const type = formatRoutingMetadataValue('x-vsr-matched-signal-type', node.type)
+  const name = formatRoutingMetadataValue(`x-vsr-matched-${node.type}`, node.name)
+  return `${type}: ${name}`
+}
+
 export function summarizeRuleNode(node: RuleNode): string {
   if (!isRuleCombination(node)) {
-    return `${node.type}: ${node.name}`
+    return formatRuleCondition(node)
   }
 
   const childSummaries = node.conditions.map((condition) => summarizeRuleNode(condition))
@@ -48,15 +55,15 @@ function countRulePreviewLines(node: RuleNode, includeOperator: boolean): number
     return 1
   }
 
-  return (includeOperator ? 1 : 0) + node.conditions.reduce(
-    (total, condition) => total + countRulePreviewLines(condition, true),
-    0
+  return (
+    (includeOperator ? 1 : 0) +
+    node.conditions.reduce((total, condition) => total + countRulePreviewLines(condition, true), 0)
   )
 }
 
 export function buildRulePreviewLines(
   rule: RuleNode,
-  options: RulePreviewOptions = {}
+  options: RulePreviewOptions = {},
 ): RulePreviewLine[] {
   const includeRootOperator = options.includeRootOperator ?? true
   const totalLineCount = countRulePreviewLines(rule, includeRootOperator)
@@ -76,13 +83,16 @@ export function buildRulePreviewLines(
 
   const walk = (node: RuleNode, depth: number, includeOperator: boolean, key: string): boolean => {
     if (isRuleCombination(node)) {
-      if (includeOperator && !pushLine({
-        key: `${key}-operator`,
-        depth,
-        kind: 'operator',
-        text: node.operator,
-        title: summarizeRuleNode(node),
-      })) {
+      if (
+        includeOperator &&
+        !pushLine({
+          key: `${key}-operator`,
+          depth,
+          kind: 'operator',
+          text: node.operator,
+          title: summarizeRuleNode(node),
+        })
+      ) {
         return false
       }
 
@@ -96,7 +106,7 @@ export function buildRulePreviewLines(
       return true
     }
 
-    const label = `${node.type}: ${node.name}`
+    const label = formatRuleCondition(node)
     return pushLine({
       key: `${key}-condition`,
       depth,

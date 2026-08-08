@@ -58,7 +58,7 @@ var retiredPluginTutorialDocs = []string{
 func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 	t.Helper()
 
-	configRoot := filepath.Join(root, repoRel("config", "algorithm"))
+	configRoot := filepath.Join(root, repoRel("config", "fragments", "algorithm"))
 	remaining := copyStringStringMap(algorithmTutorialBuckets)
 	seen := 0
 
@@ -96,7 +96,7 @@ func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) 
 		t.Fatalf("%s should contain algorithm fragments", configRoot)
 	}
 	for algorithm := range remaining {
-		t.Fatalf("algorithm tutorial mapping declares %q, but config/algorithm is missing it", algorithm)
+		t.Fatalf("algorithm tutorial mapping declares %q, but config/fragments/algorithm is missing it", algorithm)
 	}
 
 	assertPathsDoNotExist(t, root, retiredAlgorithmTutorialDocs)
@@ -105,7 +105,7 @@ func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) 
 func assertPluginTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 	t.Helper()
 
-	configRoot := filepath.Join(root, repoRel("config", "plugin"))
+	configRoot := filepath.Join(root, repoRel("config", "fragments", "plugin"))
 	entries, err := os.ReadDir(configRoot)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", configRoot, err)
@@ -123,13 +123,13 @@ func assertPluginTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 
 		docPath := repoRel("website", "docs", "tutorials", "plugin", plugin+".md")
 		if _, err := os.Stat(filepath.Join(root, docPath)); err != nil {
-			t.Fatalf("%s should exist for config/plugin/%s: %v", docPath, plugin, err)
+			t.Fatalf("%s should exist for config/fragments/plugin/%s: %v", docPath, plugin, err)
 		}
 		delete(remaining, plugin)
 	}
 
 	for plugin := range remaining {
-		t.Fatalf("plugin tutorial mapping declares %q, but config/plugin/%s is missing", plugin, plugin)
+		t.Fatalf("plugin tutorial mapping declares %q, but config/fragments/plugin/%s is missing", plugin, plugin)
 	}
 
 	assertPathsDoNotExist(t, root, retiredPluginTutorialDocs)

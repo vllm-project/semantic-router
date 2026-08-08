@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`keyword` 匹配请求中的显式词法模式。映射到 `config/signal/keyword/`，在 `routing.signals.keywords` 中声明。
+`keyword` 匹配请求中的显式词法模式。映射到 `config/fragments/signal/keyword/`，在 `routing.signals.keywords` 中声明。
 
 该族为启发式：用配置的词、短语或轻量检索方式匹配，而非学习型意图分类器。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/keyword/`
+源片段族：`config/fragments/signal/keyword/`
 
 ```yaml
 routing:

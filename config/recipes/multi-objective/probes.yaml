@@ -30,6 +30,12 @@ decisions:
       - id: ordinary_summary
         query: Summarize this product update in one paragraph.
         tags: [recipe:balanced, language:en, direct]
+      - id: semantic_easy_complexity
+        query: Give a short definition of a common term.
+        expected_signals:
+          complexity: [unified_balance_difficulty:easy]
+          projection: [unified_balance_standard]
+        tags: [recipe:balanced, language:en, signal:complexity, direct]
       - id: spanish_direct
         query: Resume esta actualización del producto en un párrafo.
         expected_signals:
@@ -42,8 +48,25 @@ decisions:
       - id: german_direct
         query: Fasse dieses Produktupdate kurz in einem Absatz zusammen.
         tags: [recipe:balanced, language:de, class:negative, direct]
+      - id: chinese_concise
+        query: 请保持回答简洁直接：用一句话说明什么是进程。
+        expected_signals:
+          keywords: [unified_balance_terse_markers]
+          projection: [unified_balance_standard]
+        tags: [recipe:balanced, language:zh, class:negative, signal:keyword, direct]
+      - id: french_concise
+        query: >-
+          Réponds de manière brève et directe en une phrase : qu'est-ce qu'un
+          processus ?
+        expected_signals:
+          keywords: [unified_balance_terse_markers]
+          projection: [unified_balance_standard]
+        tags: [recipe:balanced, language:fr, class:negative, signal:keyword, direct]
       - id: negated_deliberation
         query: Do not analyze the tradeoffs; answer briefly in one sentence.
+        expected_signals:
+          keywords: [unified_balance_negated_reasoning, unified_balance_reasoning_markers]
+          projection: [unified_balance_standard]
         tags: [recipe:balanced, language:en, stress:conflict, direct]
 
   - id: balanced_deliberate
@@ -53,26 +76,41 @@ decisions:
     expected_algorithm: multi_factor
     variants:
       - id: root_cause
-        query: Analyze the tradeoffs and root cause of this distributed failure.
+        query: Keep the answer concise and direct, but analyze the tradeoffs and root cause of this distributed failure.
         expected_signals:
-          keywords: [unified_balance_reasoning_markers]
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
           projection: [unified_balance_deliberate]
-        tags: [recipe:balanced, language:en, projection]
+        tags: [recipe:balanced, language:en, stress:preference-conflict, projection]
       - id: first_principles
-        query: 从第一性原理逐步推理，并分析这几个架构方案的取舍。
-        tags: [recipe:balanced, language:zh, projection]
+        query: 请保持回答简洁直接，但要从第一性原理逐步推理，并分析这几个架构方案的取舍。
+        expected_signals:
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:zh, stress:preference-conflict, projection]
       - id: tradeoffs_es
-        query: Analiza las ventajas y desventajas y la causa raíz paso a paso.
-        tags: [recipe:balanced, language:es, signal:keyword, projection]
+        query: Responde de forma breve y directa, pero analiza las ventajas y desventajas y la causa raíz paso a paso.
+        expected_signals:
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:es, signal:keyword, stress:preference-conflict, projection]
       - id: tradeoffs_fr
-        query: Analyse les compromis et la cause racine de cette panne.
-        tags: [recipe:balanced, language:fr, signal:keyword, projection]
+        query: Réponds de manière brève et directe, mais analyse les compromis et la cause racine de cette panne.
+        expected_signals:
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:fr, signal:keyword, stress:preference-conflict, projection]
       - id: root_cause_ja
-        query: この障害の根本原因を分析し、段階的に推論してください。
-        tags: [recipe:balanced, language:ja, signal:keyword, projection]
+        query: 簡潔で直接的に答えてください。ただし、この障害の根本原因を分析し、段階的に推論してください。
+        expected_signals:
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:ja, signal:keyword, stress:preference-conflict, projection]
       - id: tradeoffs_de
-        query: Bitte die Kompromisse analysieren und die Ursache schrittweise erklären.
-        tags: [recipe:balanced, language:de, signal:keyword, projection]
+        query: Bitte kurz und direkt antworten, aber die Kompromisse analysieren und die Ursache schrittweise erklären.
+        expected_signals:
+          keywords: [unified_balance_reasoning_markers, unified_balance_terse_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:de, signal:keyword, stress:preference-conflict, projection]
       - id: long_context_reasoning
         query: Analyze the tradeoffs in this long architecture context.
         expected_signals:
@@ -80,6 +118,29 @@ decisions:
           projection: [unified_balance_deliberate]
         repeat: 1800
         tags: [recipe:balanced, language:en, signal:context, stress:long-input]
+      - id: dense_constraints
+        query: >-
+          The answer must contain exactly three options, must include at least
+          one risk, and must use no more than 120 words without omitting the
+          final recommendation.
+        expected_signals:
+          structure: [unified_balance_constraint_dense]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:en, signal:structure, projection]
+      - id: verification_pressure
+        query: Verify the answer, cite reliable sources, and check the evidence.
+        expected_signals:
+          keywords: [unified_balance_verification_markers]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:en, signal:keyword, verification]
+      - id: semantic_hard_complexity
+        query: >-
+          Design a distributed system and justify its consistency tradeoffs
+          while analyzing several competing production failure causes.
+        expected_signals:
+          complexity: [unified_balance_difficulty:hard]
+          projection: [unified_balance_deliberate]
+        tags: [recipe:balanced, language:en, signal:complexity, projection]
 
   - id: balanced_recovery
     model: vllm-sr/mom-balanced-v1
@@ -117,6 +178,18 @@ decisions:
           reask: [unified_balance_reask]
           conversation: [unified_balance_multi_turn]
         tags: [recipe:balanced, language:en, signal:reask, shape:multi-turn]
+      - id: feedback_classifier
+        messages:
+          - role: user
+            content: What is the capital of Australia?
+          - role: assistant
+            content: Sydney.
+          - role: user
+            content: That answer was incorrect and did not solve my request.
+        expected_signals:
+          user_feedback: [wrong_answer]
+          conversation: [unified_balance_multi_turn]
+        tags: [recipe:balanced, language:en, signal:user-feedback, shape:multi-turn]
 
   - id: speed_interactive
     model: vllm-sr/mom-flash-v1
@@ -180,12 +253,20 @@ decisions:
           projection: [unified_speed_heavy]
         repeat: 1800
         tags: [recipe:speed-first, language:en, signal:context, stress:long-input]
+      - id: ordered_heavy_work
+        query: >-
+          First inspect the incident, then produce a detailed architecture, and
+          finally provide a comprehensive review.
+        expected_signals:
+          structure: [unified_speed_ordered_workflow]
+          projection: [unified_speed_heavy]
+        tags: [recipe:speed-first, language:en, signal:structure, projection]
 
   - id: cost_direct
     model: vllm-sr/mom-economy-v1
     expected_recipe: cost-first
     expected_decision: unified_cost_first_route
-    expected_algorithm: static
+    expected_algorithm: multi_factor
     expected_plugins: [semantic-cache]
     variants:
       - id: basic_definition
@@ -213,7 +294,7 @@ decisions:
     model: vllm-sr/mom-economy-v1
     expected_recipe: cost-first
     expected_decision: unified_cost_local_reasoning
-    expected_algorithm: static
+    expected_algorithm: multi_factor
     variants:
       - id: system_design
         query: Design a system and reason step by step about the tradeoffs.
@@ -243,20 +324,57 @@ decisions:
           projection: [unified_cost_reasoning]
         repeat: 1800
         tags: [recipe:cost-first, language:en, signal:context, stress:long-input]
+      - id: ordered_local_reasoning
+        query: >-
+          First identify the root cause, then reason step by step, and finally
+          design a system that stays local.
+        expected_signals:
+          structure: [unified_cost_ordered_workflow]
+          projection: [unified_cost_reasoning]
+        tags: [recipe:cost-first, language:en, signal:structure, projection]
 
   - id: frontier_direct
     model: vllm-sr/mom-frontier-v1
     expected_recipe: accuracy-first
-    expected_decision: unified_accuracy_first_route
+    expected_decision: unified_frontier_direct
     expected_algorithm: multi_factor
     variants:
       - id: basic_fact
         query: Rewrite "hello world" in uppercase.
         tags: [recipe:accuracy-first, language:en, direct]
+      - id: greeting_stays_direct
+        query: How are you?
+        tags: [recipe:accuracy-first, language:en, class:negative, direct]
+      - id: available_tools_do_not_imply_workflow
+        query: Tell me something about vllm-sr.
+        expected_signals:
+          conversation: [unified_frontier_tooling_available]
+          projection: [unified_frontier_not_workflow, unified_frontier_direct]
+        tools:
+          - type: function
+            function:
+              name: search_web
+              description: Search public web sources.
+          - type: function
+            function:
+              name: read_file
+              description: Read a local file.
+          - type: function
+            function:
+              name: search_repository
+              description: Search repository content.
+          - type: function
+            function:
+              name: apply_patch
+              description: Apply a source patch.
+          - type: function
+            function:
+              name: run_tests
+              description: Run project tests.
+        tags: [recipe:accuracy-first, language:en, class:negative, shape:tools, direct]
       - id: plain_explanation
         query: Explain what a mutex does in plain language.
         expected_signals:
-          structure: [unified_frontier_direct_reference]
           projection: [unified_frontier_direct]
         tags: [recipe:accuracy-first, language:en, direct]
       - id: phrase_collision_fusion
@@ -290,12 +408,38 @@ decisions:
         query: ミューテックスの役割を簡単に説明してください。
         tags: [recipe:accuracy-first, language:ja, class:negative, direct]
 
+  - id: frontier_tool_result_synthesis
+    model: vllm-sr/mom-frontier-v1
+    expected_recipe: accuracy-first
+    expected_decision: unified_frontier_tool_result_synthesis
+    expected_algorithm: static
+    expected_plugins: [tools]
+    variants:
+      - id: ordinary_tool_result
+        messages:
+          - role: user
+            content: Tell me something about vllm-sr.
+          - role: assistant
+            content: ""
+            tool_calls:
+              - id: call-1
+                type: function
+                function:
+                  name: search_web
+                  arguments: '{"query":"vllm-sr"}'
+          - role: tool
+            tool_call_id: call-1
+            content: vLLM Semantic Router routes requests across model backends.
+        expected_signals:
+          conversation: [unified_frontier_active_tool_loop]
+          projection: [unified_frontier_not_workflow]
+        tags: [recipe:accuracy-first, language:en, shape:tool-loop, direct]
+
   - id: frontier_verified
     model: vllm-sr/mom-frontier-v1
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_verified_answer
     expected_algorithm: confidence
-    expected_plugins: [hallucination]
     variants:
       - id: evidence_en
         query: Verify the answer with evidence and cite reliable sources.
@@ -314,6 +458,11 @@ decisions:
       - id: evidence_ja
         query: 証拠で検証し、信頼できる情報源を示してください。
         tags: [recipe:accuracy-first, language:ja, signal:keyword, looper:confidence]
+      - id: disputed_claim
+        query: The Great Wall is visible from the Moon with the naked eye. Is that claim accurate?
+        expected_signals:
+          keywords: [unified_frontier_verification_markers]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:confidence]
 
   - id: frontier_remom
     model: vllm-sr/mom-frontier-v1
@@ -344,13 +493,50 @@ decisions:
       - id: reasoning_paths_de
         query: Mehrere Ansätze untersuchen und die stärkste Lösung synthetisieren.
         tags: [recipe:accuracy-first, language:de, signal:keyword, looper:remom]
+      - id: natural_deep_request
+        query: Think deeply before answering and reason through alternative paths.
+        expected_signals:
+          keywords: [unified_frontier_deep_markers]
+          projection: [unified_frontier_deliberate]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:remom]
+      - id: shorthand_deep_request
+        query: "Think deeply / alternative paths: propose a robust migration plan."
+        expected_signals:
+          keywords: [unified_frontier_deep_markers]
+          projection: [unified_frontier_deliberate]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:remom]
+      - id: tools_attached_reasoning_only
+        query: Think deeply about alternative migration paths and recommend the safest one.
+        expected_signals:
+          keywords: [unified_frontier_deep_markers]
+          projection: [unified_frontier_deliberate]
+        tools:
+          - type: function
+            function:
+              name: search_web
+              description: Search public web sources.
+        tags: [recipe:accuracy-first, language:en, shape:tools, looper:remom]
+      - id: long_context_reasoning
+        query: Explore several approaches in this long system-design context.
+        expected_signals:
+          context: [unified_frontier_long_context]
+          projection: [unified_frontier_deliberate]
+        repeat: 1800
+        tags: [recipe:accuracy-first, language:en, signal:context, stress:long-input]
+      - id: hard_complexity
+        query: >-
+          Prove a difficult result by exploring multiple possible derivations
+          and synthesize the strongest rigorous solution.
+        expected_signals:
+          complexity: [unified_frontier_complexity:hard]
+          projection: [unified_frontier_deliberate]
+        tags: [recipe:accuracy-first, language:en, signal:complexity, looper:remom]
 
   - id: frontier_fusion
     model: vllm-sr/mom-frontier-v1
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_fusion
     expected_algorithm: fusion
-    expected_plugins: [hallucination]
     variants:
       - id: expert_panel
         query: >-
@@ -361,6 +547,12 @@ decisions:
           embeddings: [unified_frontier_fusion_intent]
           projection: [unified_frontier_use_fusion]
         tags: [recipe:accuracy-first, language:en, looper:fusion]
+      - id: natural_multiple_models
+        query: Ask multiple models, compare several independent viewpoints, and synthesize the best answer.
+        expected_signals:
+          keywords: [unified_frontier_fusion_markers]
+          projection: [unified_frontier_use_fusion]
+        tags: [recipe:accuracy-first, language:en, signal:keyword, looper:fusion]
       - id: cross_check_zh
         query: 请比较多个专家意见，交叉验证答案，并解决各个独立分析之间的分歧。
         tags: [recipe:accuracy-first, language:zh, looper:fusion]
@@ -407,6 +599,17 @@ decisions:
       - id: execute_de
         query: Das Repository untersuchen und implementieren, danach testen und überprüfen.
         tags: [recipe:accuracy-first, language:de, signal:keyword, looper:workflows]
+      - id: research_then_synthesize_with_tool
+        query: Use search_web to research and synthesize the latest architecture.
+        expected_signals:
+          keywords: [unified_frontier_workflow_markers]
+          projection: [unified_frontier_use_workflow]
+        tools:
+          - type: function
+            function:
+              name: search_web
+              description: Search public web sources.
+        tags: [recipe:accuracy-first, language:en, signal:keyword, shape:tools, looper:workflows]
       - id: tool_rich_sequence
         query: First inspect the repository, then apply the change and finally validate it.
         expected_signals:
@@ -426,27 +629,6 @@ decisions:
               name: run_tests
               description: Run project tests.
         tags: [recipe:accuracy-first, language:en, signal:conversation, shape:tools]
-      - id: active_tool_loop
-        messages:
-          - role: user
-            content: Diagnose the failing test.
-          - role: assistant
-            content: ""
-            tool_calls:
-              - id: call-1
-                type: function
-                function:
-                  name: run_tests
-                  arguments: '{}'
-          - role: tool
-            tool_call_id: call-1
-            content: The integration test failed in recipe resolution.
-          - role: user
-            content: Continue.
-        expected_signals:
-          conversation: [unified_frontier_active_tool_loop]
-          projection: [unified_frontier_use_workflow]
-        tags: [recipe:accuracy-first, language:en, signal:conversation, shape:tool-loop]
 
   - id: privacy_default
     model: vllm-sr/mom-private-v1
@@ -462,6 +644,11 @@ decisions:
       - id: basic_fact
         query: What is the capital of France?
         tags: [recipe:privacy-first, language:en, direct]
+      - id: benign_format_instruction
+        query: Return a concise answer with exactly three bullets about caching.
+        expected_signals:
+          projection: [unified_privacy_standard]
+        tags: [recipe:privacy-first, language:en, class:negative, direct]
       - id: spanish_default
         query: Explica brevemente la diferencia entre un proceso y un hilo.
         tags: [recipe:privacy-first, language:es, class:negative, direct]
@@ -506,11 +693,13 @@ decisions:
       - id: explicit_pii_ssn
         query: My SSN is 123-45-6789 and this is confidential.
         expected_signals:
+          keywords: [unified_privacy_sensitive_markers]
           pii: [unified_privacy_pii_strict]
         tags: [recipe:privacy-first, language:en, signal:pii, sensitive]
       - id: long_pii_full_scan
         query: My SSN is 123-45-6789 and this is confidential.
         expected_signals:
+          keywords: [unified_privacy_sensitive_markers]
           pii: [unified_privacy_pii_strict]
         padding:
           text: Routine benign internal context about quarterly documentation.

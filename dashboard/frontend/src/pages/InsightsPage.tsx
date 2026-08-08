@@ -9,7 +9,11 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import { createInsightsTableColumns, getInsightsRecordPath } from './insightsPageSupport'
+import {
+  createInsightsTableColumns,
+  formatInsightsDecisionName,
+  getInsightsRecordPath,
+} from './insightsPageSupport'
 import type {
   InsightsAggregateResponse,
   InsightsFilterType,
@@ -335,7 +339,7 @@ export default function InsightsPage() {
               <option value="all">All Decisions</option>
               {availableDecisions.map((decision) => (
                 <option key={decision} value={decision}>
-                  {decision}
+                  {formatInsightsDecisionName(decision)}
                 </option>
               ))}
             </select>

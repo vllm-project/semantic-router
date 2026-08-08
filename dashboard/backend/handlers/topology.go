@@ -23,6 +23,7 @@ const (
 type TestQueryRequest struct {
 	Query string        `json:"query"`
 	Mode  TestQueryMode `json:"mode"`
+	Model string        `json:"model,omitempty"`
 }
 
 // MatchedSignal represents a matched signal
@@ -118,6 +119,7 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc 
 // RouterIntentRequest is the request body for Router's /api/v1/classify/intent
 type RouterIntentRequest struct {
 	Text    string               `json:"text"`
+	Model   string               `json:"model,omitempty"`
 	Options *RouterIntentOptions `json:"options,omitempty"`
 }
 
@@ -167,7 +169,8 @@ type RouterEvalResponse struct {
 func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQueryResult {
 	// Prepare request to Router API
 	intentReq := RouterIntentRequest{
-		Text: req.Query,
+		Text:  req.Query,
+		Model: req.Model,
 		Options: &RouterIntentOptions{
 			ReturnProbabilities: true,
 		},

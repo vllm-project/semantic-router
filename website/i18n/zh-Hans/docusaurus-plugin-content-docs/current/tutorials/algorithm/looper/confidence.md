@@ -11,7 +11,7 @@ translation:
 
 `confidence` 是循环算法：在候选模型间逐级升级，直到置信度足够高。
 
-对应 `config/algorithm/looper/confidence.yaml`。
+对应 `config/fragments/algorithm/looper/confidence.yaml`。
 
 ## 主要优势
 

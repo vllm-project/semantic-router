@@ -80,7 +80,7 @@ ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-he
     max_steps: 4
     mode: "dynamic"
     on_error: "skip"
-    planner: { model: "qwen-coordinator" }
+    planner: { max_completion_tokens: 2048, model: "qwen-coordinator" }
     template: "micro_agent"
   }
 }

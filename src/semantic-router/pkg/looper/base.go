@@ -90,7 +90,15 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 		})
 
 		// BaseLooper doesn't need logprobs (no confidence-based routing).
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, nil, accessKey)
+		resp, err := l.client.CallModel(
+			ctx,
+			toolFreeLooperRequest(req.OriginalRequest),
+			modelName,
+			req.IsStreaming,
+			iteration,
+			nil,
+			accessKey,
+		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "base",
@@ -182,6 +190,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 			if err := json.Unmarshal(last.Raw, &raw); err == nil {
 				raw["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
 				raw["model"] = agg.FinalModel
+				normalizeCompletionToolFinishReason(raw)
 				body, err := json.Marshal(raw)
 				if err == nil {
 					return &Response{

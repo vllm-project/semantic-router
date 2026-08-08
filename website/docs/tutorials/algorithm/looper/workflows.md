@@ -5,7 +5,7 @@
 `workflows` is a **looper** algorithm for Router Flow: a single model name can
 run a bounded micro-agent workflow behind the OpenAI-compatible API.
 
-It aligns to `config/algorithm/looper/workflows.yaml`.
+It aligns to `config/fragments/algorithm/looper/workflows.yaml`.
 
 The runtime also supports a direct Flow model slug through
 `global.integrations.looper.flow.model_names`. The built-in default is
