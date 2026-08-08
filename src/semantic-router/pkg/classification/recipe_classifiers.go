@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // RecipeClassifiers owns the immutable classifier graph for every routing
@@ -74,6 +76,12 @@ func BuildRecipeClassifiers(
 // request-reachable named recipe. All declared recipes were still built above,
 // preserving construction and validation semantics without provisioning
 // unreachable runtime resources.
+//
+// Recipes are initialized in order, so a failure part-way through leaves the
+// earlier recipes fully initialized — holding MCP connections the caller can no
+// longer reach, since it discards the whole set on error. Those are released
+// here, mirroring what Classifier.InitializeRuntime does for a single recipe's
+// partially completed tasks.
 func (s *RecipeClassifiers) InitializeRuntime() error {
 	if s == nil {
 		return fmt.Errorf("recipe classifiers are nil")
@@ -87,6 +95,12 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 			err = classifier.InitializeRuntime()
 		}
 		if err != nil {
+			if closeErr := s.Close(); closeErr != nil {
+				logging.ComponentWarnEvent("classifier", "recipe_runtime_initialization_rollback_failed", map[string]interface{}{
+					"recipe": string(recipeName),
+					"error":  closeErr.Error(),
+				})
+			}
 			return fmt.Errorf("initialize routing recipe %q: %w", recipeName, err)
 		}
 	}
@@ -120,6 +134,23 @@ func (s *RecipeClassifiers) routingLifecycleOrder() []config.RecipeName {
 		return s.routingOrder
 	}
 	return s.order
+}
+
+// Close releases every recipe classifier's runtime resources. Classifiers are
+// deliberately not shared between recipes, so each one holds its own MCP
+// connection and a reload that closed only the default recipe's classifier would
+// strand the rest.
+func (s *RecipeClassifiers) Close() error {
+	if s == nil {
+		return nil
+	}
+	var errs []error
+	for _, recipeName := range s.order {
+		if err := s.byRecipe[recipeName].Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ForRecipe returns the classifier for exactly one recipe. There is no
