@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 // closeTrackingCache is a minimal CacheBackend stub that records how many
@@ -212,5 +213,118 @@ func TestOpenAIRouterCloseDelegatesToOwningGeneration(t *testing.T) {
 	}
 	if got := fakeCache.closeCount(); got != 0 {
 		t.Fatalf("Close() bypassed the generation and closed Cache directly %d times", got)
+	}
+}
+
+// closeTrackingEmbeddingProvider is a minimal embedding.Provider that is also
+// an io.Closer, standing in for a remote embedding backend's client — the case
+// where a tools database actually holds something to release.
+type closeTrackingEmbeddingProvider struct {
+	mu     sync.Mutex
+	closes int
+}
+
+func (p *closeTrackingEmbeddingProvider) Embed(context.Context, string) ([]float32, error) {
+	return nil, nil
+}
+
+func (p *closeTrackingEmbeddingProvider) EmbedBatch(context.Context, []string) ([][]float32, error) {
+	return nil, nil
+}
+
+func (p *closeTrackingEmbeddingProvider) Dimension() int { return 1 }
+
+func (p *closeTrackingEmbeddingProvider) Backend() string { return "close-tracking" }
+
+func (p *closeTrackingEmbeddingProvider) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.closes++
+	return nil
+}
+
+func (p *closeTrackingEmbeddingProvider) closeCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.closes
+}
+
+func toolsDatabaseWithProvider(provider *closeTrackingEmbeddingProvider) *tools.ToolsDatabase {
+	return tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true, Provider: provider})
+}
+
+// TestOpenAIRouterCloseClosesLazilyLoadedToolDatabases covers the field-by-field
+// fallback. The per-path databases are built at request time by
+// getOrLoadToolDatabaseForSelection, not by the router build, so they are the
+// one owned resource that cannot be registered from construction alone.
+func TestOpenAIRouterCloseClosesLazilyLoadedToolDatabases(t *testing.T) {
+	first := &closeTrackingEmbeddingProvider{}
+	second := &closeTrackingEmbeddingProvider{}
+	router := &OpenAIRouter{
+		toolSelectionDBByPath: map[string]*tools.ToolsDatabase{
+			"/decisions/support.json": toolsDatabaseWithProvider(first),
+			"/decisions/billing.json": toolsDatabaseWithProvider(second),
+		},
+	}
+
+	if err := router.Close(); err != nil {
+		t.Fatalf("router.Close() error = %v", err)
+	}
+
+	if got := first.closeCount(); got != 1 {
+		t.Errorf("first tools database's provider closed %d times, want 1", got)
+	}
+	if got := second.closeCount(); got != 1 {
+		t.Errorf("second tools database's provider closed %d times, want 1;"+
+			" every per-path database is a separate provider client", got)
+	}
+	if router.toolSelectionDBByPath != nil {
+		t.Error("Close() left the per-path cache populated, so a request arriving after teardown reuses a closed database")
+	}
+}
+
+// TestBuildRouterRegistersLazyToolDatabasesOnGeneration is the one that matters
+// in production: a router built by buildRouterComponents tears down purely
+// through its generation, so a resource reachable only from the router itself
+// leaks unless the build registered a closer pointing back at it.
+func TestBuildRouterRegistersLazyToolDatabasesOnGeneration(t *testing.T) {
+	gen := routerruntime.NewGeneration()
+	router := (&routerComponents{generation: gen}).buildRouter()
+
+	provider := &closeTrackingEmbeddingProvider{}
+	router.toolSelectionDBByPath = map[string]*tools.ToolsDatabase{
+		"/decisions/support.json": toolsDatabaseWithProvider(provider),
+	}
+
+	if err := router.Close(); err != nil {
+		t.Fatalf("router.Close() error = %v", err)
+	}
+
+	if got := provider.closeCount(); got != 1 {
+		t.Fatalf("per-path tools database's provider closed %d times, want 1;"+
+			" the generation never learned the router owned it", got)
+	}
+}
+
+// TestCloseToolSelectionDatabasesIsIdempotent guards the double-teardown path:
+// the fallback calls closeToolSelectionDatabases directly and the generation
+// calls it through a registered closer, and an embedding client is not
+// necessarily safe to close twice.
+func TestCloseToolSelectionDatabasesIsIdempotent(t *testing.T) {
+	provider := &closeTrackingEmbeddingProvider{}
+	router := &OpenAIRouter{
+		toolSelectionDBByPath: map[string]*tools.ToolsDatabase{
+			"/decisions/support.json": toolsDatabaseWithProvider(provider),
+		},
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := router.closeToolSelectionDatabases(); err != nil {
+			t.Fatalf("closeToolSelectionDatabases() call %d error = %v", i+1, err)
+		}
+	}
+
+	if got := provider.closeCount(); got != 1 {
+		t.Fatalf("provider closed %d times across repeated teardown, want exactly 1", got)
 	}
 }

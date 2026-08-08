@@ -118,9 +118,11 @@ func (r *OpenAIRouter) closeResources() error {
 
 // closeOwnedFields closes the lookup table goroutines plus every closeable
 // field (cache, tools database, classifier, replay recorder(s), model
-// selector, memory store, rate limiter) directly. It is the fallback for
-// routers assembled by hand rather than by buildRouterComponents, which
-// registers the same set of resources on a Generation.
+// selector, memory store, rate limiter) and the lazily loaded per-path tool
+// databases. It is the fallback for routers assembled by hand rather than by
+// buildRouterComponents, which registers the same set of resources on a
+// Generation. Keep the two in step: a resource added to one and not the other
+// leaks on exactly one of the two construction paths.
 //
 // Note the deliberate asymmetry in nil handling: a method value such as
 // r.ToolsDatabase.Close is non-nil even when the receiver is a nil pointer,
@@ -153,6 +155,7 @@ func (r *OpenAIRouter) closeOwnedFields() error {
 	if r.CompressionRecovery != nil {
 		collect(r.CompressionRecovery.Close())
 	}
+	collect(r.closeToolSelectionDatabases())
 
 	return errors.Join(errs...)
 }

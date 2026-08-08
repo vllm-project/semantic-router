@@ -286,7 +286,7 @@ func rollbackGeneration(gen *routerruntime.Generation, cause error) error {
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
-	return &OpenAIRouter{
+	router := &OpenAIRouter{
 		Config:                components.cfg,
 		CategoryDescriptions:  components.categoryDescriptions,
 		Classifier:            components.classifier,
@@ -308,4 +308,23 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		lookupTableCancel:     components.lookupTableCancel,
 		generation:            components.generation,
 	}
+
+	// Registered against the router rather than a value the build produced,
+	// because the per-path tool databases are loaded lazily at request time —
+	// after every other closer here is in place. Registering last means the
+	// reverse teardown closes them first, which is also the right order: they
+	// own nothing the other resources need.
+	components.generation.Defer(router.closeToolSelectionDatabases)
+
+	// Same reasoning as the tool databases: the compression recovery store is
+	// memoized on first use by a request, not built here, so it has to be
+	// registered against the router rather than a build value.
+	components.generation.Defer(func() error {
+		if router.CompressionRecovery != nil {
+			return router.CompressionRecovery.Close()
+		}
+		return nil
+	})
+
+	return router
 }
