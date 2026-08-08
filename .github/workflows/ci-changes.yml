@@ -130,7 +130,6 @@ jobs:
               - 'Cargo.lock'
               - 'pyproject.toml'
               - 'e2e/testing/llm-katan/**'
-              - 'e2e/testing/anthropic-shim/**'
             dashboard:
               - 'dashboard/**'
             website:
@@ -279,6 +278,7 @@ jobs:
               - 'e2e/pkg/**'
               - 'e2e/cmd/**'
               - 'e2e/testcases/**'
+              - 'e2e/profiles/all/**'
               - 'e2e/*.go'
               - 'e2e/go.mod'
               - 'e2e/go.sum'

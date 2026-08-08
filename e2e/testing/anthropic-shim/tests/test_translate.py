@@ -12,6 +12,7 @@ import copy
 from anthropic_shim.translate import (
     apply_cache_usage,
     cache_prefix_hash,
+    fix_stop_reason,
     has_cache_control,
     join_system_array,
     join_tool_result_content,
@@ -197,6 +198,31 @@ def test_apply_cache_usage_noop_without_cache_control() -> None:
 def test_apply_cache_usage_handles_missing_usage() -> None:
     response: dict = {"id": "msg_1"}
     apply_cache_usage(response, request_had_cache_control=True, prefix_seen=False)
+    assert response == {"id": "msg_1"}
+
+
+def test_fix_stop_reason_rewrites_end_turn_with_matched_sequence() -> None:
+    response = {"stop_reason": "end_turn", "stop_sequence": "STOP"}
+    fix_stop_reason(response)
+    assert response["stop_reason"] == "stop_sequence"
+    assert response["stop_sequence"] == "STOP"
+
+
+def test_fix_stop_reason_keeps_end_turn_without_matched_sequence() -> None:
+    response = {"stop_reason": "end_turn", "stop_sequence": None}
+    fix_stop_reason(response)
+    assert response["stop_reason"] == "end_turn"
+
+
+def test_fix_stop_reason_leaves_other_reasons_alone() -> None:
+    response = {"stop_reason": "max_tokens", "stop_sequence": "STOP"}
+    fix_stop_reason(response)
+    assert response["stop_reason"] == "max_tokens"
+
+
+def test_fix_stop_reason_handles_missing_fields() -> None:
+    response: dict = {"id": "msg_1"}
+    fix_stop_reason(response)
     assert response == {"id": "msg_1"}
 
 

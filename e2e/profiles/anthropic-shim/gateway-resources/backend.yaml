@@ -1,8 +1,8 @@
 # Anthropic-Shim Backend Resources
 #
 # Deploys the Qwen-flavoured anthropic-shim backend (llama.cpp + Python shim)
-# and exposes it to Envoy AI Gateway so the router can forward Anthropic-
-# protocol requests to it.
+# behind a ClusterIP Service; the HTTPRoute in gwapi-resources.yaml forwards
+# gateway traffic to it so the router can send Anthropic-protocol requests.
 #
 # The backend runs in the anthropic-backend-system namespace (created by
 # deploy/kubernetes/anthropic-backend/base/namespace.yaml). The shim Service
@@ -158,7 +158,7 @@ spec:
 
         - name: anthropic-shim
           image: ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - name: shim
               containerPort: 9080
@@ -229,30 +229,3 @@ spec:
       port: 9080
       targetPort: shim
       protocol: TCP
----
-# ── Envoy AI Gateway Backend + AIServiceBackend ───────────────────────────────
-# The router uses the Anthropic schema so the AI Gateway knows to translate
-# outbound requests to Anthropic Messages shape before forwarding.
-apiVersion: aigateway.envoyproxy.io/v1alpha1
-kind: AIServiceBackend
-metadata:
-  name: anthropic-backend-qwen
-  namespace: default
-spec:
-  schema:
-    name: Anthropic
-  backendRef:
-    name: anthropic-backend-qwen
-    kind: Backend
-    group: gateway.envoyproxy.io
----
-apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: Backend
-metadata:
-  name: anthropic-backend-qwen
-  namespace: default
-spec:
-  endpoints:
-    - fqdn:
-        hostname: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local
-        port: 9080

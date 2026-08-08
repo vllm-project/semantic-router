@@ -52,11 +52,31 @@ spec:
   connection:
     bufferLimit: 50Mi
 ---
-# AIGatewayRoute — sends all model traffic to the anthropic-shim backend.
-# The AI Gateway uses the Anthropic schema declared on AIServiceBackend so
-# outbound requests arrive at the shim in Anthropic Messages shape.
-apiVersion: aigateway.envoyproxy.io/v1alpha1
-kind: AIGatewayRoute
+# Allow the HTTPRoute in default to reference the shim Service in
+# anthropic-backend-system.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-default-to-anthropic-backend
+  namespace: anthropic-backend-system
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: default
+  to:
+    - group: ""
+      kind: Service
+      name: anthropic-backend-qwen
+---
+# Plain HTTPRoute straight to the anthropic-shim Service (same pattern as the
+# response-api profile). The semantic-router extproc rewrites :path to
+# /v1/messages for the anthropic-typed upstream, and the AI Gateway extproc
+# only accepts /anthropic/v1/messages at ingress, so routing through an
+# AIGatewayRoute would be rejected with 404 "unsupported path" before the
+# request ever reaches the shim.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
   name: semantic-router
   namespace: default
@@ -67,18 +87,14 @@ spec:
       group: gateway.networking.k8s.io
   rules:
     - matches:
-        - headers:
-            - type: Exact
-              name: x-ai-eg-model
-              value: MoM
+        - path:
+            type: PathPrefix
+            value: /
       backendRefs:
         - name: anthropic-backend-qwen
-      timeouts:
-        request: 120s
-        backendRequest: 120s
-    # Default fallback — catch-all for any unmatched model alias
-    - backendRefs:
-        - name: anthropic-backend-qwen
+          namespace: anthropic-backend-system
+          port: 9080
+          weight: 1
       timeouts:
         request: 120s
         backendRequest: 120s

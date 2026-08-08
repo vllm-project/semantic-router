@@ -14,6 +14,15 @@ config:
       default_model: MoM
     models:
       - name: MoM
+        # api_format switches the router's request-body translation to
+        # Anthropic (handleAnthropicRouting): the outbound body is rebuilt as
+        # an Anthropic Messages payload with cache_control markers and
+        # stop_sequences re-attached from the inbound request. Without it the
+        # backend_refs type below only rewrites :path/auth headers, and the
+        # shim receives an OpenAI-shaped body — no cache_control (cache-cycle
+        # test gets zero counters) and no stop_sequences (llama-server never
+        # triggers stop_sequence).
+        api_format: anthropic
         backend_refs:
           - name: anthropic-backend-qwen
             # The shim's Service exposes port 9080 (the Python FastAPI layer).
@@ -40,10 +49,10 @@ config:
         - name: all_requests
           operator: OR
           keywords:
-            # Catch-all routing; the AIGatewayRoute also has a bare fallback
-            # rule in gwapi-resources.yaml. Both are intentional — the router
-            # needs a signal match to route, and the gateway provides a
-            # safety-net in case the router produces no match.
+            # Catch-all routing; the HTTPRoute in gwapi-resources.yaml also
+            # forwards all paths to the shim. Both are intentional — the
+            # router needs a signal match to route, and the gateway provides
+            # a safety-net in case the router produces no match.
             - ""
     modelCards:
       - name: MoM

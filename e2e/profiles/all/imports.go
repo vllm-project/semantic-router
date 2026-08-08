@@ -44,11 +44,23 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 	},
 }
 
+var anthropicShimLocalImages = []framework.LocalImageBuild{
+	{
+		Dockerfile:   "e2e/testing/anthropic-shim/Dockerfile",
+		Tag:          "ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test",
+		BuildContext: "e2e/testing/anthropic-shim",
+	},
+}
+
 func init() {
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("kubernetes", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
-	register("anthropic-shim", func() framework.Profile { return anthropicshim.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"anthropic-shim",
+		func() framework.Profile { return anthropicshim.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: anthropicShimLocalImages},
+	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"dashboard",

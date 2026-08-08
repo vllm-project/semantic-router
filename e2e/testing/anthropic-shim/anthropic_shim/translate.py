@@ -16,6 +16,12 @@ Three concerns are handled:
    ``cache_read_input_tokens`` based on whether the inbound request
    carried ``cache_control`` markers and whether this session has seen
    the same request-body prefix before.
+4. ``fix_stop_reason`` corrects ``stop_reason`` to ``stop_sequence``
+   when a stop word triggered: llama-server's Anthropic endpoint
+   reports which sequence matched in ``stop_sequence`` but labels the
+   ``stop_reason`` ``end_turn`` (it collapses STOP_TYPE_WORD and
+   STOP_TYPE_EOS in ``to_json_anthropic``), which the real Anthropic
+   API would report as ``stop_sequence``.
 """
 
 from __future__ import annotations
@@ -216,4 +222,24 @@ def apply_cache_usage(
     else:
         usage["cache_creation_input_tokens"] = input_tokens
         usage.setdefault("cache_read_input_tokens", 0)
+    return response
+
+
+def fix_stop_reason(response: dict[str, Any]) -> dict[str, Any]:
+    """Correct ``stop_reason`` when a stop sequence actually triggered.
+
+    Mutates and returns ``response``. llama-server's ``to_json_anthropic``
+    maps both STOP_TYPE_WORD (a ``stop_sequences`` hit) and STOP_TYPE_EOS
+    to ``end_turn`` while still reporting the matched word in the
+    ``stop_sequence`` field. The real Anthropic API reports
+    ``stop_reason: "stop_sequence"`` in that case, so rewrite it whenever
+    the response carries a matched stop sequence.
+    """
+    stop_sequence = response.get("stop_sequence")
+    if (
+        isinstance(stop_sequence, str)
+        and stop_sequence
+        and response.get("stop_reason") == "end_turn"
+    ):
+        response["stop_reason"] = "stop_sequence"
     return response
