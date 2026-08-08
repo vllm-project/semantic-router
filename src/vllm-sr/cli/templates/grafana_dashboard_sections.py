@@ -14,6 +14,7 @@ from grafana_panel_factories import (
     create_target,
     create_timeseries_panel,
 )
+from grafana_rag_section import append_rag_section
 
 
 @dataclass
@@ -653,4 +654,5 @@ def generate_all_dashboard_panels():
     append_session_cache_warmth_section(ctx)
     append_cache_plugin_section_part1(ctx)
     append_cache_plugin_section_part2(ctx)
+    append_rag_section(ctx)
     return ctx.panels
