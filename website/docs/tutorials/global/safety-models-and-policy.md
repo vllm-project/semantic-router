@@ -30,21 +30,43 @@ Use these blocks when:
 
 ## Configuration
 
-### Prompt Guard and Classifier
+### Prompt Guard Backend
+
+Jailbreak detection supports four backends via `prompt_guard.backend`:
+
+- `candle` (default): the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT). Used when `backend` is unset or `candle`.
+- `mmbert32k`: the in-process mmBERT-32K model (32K context, YaRN RoPE, multilingual).
+- `http_chat`: an external model with role `guardrail`, called through a generative chat-completion prompt (Qwen3Guard-style). Requires an `external_models` entry with `model_role: guardrail`.
+- `http_classify`: an external sequence-classifier endpoint with role `guardrail`, speaking the widely-used HuggingFace text-classification pipeline contract - `POST {endpoint}/classify` with `{"inputs": "<text>"}`, returning every label's score, not just the top prediction. This lets a self-hosted classifier (wrapped by an existing `transformers` pipeline, or a Text Embeddings Inference deployment) plug in without disguising it as a chat completion.
 
 ```yaml
 global:
   model_catalog:
     modules:
       prompt_guard:
-        model_ref: prompt_guard
-        use_mmbert_32k: true
+        backend: http_classify
+        jailbreak_mapping_path: models/custom-classifier/jailbreak_type_mapping.json
+        positive_labels: [INJECTION]   # this model's positive class isn't named "jailbreak"
+        threshold: 0.7
       classifier:
         domain:
           model_ref: domain_classifier
           threshold: 0.5
           use_mmbert_32k: true
+    external:
+      - model_role: guardrail
+        llm_endpoint:
+          address: 127.0.0.1
+          port: 8811
+        llm_model_name: my-custom-classifier
 ```
+
+Notes:
+
+- `positive_labels` (optional): the `jailbreak_mapping` label(s) that count as unsafe, for models whose positive class isn't literally `jailbreak` (e.g. `INJECTION`, `malicious`). Multiple labels are summed when computing `risk_score`. Unset defaults to the single label `jailbreak`. If configured, at least one entry must exist in the loaded `jailbreak_mapping`'s labels or the router fails to start - a misconfigured label can no longer silently mean "never detected."
+- `http_classify` response labels are matched against `jailbreak_mapping` by name, not by array position (the server is free to order them however it likes, e.g. sorted by score).
+- `http_chat` is restricted to this binary guardrail use case; it isn't offered for N-way classifiers (`classifier.domain`, `complexity`) since a generative model can't reliably produce a calibrated multi-class distribution.
+- Breaking change: the legacy `use_modernbert`, `use_mmbert_32k`, and `use_vllm` boolean flags are removed. Migrate `use_mmbert_32k: true` to `backend: mmbert32k`, and `use_vllm: true` (plus its `external_models` entry) to `backend: http_chat`.
 
 ### Hallucination Detector Backend
 

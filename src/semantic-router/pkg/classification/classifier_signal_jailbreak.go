@@ -11,7 +11,7 @@ import (
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
 type cachedJailbreakResult struct {
-	result candle_binding.ClassResult
+	result candle_binding.ClassResultWithProbs
 	err    error
 }
 
@@ -189,7 +189,7 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
 				continue
 			}
-			if cached.result.Confidence < rule.Threshold || jailbreakType != "jailbreak" {
+			if cached.result.Confidence < rule.Threshold || !isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType) {
 				continue
 			}
 			if cached.result.Confidence > bestConf {

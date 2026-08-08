@@ -11,21 +11,18 @@ import (
 )
 
 type MockJailbreakInferenceResponse struct {
-	classifyResult candle_binding.ClassResult
+	classifyResult candle_binding.ClassResultWithProbs
 	classifyError  error
 }
 
 type MockJailbreakInference struct {
 	MockJailbreakInferenceResponse
 	responseMap map[string]MockJailbreakInferenceResponse
-
-	classifyProbsResult candle_binding.ClassResultWithProbs
-	classifyProbsError  error
 }
 
 func (m *MockJailbreakInference) setMockResponse(text string, class int, confidence float32, err error) {
 	m.responseMap[text] = MockJailbreakInferenceResponse{
-		classifyResult: candle_binding.ClassResult{
+		classifyResult: candle_binding.ClassResultWithProbs{
 			Class:      class,
 			Confidence: confidence,
 		},
@@ -33,15 +30,11 @@ func (m *MockJailbreakInference) setMockResponse(text string, class int, confide
 	}
 }
 
-func (m *MockJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+func (m *MockJailbreakInference) Classify(text string) (candle_binding.ClassResultWithProbs, error) {
 	if response, exists := m.responseMap[text]; exists {
 		return response.classifyResult, response.classifyError
 	}
 	return m.classifyResult, m.classifyError
-}
-
-func (m *MockJailbreakInference) ClassifyWithProbs(_ string) (candle_binding.ClassResultWithProbs, error) {
-	return m.classifyProbsResult, m.classifyProbsError
 }
 
 type MockJailbreakInitializer struct {
@@ -172,7 +165,7 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return jailbreak results above the configured threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 0, Confidence: 0.9}
+		mockModel.classifyResult = candle_binding.ClassResultWithProbs{Class: 0, Confidence: 0.9}
 
 		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("This is a jailbreak attempt")
 
@@ -183,7 +176,7 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return benign results above the threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 1, Confidence: 0.9}
+		mockModel.classifyResult = candle_binding.ClassResultWithProbs{Class: 1, Confidence: 0.9}
 
 		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("This is a normal question")
 
@@ -194,7 +187,7 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return false when the jailbreak confidence is below the threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 0, Confidence: 0.5}
+		mockModel.classifyResult = candle_binding.ClassResultWithProbs{Class: 0, Confidence: 0.5}
 
 		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("Ambiguous text")
 
@@ -217,7 +210,7 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should fail when the predicted class is unknown", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 9, Confidence: 0.9}
+		mockModel.classifyResult = candle_binding.ClassResultWithProbs{Class: 9, Confidence: 0.9}
 
 		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("Some text")
 

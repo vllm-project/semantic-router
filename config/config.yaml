@@ -2280,10 +2280,9 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
+        backend: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        use_vllm: false
+        positive_labels: [jailbreak]
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is

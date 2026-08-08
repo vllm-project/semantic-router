@@ -220,6 +220,19 @@ impl TraditionalBertClassifier {
 
     /// Classify a single text
     pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        let (predicted_idx, max_prob, _) = self.classify_text_internal(text)?;
+        Ok((predicted_idx, max_prob))
+    }
+
+    /// Classify a single text and return the top-1 prediction together with the
+    /// full softmax probability distribution across all classes. This lets
+    /// callers read the probability of a specific class directly instead of only
+    /// the confidence of whichever class wins argmax.
+    pub fn classify_text_with_probabilities(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
+        self.classify_text_internal(text)
+    }
+
+    fn classify_text_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
         let result = self.tokenizer.tokenize_for_traditional(text)?;
         let (token_ids_tensor, attention_mask_tensor) = self.tokenizer.create_tensors(&result)?;
 
@@ -251,7 +264,7 @@ impl TraditionalBertClassifier {
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((0, &0.0));
 
-        Ok((predicted_idx, max_prob))
+        Ok((predicted_idx, max_prob, probabilities_vec))
     }
 
     /// Classify a batch of texts efficiently

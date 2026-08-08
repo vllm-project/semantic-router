@@ -18,7 +18,7 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
-	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
+	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
