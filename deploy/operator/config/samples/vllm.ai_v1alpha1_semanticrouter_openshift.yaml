@@ -137,7 +137,7 @@ spec:
       use_cpu: true
 
     # Semantic cache for latency/token optimization
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory  # or milvus
       similarity_threshold: "0.85"  # Higher = more strict matching

@@ -3,6 +3,7 @@ package routerruntime
 import (
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -20,6 +21,25 @@ type Registry struct {
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
 	learningRuntime       LearningRuntime
+	responseCache         *cache.ResponseCacheService
+}
+
+func (r *Registry) ResponseCache() *cache.ResponseCacheService {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.responseCache
+}
+
+func (r *Registry) SetResponseCache(service *cache.ResponseCacheService) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.responseCache = service
+	r.mu.Unlock()
 }
 
 // LearningRuntime is the narrow API-server seam for Router Learning state.

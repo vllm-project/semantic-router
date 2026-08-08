@@ -350,6 +350,12 @@ const (
 	//   oauth2-proxy:      "x-forwarded-groups"
 	// Used by the authz signal classifier for group-level routing.
 	AuthzUserGroups = "x-authz-user-groups"
+
+	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
+	// response-cache partitioning. Client-provided values must be stripped by
+	// the gateway before authorization.
+	AuthzTeamID   = "x-authz-team-id"
+	AuthzTenantID = "x-authz-tenant-id"
 )
 
 // Looper Request Headers

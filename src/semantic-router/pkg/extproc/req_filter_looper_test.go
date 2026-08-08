@@ -770,7 +770,8 @@ func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *tes
 	}
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	ctx := &RequestContext{
-		LooperRequest: true,
+		LooperRequest:       true,
+		VSRSelectedDecision: &router.Config.Decisions[0],
 		Headers: map[string]string{
 			headers.VSRLooperDecision: "fusion_alias",
 		},

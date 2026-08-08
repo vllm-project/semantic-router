@@ -113,7 +113,7 @@ global:
     clear_route_cache: true
   services: {}
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       embedding_model: mmbert
     memory:

@@ -52,9 +52,9 @@ type CanonicalServiceGlobal struct {
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
 type CanonicalStoreGlobal struct {
-	SemanticCache SemanticCache      `yaml:"semantic_cache"`
-	Memory        MemoryConfig       `yaml:"memory"`
-	VectorStore   *VectorStoreConfig `yaml:"vector_store,omitempty"`
+	ResponseCache ResponseCacheStoreConfig `yaml:"response_cache"`
+	Memory        MemoryConfig             `yaml:"memory"`
+	VectorStore   *VectorStoreConfig       `yaml:"vector_store,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -233,7 +233,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 
-	cfg.SemanticCache = global.Stores.SemanticCache
+	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
 

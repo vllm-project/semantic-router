@@ -150,6 +150,49 @@ func apiInfoRoutes() []apiRoute {
 	}
 }
 
+func apiResponseCacheRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/capabilities", Method: "GET", Description: "Get response-cache backend capabilities"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/health", Method: "GET", Description: "Check response-cache backend health"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/stats", Method: "GET", Description: "Get redacted response-cache statistics"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/audit", Method: "GET", Description: "Get redacted response-cache mutation audit entries"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheAudit,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/test", Method: "POST", Description: "Validate and probe a response-cache candidate configuration"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheTest,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/invalidate", Method: "POST", Description: "Dry-run or invalidate a scoped response-cache partition"},
+			routePolicy{Permission: PermCacheInvalidate, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheInvalidate},
+			(*ClassificationAPIServer).handleResponseCacheInvalidate,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/flush", Method: "POST", Description: "Advance a scoped or global response-cache epoch"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheFlush},
+			(*ClassificationAPIServer).handleResponseCacheFlush,
+			jsonBody(),
+		),
+	}
+}
+
 func apiConfigRoutes() []apiRoute {
 	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
 }

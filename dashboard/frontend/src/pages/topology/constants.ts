@@ -73,7 +73,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
 
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
-  'semantic-cache': 'SC',
+  response_cache: 'RC',
   memory: 'MEM',
   system_prompt: 'SP',
   header_mutation: 'HM',
@@ -86,11 +86,13 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   response_jailbreak: 'RJ',
   tools: 'TL',
   tool_selection: 'TS',
+  provider_prompt_cache: 'PC',
+  context_compression: 'CC',
 }
 
 // ============== Plugin Colors (Graphite Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  'semantic-cache': { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
+  response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   memory: { background: '#3f6b73', border: '#2e4f55' },
   system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
   header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
@@ -103,6 +105,8 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   response_jailbreak: { background: '#c05621', border: '#9c4221' },
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
+  provider_prompt_cache: { background: '#5a6c7d', border: '#3d4a59' },
+  context_compression: { background: '#606c7a', border: '#3d4a59' },
 }
 
 // ============== Algorithm Icons ==============
@@ -164,7 +168,7 @@ export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string
   {
     prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
     pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
-    semantic_cache: { icon: 'SC', label: 'Semantic Cache', color: '#8f949c' }, // Graphite Alloy
+    response_cache: { icon: 'RC', label: 'Response Cache', color: '#8f949c' }, // Graphite Alloy
   }
 
 // ============== Node Colors (Gray Nodes, Alloy Paths) ==============
@@ -314,7 +318,7 @@ export const SIGNAL_TYPES: SignalType[] = [
 
 // ============== Plugin Types Array ==============
 export const PLUGIN_TYPES: PluginType[] = [
-  'semantic-cache',
+  'response_cache',
   'memory',
   'system_prompt',
   'header_mutation',

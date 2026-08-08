@@ -378,7 +378,7 @@ export function buildLayoutGraph(
 
       nodeDimensions.set(pluginChainId, { width: 160, height: pluginHeight })
 
-      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'semantic_cache')
+      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'response_cache')
 
       nodes.push({
         id: pluginChainId,

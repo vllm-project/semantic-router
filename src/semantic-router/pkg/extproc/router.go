@@ -35,6 +35,8 @@ type OpenAIRouter struct {
 	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
+	ResponseCache         *cache.ResponseCacheService
+	responseCacheMu       sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
 	toolSelectionDBMu     sync.Mutex

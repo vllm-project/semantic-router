@@ -5,6 +5,7 @@ package apiserver
 import (
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
@@ -27,10 +28,27 @@ type ClassificationAPIServer struct {
 	// The startup-status writer is created once during process bootstrap. Keep
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
-	startupStatusConfig *config.StartupStatusConfig
+	startupStatusConfig     *config.StartupStatusConfig
+	responseCache           *cache.ResponseCacheService
+	managementAuditMu       sync.Mutex
+	managementAuditEntries  []managementAuditEntry
+	managementAuditLastHash string
+	managementAuditSequence uint64
 	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
 	learningOutcomePolicyOnce sync.Once
 	learningOutcomePolicy     *learningOutcomeIngestPolicy
+}
+
+func (s *ClassificationAPIServer) currentResponseCache() *cache.ResponseCacheService {
+	if s == nil {
+		return nil
+	}
+	if s.runtimeRegistry != nil {
+		if service := s.runtimeRegistry.ResponseCache(); service != nil {
+			return service
+		}
+	}
+	return s.responseCache
 }
 
 type (

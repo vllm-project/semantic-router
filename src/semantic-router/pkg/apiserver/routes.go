@@ -80,6 +80,7 @@ func apiRoutes() []apiRoute {
 		apiHealthRoutes(),
 		apiClassifyRoutes(),
 		apiInfoRoutes(),
+		apiResponseCacheRoutes(),
 		apiConfigRoutes(),
 		apiMemoryRoutes(),
 		apiVectorStoreRoutes(),

@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
+    ContextCompressionPluginConfig,
     PluginConfig,
     PluginType,
     RouterReplayPluginConfig,
@@ -58,7 +59,7 @@ class TestPluginTypeValidation:
     def test_valid_plugin_types(self):
         """Test that all valid plugin types are accepted."""
         valid_types = [
-            PluginType.SEMANTIC_CACHE.value,
+            PluginType.RESPONSE_CACHE.value,
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
             PluginType.HALLUCINATION.value,
@@ -77,6 +78,14 @@ class TestPluginTypeValidation:
             plugin = PluginConfig(type=plugin_type, configuration={"enabled": True})
             # plugin.type is now a PluginType enum, compare to enum value
             assert plugin.type.value == plugin_type
+
+    @pytest.mark.parametrize(
+        "alias", ["semantic-cache", "semantic_cache", "response-cache"]
+    )
+    def test_response_cache_aliases_export_canonical(self, alias):
+        with pytest.warns(DeprecationWarning):
+            plugin = PluginConfig(type=alias, configuration={"enabled": True})
+        assert plugin.model_dump()["type"] == "response_cache"
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -348,9 +357,9 @@ providers:
             config = parse_user_config(temp_path)
             errors = validate_user_config(config)
             assert len(errors) > 0
-            # Check that error mentions semantic-cache
+            # Check that the alias normalized to the canonical plugin.
             error_messages = [str(e) for e in errors]
-            assert any("semantic-cache" in msg.lower() for msg in error_messages)
+            assert any("response_cache" in msg.lower() for msg in error_messages)
         finally:
             os.unlink(temp_path)
 
@@ -403,6 +412,38 @@ providers:
             ), f"Expected error about missing 'enabled' field, got: {error_messages}"
         finally:
             os.unlink(temp_path)
+
+
+class TestContextCompressionPluginConfig:
+    def test_defaults_and_rag_policy(self):
+        config = ContextCompressionPluginConfig(enabled=True)
+        assert config.min_tokens is None
+        assert config.target_tokens is None
+        assert config.compress_rag is False
+
+    def test_explicit_valid_budget(self):
+        config = ContextCompressionPluginConfig(
+            enabled=True,
+            min_tokens=2000,
+            target_tokens=1000,
+            compress_rag=True,
+        )
+        assert config.compress_rag is True
+
+    @pytest.mark.parametrize(
+        ("min_tokens", "target_tokens"),
+        [(1000, 1000), (1000, 1200)],
+    )
+    def test_rejects_invalid_budget(self, min_tokens, target_tokens):
+        with pytest.raises(
+            PydanticValidationError,
+            match="target_tokens must be less than min_tokens",
+        ):
+            ContextCompressionPluginConfig(
+                enabled=True,
+                min_tokens=min_tokens,
+                target_tokens=target_tokens,
+            )
 
 
 class TestRAGPluginConfig:

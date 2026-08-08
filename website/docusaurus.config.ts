@@ -180,6 +180,10 @@ const config: Config = {
             from: '/docs/tutorials/signal/heuristic/modality',
             to: '/docs/tutorials/signal/learned/modality',
           },
+          {
+            from: '/docs/tutorials/plugin/semantic-cache',
+            to: '/docs/tutorials/plugin/response-cache',
+          },
         ],
       },
     ],

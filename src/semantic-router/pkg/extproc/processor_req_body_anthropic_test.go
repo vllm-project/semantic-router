@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
@@ -86,6 +87,89 @@ func TestHandleAnthropicRouting_AllowsStreaming(t *testing.T) {
 	if !containsJSONField(t, body, "stream", true) {
 		t.Fatalf("expected stream=true in anthropic body, got %s", string(body))
 	}
+}
+
+func TestAnthropicRoutingUsesCompressedToolResultPassthrough(t *testing.T) {
+	largeTool := strings.Repeat("irrelevant logs ", 300) +
+		"authentication validator failed " +
+		strings.Repeat("billing records ", 300)
+	body := []byte(`{
+		"model":"claude",
+		"max_tokens":256,
+		"messages":[{
+			"role":"user",
+			"content":[
+				{"type":"text","text":"fix authentication validator"},
+				{"type":"tool_result","tool_use_id":"call_1","is_error":true,"content":[
+					{"type":"text","text":` + mustJSONString(t, largeTool) + `},
+					{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}
+				]}
+			]
+		}]
+	}`)
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(map[string]string{
+				string(authz.ProviderAnthropic): "x-user-anthropic-key",
+			}),
+		),
+	}
+	router.CredentialResolver.SetFailOpen(true)
+	ctx := &RequestContext{
+		Headers:             map[string]string{},
+		ClientProtocol:      config.ClientProtocolAnthropic,
+		OriginalRequestBody: body,
+		VSRSelectedDecision: contextCompressionTestDecision(false),
+	}
+
+	request, early, err := router.prepareRequestForModelRouting(
+		body,
+		"fix authentication validator",
+		ctx,
+	)
+	if err != nil || early != nil {
+		t.Fatalf("prepare request failed: early=%v err=%v", early, err)
+	}
+	_, outbound, errorResponse := router.prepareAnthropicRoutingRequest(request, "claude", ctx)
+	if errorResponse != nil {
+		t.Fatalf("prepare Anthropic routing returned error response: %#v", errorResponse)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(outbound, &decoded); err != nil {
+		t.Fatalf("outbound Anthropic body is invalid: %v", err)
+	}
+	toolResult := findAnthropicToolResult(decoded)
+	if toolResult == nil {
+		t.Fatalf("outbound body lost tool_result: %s", outbound)
+	}
+	if toolResult["is_error"] != true || toolResult["tool_use_id"] != "call_1" {
+		t.Fatalf("outbound metadata changed: %#v", toolResult)
+	}
+	resultBlocks := toolResult["content"].([]interface{})
+	compressedText := resultBlocks[0].(map[string]interface{})["text"].(string)
+	if len(compressedText) >= len(largeTool) {
+		t.Fatal("passthrough restored stale uncompressed tool result")
+	}
+	if resultBlocks[1].(map[string]interface{})["type"] != "image" {
+		t.Fatalf("outbound image block changed: %#v", resultBlocks[1])
+	}
+}
+
+func findAnthropicToolResult(body map[string]interface{}) map[string]interface{} {
+	messages, _ := body["messages"].([]interface{})
+	for _, rawMessage := range messages {
+		message, _ := rawMessage.(map[string]interface{})
+		content, _ := message["content"].([]interface{})
+		for _, rawBlock := range content {
+			block, _ := rawBlock.(map[string]interface{})
+			if block["type"] == "tool_result" {
+				return block
+			}
+		}
+	}
+	return nil
 }
 
 // TestParseRequestForProtocol_OpenAIDefault verifies the dispatch keeps

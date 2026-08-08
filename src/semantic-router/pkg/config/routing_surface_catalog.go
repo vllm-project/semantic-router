@@ -20,18 +20,23 @@ const (
 	DecisionAlgorithmWorkflows    = "workflows"
 	DecisionAlgorithmPrompt       = "prompt"
 
-	DecisionPluginSemanticCache     = "semantic-cache"
-	DecisionPluginSystemPrompt      = "system_prompt"
-	DecisionPluginHeaderMutation    = "header_mutation"
-	DecisionPluginHallucination     = "hallucination"
-	DecisionPluginResponseJailbreak = "response_jailbreak"
-	DecisionPluginRouterReplay      = "router_replay"
-	DecisionPluginMemory            = "memory"
-	DecisionPluginRAG               = "rag"
-	DecisionPluginImageGen          = "image_gen"
-	DecisionPluginFastResponse      = "fast_response"
-	DecisionPluginRequestParams     = "request_params"
-	DecisionPluginToolSelection     = "tool_selection"
+	DecisionPluginResponseCache = "response_cache"
+	// DecisionPluginSemanticCache is the deprecated public spelling retained
+	// for source compatibility. Runtime config is normalized to response_cache.
+	DecisionPluginSemanticCache       = "semantic-cache"
+	DecisionPluginSystemPrompt        = "system_prompt"
+	DecisionPluginHeaderMutation      = "header_mutation"
+	DecisionPluginHallucination       = "hallucination"
+	DecisionPluginResponseJailbreak   = "response_jailbreak"
+	DecisionPluginRouterReplay        = "router_replay"
+	DecisionPluginMemory              = "memory"
+	DecisionPluginRAG                 = "rag"
+	DecisionPluginImageGen            = "image_gen"
+	DecisionPluginFastResponse        = "fast_response"
+	DecisionPluginRequestParams       = "request_params"
+	DecisionPluginToolSelection       = "tool_selection"
+	DecisionPluginProviderPromptCache = "provider_prompt_cache"
+	DecisionPluginContextCompression  = "context_compression"
 )
 
 var supportedSignalTypes = []string{
@@ -65,9 +70,11 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginMemory,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
+	DecisionPluginProviderPromptCache,
+	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
-	DecisionPluginSemanticCache,
+	DecisionPluginResponseCache,
 	DecisionPluginSystemPrompt,
 	DecisionPluginToolSelection,
 	DecisionPluginTools,
@@ -108,7 +115,9 @@ var supportedDecisionAlgorithmTypes = func() []string {
 }()
 
 var pluginTypeAliases = map[string]string{
-	"semantic_cache": DecisionPluginSemanticCache,
+	"semantic-cache": DecisionPluginResponseCache,
+	"semantic_cache": DecisionPluginResponseCache,
+	"response-cache": DecisionPluginResponseCache,
 }
 
 func SupportedSignalTypes() []string {

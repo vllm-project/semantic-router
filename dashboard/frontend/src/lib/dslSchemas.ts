@@ -1,4 +1,5 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
+import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 
 export interface FieldSchema {
   key: string
@@ -469,19 +470,9 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
+  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
+  if (capabilityFields) return capabilityFields
   switch (pluginType) {
-    case 'semantic_cache':
-    case 'semantic-cache':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.95',
-          description: 'Minimum similarity for cache hit (0-1)',
-        },
-      ]
     case 'memory':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },

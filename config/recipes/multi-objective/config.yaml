@@ -633,7 +633,7 @@ recipes:
           latency_percentile: 90
           on_no_candidates: first
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.9
@@ -742,7 +742,7 @@ recipes:
       algorithm:
         type: static
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.88
@@ -1479,7 +1479,7 @@ global:
     startup_status:
       store_backend: redis
   stores:
-    semantic_cache:
+    response_cache:
       backend_type: memory
       enabled: true
       max_entries: 1000

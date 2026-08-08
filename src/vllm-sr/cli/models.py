@@ -2,6 +2,7 @@
 
 import json
 import math
+import warnings
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -652,7 +653,7 @@ class Rules(BaseModel):
 class PluginType(str, Enum):
     """Supported plugin types."""
 
-    SEMANTIC_CACHE = "semantic-cache"
+    RESPONSE_CACHE = "response_cache"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
@@ -665,12 +666,47 @@ class PluginType(str, Enum):
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
+    PROVIDER_PROMPT_CACHE = "provider_prompt_cache"
+    CONTEXT_COMPRESSION = "context_compression"
 
 
-class SemanticCachePluginConfig(BaseModel):
-    """Configuration for semantic-cache plugin."""
+class ResponseCacheSemanticConfig(BaseModel):
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ResponseCacheRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["no-cache", "no-store", "bypass", "max-age", "ttl"]] = Field(
+        default_factory=list
+    )
+    max_ttl_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class ResponseCachePersonalizedConfig(BaseModel):
+    mode: Literal["disabled", "exact"] = "disabled"
+
+
+class ResponseCacheRevisionConfig(BaseModel):
+    cache_epoch: Optional[str] = None
+    model_revision: Optional[str] = None
+    prompt_revision: Optional[str] = None
+    policy_revision: Optional[str] = None
+
+
+class ResponseCachePluginConfig(BaseModel):
+    """Configuration for response_cache plugin."""
 
     enabled: bool
+    mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
+    scope: Literal["user", "team", "tenant", "global"] = "user"
+    semantic: Optional[ResponseCacheSemanticConfig] = None
+    request_controls: Optional[ResponseCacheRequestControlsConfig] = None
+    personalized: Optional[ResponseCachePersonalizedConfig] = None
+    revision: Optional[ResponseCacheRevisionConfig] = None
+    # Deprecated flat compatibility fields.
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
     similarity_threshold: Optional[float] = Field(
         default=None,
         ge=0.0,
@@ -680,6 +716,53 @@ class SemanticCachePluginConfig(BaseModel):
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
+
+    @model_validator(mode="after")
+    def validate_compatibility_fields(self):
+        if self.semantic is not None and self.similarity_threshold is not None:
+            raise ValueError(
+                "semantic.similarity_threshold conflicts with similarity_threshold"
+            )
+        if self.request_controls is not None and (
+            self.allow_request_controls or self.control_header is not None
+        ):
+            raise ValueError(
+                "request_controls conflicts with deprecated request-control fields"
+            )
+        return self
+
+
+SemanticCachePluginConfig = ResponseCachePluginConfig
+
+
+class ProviderPromptCachePluginConfig(BaseModel):
+    """Configuration for provider_prompt_cache plugin."""
+
+    enabled: bool
+    system: bool = False
+    tools: bool = False
+    last_user: bool = False
+    ttl: Optional[Literal["5m", "1h"]] = None
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
+
+
+class ContextCompressionPluginConfig(BaseModel):
+    """Configuration for context_compression plugin."""
+
+    enabled: bool
+    min_tokens: Optional[int] = Field(default=None, ge=0)
+    target_tokens: Optional[int] = Field(default=None, ge=0)
+    bypass_header: Optional[str] = None
+    compress_rag: bool = False
+
+    @model_validator(mode="after")
+    def validate_token_budget(self):
+        min_tokens = self.min_tokens or 2000
+        target_tokens = self.target_tokens or (min_tokens // 2)
+        if target_tokens >= min_tokens:
+            raise ValueError("target_tokens must be less than min_tokens")
+        return self
 
 
 class FastResponsePluginConfig(BaseModel):
@@ -964,6 +1047,23 @@ class PluginConfig(BaseModel):
     type: PluginType
     configuration: Dict[str, Any]
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_response_cache_aliases(cls, value):
+        if isinstance(value, dict) and value.get("type") in {
+            "semantic-cache",
+            "semantic_cache",
+            "response-cache",
+        }:
+            warnings.warn(
+                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            value = dict(value)
+            value["type"] = PluginType.RESPONSE_CACHE.value
+        return value
+
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
         # Use mode='python' to get Python native types, then convert enum
@@ -1088,6 +1188,36 @@ class RouterLearningProtectionConfig(BaseModel):
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
 
 
+class RouterLearningRedisStateStoreConfig(BaseModel):
+    """Redis connectivity for shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str
+    password: Optional[str] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[str] = None
+
+
+class RouterLearningStateStoreConfig(BaseModel):
+    """Optional shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: int = Field(default=86400, ge=0)
+    timeout_ms: int = Field(default=50, ge=0)
+    redis: Optional[RouterLearningRedisStateStoreConfig] = None
+
+    @model_validator(mode="after")
+    def validate_redis(self):
+        if self.backend == "redis" and self.redis is None:
+            raise ValueError(
+                "redis config is required when state_store.backend is redis"
+            )
+        return self
+
+
 class RouterLearningConfig(BaseModel):
     """Global Router Learning controls."""
 
@@ -1096,6 +1226,7 @@ class RouterLearningConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     adaptation: Optional[RouterLearningAdaptationConfig] = None
     protection: Optional[RouterLearningProtectionConfig] = None
+    state_store: Optional[RouterLearningStateStoreConfig] = None
 
 
 class OutputContractChoiceSetSpec(BaseModel):
@@ -1193,6 +1324,7 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
+    tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
@@ -1257,6 +1389,22 @@ class ModelPricing(BaseModel):
     completion_per_1m: Optional[float] = 0.0
 
 
+class ProviderReliability(BaseModel):
+    """Generated Envoy reliability policy for one provider model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    retry_count: int = Field(default=0, ge=0, le=5)
+    retry_on: str = "connect-failure,refused-stream"
+    consecutive_5xx: int = Field(default=0, ge=0)
+    base_ejection_time: str = "30s"
+    max_ejection_percent: int = Field(default=50, ge=0, le=100)
+    health_check_path: Optional[str] = None
+    health_check_interval: str = "10s"
+    health_check_timeout: str = "2s"
+
+
 class Model(BaseModel):
     """Provider model binding for canonical providers.models entries."""
 
@@ -1265,6 +1413,7 @@ class Model(BaseModel):
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
+    reliability: Optional[ProviderReliability] = None
     api_format: Optional[str] = None
     external_model_ids: Optional[Dict[str, str]] = None
 

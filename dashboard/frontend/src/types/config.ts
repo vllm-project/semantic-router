@@ -39,6 +39,17 @@ export interface ProviderModel {
     cache_write_per_1m?: number
     completion_per_1m?: number
   }
+  reliability?: {
+    lb_policy?: 'round_robin' | 'least_request'
+    retry_count?: number
+    retry_on?: string
+    consecutive_5xx?: number
+    base_ejection_time?: string
+    max_ejection_percent?: number
+    health_check_path?: string
+    health_check_interval?: string
+    health_check_timeout?: string
+  }
 }
 
 export interface ProviderDefaults {
@@ -306,7 +317,7 @@ export interface ModelRef {
 
 export interface PluginConfig {
   type:
-    | 'semantic-cache'
+    | 'response_cache'
     | 'memory'
     | 'system_prompt'
     | 'header_mutation'
@@ -318,6 +329,8 @@ export interface PluginConfig {
     | 'tools'
     | 'request_params'
     | 'response_jailbreak'
+    | 'provider_prompt_cache'
+    | 'context_compression'
   configuration: Record<string, unknown>
 }
 
@@ -402,13 +415,21 @@ export interface LegacyConfig {
     pii_model?: LegacyModelConfig
   }
   prompt_guard?: LegacyModelConfig & { enabled: boolean }
-  semantic_cache?: {
+  response_cache?: {
     enabled: boolean
     backend_type?: string
     similarity_threshold: number
     max_entries: number
     ttl_seconds: number
     eviction_policy?: string
+  }
+  /** @deprecated Use response_cache. */
+  semantic_cache?: {
+    enabled: boolean
+    backend_type?: string
+    similarity_threshold?: number
+    max_entries?: number
+    ttl_seconds?: number
   }
   tools?: {
     enabled: boolean

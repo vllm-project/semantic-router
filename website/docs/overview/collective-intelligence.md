@@ -129,7 +129,7 @@ routing:
   decisions:
     - name: "protected-route"
       plugins:
-        - type: "semantic-cache" # Speed optimization
+        - type: "response_cache" # Speed optimization
         - type: "response_jailbreak" # Response screening
         - type: "system_prompt" # Context injection
         - type: "hallucination" # Quality assurance
@@ -184,7 +184,7 @@ reason: "Specialized in mathematical proofs"
 
 ```yaml
 plugins_applied:
-  - semantic-cache: "Cache miss, proceeding"
+  - response_cache: "Cache miss, proceeding"
   - response_jailbreak: "Output screening remains active"
   - system_prompt: "Added: 'Provide rigorous mathematical proof'"
   - hallucination: "Enabled for fact verification"

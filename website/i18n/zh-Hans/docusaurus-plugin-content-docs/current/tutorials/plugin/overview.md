@@ -44,7 +44,7 @@ routing:
   decisions:
     - name: cached_support
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
 ```
@@ -65,7 +65,7 @@ routing:
 - [Memory](./memory)
 - [RAG](./rag)
 - [Router Replay](./router-replay)
-- [Semantic Cache](./semantic-cache)
+- [Semantic Cache](./response-cache)
 
 ### 安全与生成
 

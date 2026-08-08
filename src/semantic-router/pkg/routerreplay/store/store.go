@@ -132,6 +132,13 @@ type RouteDiagnostics struct {
 	MemoryFallbackReason         string                 `json:"memory_fallback_reason,omitempty"`
 	MemoryFailOpen               bool                   `json:"memory_fail_open,omitempty"`
 	MemoryResultCount            int                    `json:"memory_result_count,omitempty"`
+	ContextCompressionApplied    bool                   `json:"context_compression_applied,omitempty"`
+	ContextCompressionBefore     int                    `json:"context_compression_tokens_before,omitempty"`
+	ContextCompressionAfter      int                    `json:"context_compression_tokens_after,omitempty"`
+	ContextCompressionMessages   int                    `json:"context_compression_messages,omitempty"`
+	ContextCompressionFormat     string                 `json:"context_compression_format,omitempty"`
+	ContextCompressionOmitted    int                    `json:"context_compression_omitted_chunks,omitempty"`
+	ContextCompressionSkipReason string                 `json:"context_compression_skip_reason,omitempty"`
 	Annotations                  map[string]interface{} `json:"annotations,omitempty"`
 	SignalErrors                 map[string]string      `json:"signal_errors,omitempty"`
 }
@@ -233,7 +240,11 @@ type Record struct {
 	//
 	// CacheSimilarity is the semantic-cache lookup similarity (0 = no lookup),
 	// formerly the x-vsr-cache-similarity header.
-	CacheSimilarity float32 `json:"cache_similarity,omitempty"`
+	CacheSimilarity      float32 `json:"cache_similarity,omitempty"`
+	CacheHitKind         string  `json:"cache_hit_kind,omitempty"`
+	CacheSource          string  `json:"cache_source,omitempty"`
+	CacheEntryAgeSeconds float64 `json:"cache_entry_age_seconds,omitempty"`
+	CacheTTLSeconds      int     `json:"cache_ttl_seconds,omitempty"`
 	// ContextTokenCount is the request context token count used for
 	// context-based routing, formerly the x-vsr-context-token-count header.
 	ContextTokenCount int `json:"context_token_count,omitempty"`

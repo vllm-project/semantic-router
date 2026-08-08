@@ -107,6 +107,19 @@ func CacheScopeNamespaceOf(query string) string {
 	return rest
 }
 
+// UserScopeNamespace returns the opaque hard-partition token for a trusted user ID.
+func UserScopeNamespace(userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return ""
+	}
+	return userScopeNamespace(userID)
+}
+
+func UserScopeSecretConfigured() bool {
+	return strings.TrimSpace(os.Getenv("USER_SCOPE_NAMESPACE_SECRET")) != ""
+}
+
 // SameCacheScope reports whether two queries belong to the same user scope.
 // It is a HARD equality check on the namespace, independent of embedding
 // similarity: a cache backend must require it before returning a hit so one

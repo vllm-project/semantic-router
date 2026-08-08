@@ -331,7 +331,7 @@ config:
             service_version: ""
             deployment_environment: "development"
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: "memory"
         similarity_threshold: 0.8
@@ -819,7 +819,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -895,7 +895,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -1043,7 +1043,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -1170,7 +1170,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -1265,7 +1265,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -1337,7 +1337,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -1358,7 +1358,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -1580,7 +1580,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -1660,7 +1660,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -1732,7 +1732,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -1872,7 +1872,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -1925,7 +1925,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -2029,7 +2029,7 @@ config:
               enabled: false
               system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.92
@@ -2101,7 +2101,7 @@ config:
               enabled: false
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.75
@@ -2122,7 +2122,7 @@ config:
               enabled: false
               system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.95
@@ -2300,7 +2300,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         backend_type: memory
         similarity_threshold: 0.8
@@ -2404,7 +2404,7 @@ config:
               enabled: false
               system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.92
@@ -2476,7 +2476,7 @@ config:
               enabled: false
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.75
@@ -2497,7 +2497,7 @@ config:
               enabled: false
               system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.95
@@ -2675,7 +2675,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         backend_type: memory
         similarity_threshold: 0.8
@@ -2797,7 +2797,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -2873,7 +2873,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -3057,7 +3057,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -3196,7 +3196,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.95
@@ -3315,7 +3315,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -3387,7 +3387,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -3408,7 +3408,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -3640,7 +3640,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -3881,7 +3881,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -3959,7 +3959,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -4200,7 +4200,7 @@ config:
     router:
       clear_route_cache: true
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -4525,7 +4525,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -4784,7 +4784,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -5026,7 +5026,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -5128,7 +5128,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -5209,7 +5209,7 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -5290,7 +5290,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -5377,7 +5377,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -5453,7 +5453,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -5571,7 +5571,7 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -5654,7 +5654,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -5782,7 +5782,7 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -5961,7 +5961,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -6039,7 +6039,7 @@ config:
           - model: base-model
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.6
@@ -6140,7 +6140,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.6
@@ -6238,7 +6238,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -6314,7 +6314,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -6462,7 +6462,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -6589,7 +6589,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -6684,7 +6684,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -6756,7 +6756,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -6777,7 +6777,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -6999,7 +6999,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -7079,7 +7079,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -7151,7 +7151,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -7291,7 +7291,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -7344,7 +7344,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -7448,7 +7448,7 @@ config:
               enabled: false
               system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.92
@@ -7520,7 +7520,7 @@ config:
               enabled: false
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.75
@@ -7541,7 +7541,7 @@ config:
               enabled: false
               system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.95
@@ -7719,7 +7719,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         backend_type: memory
         similarity_threshold: 0.8
@@ -7823,7 +7823,7 @@ config:
               enabled: false
               system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.92
@@ -7895,7 +7895,7 @@ config:
               enabled: false
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.75
@@ -7916,7 +7916,7 @@ config:
               enabled: false
               system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
               mode: replace
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: false
               similarity_threshold: 0.95
@@ -8094,7 +8094,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         backend_type: memory
         similarity_threshold: 0.8
@@ -8216,7 +8216,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -8292,7 +8292,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -8476,7 +8476,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -8615,7 +8615,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.95
@@ -8734,7 +8734,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -8806,7 +8806,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -8827,7 +8827,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -9059,7 +9059,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -9300,7 +9300,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -9378,7 +9378,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -9619,7 +9619,7 @@ config:
     router:
       clear_route_cache: true
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -9944,7 +9944,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -10203,7 +10203,7 @@ config:
               - 100
               - 200
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -10445,7 +10445,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -10547,7 +10547,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -10628,7 +10628,7 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:
@@ -10709,7 +10709,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -10796,7 +10796,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -10872,7 +10872,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -10990,7 +10990,7 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -11073,7 +11073,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -11201,7 +11201,7 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -11380,7 +11380,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
@@ -11458,7 +11458,7 @@ config:
           - model: base-model
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.6
@@ -11559,7 +11559,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.6
