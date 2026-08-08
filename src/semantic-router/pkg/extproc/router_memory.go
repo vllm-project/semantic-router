@@ -26,7 +26,9 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 		return nil, nil
 	}
 
-	memory.SetGlobalMemoryStore(memoryStore)
+	// The process-wide store is published by publishRouterState once the build
+	// commits, not here: this store belongs to a candidate that a later
+	// construction step or a failed warmup can still discard and close.
 	backend := cfg.Memory.Backend
 	if backend == "" {
 		backend = "milvus"

@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
@@ -527,6 +528,12 @@ func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.
 	router.RuntimeRegistry = runtimeRegistry
 }
 
+// publishRouterState makes a router's services visible to the rest of the
+// process. It runs only once a build has committed — after NewServer succeeds,
+// and after a reload has swapped the new router in — which is what keeps the
+// process-wide state from ever pointing at a candidate. A candidate can still
+// be discarded and closed by a later construction step or a failed warmup, and
+// the legacy package-level globals below have no owner to roll them back.
 func publishRouterState(
 	cfg *config.RouterConfig,
 	router *OpenAIRouter,
@@ -548,4 +555,5 @@ func publishRouterState(
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
+	selection.SetGlobalRegistry(router.ModelSelector)
 }
