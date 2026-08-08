@@ -39,6 +39,17 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
+// Close releases the response store this filter owns — a client and connection
+// pool on the redis backend, a background expiry goroutine on the in-memory one.
+// A reload builds a replacement and drops this filter, so the store has to go
+// with it rather than be left to the process.
+func (f *ResponseAPIFilter) Close() error {
+	if f == nil || f.store == nil {
+		return nil
+	}
+	return f.store.Close()
+}
+
 // ResponseAPIContext holds context for a Response API request during processing.
 type ResponseAPIContext struct {
 	// IsResponseAPIRequest indicates this is a /v1/responses request

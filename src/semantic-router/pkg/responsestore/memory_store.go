@@ -18,6 +18,14 @@ type MemoryStore struct {
 	ttl           time.Duration
 	maxResponses  int
 	maxConvs      int
+
+	// stopCleanup ends the background expiry sweep and cleanupDone reports that
+	// it has exited, so Close returning means the goroutine is gone. Without
+	// this the sweep outlived every Close, accumulating one live goroutine per
+	// reload for the life of the process.
+	stopCleanup chan struct{}
+	cleanupDone chan struct{}
+	closeOnce   sync.Once
 }
 
 // NewMemoryStore creates a new in-memory store.
@@ -41,6 +49,8 @@ func NewMemoryStore(config StoreConfig) (*MemoryStore, error) {
 		ttl:           ttl,
 		maxResponses:  maxResponses,
 		maxConvs:      maxConvs,
+		stopCleanup:   make(chan struct{}),
+		cleanupDone:   make(chan struct{}),
 	}
 	go store.cleanupExpired()
 	return store, nil
@@ -56,10 +66,21 @@ func (m *MemoryStore) CheckConnection(ctx context.Context) error {
 }
 
 func (m *MemoryStore) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.responses = nil
-	m.conversations = nil
+	m.closeOnce.Do(func() {
+		// Wait for the sweep to exit before dropping the maps, so it cannot
+		// race the teardown that is tearing it down.
+		if m.stopCleanup != nil {
+			close(m.stopCleanup)
+		}
+		if m.cleanupDone != nil {
+			<-m.cleanupDone
+		}
+
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.responses = nil
+		m.conversations = nil
+	})
 	return nil
 }
 
@@ -326,9 +347,17 @@ func (m *MemoryStore) AddResponseToConversation(ctx context.Context, conversatio
 // Helper methods
 
 func (m *MemoryStore) cleanupExpired() {
+	defer close(m.cleanupDone)
+
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-m.stopCleanup:
+			return
+		case <-ticker.C:
+		}
+
 		m.mu.Lock()
 		now := time.Now()
 		for id, resp := range m.responses {

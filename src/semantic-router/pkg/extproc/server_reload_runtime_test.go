@@ -3,8 +3,11 @@ package extproc
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -19,6 +22,7 @@ func (reloadMemoryStore) Store(_ context.Context, _ *memory.Memory) error { retu
 func (reloadMemoryStore) Retrieve(_ context.Context, _ memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
 	return nil, nil
 }
+
 func (reloadMemoryStore) Get(_ context.Context, _ string) (*memory.Memory, error)    { return nil, nil }
 func (reloadMemoryStore) Update(_ context.Context, _ string, _ *memory.Memory) error { return nil }
 func (reloadMemoryStore) List(_ context.Context, _ memory.ListOptions) (*memory.ListResult, error) {
@@ -29,6 +33,189 @@ func (reloadMemoryStore) ForgetByScope(_ context.Context, _ memory.MemoryScope) 
 func (reloadMemoryStore) IsEnabled() bool                                             { return true }
 func (reloadMemoryStore) CheckConnection(_ context.Context) error                     { return nil }
 func (reloadMemoryStore) Close() error                                                { return nil }
+
+// reloadRendezvousCache is a CacheBackend stub whose FindSimilar signals
+// entry on a channel and then blocks until released, so a test can land a
+// "request" goroutine inside the call before triggering a concurrent close.
+type reloadRendezvousCache struct {
+	entered chan struct{}
+	release chan struct{}
+	closed  atomic.Bool
+}
+
+func (c *reloadRendezvousCache) IsEnabled() bool            { return true }
+func (c *reloadRendezvousCache) CheckConnection() error     { return nil }
+func (c *reloadRendezvousCache) LastSimilarity() float32    { return 0 }
+func (c *reloadRendezvousCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
+func (c *reloadRendezvousCache) AddPendingRequest(_, _, _ string, _ []byte, _ int) error {
+	return nil
+}
+func (c *reloadRendezvousCache) UpdateWithResponse(_ string, _ []byte, _ int) error { return nil }
+func (c *reloadRendezvousCache) AddEntry(_, _, _ string, _, _ []byte, _ int) error  { return nil }
+func (c *reloadRendezvousCache) FindSimilarWithThreshold(_, _ string, _ float32) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func (c *reloadRendezvousCache) FindSimilar(_, _ string) ([]byte, bool, error) {
+	close(c.entered)
+	<-c.release
+	if c.closed.Load() {
+		return nil, false, errors.New("cache closed while request was in flight")
+	}
+	return nil, false, nil
+}
+
+func (c *reloadRendezvousCache) Close() error {
+	c.closed.Store(true)
+	return nil
+}
+
+// TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache exercises the
+// real reload sequence — RouterService.Swap followed by RouterService.Retire
+// (what reloadRouterFromConfig now calls, replacing the old bare
+// Swap+oldRouter.Close()) — while a "request" goroutine holds a lease on the
+// old router's Cache. It asserts Retire blocks until that lease releases,
+// leaves the cache open the whole time it's in flight, and only closes it
+// once the request has safely finished.
+//
+// This test used to assert the opposite (that the in-flight call observed
+// an error from a concurrently-closed cache) back when Close() and reload
+// had no lease coordination — see issue #2470 finding #2. It flips here to
+// the safe-drain behavior now that RouterService leases every call (Stage 4)
+// and Retire waits on the lease before closing (Stage 6).
+func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
+	fakeCache := &reloadRendezvousCache{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	oldRouter := &OpenAIRouter{Cache: fakeCache}
+	rs := NewRouterService(oldRouter)
+
+	// Acquire a lease the same way RouterService.Process does for a real
+	// request, so the in-flight call below is protected exactly as it would
+	// be in production.
+	oldLease := rs.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	resultErr := make(chan error, 1)
+	go func() {
+		defer oldLease.release()
+		_, _, err := oldRouter.Cache.FindSimilar("model", "query")
+		resultErr <- err
+	}()
+
+	<-fakeCache.entered // wait until the "request" is inside the blocking call
+
+	newRouter := &OpenAIRouter{Cache: &reloadRendezvousCache{}}
+	retireDone := make(chan error, 1)
+	go func() {
+		swappedLease := rs.Swap(newRouter)
+		retireDone <- rs.Retire(swappedLease, 2*time.Second)
+	}()
+
+	// Retire must block on the still-held lease, so the cache must not be
+	// closed yet even though the swap and retire have both started.
+	select {
+	case <-retireDone:
+		t.Fatal("Retire() returned before the in-flight request released its lease")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if fakeCache.closed.Load() {
+		t.Fatal("cache was closed while a request was still in flight")
+	}
+
+	close(fakeCache.release) // let the "request" finish, releasing its lease
+
+	select {
+	case err := <-resultErr:
+		if err != nil {
+			t.Fatalf("in-flight request observed an error even though it finished before the reload closed its resources: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight request never returned")
+	}
+
+	select {
+	case err := <-retireDone:
+		if err != nil {
+			t.Fatalf("Retire() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Retire() did not return after the in-flight request released its lease")
+	}
+	if !fakeCache.closed.Load() {
+		t.Fatal("Retire() did not close the old router's cache after the in-flight request finished")
+	}
+}
+
+// TestReloadPublishesRuntimeStateBeforeDrainingOldRouter asserts a reload
+// updates the control plane as soon as the new router starts serving,
+// instead of after the old router has drained. Swap makes the new router
+// live immediately, so publishing behind Retire — which blocks for up to
+// defaultRouterDrainTimeout — would leave the runtime registry describing
+// the old router while the data plane already runs the new one.
+func TestReloadPublishesRuntimeStateBeforeDrainingOldRouter(t *testing.T) {
+	restoreReloadSeams := stubReloadSeams(t)
+	defer restoreReloadSeams()
+
+	newRouter := &OpenAIRouter{MemoryStore: reloadMemoryStore{}}
+	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
+	}
+	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) { return newRouter, nil }
+	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error { return nil }
+
+	registry := routerruntime.NewRegistry(&config.RouterConfig{})
+	server := &Server{
+		service: NewRouterService(&OpenAIRouter{}),
+		runtime: registry,
+	}
+
+	// Hold a lease on the old router so the reload's Retire has to block on
+	// the drain, making the publish-vs-drain ordering observable.
+	oldLease := server.service.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	reloadDone := make(chan error, 1)
+	go func() {
+		reloadDone <- server.reloadRouterFromConfig("file", "config.yaml", &config.RouterConfig{})
+	}()
+
+	deadline := time.After(5 * time.Second)
+	for registry.MemoryStore() == nil {
+		select {
+		case err := <-reloadDone:
+			t.Fatalf("reload returned before publishing runtime state (error = %v)", err)
+		case <-deadline:
+			t.Fatal("reload never published runtime state; it is blocked draining the old router first")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	// The publish landed while the reload was still draining — which is the
+	// whole point, so confirm it really is still blocked.
+	select {
+	case err := <-reloadDone:
+		t.Fatalf("reload finished without draining the held lease (error = %v)", err)
+	default:
+	}
+
+	oldLease.release()
+	select {
+	case err := <-reloadDone:
+		if err != nil {
+			t.Fatalf("reloadRouterFromConfig() error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reload did not finish after the in-flight lease released")
+	}
+}
 
 func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 	restoreReloadSeams := stubReloadSeams(t)

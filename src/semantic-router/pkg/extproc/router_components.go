@@ -175,6 +175,9 @@ func createRouterClassifier(
 		return nil, nil, nil, fmt.Errorf("failed to build recipe classifiers: %w", err)
 	}
 
+	// InitializeRuntime releases whatever it acquired when it fails, which
+	// matters because these classifiers reach the generation only once this
+	// function returns successfully.
 	if err := classifiers.InitializeRuntime(); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to initialize recipe classifiers: %w", err)
 	}

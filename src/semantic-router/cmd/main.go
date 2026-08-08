@@ -16,6 +16,9 @@ import (
 )
 
 func main() {
+	shutdownHooks := newShutdownRegistry()
+	registerSignalHandler(shutdownHooks)
+
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
@@ -37,18 +40,22 @@ func main() {
 	defer initializeTracing(cfg)()
 	initializeWindowedMetricsIfEnabled(cfg)
 
-	shutdownHooks := make([]func(), 0)
-	registerSignalHandler(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
-	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, shutdownHooks, runtimeRegistry)
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	// Registered last so it drains first: in-flight requests still use the
+	// resources the earlier hooks release.
+	shutdownHooks.register(server.Stop)
 
 	warmupRouterRuntime(server, embeddingRuntime)
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)
+	// The server stopping only means the first hook is done; returning now
+	// would kill the process while the rest are still running.
+	shutdownHooks.awaitShutdownExit()
 }
 
 var (

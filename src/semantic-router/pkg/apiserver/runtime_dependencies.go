@@ -75,7 +75,7 @@ func (s *ClassificationAPIServer) currentSelectionRegistry() *selection.Registry
 		}
 		return nil
 	}
-	return selection.GlobalRegistry
+	return selection.GetGlobalRegistry()
 }
 
 func (s *ClassificationAPIServer) currentLearningRuntime() routerruntime.LearningRuntime {

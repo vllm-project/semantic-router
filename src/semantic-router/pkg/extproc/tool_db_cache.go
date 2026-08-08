@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,33 @@ func (r *OpenAIRouter) getOrLoadToolDatabaseForSelection(absPath string) (*tools
 	r.toolSelectionDBByPath[absPath] = db
 	logging.Infof("tool_selection: loaded tools database %q (%d tools)", absPath, db.GetToolCount())
 	return db, nil
+}
+
+// closeToolSelectionDatabases releases the tool databases loaded for decisions
+// pointing at a non-primary tools_db_path. Each carries its own embedding
+// provider — a client against a remote backend — so tool_selection would
+// otherwise leak one per reload. The primary database is owned by the build and
+// is not in this map, so nothing here is closed twice.
+//
+// The map is cleared as it drains, so a second call is a no-op and a request
+// arriving after teardown reloads rather than reusing a closed database.
+func (r *OpenAIRouter) closeToolSelectionDatabases() error {
+	if r == nil {
+		return nil
+	}
+
+	r.toolSelectionDBMu.Lock()
+	databases := r.toolSelectionDBByPath
+	r.toolSelectionDBByPath = nil
+	r.toolSelectionDBMu.Unlock()
+
+	var errs []error
+	for path, db := range databases {
+		if err := db.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("tool_selection: closing tools database %q: %w", path, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (r *OpenAIRouter) toolDatabaseForSelectionPlugin(sel *config.ToolSelectionPluginConfig) (*tools.ToolsDatabase, bool, error) {
