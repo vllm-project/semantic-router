@@ -32,8 +32,8 @@ matching NVIDIA routing profile is authored.
 ## Overview
 
 - Runtime image: `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest`
-  (published to `ghcr.io` via `docker-publish.yml` on `main` / nightly and
-  `docker-release.yml` on tag releases; local build still supported —
+  (published to `ghcr.io` through the reusable `docker-publish.yml` from main,
+  nightly, and release lifecycle workflows; local build still supported —
   see Step 1)
 - Dockerfile: [`src/vllm-sr/Dockerfile.cuda`](../../../src/vllm-sr/Dockerfile.cuda)
 - Inference backend: **ONNX Runtime + CUDA Execution Provider**
@@ -103,10 +103,9 @@ On the host:
 
 ### 1a. Pull the published image (recommended)
 
-`vllm-sr-cuda` is published to `ghcr.io` on every merge to `main`,
-nightly, and each tag release (via
-[`docker-publish.yml`](../../../.github/workflows/docker-publish.yml) and
-[`docker-release.yml`](../../../.github/workflows/docker-release.yml)):
+`vllm-sr-cuda` is published to `ghcr.io` on affected merges to `main`,
+nightly, and each tag release via the canonical reusable
+[`docker-publish.yml`](../../../.github/workflows/docker-publish.yml):
 
 ```bash
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest
@@ -671,7 +670,5 @@ The two images are independent; do not mix `--gpus all` with
   `VLLM_SR_PLATFORM=nvidia` block wiring `Dockerfile.cuda` +
   `vllm-sr-cuda` image name + `linux/amd64` into the Make path
 - [`.github/workflows/docker-publish.yml`](../../../.github/workflows/docker-publish.yml) —
-  publishes `vllm-sr-cuda` to `ghcr.io` on merge to `main` and nightly
-  (amd64-only, matching ROCm)
-- [`.github/workflows/docker-release.yml`](../../../.github/workflows/docker-release.yml) —
-  publishes tagged `vllm-sr-cuda` releases on `v*` tags
+  publishes `vllm-sr-cuda` to `ghcr.io` from main, nightly, and release
+  lifecycle workflows (amd64-only, matching ROCm)

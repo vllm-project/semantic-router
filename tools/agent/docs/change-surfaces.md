@@ -149,7 +149,9 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `harness_exec`
 
 - Executable harness manifests, scripts, Make entrypoints, and validation logic that implement the shared contract.
-- Typical paths: `tools/agent/*.yaml`, `tools/agent/scripts/**`, `tools/make/agent.mk`
+- Typical paths: `tools/agent/*.yaml`, `tools/agent/scripts/**`,
+  `tools/ci/**`, `tools/make/agent.mk`, `.github/workflows/**`,
+  `.mergify.yml`
 - Task rules: `agent_exec`
 
 ## `contributor_interface`
@@ -184,6 +186,10 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `ci_e2e`
 
-- CI fanout, change classification, and standard profile-matrix execution for the merge gate.
-- Typical paths: `.github/workflows/ci-changes.yml`, `integration-test-k8s.yml`, `integration-test-vllm-sr-cli.yml`, `pre-commit.yml`, `tools/agent/skill-registry.yaml`
+- Shared PR change classification, domain reusable workflows, stable merge-gate
+  compatibility, and affected profile-matrix execution.
+- Typical paths: `.github/workflows/pr.yml`,
+  `.github/workflows/ci-changes.yml`, domain workflows under
+  `.github/workflows/`, `tools/ci/validate_workflows.py`,
+  `tools/agent/skill-registry.yaml`
 - Task rules: `agent_exec`, `e2e-framework`
