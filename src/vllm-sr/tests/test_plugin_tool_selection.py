@@ -341,7 +341,7 @@ decisions:
           cache_ttl_seconds: 300
           backend_config:
             endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
+            request_format: "pinecone"
             timeout_seconds: 10
       - type: "semantic-cache"
         configuration:
@@ -383,6 +383,10 @@ providers:
             assert (
                 rag_plugin.configuration["backend_config"]["endpoint"]
                 == "http://rag-service:8000/v1/search"
+            )
+            assert (
+                rag_plugin.configuration["backend_config"]["request_format"]
+                == "pinecone"
             )
 
             # Validate entire config (no errors expected)
