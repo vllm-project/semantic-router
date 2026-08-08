@@ -57,7 +57,8 @@
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  --site-grid-max: 1400px;
+  --site-page-gutter: 1.25rem;
+  --site-page-width: calc(100% - var(--site-page-gutter) - var(--site-page-gutter));
   --site-content-max: 1200px;
   --site-doc-max: 840px;
   --site-header-height: 4.9rem;
@@ -119,4 +120,10 @@
   --ifm-color-content: var(--site-text);
   --ifm-color-content-secondary: var(--site-muted-bright);
   --ifm-font-color-base: var(--site-text);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --site-page-gutter: 0.7rem;
+  }
 }

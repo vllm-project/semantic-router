@@ -4,7 +4,7 @@
 }
 
 .container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
+  width: var(--site-page-width);
   margin: 0 auto;
   padding: 2.25rem 0 3.5rem;
 }
@@ -44,7 +44,7 @@
 
 .body {
   display: grid;
-  grid-template-columns: minmax(13rem, 0.22fr) minmax(0, 1fr);
+  grid-template-columns: 13rem minmax(0, 1fr);
   align-items: start;
   gap: 2.5rem;
   padding-top: 1.75rem;
@@ -126,7 +126,6 @@
 
 @media (max-width: 700px) {
   .container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
     padding-top: 1.5rem;
   }
 
