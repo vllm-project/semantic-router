@@ -103,7 +103,7 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"model_type":             backend,
+				"backend":                backend,
 			},
 		})
 	}
