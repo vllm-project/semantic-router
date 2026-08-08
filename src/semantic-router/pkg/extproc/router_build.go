@@ -208,6 +208,8 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	gen.Defer(classifier.Close)
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
+	gen.Defer(responseAPIFilter.Close)
+
 	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
 	gen.Defer(func() error {
 		return closeReplayRecorders(replayRecorder, replayRecorders, replayStoreShared)
