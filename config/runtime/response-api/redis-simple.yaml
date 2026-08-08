@@ -49,8 +49,13 @@ tls_enabled: false
 #     pool_size: 10
 
 # Redis Key Schema:
-# sr:response:{response_id}      → JSON blob of StoredResponse
-# sr:conversation:{conv_id}      → JSON blob of StoredConversation
+# sr:response:{response_id}         → JSON blob of StoredResponse
+# sr:conversation:{conv_id}         → JSON blob of StoredConversation
+# sr:conversation-index:{conv_id}   → sorted set of response IDs in that conversation,
+#                                     scored by created_at. Maintained on write so
+#                                     listing a conversation is a single ZRANGE plus
+#                                     one pipelined GET per response, instead of a
+#                                     scan over every response key.
 #
 # Both Response API and Semantic Cache share DB 0 but use different base prefixes:
 # - Response API: sr:*
