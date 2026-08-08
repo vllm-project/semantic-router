@@ -9,6 +9,7 @@ from cli.consts import (
     MIN_NOFILE_LIMIT,
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
+    PUBLISH_MANAGEMENT_API_ENV,
 )
 from cli.container_images import (
     _normalize_platform,
@@ -266,6 +267,30 @@ def _runtime_container_specs(
     return specs
 
 
+def _publish_management_api_enabled(common_env: dict[str, str]) -> bool:
+    raw = str(common_env.get(PUBLISH_MANAGEMENT_API_ENV, "")).strip().lower()
+    if raw:
+        return raw in {"1", "true", "yes", "on"}
+    return os.getenv(PUBLISH_MANAGEMENT_API_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _router_port_mappings(
+    stack_layout: RuntimeStackLayout, *, publish_management_api: bool
+) -> list[tuple[int, int]]:
+    mappings = [
+        (stack_layout.router_port, 50051),
+        (stack_layout.metrics_port, 9190),
+    ]
+    if publish_management_api:
+        mappings.append((stack_layout.api_port, 8080))
+    return mappings
+
+
 def _build_router_runtime_command(
     *,
     runtime: str,
@@ -286,11 +311,10 @@ def _build_router_runtime_command(
         network_name=runtime_network_name,
         env_vars=common_env,
         mount_specs=_runtime_mount_specs(runtime_paths, include_models=True),
-        port_mappings=[
-            (stack_layout.router_port, 50051),
-            (stack_layout.metrics_port, 9190),
-            (stack_layout.api_port, 8080),
-        ],
+        port_mappings=_router_port_mappings(
+            stack_layout,
+            publish_management_api=_publish_management_api_enabled(common_env),
+        ),
         entrypoint="/app/start-router.sh",
         command_args=[
             common_env.get("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/config.yaml"),

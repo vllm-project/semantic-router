@@ -1,0 +1,19 @@
+# Opt-in management / classify-api Service (#2463 Phase 4).
+# Apply when tools need ClusterIP access to the router management listener.
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-management
+  namespace: vllm-semantic-router-system
+  labels:
+    app: semantic-router
+    service: management
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: classify-api
+  selector:
+    app: semantic-router

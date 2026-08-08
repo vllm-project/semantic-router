@@ -1,0 +1,22 @@
+# Opt-in management / classify-api Service (#2463 Phase 4).
+# Apply when dashboard, eval, or operators need ClusterIP access to :8080.
+# Not applied by default so the gateway Service does not advertise the
+# management listener next to Envoy HTTP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-kserve-management
+  labels:
+    app: semantic-router
+    component: gateway
+    service: management
+spec:
+  type: ClusterIP
+  selector:
+    app: semantic-router
+    component: gateway
+  ports:
+  - name: classify-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP

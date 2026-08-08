@@ -31,10 +31,8 @@ spec:
     port: 9190
     targetPort: 9190
     protocol: TCP
-  - name: classify-api
-    port: 8080
-    targetPort: 8080
-    protocol: TCP
+  # Management / classify-api (:8080) is not on this Service by default (#2463).
+  # Apply service-management.yaml when in-cluster or port-forward access is needed.
   - name: envoy-admin
     port: 19000
     targetPort: 19000

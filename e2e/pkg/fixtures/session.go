@@ -78,7 +78,9 @@ func OpenSemanticRouterMetricsSession(ctx context.Context, client *kubernetes.Cl
 	return newSession(localPort, stop), nil
 }
 
-// OpenRouterAPISession establishes a port-forward to the semantic-router API service.
+// OpenRouterAPISession establishes a port-forward to the semantic-router
+// management API Service ({{fullname }}-management, port 8080). The primary
+// Service omits classify-api by default (#2463 Phase 4).
 func OpenRouterAPISession(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (*ServiceSession, error) {
 	localPort, err := getAvailablePort()
 	if err != nil {
@@ -90,7 +92,7 @@ func OpenRouterAPISession(ctx context.Context, client *kubernetes.Clientset, opt
 		client,
 		opts.RestConfig,
 		"vllm-semantic-router-system",
-		"semantic-router",
+		"semantic-router-management",
 		fmt.Sprintf("%s:8080", localPort),
 		opts.Verbose,
 	)
