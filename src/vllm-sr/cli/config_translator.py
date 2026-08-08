@@ -21,6 +21,7 @@ log = get_logger(__name__)
 def translate_config_to_helm_values(
     config_file: str,
     *,
+    source_config_file: str | None = None,
     image: str | None = None,
     pull_policy: str | None = None,
     enable_observability: bool = True,
@@ -55,7 +56,10 @@ def translate_config_to_helm_values(
     _translate_config_section(user_config, values)
     _translate_observability(enable_observability, values)
     _translate_env_vars(
-        env_vars, values, secret_name=env_secret_name, config_file=config_file
+        env_vars,
+        values,
+        secret_name=env_secret_name,
+        config_file=source_config_file or config_file,
     )
 
     if profile_values:

@@ -68,6 +68,24 @@ PASSTHROUGH_ENV_RULES = (
 
 _STATIC_SENSITIVE = frozenset(name for name, masked in PASSTHROUGH_ENV_RULES if masked)
 
+# Never auto-forward these from a ${VAR} match: POSIX process/identity vars are present
+# in every host shell, so an incidental match (a templated path, an example URL) would
+# silently leak them into the container. CLI override vars are covered too, so a config
+# that happens to reference one can't inject a host value ahead of the CLI's own default.
+_DISCOVERY_DENYLIST = frozenset(
+    {"PATH", "HOME", "USER", "SHELL", "PWD", "LOGNAME"}
+) | frozenset(
+    {
+        SETUP_MODE_ENV,
+        DASHBOARD_SETUP_MODE_ENV,
+        RUNTIME_ALGORITHM_OVERRIDE_ENV,
+        "DISABLE_DASHBOARD",
+        "DASHBOARD_READONLY",
+        "DASHBOARD_PLATFORM",
+        "VLLM_SR_PLATFORM",
+    }
+)
+
 
 def _finalize_runtime_config_write(
     config_path: Path, config: dict[str, object], changed: bool
@@ -130,7 +148,7 @@ def config_env_references(config_path: Path | str | None) -> set[str]:
             pending.extend(node)
         elif isinstance(node, str):
             names.update(_ENV_REFERENCE.findall(node))
-    return names
+    return names - _DISCOVERY_DENYLIST
 
 
 def sensitive_env_names(config_path: Path | str | None = None) -> set[str]:

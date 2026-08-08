@@ -242,6 +242,34 @@ class TestConfigTranslator:
         )
         assert "my-secret" in values["envFromSecrets"]
 
+    def test_sensitivity_follows_source_config_when_effective_config_diverges(
+        self, tmp_path
+    ):
+        """A name discovered from the source config must stay masked even if the
+        effective config (algorithm/platform rewrite) no longer contains it."""
+        source_config = tmp_path / "config.yaml"
+        source_config.write_text(
+            yaml.safe_dump(
+                {"providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]}}
+            )
+        )
+        # Simulates resolve_effective_config_path writing a rewritten copy that
+        # dropped the api_key_env reference.
+        effective_config = tmp_path / ".vllm-sr" / "runtime-config.yaml"
+        effective_config.parent.mkdir(parents=True, exist_ok=True)
+        effective_config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(effective_config),
+            source_config_file=str(source_config),
+            env_vars={"GEMINI_API_KEY": "gk-test"},
+        )
+        names = {e["name"] for e in values.get("env", [])}
+        assert "GEMINI_API_KEY" not in names, (
+            "credential leaked into plaintext Helm values because sensitivity was "
+            "checked against the rewritten effective config instead of the source"
+        )
+
     def test_env_vars_none_produces_no_env_key(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(yaml.safe_dump({"listeners": []}))
@@ -320,6 +348,56 @@ class TestK8sBackend:
         create_cmds = [c for c in cmds_run if "create" in c and "secret" in c]
         assert len(create_cmds) == 1
         assert "--from-literal=HF_TOKEN=hf_secret123" in create_cmds[0]
+
+    def test_deploy_checks_sensitivity_against_source_not_effective_config(
+        self, monkeypatch, tmp_path
+    ):
+        """deploy() must classify env vars using source_config_file, not the
+        (possibly rewritten) effective config_file it hands to Helm."""
+        source_config = tmp_path / "config.yaml"
+        source_config.write_text(
+            yaml.safe_dump(
+                {"providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]}}
+            )
+        )
+        effective_config = tmp_path / "runtime-config.yaml"
+        effective_config.write_text(yaml.safe_dump({"listeners": []}))
+
+        backend = K8sBackend.__new__(K8sBackend)
+        backend.namespace = "test-ns"
+        backend.context = None
+        backend.chart_dir = str(tmp_path)
+        backend.release_name = "sr"
+        backend.profile = None
+
+        monkeypatch.setattr(backend, "_require_tool", lambda _: None)
+        monkeypatch.setattr("cli.k8s_backend.print_vllm_logo", lambda: None)
+        monkeypatch.setattr(backend, "_ensure_namespace", lambda: None)
+        monkeypatch.setattr(backend, "_delete_secret_if_exists", lambda _: None)
+        monkeypatch.setattr(backend, "_run", lambda *a, **kw: None)
+        monkeypatch.setattr(backend, "_wait_for_pods", lambda: None)
+        monkeypatch.setattr(backend, "_log_k8s_summary", lambda: None)
+        monkeypatch.setattr(
+            "cli.k8s_backend.load_profile_values", lambda *a, **kw: None
+        )
+        monkeypatch.setattr(
+            "cli.k8s_backend.write_helm_values_file", lambda *a, **kw: str(tmp_path)
+        )
+
+        secret_cmds = []
+        monkeypatch.setattr(
+            backend,
+            "_sync_env_secret",
+            lambda env_vars, config_file=None: secret_cmds.append(config_file) or None,
+        )
+
+        backend.deploy(
+            config_file=str(effective_config),
+            source_config_file=str(source_config),
+            env_vars={"GEMINI_API_KEY": "gk-test"},
+        )
+
+        assert secret_cmds == [str(source_config)]
 
 
 # ---------------------------------------------------------------------------

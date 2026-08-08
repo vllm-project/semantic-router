@@ -138,6 +138,45 @@ def test_config_env_references_reads_api_key_env_and_interpolations(tmp_path):
     assert config_env_references(tmp_path / "missing.yaml") == set()
 
 
+def test_config_env_references_excludes_process_identity_vars(tmp_path):
+    """A config referencing ${PATH}/${HOME} must not pull host process state into the container."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "note": "installed under ${HOME}/.cache, resolved via ${PATH}",
+                "providers": {"models": [{"api_key_env": "MISTRAL_API_KEY"}]},
+            }
+        )
+    )
+
+    refs = config_env_references(config)
+    assert refs == {"MISTRAL_API_KEY"}
+
+
+def test_config_env_references_excludes_cli_controlled_override_vars(tmp_path):
+    """A config that happens to mention a CLI override var must not preempt the CLI's own default."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump({"note": "see ${DISABLE_DASHBOARD} and ${DASHBOARD_PLATFORM}"})
+    )
+
+    assert config_env_references(config) == set()
+
+
+def test_append_passthrough_env_vars_does_not_forward_process_identity_vars(
+    monkeypatch, tmp_path
+):
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"note": "runs from ${PATH}"}))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars, config)
+
+    assert "PATH" not in env_vars
+
+
 def test_sensitive_env_names_covers_config_named_credentials(tmp_path):
     """A key the config names must be treated as a secret, not inlined into a manifest."""
     config = tmp_path / "config.yaml"

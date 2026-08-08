@@ -54,6 +54,7 @@ class K8sBackend:
         config_file: str,
         env_vars: dict[str, str] | None = None,
         *,
+        source_config_file: str | None = None,
         image: str | None = None,
         pull_policy: str | None = None,
         enable_observability: bool = True,
@@ -70,11 +71,17 @@ class K8sBackend:
         if self.context:
             log.info(f"  Context:   {self.context}")
 
-        secret_name = self._sync_env_secret(env_vars, config_file)
+        # env_vars was discovered against source_config_file (runtime.py forwards it
+        # before algorithm/platform overrides rewrite the config), so sensitivity must
+        # be re-checked against that same file, not the rewritten effective one, or a
+        # name dropped by the rewrite silently loses its secret classification.
+        sensitivity_config_file = source_config_file or config_file
+        secret_name = self._sync_env_secret(env_vars, sensitivity_config_file)
 
         profile_values = load_profile_values(self.profile, self.chart_dir)
         values = translate_config_to_helm_values(
             config_file,
+            source_config_file=sensitivity_config_file,
             image=image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
