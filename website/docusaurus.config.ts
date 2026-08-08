@@ -50,7 +50,36 @@ const config: Config = {
       onBrokenMarkdownLinks: 'warn',
     },
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true, // cache-bust the index between deploys
+        indexDocs: true,
+        indexBlog: true,
+        indexPages: false, // homepage/community are marketing pages, not docs
+        docsRouteBasePath: '/docs',
+        blogRouteBasePath: '/blog',
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        // The site ships a full zh-Hans locale, so the index needs a Chinese
+        // tokenizer as well: Chinese is written without spaces and the default
+        // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
+        // native module that ships prebuilt binaries.
+        language: ['en', 'zh'],
+        // v1 scope: index the current docs version only, per the decision on #2737.
+        // To make archived versions searchable later, drop this and add
+        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // so results stay scoped to the version the reader is on.
+        // NOTE: ignoreFiles matches the route *without* a leading slash (the
+        // plugin strips baseUrl, which is "/" here, off the front) and without
+        // the base URL itself, so the pattern must not anchor on "/".
+        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        // styling is handled in a later phase
+      },
+    ],
+  ],
 
   presets: [
     [
