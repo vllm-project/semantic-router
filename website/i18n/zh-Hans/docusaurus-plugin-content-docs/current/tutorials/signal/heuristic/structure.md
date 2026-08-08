@@ -2,7 +2,7 @@
 translation:
   source_commit: "707b84d7"
   source_file: "docs/tutorials/signal/heuristic/structure.md"
-  outdated: false
+  outdated: true
 ---
 
 # Structure 信号
