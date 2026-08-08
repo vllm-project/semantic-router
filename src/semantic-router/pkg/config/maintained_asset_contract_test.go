@@ -254,9 +254,62 @@ func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {
 	t.Helper()
 	raw := decodeYAMLMap(t, data, rel)
 	assertNoLegacySteadyStateKeys(t, rel, raw)
+	assertNoRemovedDomainPolicyKeys(t, rel, raw)
 	if _, err := ParseYAMLBytes(data); err != nil {
 		t.Fatalf("%s no longer parses as a maintained canonical config asset: %v", rel, err)
 	}
+}
+
+// removedDomainPolicyKeys are per-domain policy keys from the pre-plugin config
+// schema. #681 moved these behaviours onto decision plugins and reduced
+// routing.signals.domains to metadata plus model scores, so the loader has
+// ignored them ever since. A shipped asset that still sets one advertises a
+// knob the router does not have.
+var removedDomainPolicyKeys = []string{
+	"system_prompt_enabled",
+	"system_prompt_mode",
+	"semantic_cache_enabled",
+	"semantic_cache_similarity_threshold",
+	"jailbreak_enabled",
+	"jailbreak_threshold",
+	"pii_enabled",
+	"pii_threshold",
+}
+
+func assertNoRemovedDomainPolicyKeys(t *testing.T, rel string, raw map[string]interface{}) {
+	t.Helper()
+	for _, domain := range assetDomainEntries(raw) {
+		name, _ := domain["name"].(string)
+		for _, key := range removedDomainPolicyKeys {
+			if _, ok := domain[key]; ok {
+				t.Errorf("%s sets removed per-domain policy key %q on domain %q; the router ignores it, configure the matching decision plugin instead", rel, key, name)
+			}
+		}
+	}
+}
+
+// assetDomainEntries returns routing.signals.domains, or nothing when the asset
+// declares no domain signal.
+func assetDomainEntries(raw map[string]interface{}) []map[string]interface{} {
+	routing, ok := raw["routing"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	signals, ok := routing["signals"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	domains, ok := signals["domains"].([]interface{})
+	if !ok {
+		return nil
+	}
+	entries := make([]map[string]interface{}, 0, len(domains))
+	for _, domain := range domains {
+		if typed, ok := domain.(map[string]interface{}); ok {
+			entries = append(entries, typed)
+		}
+	}
+	return entries
 }
 
 func assertNoLegacySteadyStateKeys(t *testing.T, rel string, raw map[string]interface{}) {
