@@ -37,14 +37,11 @@ const (
 	// Combined with key_prefix (default "sr:"): sr:conversation:conv_xxxxx
 	ConversationKeyPrefix = "conversation:"
 
-	// ConversationIndexKeyPrefix for the secondary index that maps a conversation
-	// to the responses it contains. The index is a sorted set scored by the
-	// response created_at, so listing a conversation costs one ZRANGE plus one
-	// pipelined GET per member instead of a scan over the whole keyspace.
-	// Combined with key_prefix (default "sr:"): sr:conversation-index:conv_xxxxx
+	// ConversationIndexKeyPrefix for the sorted set of a conversation's response
+	// IDs, scored by created_at: sr:conversation-index:conv_xxxxx
 	//
-	// The prefix intentionally does not start with ConversationKeyPrefix so index
-	// keys are not matched by the sr:conversation:* scan in ListConversations.
+	// Must not start with ConversationKeyPrefix, or the sr:conversation:* scan in
+	// ListConversations would read these sorted sets as conversation JSON.
 	ConversationIndexKeyPrefix = "conversation-index:"
 )
 
@@ -291,8 +288,7 @@ func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix
 }
 
-// conversationIndexKey returns the key of the sorted set indexing the responses
-// that belong to a conversation.
+// conversationIndexKey returns the sorted set indexing a conversation's responses.
 func (s *RedisStore) conversationIndexKey(conversationID string) string {
 	return s.buildKey(ConversationIndexKeyPrefix + conversationID)
 }
@@ -340,9 +336,8 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return fmt.Errorf("failed to serialize response: %w", err)
 	}
 
-	// SET NX enforces the "must not already exist" contract in a single atomic
-	// command, and guarantees the payload is readable before the ID is published
-	// to the conversation index below.
+	// Atomic existence check, and it lands the payload before the index entry, so
+	// a member always postdates its payload — what makes prune-on-missing safe.
 	stored, err := s.client.SetNX(ctx, key, data, s.ttl).Result()
 	if err != nil {
 		return fmt.Errorf("failed to store response in Redis: %w", err)
@@ -392,8 +387,7 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	// Reading the stored conversation doubles as the existence check and tells us
-	// whether the response is moving between conversations.
+	// Doubles as the existence check, and detects a move between conversations.
 	previousConversationID, err := s.storedConversationID(ctx, response.ID)
 	if err != nil {
 		return err
@@ -426,8 +420,7 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 
 	key := s.buildKey(ResponseKeyPrefix + responseID)
 
-	// Read the conversation first so its index entry can be dropped along with
-	// the payload; a missing key already means there is nothing to delete.
+	// Needed to drop the index entry; also the existence check.
 	conversationID, err := s.storedConversationID(ctx, responseID)
 	if err != nil {
 		return err
@@ -480,12 +473,11 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	return chain, nil
 }
 
-// ListResponsesByConversation lists a conversation's responses through the
-// secondary index maintained by the write paths.
+// ListResponsesByConversation lists a conversation's responses via the secondary
+// index, at a cost proportional to the conversation rather than the keyspace.
 //
-// Only responses written by a router that maintains that index are listed here.
-// Responses persisted before the index existed stay fully retrievable by ID and
-// through GetConversationChain, and age out on their own TTL (30 days by default).
+// Only indexed responses are listed. Anything written before the index existed
+// stays reachable by ID and via GetConversationChain, and ages out on its TTL.
 func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -494,9 +486,7 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
-	// The secondary index yields exactly this conversation's response IDs, in
-	// chronological order, so the work is proportional to the conversation rather
-	// than to the whole keyspace.
+	// Scored by created_at, so this reads back chronologically.
 	responseIDs, err := s.client.ZRange(ctx, s.conversationIndexKey(conversationID), 0, -1).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read conversation index: %w", err)
@@ -510,9 +500,8 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, err
 	}
 
-	// Payloads expire on their own TTL while index entries do not, so prune the
-	// entries we just found to be dead. The index cannot outlive its newest
-	// member, but pruning keeps a long-lived conversation's index bounded.
+	// Payloads expire on their own TTL; their index entries do not. Pruning keeps
+	// a long-lived conversation's index from growing without bound.
 	s.unindexResponse(ctx, conversationID, missingIDs...)
 
 	// Guard against an entry left behind by a response that moved conversation.
@@ -641,10 +630,9 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 	return nil
 }
 
-// deleteConversationResponses removes every response indexed for a conversation
-// along with the index itself. It reads the index directly rather than going
-// through ListResponsesByConversation so the pagination limit cannot leave
-// responses behind.
+// deleteConversationResponses removes a conversation's responses and its index.
+// Reads the index directly: going via ListResponsesByConversation would cap the
+// cascade at the pagination limit.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
@@ -660,8 +648,7 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 	pipe.Del(ctx, indexKey)
 
 	if _, err := pipe.Exec(ctx); err != nil {
-		// The conversation itself is already gone, so report the leftovers instead
-		// of failing a delete the caller cannot usefully retry.
+		// Conversation is already gone; a returned error could not be usefully retried.
 		logging.Warnf("RedisStore: failed to delete %d response(s) of conversation %s: %v",
 			len(responseIDs), conversationID, err)
 	}
@@ -713,21 +700,17 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	// Membership is recorded by StoreResponse, which indexes the response under
-	// its ConversationID, and traversal is handled by previous_response_id.
-	// This method can be used to update conversation metadata if needed.
+	// Membership is recorded by StoreResponse via the conversation index, and
+	// traversal by previous_response_id. Kept for conversation metadata updates.
 	return nil
 }
 
 // Helper methods
 
-// indexResponse publishes a response ID into its conversation's secondary index,
-// scored by creation time so the index reads back in chronological order.
+// indexResponse adds a response to its conversation index, scored by created_at.
 //
-// Failures are logged rather than returned: the payload is already stored and
-// stays reachable by ID and through its chain, so failing the whole write (which
-// the caller could only retry into ErrAlreadyExists) would be worse than leaving
-// this one response out of the conversation listing.
+// Best-effort: the payload is already durable, and returning an error would only
+// send the caller into a retry that fails with ErrAlreadyExists.
 func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt int64) {
 	if conversationID == "" {
 		return
@@ -738,8 +721,7 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	pipe := s.client.Pipeline()
 	pipe.ZAdd(ctx, indexKey, redis.Z{Score: float64(createdAt), Member: responseID})
 	if s.ttl > 0 {
-		// Keep the index alive at least as long as its newest member. Guarded
-		// because EXPIRE with a zero TTL deletes the key outright.
+		// Outlive the newest member. Guarded: EXPIRE with 0 deletes the key.
 		pipe.Expire(ctx, indexKey, s.ttl)
 	}
 
@@ -749,9 +731,8 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	}
 }
 
-// unindexResponse drops response IDs from a conversation's secondary index.
-// Like indexResponse it is best-effort: a stale entry only costs one extra GET
-// on the next listing, which then prunes it.
+// unindexResponse drops response IDs from a conversation index. Best-effort: a
+// stale entry costs one extra GET on the next listing, which then prunes it.
 func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string, responseIDs ...string) {
 	if conversationID == "" || len(responseIDs) == 0 {
 		return
@@ -768,11 +749,9 @@ func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string,
 	}
 }
 
-// storedConversationID reports which conversation a response currently belongs
-// to, so update and delete can repair the index they invalidate. It doubles as
-// the existence check for those paths and returns ErrNotFound when the response
-// is absent. An unreadable payload is not fatal: the caller may still overwrite
-// or delete the key, it just cannot repair the old index entry.
+// storedConversationID reports a response's current conversation so update and
+// delete can repair the index, and returns ErrNotFound when it is absent. An
+// unreadable payload is not fatal, it only costs the old index entry.
 func (s *RedisStore) storedConversationID(ctx context.Context, responseID string) (string, error) {
 	data, err := s.client.Get(ctx, s.buildKey(ResponseKeyPrefix+responseID)).Bytes()
 	if err != nil {
@@ -830,9 +809,8 @@ func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]str
 	return responseIDs, nil
 }
 
-// fetchResponsesPipelined loads the given response IDs in a single round trip.
-// Alongside the responses it found, it returns the IDs whose payload no longer
-// exists, which lets index-driven callers prune their stale entries.
+// fetchResponsesPipelined loads response IDs in one round trip, also returning
+// the IDs whose payload is gone so index-driven callers can prune them.
 func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, []string, error) {
 	if len(responseIDs) == 0 {
 		return []*responseapi.StoredResponse{}, nil, nil

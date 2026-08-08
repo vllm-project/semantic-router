@@ -466,21 +466,16 @@ func TestTLSConfig(t *testing.T) {
 	})
 }
 
-// TestRedisConversationIndexKeyIsolation locks down the invariant that makes the
-// secondary index safe to add to an existing keyspace: index keys must stay
-// invisible to the scan patterns used elsewhere. ListConversations scans
-// sr:conversation:* and unmarshals every hit as JSON, so a sorted set caught by
-// that pattern would be read as a conversation blob.
-//
-// This needs no Redis, so it guards the invariant on every CI run.
+// TestRedisConversationIndexKeyIsolation guards the invariant that index keys are
+// invisible to the sr:conversation:* scan in ListConversations, which would
+// otherwise read a sorted set as conversation JSON. Needs no Redis.
 func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	store := &RedisStore{keyPrefix: "sr:"}
 
 	indexKey := store.conversationIndexKey("conv_123")
 	assert.Equal(t, "sr:conversation-index:conv_123", indexKey)
 
-	// Both scan patterns are a literal prefix followed by "*", so being matched
-	// by one is exactly the same as carrying its prefix.
+	// Each scan pattern is a literal prefix plus "*", so matching == having it.
 	for _, scanPrefix := range []string{
 		store.buildKey(ConversationKeyPrefix),
 		store.buildKey(ResponseKeyPrefix),
@@ -490,9 +485,8 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	}
 }
 
-// conversationIndexMembers returns the response IDs recorded in a conversation's
-// secondary index, so tests can assert on the index itself rather than only on
-// what a listing happens to return.
+// conversationIndexMembers reads the index directly, so tests can assert on it
+// and not only on what a listing happens to return.
 func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID string) []string {
 	t.Helper()
 
@@ -501,9 +495,8 @@ func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID st
 	return members
 }
 
-// newConversationIndexStore returns a store scoped to a key prefix unique to this
-// run, so its keys cannot collide with the other suites sharing DB 0, and skips
-// when no Redis is reachable (the convention used throughout this file).
+// newConversationIndexStore scopes the store to a key prefix unique to this run,
+// so it cannot collide with the other suites sharing DB 0. Skips without Redis.
 func newConversationIndexStore(t *testing.T) *RedisStore {
 	t.Helper()
 
@@ -536,8 +529,7 @@ func newConversationIndexStore(t *testing.T) *RedisStore {
 }
 
 // TestRedisConversationIndexListing covers the index-backed read path: what it
-// returns, in what order, and how it converges when the index and the payloads
-// disagree.
+// returns, in what order, and how it converges when index and payloads disagree.
 func TestRedisConversationIndexListing(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -625,9 +617,8 @@ func TestRedisConversationIndexListing(t *testing.T) {
 	})
 }
 
-// TestRedisDeleteConversationCascade covers a conversation holding more responses
-// than one page: the cascade reads the index directly, so it must not stop at
-// DefaultListLimit the way the previous list-driven implementation did.
+// TestRedisDeleteConversationCascade uses more responses than one page: the
+// cascade reads the index directly, so it must not stop at DefaultListLimit.
 func TestRedisDeleteConversationCascade(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -675,9 +666,8 @@ func TestRedisDeleteConversationCascade(t *testing.T) {
 	assert.Equal(t, "kept", survivor.Status)
 }
 
-// TestRedisStoreResponseRejectsDuplicate covers the SET NX path that both enforces
-// the "must not already exist" contract and orders the payload write ahead of the
-// index write.
+// TestRedisStoreResponseRejectsDuplicate covers the SET NX path: it enforces the
+// no-duplicate contract and orders the payload write ahead of the index write.
 func TestRedisStoreResponseRejectsDuplicate(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
