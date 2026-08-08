@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -679,4 +681,27 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 		"interval": interval.String(),
 	})
 	return cancel
+}
+
+// closeRecipeModelSelectors closes every recipe's selection registry. Each
+// recipe gets its own registry from createModelSelectorRegistries, and each
+// registry owns Elo storage and the native ML handles behind the KNN/KMeans/SVM/MLP
+// selectors, so closing only the default one leaks the rest on every reload.
+//
+// Registries are de-duplicated by pointer: the default entry is an alias of a
+// map entry rather than a separate registry, and Elo storage does not
+// necessarily tolerate a second Close.
+func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {
+	var errs []error
+	closed := make(map[*selection.Registry]bool, len(registries))
+	for recipeName, registry := range registries {
+		if registry == nil || closed[registry] {
+			continue
+		}
+		closed[registry] = true
+		if err := registry.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing selection registry for routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }

@@ -184,7 +184,11 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if err != nil {
 		return nil, rollbackGeneration(gen, err)
 	}
-	gen.Defer(classifier.Close)
+	// The whole recipe set, not just the default classifier: every recipe gets
+	// its own Classifier, so closing only the default one strands the MCP
+	// connections the others opened. RecipeClassifiers.Close covers the default
+	// too, which is why it is not registered separately.
+	gen.Defer(recipeClassifiers.Close)
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
 	gen.Defer(responseAPIFilter.Close)
@@ -199,7 +203,12 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		replayReaderForLookup = replayRecorder.Reader()
 	}
 	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
-	gen.Defer(modelSelector.Close)
+	// Same reasoning as the classifiers: there is one registry per recipe, and
+	// each holds its own Elo storage and native ML handles. Closing the map
+	// covers the default registry, so it is not registered separately.
+	gen.Defer(func() error {
+		return closeRecipeModelSelectors(recipeModelSelectors)
+	})
 	// Registered after the selector so the reverse teardown cancels the
 	// lookup table's auto-save/re-population goroutines first, before the
 	// selectors those goroutines read through are closed.
