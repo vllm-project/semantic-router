@@ -358,21 +358,18 @@ func (r *Registry) Get(method SelectionMethod) (Selector, bool) {
 	return s, ok
 }
 
-// Close best-effort closes every registered selector that implements
-// io.Closer. The Selector interface itself intentionally has no Close
-// method — most selectors are stateless — so this type-asserts per
-// selector instead of widening the interface for the few that hold
-// closeable resources. Errors from individual selectors are joined rather
-// than short-circuiting, so one selector's close failure never skips the
-// rest.
+// Close best-effort closes every registered selector that implements io.Closer.
+// The Selector interface has no Close method because most selectors are
+// stateless, so this type-asserts per selector rather than widening the interface
+// for the few that hold resources. Errors are joined, never short-circuited.
 func (r *Registry) Close() error {
 	if r == nil {
 		return nil
 	}
 
 	// Snapshot under the lock and close outside it: a selector's Close is
-	// arbitrary code, and calling it while holding a non-reentrant RWMutex
-	// would deadlock if it ever reached back into the registry.
+	// arbitrary code, and would deadlock this non-reentrant RWMutex if it ever
+	// reached back into the registry.
 	r.mu.RLock()
 	closers := make([]io.Closer, 0, len(r.selectors))
 	for _, selector := range r.selectors {
@@ -391,12 +388,9 @@ func (r *Registry) Close() error {
 	return errors.Join(errs...)
 }
 
-// globalRegistry holds the process-wide default registry for selection
-// methods behind an atomic pointer so a router build/reload replacing it
-// wholesale (SetGlobalRegistry) can never race with a concurrent
-// GetGlobalRegistry/Select/GetSelector reader — unlike a bare package
-// variable, which golang's memory model gives no safety guarantee for under
-// unsynchronized concurrent read/write.
+// globalRegistry is the process-wide default registry for selection methods.
+// Atomic rather than a bare package variable, because a reload replaces it
+// wholesale while Select/GetSelector readers are running.
 var globalRegistry atomic.Pointer[Registry]
 
 func init() {
@@ -408,9 +402,8 @@ func GetGlobalRegistry() *Registry {
 	return globalRegistry.Load()
 }
 
-// SetGlobalRegistry atomically replaces the process-wide default selection
-// registry, e.g. when a router build or config reload constructs a fresh
-// one.
+// SetGlobalRegistry replaces the process-wide default selection registry, e.g.
+// when a config reload constructs a fresh one.
 func SetGlobalRegistry(registry *Registry) {
 	globalRegistry.Store(registry)
 }

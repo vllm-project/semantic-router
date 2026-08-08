@@ -39,11 +39,10 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
-// Close releases the response store this filter owns. With the redis backend
-// that store holds a client and its connection pool; with the in-memory
-// backend it holds a background expiry goroutine. Either way a reload builds a
-// replacement and drops this one, so the store has to be released with the
-// filter rather than left to the process.
+// Close releases the response store this filter owns — a client and connection
+// pool on the redis backend, a background expiry goroutine on the in-memory one.
+// A reload builds a replacement and drops this filter, so the store has to go
+// with it rather than be left to the process.
 func (f *ResponseAPIFilter) Close() error {
 	if f == nil || f.store == nil {
 		return nil

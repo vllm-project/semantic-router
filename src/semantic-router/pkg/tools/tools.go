@@ -305,9 +305,8 @@ func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
 }
 
 // Close best-effort closes the database's embedding provider, if it holds
-// closeable resources (e.g. a remote embedding backend's HTTP/gRPC client).
-// embedding.Provider itself has no Close method since most providers (e.g.
-// the in-process candle backend) hold no closeable resources.
+// anything closeable such as a remote backend's HTTP/gRPC client.
+// embedding.Provider has no Close method because most providers do not.
 func (db *ToolsDatabase) Close() error {
 	if db == nil {
 		return nil

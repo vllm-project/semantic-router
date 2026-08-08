@@ -58,11 +58,10 @@ func NewClassifier(
 // side effects.
 //
 // On failure it releases whatever the successful tasks acquired, leaving the
-// classifier uninitialized rather than half-connected. That cleanup belongs here
-// rather than in each caller: the tasks run in parallel, so a failure does not
-// imply nothing was acquired — the MCP category classifier can finish
-// connecting while a PII or jailbreak initializer fails — and every caller so
-// far discards the classifier on error, putting it beyond reach of any Close.
+// classifier uninitialized rather than half-connected. That belongs here and not
+// in the callers: the tasks run in parallel, so a failure does not imply nothing
+// was acquired, and every caller discards the classifier on error — putting it
+// beyond reach of any Close.
 func (c *Classifier) InitializeRuntime() error {
 	if c == nil {
 		return fmt.Errorf("classifier is nil")

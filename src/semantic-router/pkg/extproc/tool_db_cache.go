@@ -74,15 +74,14 @@ func (r *OpenAIRouter) getOrLoadToolDatabaseForSelection(absPath string) (*tools
 	return db, nil
 }
 
-// closeToolSelectionDatabases releases the tool databases getOrLoadToolDatabaseForSelection
-// built for decisions pointing at a non-primary tools_db_path. Each carries its
-// own embedding provider, which is an io.Closer against a remote embedding
-// backend, so a decision using tool_selection would otherwise leak one provider
-// client per reload. The primary database is not in this map — it is owned and
-// closed by the build — so nothing here is closed twice.
+// closeToolSelectionDatabases releases the tool databases loaded for decisions
+// pointing at a non-primary tools_db_path. Each carries its own embedding
+// provider — a client against a remote backend — so tool_selection would
+// otherwise leak one per reload. The primary database is owned by the build and
+// is not in this map, so nothing here is closed twice.
 //
-// The map is cleared as it is drained, both so a second call is a no-op and so a
-// request arriving after teardown reloads rather than reusing a closed database.
+// The map is cleared as it drains, so a second call is a no-op and a request
+// arriving after teardown reloads rather than reusing a closed database.
 func (r *OpenAIRouter) closeToolSelectionDatabases() error {
 	if r == nil {
 		return nil

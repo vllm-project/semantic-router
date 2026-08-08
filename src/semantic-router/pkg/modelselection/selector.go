@@ -571,9 +571,8 @@ func NewKNNSelector(k int) *KNNSelector {
 
 // setMLKNN installs a new Linfa-backed handle and frees the one it displaces.
 // Every load path allocates a fresh handle in Rust (Box::into_raw), so a plain
-// field assignment would strand the previous allocation for the lifetime of the
-// process — and with a pretrained model loaded that allocation holds the entire
-// training set.
+// field assignment strands the previous allocation — which, with a pretrained
+// model loaded, holds the entire training set — for the life of the process.
 func (s *KNNSelector) setMLKNN(next *ml_binding.KNNSelector) {
 	s.mu.Lock()
 	previous := s.mlKNN
@@ -587,10 +586,10 @@ func (s *KNNSelector) setMLKNN(next *ml_binding.KNNSelector) {
 	}
 }
 
-// Close releases the Linfa-backed handle this selector owns. The error return
-// exists so KNNSelector satisfies io.Closer — that is how selection.Registry
-// discovers which selectors hold native state when a config reload retires a
-// router — while the binding itself has no failure to report. Idempotent.
+// Close releases the Linfa-backed handle this selector owns. Idempotent. The
+// error return exists only so the selector satisfies io.Closer, which is how
+// selection.Registry discovers who holds native state; the binding itself has no
+// failure to report.
 func (s *KNNSelector) Close() error {
 	s.setMLKNN(nil)
 	return nil
@@ -730,8 +729,7 @@ func (s *KMeansSelector) setMLKMeans(next *ml_binding.KMeansSelector) {
 	}
 }
 
-// Close releases the Linfa-backed handle this selector owns. See
-// KNNSelector.Close for why this returns an error the binding cannot produce.
+// Close releases the Linfa-backed handle this selector owns. Idempotent.
 func (s *KMeansSelector) Close() error {
 	s.setMLKMeans(nil)
 	return nil
@@ -874,8 +872,7 @@ func (s *SVMSelector) setMLSVM(next *ml_binding.SVMSelector) {
 	}
 }
 
-// Close releases the Linfa-backed handle this selector owns. See
-// KNNSelector.Close for why this returns an error the binding cannot produce.
+// Close releases the Linfa-backed handle this selector owns. Idempotent.
 func (s *SVMSelector) Close() error {
 	s.setMLSVM(nil)
 	return nil
@@ -1016,8 +1013,7 @@ func (s *MLPSelector) setMLMLP(next *candle_binding.MLPSelector) {
 	}
 }
 
-// Close releases the Candle-backed handle this selector owns. See
-// KNNSelector.Close for why this returns an error the binding cannot produce.
+// Close releases the Candle-backed handle this selector owns. Idempotent.
 func (s *MLPSelector) Close() error {
 	s.setMLMLP(nil)
 	return nil

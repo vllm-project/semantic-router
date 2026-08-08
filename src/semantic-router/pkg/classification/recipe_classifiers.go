@@ -77,11 +77,10 @@ func BuildRecipeClassifiers(
 // preserving construction and validation semantics without provisioning
 // unreachable runtime resources.
 //
-// Recipes are initialized in order, so a failure part-way through leaves the
-// earlier recipes fully initialized — holding MCP connections the caller can no
-// longer reach, since it discards the whole set on error. Those are released
-// here, mirroring what Classifier.InitializeRuntime does for a single recipe's
-// partially completed tasks.
+// Recipes initialize in order, so a failure part-way through leaves the earlier
+// ones holding MCP connections the caller can no longer reach — it discards the
+// whole set on error. Released here, mirroring what Classifier.InitializeRuntime
+// does for one recipe's partially completed tasks.
 func (s *RecipeClassifiers) InitializeRuntime() error {
 	if s == nil {
 		return fmt.Errorf("recipe classifiers are nil")
@@ -137,9 +136,8 @@ func (s *RecipeClassifiers) routingLifecycleOrder() []config.RecipeName {
 }
 
 // Close releases every recipe classifier's runtime resources. Classifiers are
-// deliberately not shared between recipes, so each one holds its own MCP
-// connection and a reload that closed only the default recipe's classifier would
-// strand the rest.
+// deliberately not shared between recipes, so each holds its own MCP connection
+// and closing only the default one strands the rest.
 func (s *RecipeClassifiers) Close() error {
 	if s == nil {
 		return nil
