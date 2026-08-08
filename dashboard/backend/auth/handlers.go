@@ -77,9 +77,15 @@ func writeAudit(r *http.Request, svc *Service, action, resource, actorID string)
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) {
+	_ = respondJSONWithError(w, payload)
+}
+
+func respondJSONWithError(w http.ResponseWriter, payload interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(payload); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return err
 	}
+	return nil
 }
