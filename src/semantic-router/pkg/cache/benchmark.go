@@ -142,7 +142,7 @@ func populateCache(cache *InMemoryCache, size int) error {
 			query := queries[idx]
 			responseBody := []byte(fmt.Sprintf("Response for: %s", query))
 
-			err := cache.AddEntry(requestID,
+			err := cache.AddEntry(context.Background(), requestID,
 				"test-model", query, []byte(query), responseBody, -1)
 			if err != nil {
 				errors <- fmt.Errorf("failed to add entry %d: %w", idx, err)
@@ -182,6 +182,8 @@ func cosineSimilarity(a, b []float32) float32 {
 
 // measureSearchLatency performs a search and measures component latencies
 // IMPORTANT: Separates embedding generation time from pure search time
+//
+//nolint:nestif // Pre-existing HNSW/linear search split; #2473 only threads context through it.
 func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeasurement {
 	measurement := latencyMeasurement{}
 
@@ -189,7 +191,7 @@ func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeas
 
 	// Measure embedding generation time ONCE
 	startEmbed := time.Now()
-	queryEmbedding, err := cache.generateEmbedding(query)
+	queryEmbedding, err := cache.generateEmbedding(context.Background(), query)
 	measurement.EmbeddingTime = time.Since(startEmbed)
 
 	if err != nil {
@@ -241,6 +243,8 @@ func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeas
 }
 
 // runBenchmarkScenario executes a single benchmark scenario
+//
+//nolint:funlen // Pre-existing scenario driver; #2473 only threads context through its cache calls.
 func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResult {
 	result := BenchmarkResult{
 		Config:           config,

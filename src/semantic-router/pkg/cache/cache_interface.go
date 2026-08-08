@@ -1,8 +1,7 @@
 package cache
 
 import (
-	"math"
-	"sync/atomic"
+	"context"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,6 +22,53 @@ type CacheEntry struct {
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
+// LookupResult carries the outcome of one lookup as a request-owned value.
+// Found=true means Body holds the cached response and Similarity is this
+// lookup's matched score; Found=false means Body is nil and Similarity is zero,
+// on every path including below-threshold misses and upstream errors.
+//
+// Similarity must never be read from backend-owned state: concurrent lookups on
+// the same backend would leak one caller's score into another (#2473).
+type LookupResult struct {
+	Body       []byte
+	Found      bool
+	Similarity float32
+}
+
+// ctxErr treats a nil context as "no error".
+//
+// Backends call it around embedding, which is a synchronous CGO call that cannot
+// be interrupted mid-flight: cancellation is therefore best-effort, checked once
+// before the embed starts and again before any state is published (#2473).
+func ctxErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
+}
+
+func contextErrorOnFailure(ctx context.Context, operationErr error) error {
+	if operationErr == nil {
+		return nil
+	}
+	return ctxErr(ctx)
+}
+
+// releaseOnFailure runs one post-construction setup step and releases the
+// partially built client when it fails, so a failed constructor leaks no
+// connection or pool.
+//
+// It exists as a seam: a leaked client is invisible from the outside — the
+// constructor returns (nil, err) either way, and the drivers already drop a
+// connection whose command failed — so this is where the contract is tested.
+func releaseOnFailure(step func() error, release func()) error {
+	if err := step(); err != nil {
+		release()
+		return err
+	}
+	return nil
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
@@ -31,34 +77,29 @@ type CacheBackend interface {
 	// CheckConnection verifies the cache backend connection is healthy
 	// Returns nil if the connection is healthy, error otherwise
 	// For local caches (in-memory), this may be a no-op
-	CheckConnection() error
+	CheckConnection(ctx context.Context) error
 
 	// AddPendingRequest stores a request awaiting its response. Model is an
 	// exact cache partition key; entries from another model partition must
 	// never be considered by lookup.
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
+	AddPendingRequest(ctx context.Context, requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
 
 	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
+	UpdateWithResponse(ctx context.Context, requestID string, responseBody []byte, ttlSeconds int) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
+	AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
-	// FindSimilar searches for semantically similar cached requests inside the
-	// exact model partition.
-	// Returns the cached response, match status, and any error
-	FindSimilar(model string, query string) ([]byte, bool, error)
+	// FindSimilar searches the exact model partition using the backend's
+	// configured similarity threshold. The returned LookupResult carries the
+	// response body, hit flag, and per-request similarity score.
+	FindSimilar(ctx context.Context, model string, query string) (LookupResult, error)
 
-	// FindSimilarWithThreshold searches inside the exact model partition using
-	// a specific threshold.
-	// This allows category-specific similarity thresholds
-	// Returns the cached response, match status, and any error
-	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
-
-	// LastSimilarity returns the similarity score from the most recent
-	// FindSimilarWithThreshold call. Returns 0 if no lookup has been performed.
-	// Used by the extproc layer to set the x-vsr-cache-similarity response header.
-	LastSimilarity() float32
+	// FindSimilarWithThreshold searches the exact model partition with a
+	// caller-supplied threshold (used for category-specific thresholds). The
+	// returned LookupResult carries the response body, hit flag, and per-request
+	// similarity score.
+	FindSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
@@ -67,22 +108,20 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
-// SimilarityTracker provides thread-safe storage for the last similarity score.
-// Embed this in cache backends to satisfy the LastSimilarity() interface method.
-type SimilarityTracker struct {
-	lastSimilarity uint64 // atomic; stores float32 bits
-}
-
-// StoreSimilarity records a similarity score (thread-safe).
-func (t *SimilarityTracker) StoreSimilarity(similarity float32) {
-	atomic.StoreUint64(&t.lastSimilarity, uint64(math.Float32bits(similarity)))
-}
-
-// LastSimilarity returns the most recently stored similarity score.
-func (t *SimilarityTracker) LastSimilarity() float32 {
-	bits := atomic.LoadUint64(&t.lastSimilarity)
-	return math.Float32frombits(uint32(bits & 0xFFFFFFFF)) //nolint:gosec // intentional: float32 bits fit in 32 bits
-}
+// Compile-time assertions, untagged so a contract change fails to compile here
+// rather than in a downstream build.
+//
+// They do not cover the windows||!cgo stubs in practice: nothing compiles that
+// variant today — CGO_ENABLED=0 fails inside valkey-glide, which needs cgo, and
+// CI has no windows job — so those method sets stay review-verified.
+var (
+	_ CacheBackend = (*InMemoryCache)(nil)
+	_ CacheBackend = (*HybridCache)(nil)
+	_ CacheBackend = (*MilvusCache)(nil)
+	_ CacheBackend = (*QdrantCache)(nil)
+	_ CacheBackend = (*RedisCache)(nil)
+	_ CacheBackend = (*ValkeyCache)(nil)
+)
 
 // CacheStats holds performance metrics and usage statistics for cache operations
 type CacheStats struct {

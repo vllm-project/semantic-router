@@ -112,7 +112,7 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
 	partition := semanticCachePartition(ctx, requestModel)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	if err := r.Cache.AddPendingRequest(ctx.TraceContext, ctx.RequestID, partition, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }
@@ -139,8 +139,10 @@ func (r *OpenAIRouter) performCacheLookup(
 
 	startTime := time.Now()
 	partition := semanticCachePartition(ctx, requestModel)
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(partition, cacheQuery, threshold)
+	lookupResult, cacheErr := r.Cache.FindSimilarWithThreshold(spanCtx, partition, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
+	cachedResponse := lookupResult.Body
+	found := lookupResult.Found
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
@@ -157,7 +159,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
 		ctx.VSRCacheHit = true
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
+		ctx.VSRCacheSimilarity = lookupResult.Similarity
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
@@ -183,7 +185,8 @@ func (r *OpenAIRouter) performCacheLookup(
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
+		// No similarity is recorded: a miss leaves the debug/Replay surface
+		// without a score (see LookupResult).
 		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "semantic-cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}

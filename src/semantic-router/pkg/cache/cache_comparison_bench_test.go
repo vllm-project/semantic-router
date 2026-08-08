@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -39,10 +40,11 @@ func newInMemoryBench(b *testing.B, size int) CacheBackend {
 // ns/op reflects only lookups, and the hit rate is reported for context.
 func runCacheFindSimilarBench(b *testing.B, cache CacheBackend, model string, size int) {
 	b.Helper()
+	ctx := context.Background()
 	for i := 0; i < size; i++ {
 		q := fmt.Sprintf("benchmark query number %d about topic %d", i, i%97)
 		if err := cache.AddEntry(
-			fmt.Sprintf("req-%d", i), model, q,
+			ctx, fmt.Sprintf("req-%d", i), model, q,
 			[]byte(q), []byte(fmt.Sprintf("response-%d", i)), 300,
 		); err != nil {
 			b.Fatalf("populate AddEntry failed at %d: %v", i, err)
@@ -60,11 +62,11 @@ func runCacheFindSimilarBench(b *testing.B, cache CacheBackend, model string, si
 		} else {
 			q = fmt.Sprintf("entirely novel unseen request %d", i)
 		}
-		_, found, err := cache.FindSimilar(model, q)
+		result, err := cache.FindSimilar(ctx, model, q)
 		if err != nil {
 			b.Fatalf("FindSimilar failed: %v", err)
 		}
-		if found {
+		if result.Found {
 			hits++
 		}
 	}

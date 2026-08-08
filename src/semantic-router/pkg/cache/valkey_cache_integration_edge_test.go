@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -19,10 +20,10 @@ func TestValkeyCacheIntegration_EmptyQuery(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
 
-	err := cache.AddEntry("req_empty", "gpt-4", "", []byte("{}"), []byte("{}"), 300)
+	err := cache.AddEntry(context.Background(), "req_empty", "gpt-4", "", []byte("{}"), []byte("{}"), 300)
 	assert.NoError(t, err, "AddEntry with empty query should not error")
 
-	_, hit, err := cache.FindSimilar("gpt-4", "")
+	_, hit, err := findSimilar(cache, "gpt-4", "")
 	assert.NoError(t, err, "FindSimilar with empty query should not error")
 	t.Logf("Empty query search hit: %v", hit)
 }
@@ -36,12 +37,12 @@ func TestValkeyCacheIntegration_LargeResponseBody(t *testing.T) {
 		largeResponse[i] = byte('A' + (i % 26))
 	}
 
-	err := cache.AddEntry("req_large", "gpt-4", "large response test", []byte("{}"), largeResponse, 300)
+	err := cache.AddEntry(context.Background(), "req_large", "gpt-4", "large response test", []byte("{}"), largeResponse, 300)
 	assert.NoError(t, err, "AddEntry with large response should succeed")
 
 	time.Sleep(200 * time.Millisecond)
 
-	response, hit, err := cache.FindSimilar("gpt-4", "large response test")
+	response, hit, err := findSimilar(cache, "gpt-4", "large response test")
 	assert.NoError(t, err, "FindSimilar should work with large response")
 	if hit {
 		assert.NotNil(t, response, "Large response should be retrievable")
@@ -66,14 +67,14 @@ func TestValkeyCacheIntegration_SpecialCharactersInQuery(t *testing.T) {
 
 	for i, query := range specialQueries {
 		requestID := fmt.Sprintf("req_special_%d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"query":"%d"}`, i)), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"query":"%d"}`, i)), 300)
 		assert.NoError(t, err, "AddEntry should handle special characters: %s", query)
 	}
 
 	time.Sleep(300 * time.Millisecond)
 
 	for _, query := range specialQueries {
-		_, _, err := cache.FindSimilar("gpt-4", query)
+		_, _, err := findSimilar(cache, "gpt-4", query)
 		assert.NoError(t, err, "FindSimilar should handle special characters: %s", query)
 	}
 }
@@ -85,15 +86,15 @@ func TestValkeyCacheIntegration_StatsAccuracy(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		requestID := fmt.Sprintf("req_stats_acc_%d", i)
 		query := fmt.Sprintf("stats test query %d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, i)), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, i)), 300)
 		require.NoError(t, err)
 	}
 
 	time.Sleep(300 * time.Millisecond)
 
-	_, _, _ = cache.FindSimilar("gpt-4", "stats test query 0")
-	_, _, _ = cache.FindSimilar("gpt-4", "stats test query 1")
-	_, _, _ = cache.FindSimilar("gpt-4", "completely different query xyz")
+	_, _, _ = findSimilar(cache, "gpt-4", "stats test query 0")
+	_, _, _ = findSimilar(cache, "gpt-4", "stats test query 1")
+	_, _, _ = findSimilar(cache, "gpt-4", "completely different query xyz")
 
 	time.Sleep(100 * time.Millisecond)
 
