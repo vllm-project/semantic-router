@@ -517,7 +517,7 @@ decisions:
               description: Search public web sources.
         tags: [recipe:accuracy-first, language:en, shape:tools, looper:remom]
       - id: long_context_reasoning
-        query: Explore several approaches in this long system-design context.
+        query: Explore several approaches in this long system-design context, compare their failure modes and trade-offs, and synthesize the strongest rigorous solution.
         expected_signals:
           context: [unified_frontier_long_context]
           projection: [unified_frontier_deliberate]

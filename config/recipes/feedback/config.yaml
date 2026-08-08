@@ -38,7 +38,6 @@ providers:
           weight: 1
     - name: google/gemini-3.1-pro
       provider_model_id: google/gemini-3.1-pro
-      reasoning_family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 0.48
@@ -50,7 +49,6 @@ providers:
           weight: 1
     - name: openai/gpt5.4
       provider_model_id: openai/gpt5.4
-      reasoning_family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 1.20

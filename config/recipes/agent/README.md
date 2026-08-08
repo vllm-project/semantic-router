@@ -20,6 +20,16 @@ collection across local and frontier model lanes.
 The recipe remains runnable without training; future Router Learning updates
 can recalibrate its projections and decision weights.
 
+The security and privacy decisions set `adaptations.mode: bypass`. Because that
+policy is YAML-only, `recipe.dsl` must be applied over `config.yaml` as its base;
+the maintained DSL delivery test verifies the merge preserves both bypass
+blocks. A standalone DSL compile is not a complete Agent deployment.
+
+Runtime acceptance requires the embedding, category, PII, and complexity
+classifiers plus the configured Postgres replay store. Startup is not accepted
+until those modules initialize, and live validation checks replay writes rather
+than treating plugin presence as sufficient.
+
 ## Validate
 
 ```bash

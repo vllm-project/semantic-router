@@ -78,6 +78,7 @@ ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-he
     max_completion_tokens: 8192
     max_parallel: 3
     max_steps: 4
+    min_successful_responses: 2
     mode: "dynamic"
     on_error: "skip"
     planner: { max_completion_tokens: 2048, model: "qwen-coordinator" }
@@ -97,11 +98,14 @@ ROUTE accuracy_deliberation (description = "Use independent frontier perspective
   WHEN keyword("accuracy_deliberation_request") AND NOT keyword("accuracy_direct_request")
   MODEL "opus48-worker" (reasoning = true, effort = "medium"),
         "gemini31-worker" (reasoning = true, effort = "medium"),
-        "gpt55-worker" (reasoning = true, effort = "medium")
+        "gpt55-worker" (reasoning = true, effort = "medium"),
+        "qwen-coordinator" (reasoning = false)
   ALGORITHM fusion {
+    analysis_models: ["opus48-worker", "gemini31-worker", "gpt55-worker"]
     include_analysis: true
     include_intermediate_responses: true
     max_concurrent: 3
+    min_successful_responses: 2
     model: "qwen-coordinator"
     on_error: "skip"
   }

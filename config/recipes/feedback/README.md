@@ -35,6 +35,7 @@ The policy expresses feedback recovery with router-native primitives:
 | `210` | `feedback_persistent_recovery` | `openai/gpt5.4` | high | Same non-code question repeated across two prior user turns |
 | `200` | `feedback_general_recovery` | `google/gemini-3.1-pro` | medium | General dissatisfaction or one-turn reask |
 | `180` | `feedback_need_clarification` | `qwen/qwen3.5-rocm` | off | Cheap clarification and restatement |
+| `10` | `feedback_default` | `qwen/qwen3.5-rocm` | off | Explicit fallback for ordinary first-turn traffic |
 
 The intentional cost split is:
 
@@ -84,6 +85,11 @@ These are routing economics examples, not vendor billing quotes.
 - `verification_band`
 
 The `feedback_recovery_pressure` score deliberately weights `persistently_dissatisfied` above `likely_dissatisfied`, because a two-turn streak is stronger evidence that the cheap or mid-cost lane already failed.
+
+Runtime acceptance requires the category, feedback, and fact-check classifier
+modules. The maintained multi-turn probes additionally verify that a one-prior-
+turn retry emits `likely_dissatisfied`, while two prior matching user turns emit
+only `persistently_dissatisfied`.
 
 ## Keyword Ordering
 

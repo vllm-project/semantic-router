@@ -54,6 +54,20 @@ decisions:
       - id: react_render_bug
         query: "That answer was wrong. My React component still crashes during render and the previous fix did not solve it. Repair the code path."
         tags: [feedback, code, react]
+      - id: one_prior_code_retry
+        messages:
+          - role: user
+            content: "Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
+          - role: assistant
+            content: "Try indexing the list with the dictionary key."
+          - role: user
+            content: "That is still wrong. Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
+        expected_signals:
+          reask: [likely_dissatisfied]
+        tags: [feedback, code, boundary, messages, one-reask]
+      - id: code_without_verification
+        query: "The previous code is wrong and still raises TypeError. Fix it directly; do not research or cite sources."
+        tags: [feedback, code, negative:verification]
 
   - id: feedback_persistent_code_recovery
     expected_decision: feedback_persistent_code_recovery
@@ -75,7 +89,24 @@ decisions:
             content: "Wrap the list in dict() and try again."
           - role: user
             content: "Still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages]
+      - id: repeated_javascript_type_error
+        messages:
+          - role: user
+            content: "Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+          - role: assistant
+            content: "Add optional chaining to the property access."
+          - role: user
+            content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+          - role: assistant
+            content: "Check whether the object is initialized before access."
+          - role: user
+            content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+        expected_signals:
+          reask: [persistently_dissatisfied]
+        tags: [feedback, code, persistent, messages, javascript]
 
   - id: feedback_general_recovery
     expected_decision: feedback_general_recovery
@@ -116,6 +147,8 @@ decisions:
             content: "Inflation is when goods become more expensive."
           - role: user
             content: "Still wrong. Explain inflation vs recession in plain English."
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages]
       - id: repeated_pythagorean_retry
         messages:
@@ -129,6 +162,8 @@ decisions:
             content: "也可以从相似三角形出发。"
           - role: user
             content: "请问如何证明勾股定理？"
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages, zh, math]
 
   - id: feedback_need_clarification
