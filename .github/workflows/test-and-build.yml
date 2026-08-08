@@ -39,6 +39,7 @@ jobs:
           || needs.changes.outputs.e2e  == 'true'
           || needs.changes.outputs.docker == 'true'
           || needs.changes.outputs.make == 'true'
+          || needs.changes.outputs.bindings == 'true'
           || needs.changes.outputs.ci   == 'true') }}
     runs-on: ubuntu-latest
     steps:
@@ -62,6 +63,47 @@ jobs:
             make \
             build-essential \
             pkg-config
+
+      # Required ONNX binding contract receipt (issues #2477 / #2396). Runs
+      # inside this job because branch protection and the Mergify merge gate
+      # require test-and-build: a contract break here must block merge, not
+      # fail an optional status. Model-free by design — MMBERT_MODEL_PATH is
+      # deliberately not exported for this step, and the run asserts that a
+      # non-zero number of tests passed so the receipt cannot degrade into a
+      # skip-only pass. Covers the Rust-side ABI receipt tests (cargo test),
+      # cross-language struct layout assertions, and the Go API compile contract.
+      - name: ONNX binding contract receipt (model-free)
+        if: needs.changes.outputs.bindings == 'true' || needs.changes.outputs.ci == 'true'
+        working-directory: onnx-binding
+        run: |
+          cargo build --release
+          cargo test --release
+          export LD_LIBRARY_PATH=$PWD/target/release:$LD_LIBRARY_PATH
+          CGO_ENABLED=1 go vet ./...
+          CGO_ENABLED=1 go test -count=1 -json ./... | tee /tmp/onnx-receipt.json
+          python3 - <<'PYEOF'
+          import json, sys
+
+          passed = failed = 0
+          with open("/tmp/onnx-receipt.json") as f:
+              for line in f:
+                  try:
+                      event = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if "Test" not in event:
+                      continue
+                  if event.get("Action") == "pass":
+                      passed += 1
+                  elif event.get("Action") == "fail":
+                      failed += 1
+
+          print(f"passed={passed} failed={failed}")
+          if failed:
+              sys.exit(f"{failed} ONNX contract test(s) failed")
+          if passed == 0:
+              sys.exit("ONNX receipt executed zero passing tests — skip-only pass is not a pass")
+          PYEOF
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
