@@ -136,10 +136,9 @@ func (r *RateLimitResolver) Report(ctx Context, usage TokenUsage) {
 	}
 }
 
-// Close best-effort closes every provider that implements io.Closer (e.g.
-// EnvoyRLSProvider's gRPC connection). The Provider interface itself has no
-// Close method since most providers (e.g. LocalLimiter) hold no closeable
-// resources.
+// Close best-effort closes every provider that implements io.Closer, such as
+// EnvoyRLSProvider's gRPC connection. The Provider interface has no Close method
+// because most providers hold nothing closeable.
 func (r *RateLimitResolver) Close() error {
 	if r == nil {
 		return nil

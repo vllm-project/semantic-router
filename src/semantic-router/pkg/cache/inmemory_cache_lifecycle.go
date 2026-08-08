@@ -14,9 +14,8 @@ import (
 func (c *InMemoryCache) Close() error {
 	// Use sync.Once to ensure cleanup happens only once
 	c.closeOnce.Do(func() {
-		// Stop background cleanup goroutine and wait for it to actually exit,
-		// so a caller that observes Close() returning can rely on the
-		// goroutine no longer being live (e.g. for leak-free reload/rollback).
+		// Wait for the cleanup goroutine to actually exit, so Close returning
+		// means a reload or rollback leaks nothing.
 		if c.stopCleanup != nil {
 			close(c.stopCleanup)
 		}

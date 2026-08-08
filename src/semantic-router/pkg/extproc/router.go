@@ -70,22 +70,20 @@ type OpenAIRouter struct {
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
 
-	// generation owns every closeable resource buildRouterComponents
-	// produced for this router, registered in construction order so Close
-	// tears them down in reverse. It is nil for routers assembled by hand
-	// (e.g. in tests), which Close falls back to closing field by field.
+	// generation owns every closeable resource buildRouterComponents produced,
+	// registered in construction order so Close tears them down in reverse. Nil
+	// for routers assembled by hand, which Close falls back to closing field by
+	// field.
 	generation *routerruntime.Generation
 	closeOnce  sync.Once
 	closeErr   error
 }
 
-// Close releases every resource this router owns. It is idempotent and safe
-// to call concurrently: only the first call runs the teardown, and every
-// caller observes the same error. Idempotence matters because a router can
-// be reached by more than one shutdown path — a config reload retiring the
-// lease it replaced, and process shutdown retiring whatever lease is
-// current — and the underlying resources (gRPC connections, MCP clients)
-// are not all safe to close twice.
+// Close releases every resource this router owns. Only the first call runs the
+// teardown and every caller observes the same error, because a router is
+// reachable from more than one shutdown path — a reload retiring the lease it
+// replaced, and process shutdown retiring the current one — and not all of the
+// underlying resources tolerate a second close.
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
@@ -98,28 +96,20 @@ func (r *OpenAIRouter) Close() error {
 
 func (r *OpenAIRouter) closeResources() error {
 	if r.generation != nil {
-		// Built via buildRouterComponents, which registered a closer for
-		// every resource it created — including lookupTableCancel — so the
-		// generation is the single source of truth for what this router
-		// owns and the only thing Close has to drive.
+		// Covers lookupTableCancel too, so there is nothing else to drive here.
 		return r.generation.Close()
 	}
 	return r.closeOwnedFields()
 }
 
-// closeOwnedFields closes the lookup table goroutines plus every closeable
-// field (cache, tools database, classifier, replay recorder(s), model
-// selector, memory store, rate limiter, response store) and the lazily loaded
-// per-path tool databases. It is the fallback for routers assembled by hand rather than by
-// buildRouterComponents, which registers the same set of resources on a
-// Generation. Keep the two in step: a resource added to one and not the other
-// leaks on exactly one of the two construction paths.
+// closeOwnedFields is the fallback for routers assembled by hand rather than by
+// buildRouterComponents, which registers the same resources on a Generation.
+// Keep the two in step: a resource added to one and not the other leaks on
+// exactly one construction path.
 //
-// Note the deliberate asymmetry in nil handling: a method value such as
-// r.ToolsDatabase.Close is non-nil even when the receiver is a nil pointer,
-// so pointer-typed fields rely on the nil-receiver guard inside their own
-// Close. Interface-typed fields (Cache, MemoryStore) must be nil-checked
-// here, because taking a method value off a nil interface panics.
+// Pointer-typed fields rely on the nil-receiver guard inside their own Close.
+// Interface-typed fields are nil-checked here, because taking a method value off
+// a nil interface panics.
 func (r *OpenAIRouter) closeOwnedFields() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
@@ -149,15 +139,11 @@ func (r *OpenAIRouter) closeOwnedFields() error {
 	return errors.Join(errs...)
 }
 
-// closeReplayRecorders closes the replay recorder(s) a router owns,
-// mirroring the shared-vs-isolated storage distinction already used for
-// read paths in router_replay_api.go (see collectRouterReplayRecords): a
-// shared backend has every recorder in replayRecorders wrapping the same
-// store.Storage, so only replayRecorder is closed to avoid closing that
-// store more than once. An isolated backend gives each decision its own
-// store, so every recorder in the map is closed individually; if the map is
-// empty (e.g. a router assembled directly with only ReplayRecorder set,
-// as in tests), replayRecorder is closed as a fallback.
+// closeReplayRecorders mirrors the shared-vs-isolated storage distinction the
+// read paths already use (see collectRouterReplayRecords): a shared backend has
+// every recorder wrapping the same store.Storage, so only replayRecorder is
+// closed, while an isolated backend gives each decision its own store and needs
+// every recorder closed. An empty map falls back to replayRecorder.
 func closeReplayRecorders(
 	replayRecorder *routerreplay.Recorder,
 	replayRecorders map[string]*routerreplay.Recorder,

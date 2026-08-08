@@ -236,18 +236,18 @@ func shutdownTracing() {
 	}
 }
 
-// shutdownRegistry collects the cleanup that must run before the process
-// exits. It is shared between the main goroutine, which appends to it as
-// startup progresses, and the signal goroutine, which may read it at any
-// moment — including long before startup finishes — so every access is
-// guarded.
+// shutdownRegistry collects the cleanup that must run before the process exits.
+// Hooks run in reverse registration order, so a hook may depend on anything
+// registered before it and never on anything registered after.
+//
+// Everything is guarded because the main goroutine appends as startup
+// progresses while the signal goroutine may read at any moment, including long
+// before startup finishes.
 type shutdownRegistry struct {
 	mu    sync.Mutex
 	hooks []func()
-	// started records that the signal handler has begun running hooks, and
-	// finished is closed once it is done with all of them. Together they let
-	// the main goroutine avoid returning — and so ending the process —
-	// while cleanup is still in progress.
+	// started/finished let main block instead of returning — and so ending the
+	// process — while the signal goroutine is still running hooks.
 	started  bool
 	finished chan struct{}
 }
@@ -256,8 +256,7 @@ func newShutdownRegistry() *shutdownRegistry {
 	return &shutdownRegistry{finished: make(chan struct{})}
 }
 
-// register adds a hook to run at shutdown. Registration order matters: see
-// runInReverse.
+// register adds a hook to run at shutdown, after everything already registered.
 func (r *shutdownRegistry) register(hook func()) {
 	if hook == nil {
 		return
@@ -267,14 +266,7 @@ func (r *shutdownRegistry) register(hook func()) {
 	r.hooks = append(r.hooks, hook)
 }
 
-// runInReverse runs every hook registered so far in reverse registration
-// order, mirroring the reverse-teardown principle routerruntime.Generation
-// already applies to router-owned resources: a hook may depend on anything
-// registered before it, never on anything registered after.
-//
-// Concretely, the vector store hook is registered during runtime dependency
-// init and server.Stop is registered last, so reverse order drains in-flight
-// requests first and only then releases the resources those requests use.
+// runInReverse runs every hook registered so far, newest first.
 func (r *shutdownRegistry) runInReverse() {
 	r.mu.Lock()
 	r.started = true
@@ -287,10 +279,7 @@ func (r *shutdownRegistry) runInReverse() {
 }
 
 // awaitShutdownExit blocks until a signal-triggered shutdown has finished, or
-// returns immediately if none is running. main calls it after the ExtProc
-// server stops: server.Stop is the first hook, so its completion releases
-// main while the handler still has the remaining hooks and the tracing flush
-// to run — and a returning main ends the process underneath them.
+// returns immediately if none is running.
 func (r *shutdownRegistry) awaitShutdownExit() {
 	r.mu.Lock()
 	started := r.started
@@ -309,15 +298,14 @@ func (r *shutdownRegistry) markShutdownFinished() {
 	}
 }
 
-// shutdownTracingHook is a seam so tests can observe that the signal path
-// flushes tracing without depending on a live exporter.
+// shutdownTracingHook is a seam so tests can observe the signal path's tracing
+// flush without a live exporter.
 var shutdownTracingHook = shutdownTracing
 
-// registerSignalHandler installs the process's sole SIGINT/SIGTERM handler.
-// It runs first in main, before any heavy initialization: model download,
-// runtime init and warmup take minutes in a real deployment, and a SIGTERM
-// arriving in that window must still release whatever has been built so far
-// rather than hitting the default disposition and hard-killing the process.
+// registerSignalHandler installs the process's sole SIGINT/SIGTERM handler. It
+// must run before any heavy initialization: model download, runtime init and
+// warmup take minutes, and a SIGTERM arriving in that window must release
+// whatever has been built so far rather than hard-kill the process.
 func registerSignalHandler(registry *shutdownRegistry) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -328,11 +316,8 @@ func registerSignalHandler(registry *shutdownRegistry) {
 			"signal": sig.String(),
 		})
 		registry.runInReverse()
-		// Safe to flush after the hooks: server.Stop is registered last and
-		// therefore ran first, so no request is still in flight producing
-		// spans. tracing.ShutdownTracing is idempotent (otel's
-		// TracerProvider.Shutdown is once-guarded), so the deferred flush in
-		// main running too is harmless.
+		// Flushed after the hooks so no request is still producing spans.
+		// Idempotent, so main's deferred flush running too is harmless.
 		shutdownTracingHook()
 		registry.markShutdownFinished()
 		os.Exit(0)

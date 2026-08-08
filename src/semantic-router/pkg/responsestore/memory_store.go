@@ -19,11 +19,10 @@ type MemoryStore struct {
 	maxResponses  int
 	maxConvs      int
 
-	// stopCleanup ends the background expiry sweep and cleanupDone reports
-	// that it has exited, so a caller observing Close() returning can rely on
-	// the goroutine being gone. Without this the store outlived every Close:
-	// a router reload builds a replacement store and drops the old one, so the
-	// sweep accumulated one live goroutine per reload for the process's life.
+	// stopCleanup ends the background expiry sweep and cleanupDone reports that
+	// it has exited, so Close returning means the goroutine is gone. Without
+	// this the sweep outlived every Close, accumulating one live goroutine per
+	// reload for the life of the process.
 	stopCleanup chan struct{}
 	cleanupDone chan struct{}
 	closeOnce   sync.Once
@@ -68,9 +67,8 @@ func (m *MemoryStore) CheckConnection(ctx context.Context) error {
 
 func (m *MemoryStore) Close() error {
 	m.closeOnce.Do(func() {
-		// Stop the expiry sweep and wait for it to exit before dropping the
-		// maps, so the goroutine is provably gone once Close returns rather
-		// than racing the teardown it is being torn down by.
+		// Wait for the sweep to exit before dropping the maps, so it cannot
+		// race the teardown that is tearing it down.
 		if m.stopCleanup != nil {
 			close(m.stopCleanup)
 		}

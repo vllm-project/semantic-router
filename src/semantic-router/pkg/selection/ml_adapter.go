@@ -120,11 +120,10 @@ func (a *MLSelectorAdapter) UpdateFeedback(ctx context.Context, feedback *Feedba
 // Close releases the native handle the wrapped ML selector owns, so a config
 // reload that retires this adapter also frees the Rust-side allocation.
 //
-// modelselection.Selector deliberately stays free of Close for the same reason
-// selection.Selector does — only the Rust-backed selectors hold anything to
-// release — so this uses the same io.Closer type assertion Registry.Close uses
-// one level up. Keep them in step: an ML selector that grows native state but
-// no Close would be skipped here silently.
+// modelselection.Selector has no Close for the same reason selection.Selector
+// does not, so this type-asserts exactly as Registry.Close does one level up.
+// Watch the failure mode: an ML selector that grows native state but no Close is
+// skipped here silently.
 func (a *MLSelectorAdapter) Close() error {
 	if a == nil || a.mlSelector == nil {
 		return nil

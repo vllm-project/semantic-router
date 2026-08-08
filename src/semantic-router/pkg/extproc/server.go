@@ -76,26 +76,15 @@ type Server struct {
 	certPath   string
 	runtime    *routerruntime.Registry
 
-	// mu guards the shutdown state below, which Start writes and Stop reads
-	// — possibly from different goroutines.
-	mu sync.Mutex
-	// server is the running gRPC server, published by Start once it is ready
-	// to serve. Stop may run concurrently with (or entirely before) Start, so
-	// it is only ever read under mu.
+	// mu guards the shutdown state below. Stop may run concurrently with, or
+	// entirely before, the Start that publishes it.
+	mu     sync.Mutex
 	server *grpc.Server
-	// stopped records that Stop has already run, so a Start racing it never
-	// begins serving a socket that shutdown can no longer close.
-	stopped bool
-	// watcherCancel stops the config-reload watcher Start launched. Stop
-	// calls it before draining so a reload cannot land mid-shutdown.
+	// stopped lets a Start racing Stop abort instead of serving a socket
+	// shutdown can no longer close.
+	stopped       bool
 	watcherCancel context.CancelFunc
-	// stopOnce makes Stop idempotent. Both the process signal handler (which
-	// lives in cmd, the only SIGINT/SIGTERM owner) and Start's own path after
-	// serving ends call Stop, so the two can overlap; Once also blocks the
-	// second caller until the first drain finishes, which is exactly the
-	// contract the signal handler needs before tearing down the rest of the
-	// process.
-	stopOnce sync.Once
+	stopOnce      sync.Once
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -184,11 +173,10 @@ func (s *Server) Start() error {
 	grpcServer := grpc.NewServer(serverOpts...)
 	ext_proc.RegisterExternalProcessorServer(grpcServer, s.service)
 
-	// Publish the gRPC server and the config watcher's cancel under one lock,
-	// and give up if Stop already ran. The signal handler owns Stop and can
-	// fire at any point during startup — including after NewServer but before
-	// Start — so without this check a late Start would serve traffic that
-	// shutdown has already finished draining and can no longer stop.
+	// Publish the server and the watcher's cancel under one lock, and give up
+	// if Stop already ran: a signal can arrive after NewServer but before
+	// Start, and a late Start would then serve traffic shutdown can no longer
+	// drain.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.mu.Lock()
@@ -218,10 +206,8 @@ func (s *Server) Start() error {
 	go s.watchConfigAndReload(ctx)
 
 	// Serve until the server fails or Stop is called. Process signals are not
-	// watched here: SIGINT/SIGTERM can arrive long before the server exists
-	// (model init, classifier construction and warmup all run first), so the
-	// handler belongs in cmd where it is live from the first line of main.
-	// Stop is what ends this wait — it makes Serve return grpc.ErrServerStopped.
+	// watched here: SIGINT/SIGTERM can arrive long before the server exists,
+	// so cmd owns the handler.
 	if err := <-serverErrCh; err != nil {
 		logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
 			"port":  s.port,
@@ -235,29 +221,22 @@ func (s *Server) Start() error {
 }
 
 // Stop gracefully stops the gRPC server, draining in-flight requests, then
-// releases the resources the server owns. It runs at most once and is safe to
-// call concurrently: a second caller blocks until the first Stop has finished,
-// so a caller that tears down shared process resources afterwards (the signal
-// handler in cmd) can never do so while requests are still draining.
+// releases the resources the server owns. It runs at most once, and a second
+// caller blocks until the first has finished — which is what lets cmd's signal
+// handler tear down process-wide resources only after requests have drained.
 func (s *Server) Stop() {
 	s.stopOnce.Do(s.stop)
 }
 
 func (s *Server) stop() {
-	// Flag the shutdown before reading anything Start publishes. Ordered the
-	// other way, a Stop that beats Start reads a nil watcherCancel, skips the
-	// cancel, and only then flags — leaving Start free to publish and launch
-	// a watcher nothing ever stops. Flagging first makes the two outcomes
-	// exhaustive: either Start aborts and no watcher exists, or Start won the
-	// lock and published server and watcherCancel together, so both are
-	// visible here.
+	// Flag before reading what Start publishes, so the outcomes stay
+	// exhaustive: either Start aborts and no watcher exists, or Start already
+	// published both server and watcherCancel and both are visible here.
 	grpcServer := s.markStopped()
 
-	// Stop config reloads before draining. The watcher outlives Stop
-	// otherwise (Start only cancels it once Start itself returns), and a
-	// reload landing mid-shutdown would Swap a fresh router into an
-	// already-retired service — leaking that router and republishing runtime
-	// state for a process that is going away.
+	// Stop config reloads before draining, or a reload landing mid-shutdown
+	// would Swap a fresh router into an already-retired service — leaking it
+	// and republishing runtime state for a process that is going away.
 	s.stopConfigWatcher()
 
 	if grpcServer != nil {
@@ -285,9 +264,8 @@ func (s *Server) stopConfigWatcher() {
 }
 
 // markStopped records that shutdown has run and returns the running gRPC
-// server, or nil if Start never got as far as publishing one. Flagging and
-// reading under a single lock is what lets a Stop that beats Start guarantee
-// Start never starts serving afterwards.
+// server, or nil if Start never published one. Doing both under one lock is
+// what lets a Stop that beats Start guarantee Start never serves afterwards.
 func (s *Server) markStopped() *grpc.Server {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -295,12 +273,11 @@ func (s *Server) markStopped() *grpc.Server {
 	return s.server
 }
 
-// gracefulStopWithin drains the gRPC server's in-flight streams, falling
-// back to a hard Stop once timeout elapses. GracefulStop on its own is
-// unbounded: ExtProc serves bidirectional streams, so a single stream that
-// never ends would block shutdown until the orchestrator SIGKILLs the
-// process — losing the router teardown that follows it here, and the
-// process-wide cleanup the signal handler runs after Stop returns.
+// gracefulStopWithin drains the gRPC server's in-flight streams, falling back
+// to a hard Stop once timeout elapses. GracefulStop alone is unbounded: ExtProc
+// serves bidirectional streams, so one stream that never ends would block
+// shutdown until the orchestrator SIGKILLs the process, losing every teardown
+// step that follows.
 func (s *Server) gracefulStopWithin(grpcServer *grpc.Server, timeout time.Duration) {
 	stopped := make(chan struct{})
 	go func() {
@@ -321,16 +298,14 @@ func (s *Server) gracefulStopWithin(grpcServer *grpc.Server, timeout time.Durati
 }
 
 // defaultRouterDrainTimeout bounds how long shutdown waits for in-flight
-// requests — both the gRPC graceful drain and a retired router's lease —
-// before proceeding anyway, so neither a reload nor process shutdown is
-// blocked indefinitely by a stuck request.
+// requests — both the gRPC graceful drain and a retired router's lease — so a
+// stuck request cannot block a reload or process exit indefinitely.
 const defaultRouterDrainTimeout = 30 * time.Second
 
-// maxLeaseAcquireAttempts bounds how many times Process re-reads the
-// current lease when it finds one already retiring. Each retry means a
-// reload swapped in a replacement mid-call; a handful of consecutive
-// reloads is conceivable, an unbounded number is not, and bounding the loop
-// guarantees Process can never spin.
+// maxLeaseAcquireAttempts bounds how many times Process re-reads the current
+// lease when it finds one already retiring. Each retry means a reload swapped in
+// a replacement mid-call: a handful in a row is conceivable, so the bound only
+// exists to guarantee Process can never spin.
 const maxLeaseAcquireAttempts = 8
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
@@ -351,10 +326,9 @@ func (rs *RouterService) Swap(r *OpenAIRouter) *routerLease {
 	return rs.current.Swap(newRouterLease(r))
 }
 
-// Retire stops admitting new calls through lease, waits up to drainTimeout
-// for its in-flight calls to finish, then closes its router's owned
-// resources. Pass the lease returned by Swap. A nil lease (e.g. no router
-// was previously set) is a no-op.
+// Retire stops admitting new calls through lease, waits up to drainTimeout for
+// its in-flight calls to finish, then closes its router's owned resources. Pass
+// the lease returned by Swap; a nil lease is a no-op.
 func (rs *RouterService) Retire(lease *routerLease, drainTimeout time.Duration) error {
 	if lease == nil {
 		return nil
@@ -363,10 +337,8 @@ func (rs *RouterService) Retire(lease *routerLease, drainTimeout time.Duration) 
 	return lease.router.Close()
 }
 
-// Shutdown retires the currently active router: stops admitting new calls,
-// waits up to drainTimeout for its in-flight calls to finish, then closes
-// its owned resources. Used for final process shutdown, where — unlike a
-// reload — there is no replacement router to Swap in first.
+// Shutdown retires the currently active router. Used for process shutdown,
+// where — unlike a reload — there is no replacement to Swap in first.
 func (rs *RouterService) Shutdown(drainTimeout time.Duration) error {
 	return rs.Retire(rs.current.Load(), drainTimeout)
 }
@@ -382,7 +354,7 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 
 // Process delegates to the current router, holding a lease on it for the
 // duration of the call so a concurrent reload can't close its resources out
-// from under an in-flight request.
+// from under the request.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
 	lease, err := rs.acquireCurrentLease()
 	if err != nil {
@@ -394,12 +366,9 @@ func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer
 
 // acquireCurrentLease returns the current lease with one in-flight call
 // admitted against it. If a reload retires the loaded lease between load and
-// acquire, it retries against the replacement.
-//
-// Retrying only makes sense while the service still has a live router to
-// retry against. Shutdown retires the current lease without replacing it, so
-// once acquire fails against the lease that is still installed, it will keep
-// failing: reject the call instead of retrying forever.
+// acquire, it retries against the replacement — but only if there is one:
+// Shutdown retires without replacing, so a failed acquire against the lease
+// that is still installed would keep failing, and the call is rejected instead.
 func (rs *RouterService) acquireCurrentLease() (*routerLease, error) {
 	for attempt := 0; attempt < maxLeaseAcquireAttempts; attempt++ {
 		lease := rs.current.Load()
@@ -459,11 +428,9 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
 	oldLease := s.service.Swap(newRouter)
-	// Publish before draining. The new router serves traffic the instant
-	// Swap returns, so holding the runtime-registry update behind a drain
-	// that can take up to defaultRouterDrainTimeout would leave the control
-	// plane describing the old router while the data plane already runs the
-	// new one.
+	// Publish before draining: the new router serves traffic the instant Swap
+	// returns, so waiting out the drain would leave the control plane
+	// describing the old router while the data plane already runs the new one.
 	publishRouterState(candidateCfg, newRouter, s.runtime)
 	if err := s.service.Retire(oldLease, defaultRouterDrainTimeout); err != nil {
 		logging.ComponentWarnEvent("extproc", "router_retire_close_failed", map[string]interface{}{
@@ -530,10 +497,9 @@ func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.
 
 // publishRouterState makes a router's services visible to the rest of the
 // process. It runs only once a build has committed — after NewServer succeeds,
-// and after a reload has swapped the new router in — which is what keeps the
-// process-wide state from ever pointing at a candidate. A candidate can still
-// be discarded and closed by a later construction step or a failed warmup, and
-// the legacy package-level globals below have no owner to roll them back.
+// or after a reload has swapped the new router in — because a candidate can
+// still be discarded and closed by a later step or a failed warmup, and the
+// legacy globals below have no owner to roll them back.
 func publishRouterState(
 	cfg *config.RouterConfig,
 	router *OpenAIRouter,

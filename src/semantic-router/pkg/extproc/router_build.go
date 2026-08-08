@@ -45,10 +45,10 @@ type routerComponents struct {
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
-	// generation owns every closeable resource above, registered in
-	// construction order. It doubles as the rollback stack while
-	// buildRouterComponents runs and as the router's teardown driver
-	// afterwards, so there is exactly one list of what a router owns.
+	// generation owns every closeable resource above, registered in construction
+	// order. It doubles as the rollback stack while buildRouterComponents runs
+	// and as the router's teardown driver afterwards, so there is exactly one
+	// list of what a router owns.
 	generation *routerruntime.Generation
 }
 
@@ -184,10 +184,8 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if err != nil {
 		return nil, rollbackGeneration(gen, err)
 	}
-	// The whole recipe set, not just the default classifier: every recipe gets
-	// its own Classifier, so closing only the default one strands the MCP
-	// connections the others opened. RecipeClassifiers.Close covers the default
-	// too, which is why it is not registered separately.
+	// The whole set, not just the default: every recipe has its own Classifier
+	// holding its own MCP connections, and Close covers the default too.
 	gen.Defer(recipeClassifiers.Close)
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
@@ -203,15 +201,13 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		replayReaderForLookup = replayRecorder.Reader()
 	}
 	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
-	// Same reasoning as the classifiers: there is one registry per recipe, and
-	// each holds its own Elo storage and native ML handles. Closing the map
-	// covers the default registry, so it is not registered separately.
+	// Same as the classifiers: one registry per recipe, each holding its own Elo
+	// storage and native ML handles, and the map covers the default.
 	gen.Defer(func() error {
 		return closeRecipeModelSelectors(recipeModelSelectors)
 	})
-	// Registered after the selector so the reverse teardown cancels the
-	// lookup table's auto-save/re-population goroutines first, before the
-	// selectors those goroutines read through are closed.
+	// After the selectors, so the reverse teardown cancels the lookup table's
+	// goroutines before closing the selectors they read through.
 	if lookupTableCancel != nil {
 		gen.Defer(func() error {
 			lookupTableCancel()
@@ -299,11 +295,9 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		generation:            components.generation,
 	}
 
-	// Registered against the router rather than a value the build produced,
-	// because the per-path tool databases are loaded lazily at request time —
-	// after every other closer here is in place. Registering last means the
-	// reverse teardown closes them first, which is also the right order: they
-	// own nothing the other resources need.
+	// Registered against the router rather than a build product, because these
+	// databases are loaded lazily at request time. Last, so the reverse teardown
+	// closes them first — they own nothing the other resources need.
 	components.generation.Defer(router.closeToolSelectionDatabases)
 
 	return router

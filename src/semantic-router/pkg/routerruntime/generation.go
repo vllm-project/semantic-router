@@ -5,12 +5,10 @@ import (
 	"sync"
 )
 
-// Generation accumulates the closeable resources produced by one runtime
-// build (e.g. buildRouterComponents) and tears them down in reverse
-// construction order. It lets a constructor sequence register a closer
-// immediately after each successful step and roll back everything built so
-// far the moment a later step fails, instead of leaking partially
-// constructed resources.
+// Generation accumulates the closeable resources produced by one runtime build
+// and tears them down in reverse construction order. A constructor registers a
+// closer after each successful step, so a later failure can roll back everything
+// built so far rather than leak it.
 type Generation struct {
 	mu      sync.Mutex
 	closers []func() error
@@ -22,9 +20,8 @@ func NewGeneration() *Generation {
 	return &Generation{}
 }
 
-// Defer registers closer to run, in reverse registration order, the next
-// time Close is called. Nil closers are ignored so callers can pass a
-// resource's Close method directly even when the resource itself may be nil.
+// Defer registers closer to run, in reverse registration order, the next time
+// Close is called. Nil closers are ignored.
 func (g *Generation) Defer(closer func() error) {
 	if g == nil || closer == nil {
 		return
@@ -35,8 +32,8 @@ func (g *Generation) Defer(closer func() error) {
 }
 
 // Close runs every registered closer exactly once, in reverse registration
-// order, and joins any errors they return. It is safe to call multiple
-// times or concurrently; only the first call runs the closers.
+// order, joining their errors. Safe to call repeatedly or concurrently; only the
+// first call runs the closers.
 func (g *Generation) Close() error {
 	if g == nil {
 		return nil

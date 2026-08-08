@@ -16,11 +16,11 @@ import (
 )
 
 // createModelSelectorRegistries builds one selection registry per routing
-// recipe. Deliberately none of them is published to selection.SetGlobalRegistry
-// here — see publishRouterState. These registries belong to a candidate build
-// that a later step, or a failed warmup, can still discard and Close; publishing
-// now would leave the process-wide pointer at a closed registry whose rating
-// writes are silently dropped, while the previous router still serves.
+// recipe. None of them is published to selection.SetGlobalRegistry here: they
+// belong to a candidate build that a later step or a failed warmup can still
+// discard and Close, which would leave the process-wide pointer at a closed
+// registry silently dropping rating writes while the previous router serves on.
+// publishRouterState does it once the build commits.
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	embed := resolveSelectionEmbeddingFunc(cfg)
@@ -57,11 +57,8 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
-	// Deliberately not published to selection.SetGlobalRegistry here — see
-	// publishRouterState. This registry belongs to a candidate build that a
-	// later step, or a failed warmup, can still discard and Close; publishing
-	// it now would leave the process-wide pointer at a closed registry whose
-	// rating writes are silently dropped, while the previous router still serves.
+	// Not published to selection.SetGlobalRegistry here; see
+	// createModelSelectorRegistries.
 	registry := selectionFactory.CreateAll()
 
 	// Collect algorithm methods actually configured in decisions
@@ -683,14 +680,12 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 	return cancel
 }
 
-// closeRecipeModelSelectors closes every recipe's selection registry. Each
-// recipe gets its own registry from createModelSelectorRegistries, and each
-// registry owns Elo storage and the native ML handles behind the KNN/KMeans/SVM/MLP
-// selectors, so closing only the default one leaks the rest on every reload.
+// closeRecipeModelSelectors closes every recipe's selection registry. Each owns
+// Elo storage and the native ML handles behind the KNN/KMeans/SVM/MLP selectors,
+// so closing only the default one leaks the rest on every reload.
 //
-// Registries are de-duplicated by pointer: the default entry is an alias of a
-// map entry rather than a separate registry, and Elo storage does not
-// necessarily tolerate a second Close.
+// De-duplicated by pointer, because the default entry aliases a map entry and
+// Elo storage does not necessarily tolerate a second Close.
 func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {
 	var errs []error
 	closed := make(map[*selection.Registry]bool, len(registries))
