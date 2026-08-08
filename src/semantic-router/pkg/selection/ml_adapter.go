@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelselection"
@@ -114,6 +115,25 @@ func (a *MLSelectorAdapter) UpdateFeedback(ctx context.Context, feedback *Feedba
 	logging.Debugf("[MLAdapter] Feedback received for %s, model=%s (training via Train() method)",
 		a.method, feedback.WinnerModel)
 	return nil
+}
+
+// Close releases the native handle the wrapped ML selector owns, so a config
+// reload that retires this adapter also frees the Rust-side allocation.
+//
+// modelselection.Selector deliberately stays free of Close for the same reason
+// selection.Selector does — only the Rust-backed selectors hold anything to
+// release — so this uses the same io.Closer type assertion Registry.Close uses
+// one level up. Keep them in step: an ML selector that grows native state but
+// no Close would be skipped here silently.
+func (a *MLSelectorAdapter) Close() error {
+	if a == nil || a.mlSelector == nil {
+		return nil
+	}
+	closer, ok := a.mlSelector.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
 }
 
 // GetMLSelector returns the underlying ML selector for direct access (e.g., for training).
