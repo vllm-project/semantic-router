@@ -109,8 +109,8 @@ func (r *OpenAIRouter) closeResources() error {
 
 // closeOwnedFields closes the lookup table goroutines plus every closeable
 // field (cache, tools database, classifier, replay recorder(s), model
-// selector, memory store, rate limiter) and the lazily loaded per-path tool
-// databases. It is the fallback for routers assembled by hand rather than by
+// selector, memory store, rate limiter, response store) and the lazily loaded
+// per-path tool databases. It is the fallback for routers assembled by hand rather than by
 // buildRouterComponents, which registers the same set of resources on a
 // Generation. Keep the two in step: a resource added to one and not the other
 // leaks on exactly one of the two construction paths.
@@ -143,6 +143,7 @@ func (r *OpenAIRouter) closeOwnedFields() error {
 		collect(r.MemoryStore.Close())
 	}
 	collect(r.RateLimiter.Close())
+	collect(r.ResponseAPIFilter.Close())
 	collect(r.closeToolSelectionDatabases())
 
 	return errors.Join(errs...)

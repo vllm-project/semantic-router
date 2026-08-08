@@ -127,6 +127,40 @@ func TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable(t *testing.T) {
 		"buildRouterComponents+Close leaked goroutines across %d repeated reload cycles", iterations)
 }
 
+// TestBuildRouterComponentsWithResponseAPIIsGoroutineStable covers the same
+// reload loop with the Response API enabled. Its in-memory store runs a
+// background expiry sweep, so an unregistered or unstoppable store shows up
+// here as one leaked goroutine per cycle — which is how this leak survived the
+// stability test above, whose config leaves the Response API off.
+func TestBuildRouterComponentsWithResponseAPIIsGoroutineStable(t *testing.T) {
+	cfg := &config.RouterConfig{
+		ResponseAPI: config.ResponseAPIConfig{
+			Enabled:      true,
+			StoreBackend: "memory",
+			TTLSeconds:   60,
+		},
+	}
+
+	components, err := buildRouterComponents(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, components.responseAPIFilter,
+		"Response API filter was not built, so this test would pass without exercising the store")
+	require.NoError(t, components.buildRouter().Close())
+
+	baseline := stableGoroutineCount(t)
+
+	const iterations = 30
+	for i := 0; i < iterations; i++ {
+		components, err := buildRouterComponents(cfg)
+		require.NoError(t, err)
+		router := components.buildRouter()
+		require.NoError(t, router.Close())
+	}
+
+	requireGoroutinesSettleTo(t, baseline,
+		"the Response API store leaked goroutines across %d repeated reload cycles", iterations)
+}
+
 // stableGoroutineCount returns a goroutine count that has stopped moving, so
 // goroutines left winding down by an earlier test are not mistaken for this
 // test's baseline. runtime.Gosched is not a barrier — goroutine exit is

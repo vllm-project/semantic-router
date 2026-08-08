@@ -39,6 +39,18 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
+// Close releases the response store this filter owns. With the redis backend
+// that store holds a client and its connection pool; with the in-memory
+// backend it holds a background expiry goroutine. Either way a reload builds a
+// replacement and drops this one, so the store has to be released with the
+// filter rather than left to the process.
+func (f *ResponseAPIFilter) Close() error {
+	if f == nil || f.store == nil {
+		return nil
+	}
+	return f.store.Close()
+}
+
 // ResponseAPIContext holds context for a Response API request during processing.
 type ResponseAPIContext struct {
 	// IsResponseAPIRequest indicates this is a /v1/responses request
