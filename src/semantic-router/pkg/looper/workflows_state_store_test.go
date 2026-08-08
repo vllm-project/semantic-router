@@ -2,7 +2,9 @@ package looper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -243,6 +245,20 @@ func TestMemoryStateStore_CardinalityCap(t *testing.T) {
 	if !strings.Contains(err.Error(), "capacity") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	// Replacing an existing entry should still succeed at capacity.
+	existingID := ""
+	for id := range s.states {
+		existingID = id
+		break
+	}
+	if existingID == "" {
+		t.Fatal("expected at least one stored state")
+	}
+	replacement := &workflowPendingToolState{ID: existingID, CreatedAt: time.Now().UTC()}
+	if _, err := s.Put(ctx, replacement); err != nil {
+		t.Fatalf("Put replacement at capacity: %v", err)
+	}
 }
 
 // ---- Memory aggregate byte cap ----------------------------------------------
@@ -403,6 +419,46 @@ func TestWorkflowRedisToolStateStore_TTLExpiry(t *testing.T) {
 	}
 }
 
+func TestWorkflowRedisToolStateStore_ConnectionPoolStable(t *testing.T) {
+	mr := miniredis.RunT(t)
+	cfg := config.WorkflowStateRedisConfig{
+		Address:  mr.Addr(),
+		PoolSize: 2,
+	}
+	s := newWorkflowRedisToolStateStore(cfg, time.Hour)
+	defer s.Close()
+
+	ctx := context.Background()
+	const workers = 16
+	const opsPerWorker = 25
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for i := 0; i < opsPerWorker; i++ {
+				state := makeTestState(fmt.Sprintf("pool-%d-%d", workerID, i))
+				id, putErr := s.Put(ctx, state)
+				if putErr != nil {
+					t.Errorf("Put: %v", putErr)
+					return
+				}
+				if _, _, takeErr := s.Take(ctx, id); takeErr != nil {
+					t.Errorf("Take: %v", takeErr)
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	stats := s.client.PoolStats()
+	if stats.TotalConns > uint32(cfg.PoolSize) {
+		t.Fatalf("redis pool exceeded configured size: total=%d pool_size=%d", stats.TotalConns, cfg.PoolSize)
+	}
+}
+
 func TestWorkflowRedisToolStateStore_Clear(t *testing.T) {
 	mr, s := setupRedisStore(t)
 	defer mr.Close()
@@ -426,4 +482,170 @@ func TestWorkflowRedisToolStateStore_Clear(t *testing.T) {
 	if ok {
 		t.Fatal("Clear failed to remove state")
 	}
+}
+
+func TestFileStateStore_AggregateByteCap(t *testing.T) {
+	dir := t.TempDir()
+	store := newWorkflowFileToolStateStore(dir, time.Hour)
+	defer store.Close()
+
+	ctx := context.Background()
+	state1 := makeTestState("file-cap-1")
+	if _, err := store.Put(ctx, state1); err != nil {
+		t.Fatalf("Put state1: %v", err)
+	}
+
+	store.mu.Lock()
+	initialBytes := store.currentBytes
+	if initialBytes <= 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected currentBytes > 0, got %d", initialBytes)
+	}
+	// Simulate store being near 100 MiB limit
+	store.currentBytes = maxAggregateStateBytes - 10
+	store.mu.Unlock()
+
+	state2 := makeTestState("file-cap-2")
+	_, err := store.Put(ctx, state2)
+	if err == nil {
+		t.Fatalf("expected Put to fail when aggregate capacity exceeded, but succeeded")
+	}
+	if !strings.Contains(err.Error(), "capacity") {
+		t.Fatalf("expected capacity error message, got: %v", err)
+	}
+
+	store.mu.Lock()
+	if store.currentBytes != maxAggregateStateBytes-10 {
+		store.mu.Unlock()
+		t.Fatalf("expected currentBytes rolled back to %d, got %d", maxAggregateStateBytes-10, store.currentBytes)
+	}
+	// Reset currentBytes to actual size of state1 for clean take
+	store.currentBytes = initialBytes
+	store.mu.Unlock()
+
+	taken, ok, err := store.Take(ctx, "file-cap-1")
+	if err != nil || !ok || taken == nil {
+		t.Fatalf("Take state1 failed: ok=%v, err=%v", ok, err)
+	}
+
+	store.mu.Lock()
+	if store.currentBytes != 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected currentBytes to be 0 after taking all states, got %d", store.currentBytes)
+	}
+	store.mu.Unlock()
+}
+
+func TestFileStateStore_ReclamationAndRaceSafety(t *testing.T) {
+	dir := t.TempDir()
+	store := newWorkflowFileToolStateStore(dir, time.Hour)
+	defer store.Close()
+
+	ctx := context.Background()
+	const workers = 8
+	const opsPerWorker = 20
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for i := 0; i < opsPerWorker; i++ {
+				id := fmt.Sprintf("race-state-%d-%d", workerID, i)
+				st := makeTestState(id)
+				if _, putErr := store.Put(ctx, st); putErr != nil {
+					t.Errorf("worker %d Put failed: %v", workerID, putErr)
+					return
+				}
+				taken, ok, takeErr := store.Take(ctx, id)
+				if takeErr != nil || !ok || taken == nil {
+					t.Errorf("worker %d Take failed: ok=%v, err=%v", workerID, ok, takeErr)
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.currentBytes != 0 {
+		t.Fatalf("expected currentBytes = 0 after taking all items, got %d", store.currentBytes)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), ".take-") || strings.Contains(e.Name(), ".tmp-") {
+			t.Fatalf("unexpected leftover file on disk: %s", e.Name())
+		}
+	}
+}
+
+func TestFileStateStore_StartupRecovery(t *testing.T) {
+	dir := t.TempDir()
+	st1 := makeTestState("startup-1")
+	st2 := makeTestState("startup-2")
+
+	d1, err := json.Marshal(st1)
+	if err != nil {
+		t.Fatalf("marshal st1: %v", err)
+	}
+	d2, err := json.Marshal(st2)
+	if err != nil {
+		t.Fatalf("marshal st2: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "startup-1.json"), d1, 0o600); err != nil {
+		t.Fatalf("write st1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "startup-2.json"), d2, 0o600); err != nil {
+		t.Fatalf("write st2: %v", err)
+	}
+	// Write orphaned temporary and claim files from a previous crash
+	if err := os.WriteFile(filepath.Join(dir, "startup-1.json.take-orphan"), []byte("orphan"), 0o600); err != nil {
+		t.Fatalf("write orphan take: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "startup-3.json.tmp-orphan"), []byte("orphan"), 0o600); err != nil {
+		t.Fatalf("write orphan tmp: %v", err)
+	}
+
+	store := newWorkflowFileToolStateStore(dir, time.Hour)
+	defer store.Close()
+
+	expectedBytes := int64(len(d1) + len(d2))
+	store.mu.Lock()
+	actualBytes := store.currentBytes
+	store.mu.Unlock()
+
+	if actualBytes != expectedBytes {
+		t.Fatalf("expected initial currentBytes %d, got %d", expectedBytes, actualBytes)
+	}
+
+	// Verify orphaned files were cleaned up
+	if _, err := os.Stat(filepath.Join(dir, "startup-1.json.take-orphan")); !os.IsNotExist(err) {
+		t.Fatalf("expected orphan take file to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "startup-3.json.tmp-orphan")); !os.IsNotExist(err) {
+		t.Fatalf("expected orphan tmp file to be removed")
+	}
+
+	ctx := context.Background()
+	taken1, ok1, err1 := store.Take(ctx, "startup-1")
+	if err1 != nil || !ok1 || taken1 == nil {
+		t.Fatalf("Take startup-1 failed: %v", err1)
+	}
+	taken2, ok2, err2 := store.Take(ctx, "startup-2")
+	if err2 != nil || !ok2 || taken2 == nil {
+		t.Fatalf("Take startup-2 failed: %v", err2)
+	}
+
+	store.mu.Lock()
+	if store.currentBytes != 0 {
+		store.mu.Unlock()
+		t.Fatalf("expected currentBytes 0 after taking all states, got %d", store.currentBytes)
+	}
+	store.mu.Unlock()
 }

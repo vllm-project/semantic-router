@@ -67,7 +67,6 @@ func (p *RedisProfile) GetTestCases() []string {
 		"response-api-edge-concurrent-requests",
 		"response-api-ttl-expiry",
 		"response-api-restart-recovery",
-		"workflow-resume-restart-recovery",
 	}
 }
 

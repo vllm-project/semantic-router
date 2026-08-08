@@ -127,6 +127,12 @@ type WorkflowStateService struct {
 }
 
 // Acquire tries to get a read lease on the service. Returns false if closed.
+//
+// Safety invariant: wg.Add(1) is called while holding RLock. This is safe
+// because Close() sets s.closed = true under a write lock *before* calling
+// wg.Wait(). Once closed is true, no new Add(1) can happen, so Wait() will
+// observe a stable counter. Do not add a second Close() codepath without
+// preserving this ordering.
 func (s *WorkflowStateService) Acquire() bool {
 	if s == nil {
 		return false

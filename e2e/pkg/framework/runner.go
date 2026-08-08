@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -98,6 +99,40 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
 			return err
 		}
+		for _, target := range image.RolloutRestarts {
+			if err := r.rolloutRestartDeployment(ctx, target.Namespace, target.Deployment); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *Runner) rolloutRestartDeployment(ctx context.Context, namespace, deployment string) error {
+	kubeContext := fmt.Sprintf("kind-%s", r.opts.ClusterName)
+	r.log("Restarting deployment %s/%s to pick up reloaded image", namespace, deployment)
+
+	restart := exec.CommandContext(ctx, "kubectl", "--context", kubeContext,
+		"rollout", "restart", fmt.Sprintf("deployment/%s", deployment),
+		"-n", namespace)
+	if r.opts.Verbose {
+		restart.Stdout = os.Stdout
+		restart.Stderr = os.Stderr
+	}
+	if err := restart.Run(); err != nil {
+		return fmt.Errorf("rollout restart %s/%s: %w", namespace, deployment, err)
+	}
+
+	wait := exec.CommandContext(ctx, "kubectl", "--context", kubeContext,
+		"rollout", "status", fmt.Sprintf("deployment/%s", deployment),
+		"-n", namespace, "--timeout=120s")
+	if r.opts.Verbose {
+		wait.Stdout = os.Stdout
+		wait.Stderr = os.Stderr
+	}
+	if err := wait.Run(); err != nil {
+		return fmt.Errorf("wait for rollout %s/%s: %w", namespace, deployment, err)
 	}
 
 	return nil
