@@ -69,4 +69,6 @@ Use the case-shape catalog below in the same order as the fragment tree:
 | `composite` | `config/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
 | `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
 
+For a reusable workflow pattern that combines keyword signals with composite decisions, see [Multi-Step Pipeline Routing](./multi-step-pipeline).
+
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
