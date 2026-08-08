@@ -40,6 +40,13 @@ type AnthropicPassthrough struct {
 	// on inbound; do not emit".
 	TopK *int64
 
+	// Thinking preserves the Anthropic extended-thinking request parameter
+	// (type + budget_tokens). It has no OpenAI representation, so without this
+	// carrier it would be silently dropped on the Anthropic→Anthropic path and
+	// the backend would not enable extended thinking. nil means "not set on
+	// inbound; do not emit".
+	Thinking *ThinkingConfig
+
 	// MetadataUserID populates metadata.user_id on the outbound body. Empty
 	// means "do not emit".
 	MetadataUserID string
@@ -83,6 +90,14 @@ type SystemBlock struct {
 type CacheControlSpec struct {
 	Type string
 	TTL  string
+}
+
+// ThinkingConfig captures the Anthropic extended-thinking request parameter.
+// Type is "enabled" or "disabled"; BudgetTokens is only meaningful (and only
+// emitted) when Type is "enabled".
+type ThinkingConfig struct {
+	Type         string
+	BudgetTokens int64
 }
 
 // ToolResultContentBlock represents one block of a tool_result content array.
@@ -164,6 +179,15 @@ func captureSamplingAndMetadata(raw []byte, pt *AnthropicPassthrough) {
 	}
 	if v := gjson.GetBytes(raw, "metadata.user_id"); v.Exists() && v.Type == gjson.String {
 		pt.MetadataUserID = v.String()
+	}
+	if v := gjson.GetBytes(raw, "thinking"); v.Exists() {
+		if tType := v.Get("type").String(); tType != "" {
+			tc := &ThinkingConfig{Type: tType}
+			if b := v.Get("budget_tokens"); b.Exists() && b.Type == gjson.Number {
+				tc.BudgetTokens = b.Int()
+			}
+			pt.Thinking = tc
+		}
 	}
 }
 

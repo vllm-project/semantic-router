@@ -87,6 +87,25 @@ func applyMetadata(params *anthropic.MessageNewParams, req *openai.ChatCompletio
 	params.Metadata = anthropic.MetadataParam{UserID: anthropic.String(userID)}
 }
 
+// applyThinking restores the Anthropic extended-thinking request parameter from
+// the passthrough. The thinking config has no OpenAI representation, so without
+// this the same-protocol (Anthropic→Anthropic) path would silently drop it and
+// the backend would not enable extended thinking. nil passthrough or unset
+// Thinking is a no-op, leaving the field omitted.
+func applyThinking(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {
+	if pt == nil || pt.Thinking == nil {
+		return
+	}
+	switch pt.Thinking.Type {
+	case "enabled":
+		params.Thinking = anthropic.ThinkingConfigParamOfEnabled(pt.Thinking.BudgetTokens)
+	case "disabled":
+		params.Thinking = anthropic.ThinkingConfigParamUnion{
+			OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+		}
+	}
+}
+
 // applyToolsCacheControl attaches cache_control markers to tool definitions
 // based on the `tools[i]` keys in the passthrough.
 func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {
@@ -504,9 +523,31 @@ func applyOpenAIToolsToAnthropicParams(
 
 	toolChoice, hasChoice := openAIToolChoiceToAnthropic(openAIRequest.ToolChoice)
 	if hasChoice {
+		applyDisableParallelToolUse(&toolChoice, openAIRequest)
 		params.ToolChoice = toolChoice
 	}
 	return nil
+}
+
+// applyDisableParallelToolUse restores the Anthropic
+// tool_choice.disable_parallel_tool_use flag from the OpenAI
+// parallel_tool_calls field. Inbound maps Anthropic
+// disable_parallel_tool_use:true onto parallel_tool_calls:false; without this
+// the flag would be silently dropped on the Anthropic→Anthropic path, so a
+// client that asked the backend to serialize tool calls would not get it. Only
+// an explicit false triggers the flag (parallel is the Anthropic default).
+func applyDisableParallelToolUse(choice *anthropic.ToolChoiceUnionParam, req *openai.ChatCompletionNewParams) {
+	if req == nil || !req.ParallelToolCalls.Valid() || req.ParallelToolCalls.Value {
+		return
+	}
+	switch {
+	case choice.OfAuto != nil:
+		choice.OfAuto.DisableParallelToolUse = anthropic.Bool(true)
+	case choice.OfAny != nil:
+		choice.OfAny.DisableParallelToolUse = anthropic.Bool(true)
+	case choice.OfTool != nil:
+		choice.OfTool.DisableParallelToolUse = anthropic.Bool(true)
+	}
 }
 
 func openAIToolsToAnthropic(tools []openai.ChatCompletionToolParam) ([]anthropic.ToolUnionParam, error) {

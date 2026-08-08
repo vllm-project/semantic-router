@@ -123,6 +123,7 @@ func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionN
 	applyToolResultPassthrough(params.Messages, pt)
 	applySampling(&params, openAIRequest, pt)
 	applyMetadata(&params, openAIRequest, pt)
+	applyThinking(&params, pt)
 
 	return json.Marshal(params)
 }
