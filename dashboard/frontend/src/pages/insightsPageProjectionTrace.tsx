@@ -103,13 +103,16 @@ function renderPartitionBlock(p: ProjectionTracePartition, idx: number) {
 function renderMappingBlock(m: ProjectionTraceMapping, idx: number) {
   const key = `${m.mapping_name}-${idx}`
   const hasOutputs = m.outputs && m.outputs.length > 0
+  const matchedOutputs = m.matched_outputs && m.matched_outputs.length > 0
+    ? m.matched_outputs.join(', ')
+    : m.selected_output || '—'
   return (
     <Fragment key={key}>
       <tr>
         <td>{m.mapping_name}</td>
         <td>{m.source_score}</td>
         <td>{fmtFixed(m.score_value)}</td>
-        <td>{m.selected_output || '—'}</td>
+        <td>{matchedOutputs}</td>
         <td>{fmtFixed(m.confidence)}</td>
         <td>{fmtFixed(m.boundary_distance)}</td>
       </tr>
@@ -201,7 +204,7 @@ function renderProjectionTraceTables(trace: ProjectionTrace) {
                 <th>Mapping</th>
                 <th>Source score</th>
                 <th>Value</th>
-                <th>Selected</th>
+                <th>Matched outputs</th>
                 <th>Confidence</th>
                 <th>Boundary</th>
               </tr>

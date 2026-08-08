@@ -68,6 +68,7 @@ export interface ProjectionTraceMapping {
   mapping_name: string
   source_score: string
   score_value: number
+  matched_outputs?: string[]
   selected_output?: string
   confidence?: number
   boundary_distance?: number
