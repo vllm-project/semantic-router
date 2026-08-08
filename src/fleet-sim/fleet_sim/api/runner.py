@@ -17,8 +17,11 @@ from .models import (
     HistogramBucket,
     JobRequest,
     JobType,
+    MixtureCasePoint,
+    MixtureOptResult,
     OptResult,
     PoolResult,
+    RobustMixturePoint,
     SimResult,
     SweepPoint,
     WhatifPoint,
@@ -92,6 +95,25 @@ def _load_cdf(workload_ref: WorkloadRef) -> list:
             meta.get("format", "jsonl"),
         )
     raise ValueError(f"Unknown workload type '{workload_ref.type}'")
+
+
+def _load_mixture_scenario(name: str):
+    from fleet_sim.workload import load_mixture_scenario
+
+    scenario_name = name.removesuffix(".json").removeprefix("workload_mixture_")
+    filenames = {
+        "nominal": "workload_mixture_nominal.json",
+        "drift": "workload_mixture_drift.json",
+        "burst": "workload_mixture_burst.json",
+    }
+    filename = filenames.get(scenario_name)
+    if filename is None:
+        raise FileNotFoundError(
+            f"Built-in mixture scenario '{name}' not found; "
+            f"available: {sorted(filenames)}"
+        )
+    path = _DATA_DIR / filename
+    return load_mixture_scenario(path)
 
 
 def _cdf_from_trace(path: Path, fmt: str) -> list:
@@ -168,11 +190,7 @@ def _run_optimize(params) -> OptResult:
         p_c=params.p_c,
         node_avail=params.node_avail,
     )
-    step = params.gamma_step
-    gammas = [
-        round(params.gamma_min + i * step, 2)
-        for i in range(int((params.gamma_max - params.gamma_min) / step) + 1)
-    ]
+    gammas = _gamma_values(params.gamma_min, params.gamma_max, params.gamma_step)
 
     result = opt.optimize(
         cdf=cdf,
@@ -184,20 +202,7 @@ def _run_optimize(params) -> OptResult:
 
     # OptimizationReport stores results in .analytical and .simulated lists
     all_results = result.analytical + result.simulated
-    sweep_pts = [
-        SweepPoint(
-            gamma=r.gamma,
-            n_s=r.n_s,
-            n_l=r.n_l,
-            total_gpus=r.total_gpus,
-            annual_cost_kusd=r.annualised_cost_kusd,
-            p99_short_ms=r.p99_ttft_short_ms,
-            p99_long_ms=r.p99_ttft_long_ms,
-            slo_met=r.slo_met,
-            source=r.source,
-        )
-        for r in all_results
-    ]
+    sweep_pts = [_sweep_point(r) for r in all_results]
 
     best_r = result.best_simulated or result.best_analytical
     # Baseline = cheapest γ=1.0 analytical result (no C+R compression)
@@ -211,17 +216,7 @@ def _run_optimize(params) -> OptResult:
             (baseline_cost - best_r.annualised_cost_kusd) / baseline_cost * 100, 1
         )
 
-    best_pt = SweepPoint(
-        gamma=best_r.gamma,
-        n_s=best_r.n_s,
-        n_l=best_r.n_l,
-        total_gpus=best_r.total_gpus,
-        annual_cost_kusd=best_r.annualised_cost_kusd,
-        p99_short_ms=best_r.p99_ttft_short_ms,
-        p99_long_ms=best_r.p99_ttft_long_ms,
-        slo_met=best_r.slo_met,
-        source=best_r.source,
-    )
+    best_pt = _sweep_point(best_r)
 
     # DES produces SweepResult summaries, not a raw FleetSimResult, so
     # sim_validation cannot be reconstructed here without re-running the DES.
@@ -231,6 +226,61 @@ def _run_optimize(params) -> OptResult:
         baseline_annual_cost_kusd=baseline_cost,
         savings_pct=savings,
         sim_validation=None,
+    )
+
+
+def _run_mixture_optimize(params) -> MixtureOptResult:
+    from fleet_sim.optimizer import FleetOptimizer, evaluate_mixture_scenario
+
+    scenario = _load_mixture_scenario(params.scenario)
+    gpu_s = _gpu(params.gpu_short)
+    gpu_l = _gpu(params.gpu_long)
+    optimizer = FleetOptimizer(
+        gpu_short=gpu_s,
+        gpu_long=gpu_l,
+        B_short=params.b_short,
+        t_slo_ms=params.slo_ms,
+        long_max_ctx=params.long_max_ctx,
+        p_c=params.p_c,
+        node_avail=params.node_avail,
+    )
+    report = evaluate_mixture_scenario(
+        optimizer=optimizer,
+        scenario=scenario,
+        lam=params.lam,
+        gammas=_gamma_values(params.gamma_min, params.gamma_max, params.gamma_step),
+        n_sim_requests=params.n_sim_requests,
+        verify_top_n=1 if params.n_sim_requests else 0,
+        max_total_gpus=params.max_total_gpus,
+        fail_on_infeasible=params.fail_on_infeasible,
+        verbose=False,
+    )
+    robust = report.robust_recommendation
+    return MixtureOptResult(
+        scenario_id=report.scenario_id,
+        scenario_version=report.scenario_version,
+        lam=report.lam,
+        ok=report.ok,
+        aggregate_baseline_case_id=report.aggregate_baseline_case_id,
+        nominal_case_id=report.nominal_case_id,
+        robust_recommendation=(
+            RobustMixturePoint(
+                gamma=robust.gamma,
+                n_s=robust.n_s,
+                n_l=robust.n_l,
+                total_gpus=robust.total_gpus,
+                annual_cost_kusd=robust.annualised_cost_kusd,
+                worst_case_id=robust.worst_case_id,
+                worst_p99_short_ms=robust.worst_p99_ttft_short_ms,
+                worst_p99_long_ms=robust.worst_p99_ttft_long_ms,
+                slo_met=robust.slo_met,
+                infeasible_reason=robust.infeasible_reason,
+            )
+            if robust is not None
+            else None
+        ),
+        cases=[_mixture_case_point(case) for case in report.cases],
+        diagnostics=list(report.diagnostics),
     )
 
 
@@ -334,6 +384,42 @@ def _router_name(router: str, gamma: float | None) -> str:
     return mapping.get(router, "LengthRouter")
 
 
+def _gamma_values(gamma_min: float, gamma_max: float, gamma_step: float) -> list[float]:
+    if gamma_max < gamma_min:
+        raise ValueError("gamma_max must be >= gamma_min")
+    n_steps = int((gamma_max - gamma_min) / gamma_step)
+    return [round(gamma_min + i * gamma_step, 2) for i in range(n_steps + 1)]
+
+
+def _sweep_point(result) -> SweepPoint:
+    return SweepPoint(
+        gamma=result.gamma,
+        n_s=result.n_s,
+        n_l=result.n_l,
+        total_gpus=result.total_gpus,
+        annual_cost_kusd=result.annualised_cost_kusd,
+        p99_short_ms=result.p99_ttft_short_ms,
+        p99_long_ms=result.p99_ttft_long_ms,
+        slo_met=result.slo_met,
+        source=result.source,
+    )
+
+
+def _mixture_case_point(case) -> MixtureCasePoint:
+    return MixtureCasePoint(
+        case_id=case.case_id,
+        kind=case.kind,
+        lam=case.lam,
+        weights=case.weights,
+        best=_sweep_point(case.best) if case.best is not None else None,
+        baseline=_sweep_point(case.baseline) if case.baseline is not None else None,
+        slo_met=case.slo_met,
+        infeasible_reason=case.infeasible_reason,
+        annual_cost_delta_vs_nominal_kusd=case.annual_cost_delta_vs_nominal_kusd,
+        cost_sensitivity_pct=case.cost_sensitivity_pct,
+    )
+
+
 def _fleet_sim_result_to_model(result, slo_ms: float) -> SimResult:
     pool_results = []
     for pid, pool in result.pools.items():
@@ -387,6 +473,11 @@ async def run_job(job_id: str, request: JobRequest) -> None:
         if request.type == JobType.optimize:
             result = await asyncio.to_thread(_run_optimize, request.optimize)
             data["result_optimize"] = result.model_dump()
+        elif request.type == JobType.mixture_optimize:
+            result = await asyncio.to_thread(
+                _run_mixture_optimize, request.mixture_optimize
+            )
+            data["result_mixture_optimize"] = result.model_dump()
         elif request.type == JobType.simulate:
             result = await asyncio.to_thread(_run_simulate, request.simulate)
             data["result_simulate"] = result.model_dump()

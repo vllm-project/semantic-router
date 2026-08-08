@@ -1,0 +1,165 @@
+{
+  "schema_version": "fleet-sim.workload-archetype-forecast/v1alpha1",
+  "taxonomy_version": "fleet-sim.workload-archetype-taxonomy/v1alpha1",
+  "id": "drift-chat-to-agent-aggregates",
+  "version": "2026-07-18",
+  "description": "Content-free aggregate windows where demand drifts toward agent-heavy work.",
+  "source_mixture": "workload_mixture_nominal.json",
+  "generated_at_s": 240,
+  "max_staleness_s": 180,
+  "forecast_horizon_windows": 2,
+  "privacy": {
+    "content_free": true,
+    "min_requests_per_window": 100,
+    "allowed_dimensions": ["archetype_weights", "model_class", "region", "slo_class"],
+    "forbidden_dimensions": ["caller_id", "session_id", "domain", "raw_prompt", "request_id"]
+  },
+  "aggregate_windows": [
+    {
+      "start_s": 0,
+      "duration_s": 60,
+      "request_count": 1200,
+      "total_tokens": 2400000,
+      "p95_total_tokens": 5000,
+      "p99_ttft_ms": 425,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.7,
+        "multiturn-chat": 0.2,
+        "agent-heavy": 0.1
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 0.9,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    },
+    {
+      "start_s": 60,
+      "duration_s": 60,
+      "request_count": 1320,
+      "total_tokens": 2970000,
+      "p95_total_tokens": 6200,
+      "p99_ttft_ms": 440,
+      "model_class": "general-llm",
+      "slo_class": "interactive",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.23,
+        "agent-heavy": 0.17
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 0.9,
+        "weight_stddev": {
+          "interactive-chat": 0.02,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.02
+        }
+      }
+    },
+    {
+      "start_s": 120,
+      "duration_s": 60,
+      "request_count": 1440,
+      "total_tokens": 3600000,
+      "p95_total_tokens": 7600,
+      "p99_ttft_ms": 465,
+      "model_class": "general-llm",
+      "slo_class": "mixed",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.5,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.25
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.0,
+        "weight_stddev": {
+          "interactive-chat": 0.03,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.03
+        }
+      }
+    },
+    {
+      "start_s": 180,
+      "duration_s": 60,
+      "request_count": 1560,
+      "total_tokens": 4290000,
+      "p95_total_tokens": 9000,
+      "p99_ttft_ms": 490,
+      "model_class": "general-llm",
+      "slo_class": "mixed",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.4,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.35
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.1,
+        "weight_stddev": {
+          "interactive-chat": 0.03,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.03
+        }
+      }
+    }
+  ],
+  "holdout_windows": [
+    {
+      "start_s": 240,
+      "duration_s": 60,
+      "request_count": 1680,
+      "total_tokens": 5040000,
+      "p95_total_tokens": 10400,
+      "p99_ttft_ms": 510,
+      "model_class": "general-llm",
+      "slo_class": "mixed",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.3,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.45
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.2,
+        "weight_stddev": {
+          "interactive-chat": 0.03,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.03
+        }
+      }
+    },
+    {
+      "start_s": 300,
+      "duration_s": 60,
+      "request_count": 1800,
+      "total_tokens": 5700000,
+      "p95_total_tokens": 11600,
+      "p99_ttft_ms": 525,
+      "model_class": "general-llm",
+      "slo_class": "mixed",
+      "region": "global",
+      "archetype_weights": {
+        "interactive-chat": 0.25,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.5
+      },
+      "uncertainty": {
+        "arrival_rate_stddev": 1.3,
+        "weight_stddev": {
+          "interactive-chat": 0.03,
+          "multiturn-chat": 0.02,
+          "agent-heavy": 0.03
+        }
+      }
+    }
+  ]
+}
