@@ -465,12 +465,7 @@ func (s *KNNSelector) Load(path string) error {
 	if err != nil {
 		logging.Warnf("Failed to load KNN into Rust binding: %v (will use Go fallback)", err)
 	} else {
-		s.mu.Lock()
-		if s.mlKNN != nil {
-			s.mlKNN.Close()
-		}
-		s.mlKNN = mlKNN
-		s.mu.Unlock()
+		s.setMLKNN(mlKNN)
 	}
 
 	// Also parse into Go struct for metadata
@@ -551,12 +546,7 @@ func (s *KMeansSelector) Load(path string) error {
 	if err != nil {
 		logging.Warnf("Failed to load KMeans into Rust binding: %v (will use Go fallback)", err)
 	} else {
-		s.mu.Lock()
-		if s.mlKMeans != nil {
-			s.mlKMeans.Close()
-		}
-		s.mlKMeans = mlKMeans
-		s.mu.Unlock()
+		s.setMLKMeans(mlKMeans)
 	}
 
 	// Also parse into Go struct for metadata
@@ -657,12 +647,7 @@ func (s *SVMSelector) Load(path string) error {
 	if err != nil {
 		logging.Warnf("Failed to load SVM into Rust binding: %v (will use Go fallback)", err)
 	} else {
-		s.mu.Lock()
-		if s.mlSVM != nil {
-			s.mlSVM.Close()
-		}
-		s.mlSVM = mlSVM
-		s.mu.Unlock()
+		s.setMLSVM(mlSVM)
 	}
 
 	// Also parse into Go struct for metadata
