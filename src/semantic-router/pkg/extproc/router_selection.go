@@ -13,6 +13,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
+// createModelSelectorRegistries builds one selection registry per routing
+// recipe. Deliberately none of them is published to selection.SetGlobalRegistry
+// here — see publishRouterState. These registries belong to a candidate build
+// that a later step, or a failed warmup, can still discard and Close; publishing
+// now would leave the process-wide pointer at a closed registry whose rating
+// writes are silently dropped, while the previous router still serves.
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	embed := resolveSelectionEmbeddingFunc(cfg)
@@ -21,7 +27,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg, lt, embed)
 		registries[config.DefaultRecipeName] = registry
-		selection.SetGlobalRegistry(registry)
 		return registries, registry, lt, cancel
 	}
 
@@ -31,7 +36,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
-	selection.SetGlobalRegistry(defaultRegistry)
 	return registries, defaultRegistry, lt, cancel
 }
 
@@ -51,6 +55,11 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
+	// Deliberately not published to selection.SetGlobalRegistry here — see
+	// publishRouterState. This registry belongs to a candidate build that a
+	// later step, or a failed warmup, can still discard and Close; publishing
+	// it now would leave the process-wide pointer at a closed registry whose
+	// rating writes are silently dropped, while the previous router still serves.
 	registry := selectionFactory.CreateAll()
 
 	// Collect algorithm methods actually configured in decisions
