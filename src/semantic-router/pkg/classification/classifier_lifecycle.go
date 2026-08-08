@@ -56,6 +56,13 @@ func NewClassifier(
 // construction. Required and best-effort initializers are explicit task units so
 // router assembly can reason about lifecycle instead of relying on constructor
 // side effects.
+//
+// On failure it releases whatever the successful tasks acquired, leaving the
+// classifier uninitialized rather than half-connected. That cleanup belongs here
+// rather than in each caller: the tasks run in parallel, so a failure does not
+// imply nothing was acquired — the MCP category classifier can finish
+// connecting while a PII or jailbreak initializer fails — and every caller so
+// far discards the classifier on error, putting it beyond reach of any Close.
 func (c *Classifier) InitializeRuntime() error {
 	if c == nil {
 		return fmt.Errorf("classifier is nil")
@@ -75,6 +82,11 @@ func (c *Classifier) InitializeRuntime() error {
 		OnEvent:        logRuntimeInitializationEvent,
 	})
 	if err != nil {
+		if closeErr := c.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("classifier", "runtime_initialization_rollback_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return err
 	}
 
