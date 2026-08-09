@@ -21,7 +21,7 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details
+	cache_similarity, context_token_count, hallucination_span_details, recipe
 `
 
 type postgresRowScanner interface {
@@ -74,6 +74,7 @@ type postgresRecordRow struct {
 	turnIndex                    sql.NullInt64
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
+	recipe                       sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -195,6 +196,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.CacheSimilarity,
 		record.record.ContextTokenCount,
 		record.hallucinationSpanDetailsJSON,
+		emptyStringSQL(record.record.Recipe),
 	}
 }
 
@@ -287,6 +289,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.CacheSimilarity,
 		&row.record.ContextTokenCount,
 		&row.hallucinationSpanDetailsJSON,
+		&row.recipe,
 	}
 }
 
@@ -314,6 +317,7 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.baselineModel,
 	)
 	row.assignReplaySessionIdentifiers()
+	row.assignReplayRecipe()
 	return row.record, nil
 }
 
@@ -366,5 +370,13 @@ func (row *postgresRecordRow) assignReplaySessionIdentifiers() {
 	}
 	if row.conversationID.Valid {
 		row.record.ConversationID = row.conversationID.String
+	}
+}
+
+// assignReplayRecipe restores routing recipe identity. Rows written before the
+// recipe column existed scan as NULL and leave Record.Recipe empty.
+func (row *postgresRecordRow) assignReplayRecipe() {
+	if row.recipe.Valid {
+		row.record.Recipe = row.recipe.String
 	}
 }
