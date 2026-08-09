@@ -80,7 +80,7 @@ func TestPostgresRecordRowDecodesMissingRecipe(t *testing.T) {
 func TestPostgresCreateTableAddsRecipeColumn(t *testing.T) {
 	query := postgresCreateTableQuery(DefaultPostgresTableName)
 
-	want := "ALTER TABLE " + DefaultPostgresTableName + " ADD COLUMN IF NOT EXISTS recipe VARCHAR(255);"
+	want := "ALTER TABLE " + DefaultPostgresTableName + " ADD COLUMN IF NOT EXISTS recipe TEXT;"
 	if !strings.Contains(query, want) {
 		t.Errorf("create-table query is missing the non-destructive recipe migration:\nwant substring: %s", want)
 	}

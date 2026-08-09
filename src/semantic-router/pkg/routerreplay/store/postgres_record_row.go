@@ -9,7 +9,7 @@ import (
 )
 
 const postgresRecordSelectColumns = `
-	id, timestamp, request_id, recipe, decision, decision_tier, decision_priority, category,
+	id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 	original_model, selected_model, reasoning_mode,
 	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 	request_body, response_body, response_status,
@@ -70,7 +70,6 @@ type postgresRecordRow struct {
 	costSavings                  sql.NullFloat64
 	currency                     sql.NullString
 	baselineModel                sql.NullString
-	recipe                       sql.NullString
 	sessionID                    sql.NullString
 	turnIndex                    sql.NullInt64
 	previousResponseID           sql.NullString
@@ -140,7 +139,6 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.ID,
 		record.record.Timestamp,
 		record.record.RequestID,
-		emptyStringSQL(record.record.Recipe),
 		record.record.Decision,
 		record.record.DecisionTier,
 		record.record.DecisionPriority,
@@ -234,7 +232,6 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.ID,
 		&row.record.Timestamp,
 		&row.record.RequestID,
-		&row.recipe,
 		&row.record.Decision,
 		&row.record.DecisionTier,
 		&row.record.DecisionPriority,
@@ -319,7 +316,6 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.currency,
 		row.baselineModel,
 	)
-	row.assignReplayRecipe()
 	row.assignReplaySessionIdentifiers()
 	row.assignReplayRecipe()
 	return row.record, nil
@@ -360,12 +356,6 @@ func (row *postgresRecordRow) unmarshalDecodedJSON() error {
 		return fmt.Errorf("failed to unmarshal outcomes: %w", err)
 	}
 	return nil
-}
-
-func (row *postgresRecordRow) assignReplayRecipe() {
-	if row.recipe.Valid {
-		row.record.Recipe = row.recipe.String
-	}
 }
 
 func (row *postgresRecordRow) assignReplaySessionIdentifiers() {

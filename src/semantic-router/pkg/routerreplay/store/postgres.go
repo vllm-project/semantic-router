@@ -24,7 +24,7 @@ const DefaultPostgresTableName = "router_replay_records"
 // guarded by TestPostgresInsertQueryColumnArgsAlignment.
 const postgresInsertQueryTemplate = `
 		INSERT INTO %s (
-			id, timestamp, request_id, recipe, decision, decision_tier, decision_priority, category,
+			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
 			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 			request_body, response_body, response_status,
@@ -36,7 +36,7 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
-			cache_similarity, context_token_count, hallucination_span_details
+			cache_similarity, context_token_count, hallucination_span_details, recipe
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61)
 	`
 
