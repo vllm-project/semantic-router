@@ -215,6 +215,8 @@ def test_sensitive_env_names_covers_config_named_credentials(tmp_path):
     assert "HF_TOKEN" in sensitive_env_names(config)
     assert "HF_ENDPOINT" not in sensitive_env_names(config)
     assert "GEMINI_API_KEY" not in sensitive_env_names(None)
+
+
 def test_dashboard_open_bootstrap_defaults_true_without_admin(monkeypatch):
     monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
     monkeypatch.delenv("DASHBOARD_ADMIN_EMAIL", raising=False)
