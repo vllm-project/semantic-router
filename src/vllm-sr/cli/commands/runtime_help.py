@@ -68,4 +68,7 @@ Examples:
 
     # Preserve CPU settings for router internal signal models on AMD
     VLLM_SR_AMD_PRESERVE_CPU=1 vllm-sr serve --platform amd
+
+    # Reserve one AMD GPU for router-internal signal models
+    VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 """

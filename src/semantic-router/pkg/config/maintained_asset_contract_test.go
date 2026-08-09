@@ -194,22 +194,6 @@ func assertRecipeDirectoryContract(t *testing.T, root, name string) {
 	assertRecipeProbeManifest(t, name)
 }
 
-func assertRecipeProbeManifest(t *testing.T, name string) {
-	t.Helper()
-	rel := filepath.ToSlash(filepath.Join("config", "recipes", name, "probes.yaml"))
-	manifest := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
-	assets := mustAssetMapValue(t, manifest, "routing_assets", rel)
-	wantYAML := filepath.ToSlash(filepath.Join("config", "recipes", name, "config.yaml"))
-	wantDSL := filepath.ToSlash(filepath.Join("config", "recipes", name, "recipe.dsl"))
-	if assets["yaml"] != wantYAML || assets["dsl"] != wantDSL {
-		t.Fatalf("%s routing_assets = %+v, want yaml=%q dsl=%q", rel, assets, wantYAML, wantDSL)
-	}
-	decisions, ok := manifest["decisions"].([]interface{})
-	if !ok || len(decisions) == 0 {
-		t.Fatalf("%s must contain a non-empty decisions list", rel)
-	}
-}
-
 func readMaintainedConfigAsset(t *testing.T, rel string) []byte {
 	t.Helper()
 	return mustReadRepoFile(t, rel)

@@ -352,6 +352,13 @@ const (
 	AuthzUserGroups = "x-authz-user-groups"
 )
 
+// Internal Request Authentication
+const (
+	// VSRInternalAuth authenticates in-process request context that must not
+	// be accepted from external callers or forwarded to model backends.
+	VSRInternalAuth = "x-vsr-internal-auth"
+)
+
 // Looper Request Headers
 // These headers are added to looper internal requests to identify them
 // and allow the extproc to lookup decision configuration and apply plugins.

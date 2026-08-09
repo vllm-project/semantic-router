@@ -17,6 +17,7 @@ export interface DeployStatusResponse {
 
 export const initialDSLState: DSLState = {
   dslSource: '',
+  renderedYamlOutput: '',
   yamlOutput: '',
   crdOutput: '',
   diagnostics: [],

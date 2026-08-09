@@ -188,7 +188,7 @@ SIGNAL embedding code_general {
 
 SIGNAL embedding complex_stem {
   threshold: 0.77
-  candidates: ["Compare modeling approaches for turbulent fluid simulation.", "Explain the trade-offs between battery chemistries for grid storage.", "Analyze a protein-folding pipeline and its computational bottlenecks.", "Design an anomaly-detection method for sensor networks."]
+  candidates: ["Compare modeling approaches for turbulent fluid simulation.", "Explain the trade-offs between battery chemistries for grid storage.", "Analyze a protein-folding pipeline and its computational bottlenecks.", "Design an anomaly-detection method for sensor networks.", "In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism."]
   aggregation_method: "max"
 }
 

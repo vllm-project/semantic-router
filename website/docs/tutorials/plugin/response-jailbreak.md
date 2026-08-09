@@ -4,7 +4,7 @@
 
 `response_jailbreak` is a route-local plugin for screening the model response before it is returned.
 
-It aligns to `config/plugin/response-jailbreak/strict.yaml`.
+It aligns to `config/fragments/plugin/response-jailbreak/strict.yaml`.
 
 ## Key Advantages
 

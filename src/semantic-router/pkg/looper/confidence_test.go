@@ -1,10 +1,50 @@
 package looper
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestFormatConfidenceStreamingResponsePublishesOnlySelectedCandidate(t *testing.T) {
+	looper := NewConfidenceLooper(&config.LooperConfig{})
+	first := &ModelResponse{
+		Raw:         []byte("data: first candidate\n\ndata: [DONE]\n\n"),
+		Model:       "small",
+		IsStreaming: true,
+		Usage:       TokenUsage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12},
+	}
+	selected := &ModelResponse{
+		Raw:         []byte("data: selected candidate\n\ndata: [DONE]\n\n"),
+		Model:       "large",
+		IsStreaming: true,
+		Usage:       TokenUsage{PromptTokens: 20, CompletionTokens: 3, TotalTokens: 23},
+	}
+
+	resp, err := looper.formatConfidenceStreamingResponse(
+		&AggregatedResponse{
+			Models:          []string{"small", "large"},
+			Responses:       []*ModelResponse{first, selected},
+			CombinedContent: "selected candidate",
+			FinalModel:      "large",
+		},
+		[]string{"small", "large"},
+		2,
+	)
+	if err != nil {
+		t.Fatalf("format confidence streaming response: %v", err)
+	}
+	if strings.Contains(string(resp.Body), "first candidate") {
+		t.Fatalf("confidence stream leaked a rejected candidate: %s", resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), "selected candidate") {
+		t.Fatalf("confidence stream omitted the selected candidate: %s", resp.Body)
+	}
+	if resp.Usage.TotalTokens != 35 {
+		t.Fatalf("confidence usage = %+v, want aggregate total 35", resp.Usage)
+	}
+}
 
 func TestSortModelRefsBySize(t *testing.T) {
 	modelParams := map[string]config.ModelParams{
@@ -100,6 +140,28 @@ func TestConfidenceEvaluator_Creation(t *testing.T) {
 
 			if eval.IsAutoMixEntailment() != tt.wantAutoMix {
 				t.Errorf("IsAutoMixEntailment() = %v, want %v", eval.IsAutoMixEntailment(), tt.wantAutoMix)
+			}
+		})
+	}
+}
+
+func TestConfidenceModelCallStreamingRequiresNoLogprobs(t *testing.T) {
+	for _, test := range []struct {
+		method string
+		want   bool
+	}{
+		{method: "avg_logprob", want: false},
+		{method: "margin", want: false},
+		{method: "hybrid", want: false},
+		{method: "self_verify", want: true},
+		{method: MethodAutoMixEntailment, want: true},
+	} {
+		t.Run(test.method, func(t *testing.T) {
+			evaluator := NewConfidenceEvaluator(&config.ConfidenceAlgorithmConfig{
+				ConfidenceMethod: test.method,
+			})
+			if got := confidenceModelCallStreaming(true, evaluator); got != test.want {
+				t.Fatalf("confidenceModelCallStreaming(%q) = %v, want %v", test.method, got, test.want)
 			}
 		})
 	}

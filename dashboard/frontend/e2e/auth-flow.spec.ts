@@ -471,6 +471,127 @@ test.describe("Dashboard auth flow", () => {
     await expect(page).toHaveURL(/\/setup$/, { timeout: 12000 });
   });
 
+  test("bootstrap registration with complete configuration redirects to dashboard", async ({
+    page,
+  }) => {
+    test.slow();
+    const issuedToken = "complete-config-bootstrap-token";
+    let registerRequestCount = 0;
+
+    await page.route("**/api/setup/state", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(baseSetupState),
+      });
+    });
+
+    await page.route("**/api/auth/bootstrap/can-register", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canRegister: true }),
+      });
+    });
+
+    await page.route("**/api/auth/bootstrap/register", async (route) => {
+      registerRequestCount += 1;
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: issuedToken,
+          user: {
+            id: "user-admin-1",
+            email: "ada@example.com",
+            name: "Ada Router",
+            role: "admin",
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/auth/me", async (route) => {
+      if (route.request().headers().authorization !== `Bearer ${issuedToken}`) {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user: {
+            id: "user-admin-1",
+            email: "ada@example.com",
+            name: "Ada Router",
+            role: "admin",
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/settings", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          readonlyMode: false,
+          setupMode: false,
+          platform: "",
+          envoyUrl: "",
+        }),
+      });
+    });
+
+    await page.route("**/api/status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          overall: "healthy",
+          deployment_type: "local",
+          services: [],
+        }),
+      });
+    });
+
+    await page.route("**/api/router/config/all", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signals: {},
+          decisions: [],
+          providers: { models: [] },
+          plugins: {},
+        }),
+      });
+    });
+
+    await page.goto("/login");
+
+    await expect(
+      page.getByRole("heading", {
+        name: "Name your first administrator.",
+      }),
+    ).toBeVisible();
+
+    await page.getByLabel("What should we call you?").fill("Ada Router");
+    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByLabel("Admin email").fill("ada@example.com");
+    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByLabel("Password").fill("future-password");
+
+    await Promise.all([
+      page.waitForURL(/\/auth\/transition\?to=%2Fdashboard$/),
+      page.getByText(transitionCopyPattern).waitFor({ state: "visible" }),
+      page.getByRole("button", { name: "Create admin and continue" }).click(),
+    ]);
+
+    await expect.poll(() => registerRequestCount).toBe(1);
+    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
+  });
+
   test("login preserves the original protected route through the transition page", async ({
     page,
   }) => {

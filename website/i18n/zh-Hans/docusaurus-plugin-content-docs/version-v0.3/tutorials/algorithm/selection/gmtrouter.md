@@ -11,7 +11,7 @@ translation:
 
 `gmtrouter` 基于历史与学习模型的个性化路由选择算法。
 
-对应 `config/algorithm/selection/gmtrouter.yaml`。
+对应 `config/fragments/algorithm/selection/gmtrouter.yaml`。
 
 ## 主要优势
 

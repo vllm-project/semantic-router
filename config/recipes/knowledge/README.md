@@ -6,11 +6,13 @@ measured domain uplift between a local 7B lane and a frontier 72B lane.
 
 ## Policy
 
-- `escalate_72b` handles domains whose measured `escalate_vs_keep` uplift is
-  at least `2.0`.
-- `keep_7b` handles lower-uplift domains locally.
-- `kb_metric` feeds one derived score and threshold mapping; individual `kb`
-  signals make the selected domain auditable in Eval output.
+- `escalate_72b` directly matches the audited high-uplift labels: biology,
+  business, computer science, economics, history, math, other, philosophy, and
+  psychology.
+- `keep_7b` handles lower-uplift domains through the `escalate_vs_keep` metric's
+  `no_escalation` projection.
+- This asymmetry is intentional: the selected `kb` label makes escalation
+  explainable, while the metric provides a conservative local fallback.
 - Small deterministic boundary guards cover terms such as matrix invertibility,
   blood cells, and legal consideration where adjacent MMLU labels can be
   semantically closer than the policy category. They correct known ambiguity;
@@ -24,7 +26,8 @@ policy shape.
 
 - `config.yaml` is the runnable canonical configuration.
 - `recipe.dsl` is the equivalent routing authoring surface.
-- `probes.yaml` covers both escalation and local domains.
+- `probes.yaml` covers every escalation/local label family, including `other`,
+  deterministic keyword overrides, and the per-label-versus-metric boundary.
 
 ```bash
 vllm-sr validate --config config/recipes/knowledge/config.yaml

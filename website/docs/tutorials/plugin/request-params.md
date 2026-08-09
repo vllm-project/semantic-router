@@ -4,7 +4,7 @@
 
 `request_params` is a route-local plugin that validates and trims OpenAI Chat Completions request bodies before they are forwarded to backends.
 
-It aligns to `config/plugin/request-params/budget-tier.yaml`.
+It aligns to `config/fragments/plugin/request-params/budget-tier.yaml`.
 
 ## Key Advantages
 

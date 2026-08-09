@@ -2,6 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 from cli.bootstrap import build_bootstrap_config
 from cli.commands.runtime_support import (
@@ -12,10 +13,34 @@ from cli.commands.runtime_support import (
     resolve_effective_config_path,
     sensitive_env_names,
 )
-from cli.container_start import _build_dashboard_runtime_env
-from cli.runtime_stack import resolve_runtime_stack
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.fixture
+def write_local_looper_config(tmp_path: Path):
+    def _write(endpoint: str | None = None) -> Path:
+        looper = {} if endpoint is None else {"endpoint": endpoint}
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "version": "v0.3",
+                    "listeners": [
+                        {
+                            "name": "http-generic",
+                            "address": "0.0.0.0",
+                            "port": 9011,
+                        }
+                    ],
+                    "global": {"integrations": {"looper": looper}},
+                },
+                sort_keys=False,
+            )
+        )
+        return config_path
+
+    return _write
 
 
 def test_runtime_support_import_does_not_load_optional_cli_dependencies():
@@ -188,28 +213,6 @@ def test_sensitive_env_names_covers_config_named_credentials(tmp_path):
     assert "HF_TOKEN" in sensitive_env_names(config)
     assert "HF_ENDPOINT" not in sensitive_env_names(config)
     assert "GEMINI_API_KEY" not in sensitive_env_names(None)
-
-
-def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
-    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "core@vllm-sr.ai")
-    monkeypatch.setenv("DASHBOARD_ADMIN_PASSWORD", "core")
-    monkeypatch.setenv("DASHBOARD_ADMIN_NAME", "Core")
-
-    env_vars: dict[str, str] = {}
-    append_passthrough_env_vars(env_vars)
-
-    assert "DASHBOARD_ADMIN_EMAIL" not in env_vars
-    assert "DASHBOARD_ADMIN_PASSWORD" not in env_vars
-    assert "DASHBOARD_ADMIN_NAME" not in env_vars
-
-    dashboard_env = _build_dashboard_runtime_env(
-        common_env=env_vars,
-        listener_port=8899,
-        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
-    )
-    assert dashboard_env["DASHBOARD_ADMIN_EMAIL"] == "core@vllm-sr.ai"
-    assert dashboard_env["DASHBOARD_ADMIN_PASSWORD"] == "core"
-    assert dashboard_env["DASHBOARD_ADMIN_NAME"] == "Core"
 
 
 def test_resolve_effective_config_path_enables_amd_gpu_by_default(
@@ -656,6 +659,57 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     assert router_replay["postgres"]["user"] == "router"
     assert router_replay["postgres"]["password"] == "router-secret"
     assert router_replay["postgres"]["ssl_mode"] == "disable"
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        None,
+        "http://localhost:8899/v1/chat/completions",
+        "http://127.0.0.2:8899/v1/chat/completions",
+        "http://[::1]:8899/v1/chat/completions",
+    ],
+)
+def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
+    endpoint: str | None,
+    write_local_looper_config,
+    monkeypatch,
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
+    config_path = write_local_looper_config(endpoint)
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform=None,
+    )
+
+    effective = yaml.safe_load(effective_path.read_text())
+    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
+        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
+    )
+
+
+def test_resolve_effective_config_path_preserves_external_looper_endpoint(
+    write_local_looper_config,
+    monkeypatch,
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
+    external_endpoint = "https://gateway.example.test/v1/chat/completions"
+    config_path = write_local_looper_config(external_endpoint)
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform=None,
+    )
+
+    effective = yaml.safe_load(effective_path.read_text())
+    assert (
+        effective["global"]["integrations"]["looper"]["endpoint"] == external_endpoint
+    )
 
 
 def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(

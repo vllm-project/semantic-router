@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-在**多种等价信号匹配**应导向同一路由时使用 `config/decision/or/`。
+在**多种等价信号匹配**应导向同一路由时使用 `config/fragments/decision/or/`。
 
 `OR` 适用于多个独立信号应得到相同路由结果的情形。
 
@@ -36,7 +36,7 @@ translation:
 
 ## 配置
 
-源片段：`config/decision/or/business-or-law.yaml`
+源片段：`config/fragments/decision/or/business-or-law.yaml`
 
 ```yaml
 routing:

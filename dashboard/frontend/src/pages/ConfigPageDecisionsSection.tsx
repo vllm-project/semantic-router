@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import styles from './ConfigPage.module.css'
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfirmDialog from '../components/ConfirmDialog'
+import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
-import { DataTable, type Column } from '../components/DataTable'
+import { DataTable } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type {
@@ -21,11 +22,12 @@ import {
   conditionHasNestedRules,
   decisionRulesForSave,
   mergeDecisionForSave,
-  TABLE_COLUMN_WIDTH,
 } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
+import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import { decisionColumns } from './configPageDecisionTable'
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
@@ -39,6 +41,8 @@ interface ConfigPageDecisionsSectionProps {
   removeDecisionByName: (cfg: ConfigData, targetName: string) => void
   models: NormalizedModel[]
 }
+
+type DecisionRow = DecisionConfig
 
 export default function ConfigPageDecisionsSection({
   config,
@@ -55,61 +59,25 @@ export default function ConfigPageDecisionsSection({
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
-  const decisions = config?.decisions || []
+  const {
+    applyScopedConfig,
+    routingScopes,
+    scopedConfig,
+    selectedScope,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useRoutingScopeManager(config)
+  useEffect(() => {
+    setDecisionPendingDelete(null)
+    setDecisionDeleteError(null)
+  }, [selectedScopeId])
+  const decisions = scopedConfig?.decisions || []
 
   const filteredDecisions = decisions.filter(
     (decision) =>
       decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
       decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase()),
   )
-
-  type DecisionRow = NonNullable<ConfigData['decisions']>[number]
-  const decisionsColumns: Column<DecisionRow>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'priority',
-      header: 'Priority',
-      width: TABLE_COLUMN_WIDTH.compact,
-      align: 'center',
-      sortable: true,
-      render: (row) => (
-        <span className={`${styles.tableMetaBadge} ${styles.tableMetaBadgeMono}`}>
-          P{row.priority}
-        </span>
-      ),
-    },
-    {
-      key: 'conditions',
-      header: 'Conditions',
-      width: TABLE_COLUMN_WIDTH.medium,
-      render: (row) => {
-        const count = row.rules?.conditions?.length || 0
-        return (
-          <span>
-            {count} {count === 1 ? 'condition' : 'conditions'}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'models',
-      header: 'Models',
-      width: TABLE_COLUMN_WIDTH.medium,
-      render: (row) => {
-        const count = row.modelRefs?.length || 0
-        return (
-          <span>
-            {count} {count === 1 ? 'model' : 'models'}
-          </span>
-        )
-      },
-    },
-  ]
 
   const renderDecisionModelRefSummary = (
     ref: DecisionConfig['modelRefs'][number],
@@ -794,7 +762,10 @@ export default function ConfigPageDecisionsSection({
         plugins,
       })
 
-      const newConfig: ConfigData = cloneConfigData(config)
+      if (!scopedConfig) {
+        throw new Error('Routing profile not loaded yet.')
+      }
+      const newConfig: ConfigData = cloneConfigData(scopedConfig)
       newConfig.decisions = [...(newConfig.decisions || [])]
 
       if (mode === 'edit' && decision) {
@@ -802,7 +773,7 @@ export default function ConfigPageDecisionsSection({
       }
 
       newConfig.decisions.push(newDecision)
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
     }
 
     openEditModal<DecisionFormState>(
@@ -833,9 +804,12 @@ export default function ConfigPageDecisionsSection({
     setDecisionDeletePending(true)
     setDecisionDeleteError(null)
     try {
-      const newConfig: ConfigData = cloneConfigData(config)
+      if (!scopedConfig) {
+        throw new Error('Routing profile not loaded yet.')
+      }
+      const newConfig: ConfigData = cloneConfigData(scopedConfig)
       removeDecisionByName(newConfig, decisionPendingDelete.name)
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
       setDecisionPendingDelete(null)
     } catch (error) {
       setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')
@@ -848,9 +822,15 @@ export default function ConfigPageDecisionsSection({
     <ConfigPageManagerLayout
       title="Decisions"
       description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
+      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>
+          <RoutingScopeSelector
+            scopes={routingScopes}
+            value={selectedScopeId}
+            onChange={setSelectedScopeId}
+          />
           <TableHeader
             title="Routing Decisions"
             count={decisions.length}
@@ -863,7 +843,7 @@ export default function ConfigPageDecisionsSection({
             variant="embedded"
           />
           <DataTable
-            columns={decisionsColumns}
+            columns={decisionColumns}
             data={filteredDecisions}
             keyExtractor={(row) => row.name}
             onView={handleViewDecision}

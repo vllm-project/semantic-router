@@ -201,6 +201,7 @@ routing:
             max_completion_tokens: 2048
           max_steps: 4
           max_parallel: 3
+          min_successful_responses: 2
           max_completion_tokens: 8192
           include_intermediate_responses: true
           on_error: skip
@@ -240,11 +241,18 @@ routing:
         - model: gpt55-worker
           use_reasoning: true
           reasoning_effort: medium
+        - model: qwen-coordinator
+          use_reasoning: false
       algorithm:
         type: fusion
         fusion:
           model: qwen-coordinator
+          analysis_models:
+            - opus48-worker
+            - gemini31-worker
+            - gpt55-worker
           max_concurrent: 3
+          min_successful_responses: 2
           include_analysis: true
           include_intermediate_responses: true
           on_error: skip

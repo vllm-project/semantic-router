@@ -261,27 +261,37 @@ bindings that affect routing remain recipe-local.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 
+For the local split runtime, the generated effective config points a missing or
+loopback `global.integrations.looper.endpoint` at the stack-scoped Envoy
+listener. Explicit external endpoints and the source config remain unchanged.
+
 ## Repository config assets
 
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:
 
 - `config/config.yaml`: exhaustive canonical reference config
-- `config/signal/`: reusable `routing.signals` fragments
-- `config/decision/`: reusable `routing.decisions` rule-shape fragments
-- `config/algorithm/`: reusable `decision.algorithm` snippets
-- `config/plugin/`: reusable route-plugin snippets
+- `config/fragments/signal/`: reusable `routing.signals` fragments
+- `config/fragments/decision/`: reusable `routing.decisions` rule-shape fragments
+- `config/fragments/algorithm/`: reusable `decision.algorithm` snippets
+- `config/fragments/plugin/`: reusable route-plugin snippets
 
-`config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
-`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.
-`config/plugin/` is organized one plugin or reusable bundle per directory.
+`config/fragments/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
+`config/fragments/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.
+The ReMoM algorithm accepts an optional `max_completion_tokens` budget for each internal model call.
+`config/fragments/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
+
+The four fragment families previously lived directly under `config/`. Update
+repository links and automation to use `config/fragments/...`. This is an asset
+path migration only; the YAML configuration schema and runtime field names do
+not change.
 
 Latest tutorials follow the same taxonomy:
 
-- `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/signal/`
-- `tutorials/decision/` for `config/decision/`
-- `tutorials/algorithm/` for `config/algorithm/`, with one page per algorithm
-- `tutorials/plugin/` for `config/plugin/`, with one page per plugin
+- `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/fragments/signal/`
+- `tutorials/decision/` for `config/fragments/decision/`
+- `tutorials/algorithm/` for `config/fragments/algorithm/`, with one page per algorithm
+- `tutorials/plugin/` for `config/fragments/plugin/`, with one page per plugin
 - `tutorials/global/` for sparse router-wide overrides under `global:`
 
 Repo-owned runtime and harness assets now live outside `config/`:
@@ -549,4 +559,4 @@ Wire `POSTGRES_PASSWORD` from a Secret into the router Deployment environment, t
 2. CLI import of a full YAML file preserves the default routing profile,
    entrypoint mappings, and isolated recipes.
 3. Keep endpoints, API keys, listeners, and `global` in YAML.
-4. Reusable routing fragments now live under `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/`.
+4. Reusable routing fragments now live under `config/fragments/signal/`, `config/fragments/decision/`, `config/fragments/algorithm/`, and `config/fragments/plugin/`.

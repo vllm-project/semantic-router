@@ -30,7 +30,8 @@ Always prefer the running server as the source of truth for field-level details:
 http://localhost:8080
 ```
 
-With local `vllm-sr serve`, the apiserver is usually reachable on that host and port.
+With local `vllm-sr serve`, the apiserver is usually reachable at
+`http://localhost:8080`.
 Category names, model IDs, and decisions in the sample responses below depend on
 your recipe and will differ per deployment.
 
@@ -153,6 +154,9 @@ Example response (fields vary by recipe):
 | `POST` | `/v1/router/outcomes` | Submit Router Learning outcome linked to a replay id |
 
 ### Router config and recipes
+
+Start with `GET /config/router` to read the active canonical document and its
+ETag before applying updates.
 
 | Method | Path | Description |
 | --- | --- | --- |
