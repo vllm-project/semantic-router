@@ -5,4 +5,5 @@
 @import './shell.css';
 @import './docs.css';
 @import './blog.css';
+@import './search.css';
 @import 'katex/dist/katex.min.css';

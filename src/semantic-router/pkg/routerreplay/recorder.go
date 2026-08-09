@@ -2,6 +2,7 @@ package routerreplay
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,6 +143,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.Timestamp = time.Now().UTC()
 	}
 
+	// Enforce capture switches and apply body truncation limits.
 	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
 		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
 	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
@@ -166,14 +168,8 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	if max <= 0 {
 		return
 	}
-	if len(rec.Prompt) > max {
-		rec.Prompt = rec.Prompt[:max]
-		rec.PromptTruncated = true
-	}
-	if len(rec.ToolDefinitions) > max {
-		rec.ToolDefinitions = rec.ToolDefinitions[:max]
-		rec.ToolDefinitionsTruncated = true
-	}
+	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
@@ -218,12 +214,11 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 // payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
-	if len(step.Arguments) > max {
-		step.Arguments = step.Arguments[:max]
-		step.Truncated = true
-	}
-	if len(step.Output) > max {
-		step.Output = step.Output[:max]
+	args, t1 := truncateString(step.Arguments, max)
+	out, t2 := truncateString(step.Output, max)
+	step.Arguments = args
+	step.Output = out
+	if t1 || t2 {
 		step.Truncated = true
 	}
 }
@@ -325,7 +320,7 @@ func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) 
 		return "", false
 	}
 	if len(body) > maxBytes {
-		return body[:maxBytes], true
+		return strings.Clone(body[:maxBytes]), true
 	}
 	return body, truncated
 }
@@ -335,6 +330,13 @@ func truncateBody(body []byte, maxBytes int) (string, bool) {
 		return string(body), false
 	}
 	return string(body[:maxBytes]), true
+}
+
+func truncateString(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s, false
+	}
+	return strings.Clone(s[:maxBytes]), true
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {
