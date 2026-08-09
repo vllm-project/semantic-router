@@ -3,6 +3,7 @@
 `config/` is now the user-facing config surface only.
 
 - `config/config.yaml`: exhaustive canonical reference config
+- `config/quickstart.yaml`: smallest maintained config that passes validation; model-free keyword routing for first-run evaluation (#2690), not a production baseline
 - `config/signal/`: reusable `routing.signals` fragments
 - `config/decision/`: reusable `routing.decisions` rule-shape fragments
 - `config/algorithm/`: reusable `decision.algorithm` snippets
