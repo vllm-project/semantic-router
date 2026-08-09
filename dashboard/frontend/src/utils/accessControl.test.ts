@@ -7,7 +7,6 @@ import {
   canDeployConfig,
   canManageMCP,
   canManageOpenClaw,
-  canManageSecurity,
   canManageUsers,
   canRunEvaluation,
   canViewUsers,
@@ -75,8 +74,6 @@ describe('config write access', () => {
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
-    expect(canManageSecurity({ role: 'write' })).toBe(false)
-    expect(canManageSecurity({ role: 'admin' })).toBe(true)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {

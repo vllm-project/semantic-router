@@ -194,9 +194,11 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
+		// The retired security surface keeps the generic authenticated read requirement, so
+		// its 410 cannot be reached anonymously and cannot mutate anything.
 		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
-		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
-		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
+		{method: http.MethodPut, path: "/api/security/policy", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermConfigRead},
 	}
 
 	for _, tc := range testCases {

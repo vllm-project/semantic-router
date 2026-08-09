@@ -111,8 +111,8 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   },
   {
     key: 'integrations',
-    label: 'Integrations & Policy',
-    description: 'Connect external capabilities and enforce request-path controls.',
+    label: 'Integrations',
+    description: 'Connect external capabilities to the control plane.',
     sections: [
       {
         title: 'Integrations',
@@ -121,11 +121,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
           { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
           { kind: 'route', label: 'ClawOS', to: '/clawos' },
         ],
-      },
-      {
-        title: 'Policy',
-        description: 'Review the security controls applied around routing.',
-        items: [{ kind: 'route', label: 'Security Policy', to: '/security' }],
       },
     ],
   },

@@ -12,7 +12,6 @@ export type ShellRoutePage =
   | 'logs'
   | 'monitoring'
   | 'playground'
-  | 'security'
   | 'status'
   | 'topology'
   | 'tracing'
@@ -53,7 +52,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/builder', page: 'builder' },
   { path: '/clawos', page: 'clawos' },
   { path: '/users', page: 'users' },
-  { path: '/security', page: 'security' },
 ]
 
 export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
