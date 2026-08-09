@@ -7,8 +7,10 @@ from cli.bootstrap import build_bootstrap_config
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
+    config_env_references,
     configure_runtime_override_env_vars,
     resolve_effective_config_path,
+    sensitive_env_names,
 )
 from cli.container_start import _build_dashboard_runtime_env
 from cli.runtime_stack import resolve_runtime_stack
@@ -84,6 +86,108 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
 
     assert env_vars["SR_LOG_LEVEL"] == "debug"
     assert env_vars["SR_LOG_ENCODING"] == "console"
+
+
+def test_append_passthrough_env_vars_forwards_keys_named_by_the_config(
+    monkeypatch, tmp_path
+):
+    """api_key_env is free-form, so a provider key outside the static rules must still reach the container."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "models": [{"name": "gemini", "api_key_env": "GEMINI_API_KEY"}]
+                },
+                "global": {
+                    "stores": {"vector_store": {"password": "${VALKEY_PASSWORD}"}}
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("GEMINI_API_KEY", "gk-test")
+    monkeypatch.setenv("VALKEY_PASSWORD", "vp-test")
+    monkeypatch.delenv("UNREFERENCED_API_KEY", raising=False)
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars, config)
+
+    assert env_vars["GEMINI_API_KEY"] == "gk-test"
+    assert env_vars["VALKEY_PASSWORD"] == "vp-test"
+    assert "UNREFERENCED_API_KEY" not in env_vars
+
+
+def test_config_env_references_reads_api_key_env_and_interpolations(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {"models": [{"api_key_env": "MISTRAL_API_KEY"}]},
+                "embedding_models": {"endpoint": {"api_key_env": "EMBEDDING_API_KEY"}},
+                "note": "uses ${REDIS_AUTH_TOKEN} at runtime",
+            }
+        )
+    )
+
+    assert config_env_references(config) == {
+        "MISTRAL_API_KEY",
+        "EMBEDDING_API_KEY",
+        "REDIS_AUTH_TOKEN",
+    }
+    assert config_env_references(None) == set()
+    assert config_env_references(tmp_path / "missing.yaml") == set()
+
+
+def test_config_env_references_excludes_process_identity_vars(tmp_path):
+    """A config referencing ${PATH}/${HOME} must not pull host process state into the container."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "note": "installed under ${HOME}/.cache, resolved via ${PATH}",
+                "providers": {"models": [{"api_key_env": "MISTRAL_API_KEY"}]},
+            }
+        )
+    )
+
+    refs = config_env_references(config)
+    assert refs == {"MISTRAL_API_KEY"}
+
+
+def test_config_env_references_excludes_cli_controlled_override_vars(tmp_path):
+    """A config that happens to mention a CLI override var must not preempt the CLI's own default."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump({"note": "see ${DISABLE_DASHBOARD} and ${DASHBOARD_PLATFORM}"})
+    )
+
+    assert config_env_references(config) == set()
+
+
+def test_append_passthrough_env_vars_does_not_forward_process_identity_vars(
+    monkeypatch, tmp_path
+):
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({"note": "runs from ${PATH}"}))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    env_vars: dict[str, str] = {}
+    append_passthrough_env_vars(env_vars, config)
+
+    assert "PATH" not in env_vars
+
+
+def test_sensitive_env_names_covers_config_named_credentials(tmp_path):
+    """A key the config names must be treated as a secret, not inlined into a manifest."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump({"providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]}})
+    )
+
+    assert "GEMINI_API_KEY" in sensitive_env_names(config)
+    assert "HF_TOKEN" in sensitive_env_names(config)
+    assert "HF_ENDPOINT" not in sensitive_env_names(config)
+    assert "GEMINI_API_KEY" not in sensitive_env_names(None)
 
 
 def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
