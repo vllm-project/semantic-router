@@ -75,8 +75,8 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 
 `config/fragments/plugin/` is organized by route-local plugin or reusable plugin bundle:
 
-- one directory per plugin or bundle, such as `response-cache/`, `context-compression/`, `provider-prompt-cache/`, `rag/`, `memory/`, or `content-safety/`
-- `context-compression/` protects RAG-injected tool results by default; set `compress_rag: true` only for routes that accept extractive RAG compression
+- one directory per plugin or bundle, such as `response-cache/`, `context-compression/`, `rag/`, `memory/`, or `content-safety/`
+- `context-compression/` protects RAG-injected tool results by default; set `targets.rag.mode: extractive` only for routes that accept extractive RAG compression
 - route-local tool policy examples live under `tools/`
 - one fragment example per directory in the current catalog
 

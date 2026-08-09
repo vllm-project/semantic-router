@@ -83,37 +83,118 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           ],
         },
       ]
-    case 'provider_prompt_cache':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'system', label: 'Cache System Prefix', type: 'boolean' },
-        { key: 'tools', label: 'Cache Tool Definitions', type: 'boolean' },
-        { key: 'last_user', label: 'Cache Latest User Block', type: 'boolean' },
-        { key: 'ttl', label: 'TTL', type: 'select', options: ['', '5m', '1h'] },
-        { key: 'allow_request_controls', label: 'Allow Request Controls', type: 'boolean' },
-        {
-          key: 'control_header',
-          label: 'Control Header',
-          type: 'string',
-          placeholder: 'x-vsr-provider-cache-control',
-        },
-      ]
     case 'context_compression':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'min_tokens', label: 'Minimum Tokens', type: 'number', placeholder: '2000' },
-        { key: 'target_tokens', label: 'Target Tokens', type: 'number', placeholder: '1000' },
         {
-          key: 'compress_rag',
-          label: 'Compress RAG Tool Results',
-          type: 'boolean',
-          description: 'Opt in to compressing tool messages injected by the RAG plugin',
+          key: 'mode',
+          label: 'Mode',
+          type: 'select',
+          options: ['auto', 'always'],
         },
         {
-          key: 'bypass_header',
-          label: 'Bypass Header',
-          type: 'string',
-          placeholder: 'x-vsr-compression-bypass',
+          key: 'budget',
+          label: 'Request Budget',
+          type: 'object',
+          fields: [
+            { key: 'trigger_tokens', label: 'Trigger Tokens', type: 'string', placeholder: 'auto' },
+            { key: 'target_tokens', label: 'Target Tokens', type: 'string', placeholder: 'auto' },
+            {
+              key: 'reserve_output_tokens',
+              label: 'Reserved Output Tokens',
+              type: 'string',
+              placeholder: 'auto',
+            },
+          ],
+        },
+        {
+          key: 'targets',
+          label: 'Compression Targets',
+          type: 'object',
+          fields: [
+            {
+              key: 'tool_outputs',
+              label: 'Tool Outputs',
+              type: 'object',
+              fields: [
+                {
+                  key: 'mode',
+                  label: 'Mode',
+                  type: 'select',
+                  options: ['preserve', 'extractive', 'recoverable'],
+                },
+                { key: 'min_tokens', label: 'Minimum Tokens', type: 'number' },
+                { key: 'target_tokens', label: 'Target Tokens', type: 'number' },
+              ],
+            },
+            ...['history', 'rag', 'memory'].map((key) => ({
+              key,
+              label: key === 'rag' ? 'RAG' : key[0].toUpperCase() + key.slice(1),
+              type: 'object' as const,
+              fields: [
+                {
+                  key: 'mode',
+                  label: 'Mode',
+                  type: 'select' as const,
+                  options: ['preserve', 'extractive', 'recoverable'],
+                },
+              ],
+            })),
+          ],
+        },
+        {
+          key: 'scoring',
+          label: 'Relevance Scoring',
+          type: 'object',
+          fields: [
+            {
+              key: 'method',
+              label: 'Method',
+              type: 'select',
+              options: ['bm25', 'embedding', 'hybrid'],
+            },
+            { key: 'embedding_model_ref', label: 'Embedding Model Ref', type: 'string' },
+          ],
+        },
+        {
+          key: 'recovery',
+          label: 'Recoverable Compression',
+          type: 'object',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            {
+              key: 'store',
+              label: 'Shared Store',
+              type: 'select',
+              options: ['', 'response_cache', 'redis', 'valkey'],
+            },
+            { key: 'ttl_seconds', label: 'TTL Seconds', type: 'number' },
+            { key: 'max_bytes_per_request', label: 'Max Bytes Per Request', type: 'number' },
+            { key: 'max_total_bytes', label: 'Max Total Bytes', type: 'number' },
+            { key: 'max_retrievals', label: 'Max Retrievals', type: 'number' },
+          ],
+        },
+        {
+          key: 'request_controls',
+          label: 'Request Controls',
+          type: 'object',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            {
+              key: 'header',
+              label: 'Header',
+              type: 'string',
+              placeholder: 'x-vsr-compression-control',
+            },
+            { key: 'allowed', label: 'Allowed Directives', type: 'string[]' },
+            { key: 'max_target_tokens', label: 'Maximum Target Tokens', type: 'number' },
+          ],
+        },
+        {
+          key: 'failure_mode',
+          label: 'Failure Mode',
+          type: 'select',
+          options: ['fail_open', 'fail_closed'],
         },
       ]
     default:

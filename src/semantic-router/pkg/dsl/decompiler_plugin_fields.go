@@ -9,19 +9,20 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":      pluginFieldsSystemPrompt,
-	"response_cache":     pluginFieldsResponseCache,
-	"router_replay":      pluginFieldsRouterReplay,
-	"memory":             pluginFieldsMemory,
-	"hallucination":      pluginFieldsHallucination,
-	"image_gen":          pluginFieldsImageGen,
-	"fast_response":      pluginFieldsFastResponse,
-	"request_params":     pluginFieldsRequestParams,
-	"tool_selection":     pluginFieldsToolSelection,
-	"tools":              pluginFieldsTools,
-	"rag":                pluginFieldsRAG,
-	"header_mutation":    pluginFieldsHeaderMutation,
-	"response_jailbreak": pluginFieldsResponseJailbreak,
+	"system_prompt":       pluginFieldsSystemPrompt,
+	"response_cache":      pluginFieldsResponseCache,
+	"context_compression": pluginFieldsStructuredConfiguration,
+	"router_replay":       pluginFieldsRouterReplay,
+	"memory":              pluginFieldsMemory,
+	"hallucination":       pluginFieldsHallucination,
+	"image_gen":           pluginFieldsImageGen,
+	"fast_response":       pluginFieldsFastResponse,
+	"request_params":      pluginFieldsRequestParams,
+	"tool_selection":      pluginFieldsToolSelection,
+	"tools":               pluginFieldsTools,
+	"rag":                 pluginFieldsRAG,
+	"header_mutation":     pluginFieldsHeaderMutation,
+	"response_jailbreak":  pluginFieldsResponseJailbreak,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
@@ -50,6 +51,10 @@ func pluginFieldsSystemPrompt(p *config.DecisionPlugin) map[string]Value {
 }
 
 func pluginFieldsResponseCache(p *config.DecisionPlugin) map[string]Value {
+	return pluginFieldsStructuredConfiguration(p)
+}
+
+func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Value {
 	object, ok := structuredPayloadObjectValue(p.Configuration)
 	if !ok {
 		return map[string]Value{}

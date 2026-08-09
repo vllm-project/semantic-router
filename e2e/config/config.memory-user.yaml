@@ -51,7 +51,7 @@ routing:
             enabled: false
 
     # Triggered by THRESHOLD_MARKER keyword. Memory enabled with similarity_threshold=0.99
-    # (near-impossible to match), overriding the global default of 0.45.
+    # (near-impossible to match), overriding the integration default of 0.10.
     - name: custom_threshold_route
       description: Route with high similarity threshold for per-decision testing
       priority: 150
@@ -93,7 +93,7 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 5
-            similarity_threshold: 0.45
+            similarity_threshold: 0.10
             auto_store: true
 global:
   services:
@@ -111,7 +111,7 @@ global:
         dimension: 384
       embedding_model: mmbert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.45
+      default_similarity_threshold: 0.10
     response_cache:
       enabled: false
       embedding_model: mmbert

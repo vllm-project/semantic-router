@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 )
 
 func TestApplyContextCompressionCompressesOnlyLargeToolOutput(t *testing.T) {
@@ -14,9 +15,14 @@ func TestApplyContextCompressionCompressesOnlyLargeToolOutput(t *testing.T) {
 		Plugins: []config.DecisionPlugin{{
 			Type: "context_compression",
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":       true,
-				"min_tokens":    100,
-				"target_tokens": 45,
+				"enabled": true,
+				"targets": map[string]interface{}{
+					"tool_outputs": map[string]interface{}{
+						"mode":          "extractive",
+						"min_tokens":    100,
+						"target_tokens": 45,
+					},
+				},
 			}),
 		}},
 	}
@@ -64,22 +70,31 @@ func TestApplyContextCompressionCompressesOnlyLargeToolOutput(t *testing.T) {
 	}
 }
 
-func TestApplyContextCompressionHonorsConfiguredBypassHeader(t *testing.T) {
+func TestApplyContextCompressionHonorsRequestControl(t *testing.T) {
 	decision := &config.Decision{
 		Name: "compressed-route",
 		Plugins: []config.DecisionPlugin{{
 			Type: "context_compression",
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":       true,
-				"min_tokens":    10,
-				"target_tokens": 5,
-				"bypass_header": "x-compression-bypass",
+				"enabled": true,
+				"targets": map[string]interface{}{
+					"tool_outputs": map[string]interface{}{
+						"mode":          "extractive",
+						"min_tokens":    10,
+						"target_tokens": 5,
+					},
+				},
+				"request_controls": map[string]interface{}{
+					"enabled": true,
+					"header":  "x-compression-control",
+					"allowed": []string{"bypass"},
+				},
 			}),
 		}},
 	}
 	body := []byte(`{"model":"auto","messages":[{"role":"tool","content":"one two three four five six seven eight nine ten eleven twelve"}]}`)
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-compression-bypass": "true"},
+		Headers:             map[string]string{"x-compression-control": "bypass"},
 		VSRSelectedDecision: decision,
 	}
 	router := &OpenAIRouter{}
@@ -264,16 +279,95 @@ func TestApplyContextCompressionMalformedBodyFailsOpen(t *testing.T) {
 	}
 }
 
+func TestContextCompressionPreservesRecoverableTargetsForStreaming(t *testing.T) {
+	decision := &config.Decision{
+		Name: "streaming-recovery",
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginContextCompression,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    "always",
+				"targets": map[string]interface{}{
+					"tool_outputs": map[string]interface{}{
+						"mode":          "recoverable",
+						"min_tokens":    10,
+						"target_tokens": 5,
+					},
+				},
+				"recovery": map[string]interface{}{
+					"enabled": true,
+					"store":   "redis",
+				},
+			}),
+		}},
+	}
+	body := []byte(`{"messages":[{"role":"user","content":"question"},{"role":"tool","content":"` +
+		strings.Repeat("large output ", 50) + `"}]}`)
+	ctx := &RequestContext{
+		VSRSelectedDecision:     decision,
+		ExpectStreamingResponse: true,
+	}
+	got := (&OpenAIRouter{}).applyContextCompression(ctx, body)
+	if string(got) != string(body) {
+		t.Fatal("streaming request exposed recoverable compression")
+	}
+}
+
+func TestContextCompressionFailClosedReturnsError(t *testing.T) {
+	decision := &config.Decision{
+		Name: "fail-closed",
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginContextCompression,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled":      true,
+				"failure_mode": "fail_closed",
+			}),
+		}},
+	}
+	_, err := (&OpenAIRouter{}).applyContextCompressionPolicy(
+		&RequestContext{VSRSelectedDecision: decision},
+		[]byte(`not-json`),
+	)
+	if err == nil {
+		t.Fatal("fail_closed compression accepted malformed request")
+	}
+}
+
+func TestInjectContextRecoveryToolRejectsReservedNameConflict(t *testing.T) {
+	request := map[string]interface{}{
+		"tools": []interface{}{map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name": contextcompression.RetrieveToolName,
+			},
+		}},
+	}
+	if err := injectContextRecoveryTool(request, []string{"issued-key"}); err == nil {
+		t.Fatal("reserved recovery tool conflict was accepted")
+	}
+}
+
 func contextCompressionTestDecision(compressRAG bool) *config.Decision {
+	ragMode := "preserve"
+	if compressRAG {
+		ragMode = "extractive"
+	}
 	return &config.Decision{
 		Name: "compressed-route",
 		Plugins: []config.DecisionPlugin{{
 			Type: "context_compression",
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":       true,
-				"min_tokens":    200,
-				"target_tokens": 160,
-				"compress_rag":  compressRAG,
+				"enabled": true,
+				"targets": map[string]interface{}{
+					"tool_outputs": map[string]interface{}{
+						"mode":          "extractive",
+						"min_tokens":    200,
+						"target_tokens": 160,
+					},
+					"rag": map[string]interface{}{
+						"mode": ragMode,
+					},
+				},
 			}),
 		}},
 	}

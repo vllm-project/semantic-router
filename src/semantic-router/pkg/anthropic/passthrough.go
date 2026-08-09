@@ -55,10 +55,6 @@ type AnthropicPassthrough struct {
 	// upstream mutation removed the block, drop silently.
 	CacheControl map[string]CacheControlSpec
 
-	// AutoCacheControl carries route-local provider prompt-cache injection
-	// policy. Explicit inbound cache_control markers always take precedence.
-	AutoCacheControl *AutoCacheControlSpec
-
 	// ToolResultErrors maps tool_call_id to the is_error flag, so the emitter
 	// can restore is_error: true on the matching outbound tool_result.
 	ToolResultErrors map[string]bool
@@ -87,14 +83,6 @@ type SystemBlock struct {
 type CacheControlSpec struct {
 	Type string
 	TTL  string
-}
-
-// AutoCacheControlSpec selects provider prompt segments for automatic caching.
-type AutoCacheControlSpec struct {
-	System   bool
-	Tools    bool
-	LastUser bool
-	TTL      string
 }
 
 // ToolResultContentBlock represents one block of a tool_result content array.

@@ -323,6 +323,7 @@ type RequestContext struct {
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
 	RAGSimilarityScore  float32 // Best similarity score from retrieval
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
+	RAGToolCallIDs      map[string]struct{}
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
@@ -333,6 +334,18 @@ type RequestContext struct {
 	MemoryFallbackReason string
 	MemoryFailOpen       bool
 	MemoryResultCount    int
+	MemoryMessageIndexes map[int]struct{}
+
+	ContextCompressionTargetTokens *int
+	ContextCompressionRecoveryKeys []string
+	ContextCompressionStrategy     string
+	ContextCompressionBudgetMode   string
+	ContextCompressionTokenSource  string
+	ContextCompressionTrigger      string
+	ContextCompressionRevision     string
+	ContextCompressionQuality      string
+	ContextCompressionFallback     string
+	ContextCompressionCostSaved    float64
 
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.

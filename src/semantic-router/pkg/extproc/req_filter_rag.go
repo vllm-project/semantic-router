@@ -310,6 +310,10 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 	if ctx.RequestID != "" {
 		toolCallID = fmt.Sprintf("rag_%s_%d", ctx.RequestID, time.Now().UnixNano())
 	}
+	if ctx.RAGToolCallIDs == nil {
+		ctx.RAGToolCallIDs = make(map[string]struct{})
+	}
+	ctx.RAGToolCallIDs[toolCallID] = struct{}{}
 	toolMessage := map[string]interface{}{
 		"role":         "tool",
 		"tool_call_id": toolCallID,

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -95,24 +96,74 @@ func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequ
 	}
 }
 
-// ProviderPromptCachePluginConfig controls provider-native prompt cache markers.
-type ProviderPromptCachePluginConfig struct {
-	Enabled              bool   `json:"enabled" yaml:"enabled"`
-	System               bool   `json:"system,omitempty" yaml:"system,omitempty"`
-	Tools                bool   `json:"tools,omitempty" yaml:"tools,omitempty"`
-	LastUser             bool   `json:"last_user,omitempty" yaml:"last_user,omitempty"`
-	TTL                  string `json:"ttl,omitempty" yaml:"ttl,omitempty"`
-	AllowRequestControls bool   `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
-	ControlHeader        string `json:"control_header,omitempty" yaml:"control_header,omitempty"`
+// ContextCompressionPluginConfig controls route-local provider-bound context compression.
+type ContextCompressionPluginConfig struct {
+	Enabled         bool                                     `json:"enabled" yaml:"enabled"`
+	Mode            string                                   `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Budget          *ContextCompressionBudgetConfig          `json:"budget,omitempty" yaml:"budget,omitempty"`
+	Targets         *ContextCompressionTargetsConfig         `json:"targets,omitempty" yaml:"targets,omitempty"`
+	Scoring         *ContextCompressionScoringConfig         `json:"scoring,omitempty" yaml:"scoring,omitempty"`
+	Recovery        *ContextCompressionRecoveryConfig        `json:"recovery,omitempty" yaml:"recovery,omitempty"`
+	RequestControls *ContextCompressionRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
+	FailureMode     string                                   `json:"failure_mode,omitempty" yaml:"failure_mode,omitempty"`
 }
 
-// ContextCompressionPluginConfig controls route-local upstream tool-output compression.
-type ContextCompressionPluginConfig struct {
-	Enabled      bool   `json:"enabled" yaml:"enabled"`
-	MinTokens    int    `json:"min_tokens,omitempty" yaml:"min_tokens,omitempty"`
-	TargetTokens int    `json:"target_tokens,omitempty" yaml:"target_tokens,omitempty"`
-	BypassHeader string `json:"bypass_header,omitempty" yaml:"bypass_header,omitempty"`
-	CompressRAG  bool   `json:"compress_rag,omitempty" yaml:"compress_rag,omitempty"`
+func (c *ContextCompressionPluginConfig) EffectiveMode() string {
+	if c == nil || strings.TrimSpace(c.Mode) == "" {
+		return ContextCompressionModeAuto
+	}
+	return strings.TrimSpace(c.Mode)
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveToolOutputTarget() ContextCompressionTargetConfig {
+	result := ContextCompressionTargetConfig{
+		Mode:         ContextCompressionTargetExtractive,
+		MinTokens:    2000,
+		TargetTokens: 1000,
+	}
+	if c == nil {
+		return result
+	}
+	if c.Targets != nil {
+		target := c.Targets.ToolOutputs
+		if strings.TrimSpace(target.Mode) != "" {
+			result.Mode = strings.TrimSpace(target.Mode)
+		}
+		if target.MinTokens != 0 {
+			result.MinTokens = target.MinTokens
+		}
+		if target.TargetTokens != 0 {
+			result.TargetTokens = target.TargetTokens
+		}
+	}
+	return result
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveTargetMode(
+	target ContextCompressionTargetConfig,
+) string {
+	if strings.TrimSpace(target.Mode) == "" {
+		return ContextCompressionTargetPreserve
+	}
+	return strings.TrimSpace(target.Mode)
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveScoring() ContextCompressionScoringConfig {
+	if c == nil || c.Scoring == nil {
+		return ContextCompressionScoringConfig{Method: ContextCompressionScoringBM25}
+	}
+	result := *c.Scoring
+	if strings.TrimSpace(result.Method) == "" {
+		result.Method = ContextCompressionScoringBM25
+	}
+	return result
+}
+
+func (c *ContextCompressionPluginConfig) EffectiveFailureMode() string {
+	if c == nil || strings.TrimSpace(c.FailureMode) == "" {
+		return ContextCompressionFailureOpen
+	}
+	return strings.TrimSpace(c.FailureMode)
 }
 
 // MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
@@ -235,12 +286,6 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 // Deprecated: use GetResponseCacheConfig.
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	return d.GetResponseCacheConfig()
-}
-
-// GetProviderPromptCacheConfig returns provider-native prompt cache settings.
-func (d *Decision) GetProviderPromptCacheConfig() *ProviderPromptCachePluginConfig {
-	result := &ProviderPromptCachePluginConfig{}
-	return decodeDecisionPlugin(d, "provider_prompt_cache", result)
 }
 
 // GetContextCompressionConfig returns route-local tool-output compression settings.

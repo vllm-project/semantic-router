@@ -7,7 +7,6 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
-    ContextCompressionPluginConfig,
     PluginConfig,
     PluginType,
     RouterReplayPluginConfig,
@@ -412,38 +411,6 @@ providers:
             ), f"Expected error about missing 'enabled' field, got: {error_messages}"
         finally:
             os.unlink(temp_path)
-
-
-class TestContextCompressionPluginConfig:
-    def test_defaults_and_rag_policy(self):
-        config = ContextCompressionPluginConfig(enabled=True)
-        assert config.min_tokens is None
-        assert config.target_tokens is None
-        assert config.compress_rag is False
-
-    def test_explicit_valid_budget(self):
-        config = ContextCompressionPluginConfig(
-            enabled=True,
-            min_tokens=2000,
-            target_tokens=1000,
-            compress_rag=True,
-        )
-        assert config.compress_rag is True
-
-    @pytest.mark.parametrize(
-        ("min_tokens", "target_tokens"),
-        [(1000, 1000), (1000, 1200)],
-    )
-    def test_rejects_invalid_budget(self, min_tokens, target_tokens):
-        with pytest.raises(
-            PydanticValidationError,
-            match="target_tokens must be less than min_tokens",
-        ):
-            ContextCompressionPluginConfig(
-                enabled=True,
-                min_tokens=min_tokens,
-                target_tokens=target_tokens,
-            )
 
 
 class TestRAGPluginConfig:

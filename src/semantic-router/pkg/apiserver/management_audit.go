@@ -89,6 +89,22 @@ func (s *ClassificationAPIServer) responseCacheAuditEntries() []managementAuditE
 	return entries
 }
 
+func (s *ClassificationAPIServer) contextCompressionAuditEntries() []managementAuditEntry {
+	if s == nil {
+		return nil
+	}
+	s.managementAuditMu.Lock()
+	defer s.managementAuditMu.Unlock()
+	entries := make([]managementAuditEntry, 0, len(s.managementAuditEntries))
+	for _, entry := range s.managementAuditEntries {
+		if entry.Action == AuditActionCompressionPreview ||
+			entry.Action == AuditActionCompressionInvalidate {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
 func (s *ClassificationAPIServer) handleResponseCacheAudit(
 	w http.ResponseWriter,
 	_ *http.Request,

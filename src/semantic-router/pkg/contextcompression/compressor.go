@@ -369,6 +369,12 @@ func estimateTokens(text string) int {
 	return max(heuristic, byteEstimate)
 }
 
+// EstimateTokens returns the conservative local token estimate used when no
+// model/provider counter is available.
+func EstimateTokens(text string) int {
+	return estimateTokens(text)
+}
+
 func isJSONObjectOrArray(content string) bool {
 	trimmed := strings.TrimSpace(content)
 	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")

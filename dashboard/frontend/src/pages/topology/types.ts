@@ -1,6 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
 
 // ============== Signal Types ==============
 export type SignalType =
@@ -265,7 +266,6 @@ export type PluginType =
   | 'response_jailbreak'
   | 'tools'
   | 'tool_selection'
-  | 'provider_prompt_cache'
   | 'context_compression'
 
 export interface PluginConfig {
@@ -439,18 +439,8 @@ export interface ConfigData {
       threshold?: number
     }
   }
-  response_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold?: number
-    ttl_seconds?: number
-  }
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold?: number
-    ttl_seconds?: number
-  }
+  response_cache?: TopologyCacheConfig
+  semantic_cache?: TopologyCacheConfig
   // Signal definitions
   keyword_rules?: Array<{
     name: string
@@ -767,18 +757,8 @@ export interface ConfigData {
       strategy?: 'priority' | 'confidence'
     }
     stores?: {
-      response_cache?: {
-        enabled?: boolean
-        backend_type?: string
-        similarity_threshold?: number
-        ttl_seconds?: number
-      }
-      semantic_cache?: {
-        enabled?: boolean
-        backend_type?: string
-        similarity_threshold?: number
-        ttl_seconds?: number
-      }
+      response_cache?: TopologyOptionalCacheConfig
+      semantic_cache?: TopologyOptionalCacheConfig
     }
     model_catalog?: {
       modules?: {

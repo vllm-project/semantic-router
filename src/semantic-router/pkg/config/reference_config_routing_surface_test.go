@@ -88,6 +88,20 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "request_controls", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRequestControlsConfig{}), "plugins(response_cache).configuration.request_controls")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "personalized", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCachePersonalizedConfig{}), "plugins(response_cache).configuration.personalized")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, responseCacheConfigs, "revision", "plugins(response_cache).configuration"), reflect.TypeOf(ResponseCacheRevisionConfig{}), "plugins(response_cache).configuration.revision")
+	compressionPlugins := pluginsByType["context_compression"]
+	assertPluginConfigCoverage(t, compressionPlugins, reflect.TypeOf(contextCompressionReferenceConfig{}), "context_compression")
+	compressionConfigs := collectChildMapsFromSlice(t, compressionPlugins, "configuration", "plugins(context_compression)")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "budget", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionBudgetConfig{}), "plugins(context_compression).configuration.budget")
+	compressionTargets := collectChildMapsFromSlice(t, compressionConfigs, "targets", "plugins(context_compression).configuration")
+	assertSliceUnionCoversStructFields(t, compressionTargets, reflect.TypeOf(ContextCompressionTargetsConfig{}), "plugins(context_compression).configuration.targets")
+	targetPolicies := collectChildMapsFromSlice(t, compressionTargets, "tool_outputs", "plugins(context_compression).configuration.targets")
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "history", "plugins(context_compression).configuration.targets")...)
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "rag", "plugins(context_compression).configuration.targets")...)
+	targetPolicies = append(targetPolicies, collectChildMapsFromSlice(t, compressionTargets, "memory", "plugins(context_compression).configuration.targets")...)
+	assertSliceUnionCoversStructFields(t, targetPolicies, reflect.TypeOf(ContextCompressionTargetConfig{}), "plugins(context_compression).configuration.targets.*")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "scoring", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionScoringConfig{}), "plugins(context_compression).configuration.scoring")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "recovery", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRecoveryConfig{}), "plugins(context_compression).configuration.recovery")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "request_controls", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRequestControlsConfig{}), "plugins(context_compression).configuration.request_controls")
 	assertPluginConfigCoverage(t, pluginsByType["memory"], reflect.TypeOf(MemoryPluginConfig{}), "memory")
 	assertPluginConfigCoverage(t, pluginsByType["fast_response"], reflect.TypeOf(FastResponsePluginConfig{}), "fast_response")
 	assertPluginConfigCoverage(t, pluginsByType["system_prompt"], reflect.TypeOf(SystemPromptPluginConfig{}), "system_prompt")
@@ -97,6 +111,17 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tool_selection"], reflect.TypeOf(ToolSelectionPluginConfig{}), "tool_selection")
+}
+
+type contextCompressionReferenceConfig struct {
+	Enabled         bool                                     `yaml:"enabled"`
+	Mode            string                                   `yaml:"mode,omitempty"`
+	Budget          *ContextCompressionBudgetConfig          `yaml:"budget,omitempty"`
+	Targets         *ContextCompressionTargetsConfig         `yaml:"targets,omitempty"`
+	Scoring         *ContextCompressionScoringConfig         `yaml:"scoring,omitempty"`
+	Recovery        *ContextCompressionRecoveryConfig        `yaml:"recovery,omitempty"`
+	RequestControls *ContextCompressionRequestControlsConfig `yaml:"request_controls,omitempty"`
+	FailureMode     string                                   `yaml:"failure_mode,omitempty"`
 }
 
 type responseCacheReferenceConfig struct {

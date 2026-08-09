@@ -11,11 +11,7 @@ translation:
 
 `response_cache` 是路由局部插件：复用语义相近的历史响应。
 
-<<<<<<< HEAD:website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/plugin/semantic-cache.md
-对应 `config/fragments/plugin/semantic-cache/high-recall.yaml` 与 `config/fragments/plugin/semantic-cache/memory.yaml`。
-=======
-对应 `config/plugin/response-cache/high-recall.yaml` 与 `config/plugin/response-cache/memory.yaml`。
->>>>>>> 33ea7728 (fix(cache): honor canonical store in local runtime):website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/plugin/response-cache.md
+对应 `config/fragments/plugin/response-cache/high-recall.yaml` 与 `config/fragments/plugin/response-cache/memory.yaml`。
 
 ## 主要优势
 

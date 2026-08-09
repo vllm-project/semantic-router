@@ -38,14 +38,10 @@ func resolveMaxTokens(req *openai.ChatCompletionNewParams) int64 {
 func buildSystem(systemPrompt string, pt *AnthropicPassthrough) []anthropic.TextBlockParam {
 	if pt != nil && len(pt.SystemBlocks) > 0 {
 		out := make([]anthropic.TextBlockParam, 0, len(pt.SystemBlocks))
-		for index, sb := range pt.SystemBlocks {
+		for _, sb := range pt.SystemBlocks {
 			block := anthropic.TextBlockParam{Text: sb.Text}
 			if sb.CacheControl != nil {
 				block.CacheControl = toSDKCacheControl(*sb.CacheControl)
-			} else if pt.AutoCacheControl != nil &&
-				pt.AutoCacheControl.System &&
-				index == len(pt.SystemBlocks)-1 {
-				block.CacheControl = autoSDKCacheControl(pt.AutoCacheControl)
 			}
 			out = append(out, block)
 		}
@@ -55,9 +51,6 @@ func buildSystem(systemPrompt string, pt *AnthropicPassthrough) []anthropic.Text
 		return nil
 	}
 	block := anthropic.TextBlockParam{Text: systemPrompt}
-	if pt != nil && pt.AutoCacheControl != nil && pt.AutoCacheControl.System {
-		block.CacheControl = autoSDKCacheControl(pt.AutoCacheControl)
-	}
 	return []anthropic.TextBlockParam{block}
 }
 
@@ -107,12 +100,6 @@ func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPas
 			params.Tools[i].OfTool.CacheControl = toSDKCacheControl(spec)
 			continue
 		}
-		if pt.AutoCacheControl != nil &&
-			pt.AutoCacheControl.Tools &&
-			i == len(params.Tools)-1 &&
-			params.Tools[i].OfTool != nil {
-			params.Tools[i].OfTool.CacheControl = autoSDKCacheControl(pt.AutoCacheControl)
-		}
 	}
 }
 
@@ -133,19 +120,6 @@ func applyMessagesCacheControl(messages []anthropic.MessageParam, pt *AnthropicP
 			applyCacheControlToBlock(&messages[i].Content[j], toSDKCacheControl(spec))
 		}
 	}
-	if pt.AutoCacheControl == nil || !pt.AutoCacheControl.LastUser {
-		return
-	}
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != anthropic.MessageParamRoleUser || len(messages[i].Content) == 0 {
-			continue
-		}
-		lastBlock := &messages[i].Content[len(messages[i].Content)-1]
-		if !contentBlockHasCacheControl(lastBlock) {
-			applyCacheControlToBlock(lastBlock, autoSDKCacheControl(pt.AutoCacheControl))
-		}
-		return
-	}
 }
 
 func applyCacheControlToBlock(
@@ -162,25 +136,6 @@ func applyCacheControlToBlock(
 	case block.OfToolResult != nil:
 		block.OfToolResult.CacheControl = cacheControl
 	}
-}
-
-func contentBlockHasCacheControl(block *anthropic.ContentBlockParamUnion) bool {
-	switch {
-	case block.OfText != nil:
-		return block.OfText.CacheControl.Type != ""
-	case block.OfImage != nil:
-		return block.OfImage.CacheControl.Type != ""
-	case block.OfToolUse != nil:
-		return block.OfToolUse.CacheControl.Type != ""
-	case block.OfToolResult != nil:
-		return block.OfToolResult.CacheControl.Type != ""
-	default:
-		return false
-	}
-}
-
-func autoSDKCacheControl(spec *AutoCacheControlSpec) anthropic.CacheControlEphemeralParam {
-	return toSDKCacheControl(CacheControlSpec{Type: "ephemeral", TTL: spec.TTL})
 }
 
 // toSDKCacheControl converts the package-local CacheControlSpec into the SDK's

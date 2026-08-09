@@ -13,6 +13,7 @@ export type ShellRoutePage =
   | 'monitoring'
   | 'playground'
   | 'response-cache'
+  | 'context-compression'
   | 'security'
   | 'status'
   | 'topology'
@@ -44,6 +45,7 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/tracing', page: 'tracing' },
   { path: '/status', page: 'status' },
   { path: '/response-cache', page: 'response-cache' },
+  { path: '/context-compression', page: 'context-compression' },
   { path: '/logs', page: 'logs' },
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },

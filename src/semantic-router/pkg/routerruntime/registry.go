@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -22,6 +23,33 @@ type Registry struct {
 	modelSelector         *selection.Registry
 	learningRuntime       LearningRuntime
 	responseCache         *cache.ResponseCacheService
+	contextCompression    *contextcompression.Service
+	compressionRecovery   contextcompression.RecoveryStore
+}
+
+func (r *Registry) ContextCompression() (
+	*contextcompression.Service,
+	contextcompression.RecoveryStore,
+) {
+	if r == nil {
+		return nil, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.contextCompression, r.compressionRecovery
+}
+
+func (r *Registry) SetContextCompression(
+	service *contextcompression.Service,
+	recovery contextcompression.RecoveryStore,
+) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.contextCompression = service
+	r.compressionRecovery = recovery
+	r.mu.Unlock()
 }
 
 func (r *Registry) ResponseCache() *cache.ResponseCacheService {

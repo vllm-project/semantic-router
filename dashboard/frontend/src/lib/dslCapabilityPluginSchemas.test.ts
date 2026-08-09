@@ -7,12 +7,15 @@ describe('capability plugin field schemas', () => {
     const fields = getCapabilityPluginFieldSchema('context_compression')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
-      'min_tokens',
-      'target_tokens',
-      'compress_rag',
-      'bypass_header',
+      'mode',
+      'budget',
+      'targets',
+      'scoring',
+      'recovery',
+      'request_controls',
+      'failure_mode',
     ])
-    expect(fields?.find((field) => field.key === 'compress_rag')?.type).toBe('boolean')
+    expect(fields?.find((field) => field.key === 'targets')?.type).toBe('object')
   })
 
   it('exposes canonical response cache fields', () => {

@@ -233,7 +233,13 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		})
 	}
 	ctx.setWorkingRequestBody(requestBody)
-	requestBody = r.applyContextCompression(ctx, requestBody)
+	requestBody, compressionErr := r.applyContextCompressionPolicy(ctx, requestBody)
+	if compressionErr != nil {
+		return nil, r.createErrorResponse(
+			500,
+			"Context compression failed under fail_closed policy",
+		), nil
+	}
 	ctx.setWorkingRequestBody(requestBody)
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)
 	openAIRequest = r.reparseRequestAfterMutation(requestBody, openAIRequest, ctx)

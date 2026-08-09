@@ -1,8 +1,0 @@
-plugin:
-  type: provider_prompt_cache
-  configuration:
-    enabled: true
-    system: true
-    tools: true
-    last_user: false
-    ttl: 5m

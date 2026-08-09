@@ -34,6 +34,7 @@ import {
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadResponseCachePage,
+  loadContextCompressionPage,
   loadSecurityPolicyPage,
   loadSetupWizardPage,
   loadStatusPage,
@@ -72,6 +73,12 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
   'response-cache': (
     <RecoverableLazyRoute loader={loadResponseCachePage} routeLabel="Response Cache" />
+  ),
+  'context-compression': (
+    <RecoverableLazyRoute
+      loader={loadContextCompressionPage}
+      routeLabel="Context Compression"
+    />
   ),
   security: <RecoverableLazyRoute loader={loadSecurityPolicyPage} routeLabel="Security" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,

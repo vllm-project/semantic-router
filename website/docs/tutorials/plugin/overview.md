@@ -53,7 +53,6 @@ The plugin docs now mirror `config/fragments/plugin/` one page at a time.
 - [System Prompt](./system-prompt)
 - [Tools](./tools)
 - [Context Compression](./context-compression)
-- [Provider Prompt Cache](./provider-prompt-cache)
 
 ### Retrieval and Memory
 

@@ -23,20 +23,19 @@ const (
 	DecisionPluginResponseCache = "response_cache"
 	// DecisionPluginSemanticCache is the deprecated public spelling retained
 	// for source compatibility. Runtime config is normalized to response_cache.
-	DecisionPluginSemanticCache       = "semantic-cache"
-	DecisionPluginSystemPrompt        = "system_prompt"
-	DecisionPluginHeaderMutation      = "header_mutation"
-	DecisionPluginHallucination       = "hallucination"
-	DecisionPluginResponseJailbreak   = "response_jailbreak"
-	DecisionPluginRouterReplay        = "router_replay"
-	DecisionPluginMemory              = "memory"
-	DecisionPluginRAG                 = "rag"
-	DecisionPluginImageGen            = "image_gen"
-	DecisionPluginFastResponse        = "fast_response"
-	DecisionPluginRequestParams       = "request_params"
-	DecisionPluginToolSelection       = "tool_selection"
-	DecisionPluginProviderPromptCache = "provider_prompt_cache"
-	DecisionPluginContextCompression  = "context_compression"
+	DecisionPluginSemanticCache      = "semantic-cache"
+	DecisionPluginSystemPrompt       = "system_prompt"
+	DecisionPluginHeaderMutation     = "header_mutation"
+	DecisionPluginHallucination      = "hallucination"
+	DecisionPluginResponseJailbreak  = "response_jailbreak"
+	DecisionPluginRouterReplay       = "router_replay"
+	DecisionPluginMemory             = "memory"
+	DecisionPluginRAG                = "rag"
+	DecisionPluginImageGen           = "image_gen"
+	DecisionPluginFastResponse       = "fast_response"
+	DecisionPluginRequestParams      = "request_params"
+	DecisionPluginToolSelection      = "tool_selection"
+	DecisionPluginContextCompression = "context_compression"
 )
 
 var supportedSignalTypes = []string{
@@ -70,7 +69,6 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginMemory,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
-	DecisionPluginProviderPromptCache,
 	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,

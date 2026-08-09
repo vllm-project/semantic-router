@@ -257,7 +257,13 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return response, nil
 	}
 	workingBody := ctx.workingRequestBody()
-	workingBody = r.applyContextCompression(ctx, workingBody)
+	workingBody, compressionErr := r.applyContextCompressionPolicy(ctx, workingBody)
+	if compressionErr != nil {
+		return r.createErrorResponse(
+			500,
+			"Context compression failed under fail_closed policy",
+		), nil
+	}
 	ctx.setWorkingRequestBody(workingBody)
 	if ctx.requestBodyMutated() {
 		openAIRequest, err = parseOpenAIRequest(workingBody)

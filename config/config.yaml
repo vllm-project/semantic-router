@@ -661,22 +661,43 @@ routing:
               model_revision: "model-catalog-v1"
               prompt_revision: "prompts-v1"
               policy_revision: "policy-v1"
-        - type: provider_prompt_cache
-          configuration:
-            enabled: true
-            system: true
-            tools: true
-            last_user: false
-            ttl: 5m
-            allow_request_controls: true
-            control_header: x-vsr-provider-cache-control
         - type: context_compression
           configuration:
             enabled: true
-            min_tokens: 2000
-            target_tokens: 1000
-            bypass_header: x-vsr-compression-bypass
-            compress_rag: false
+            mode: auto
+            budget:
+              trigger_tokens: auto
+              target_tokens: auto
+              reserve_output_tokens: auto
+            targets:
+              tool_outputs:
+                mode: extractive
+                min_tokens: 2000
+                target_tokens: 1000
+              history:
+                mode: preserve
+              rag:
+                mode: preserve
+              memory:
+                mode: preserve
+            scoring:
+              method: bm25
+              embedding_model_ref: ""
+            recovery:
+              enabled: false
+              store: response_cache
+              ttl_seconds: 900
+              max_bytes_per_request: 10485760
+              max_total_bytes: 268435456
+              max_retrievals: 8
+            request_controls:
+              enabled: false
+              header: x-vsr-compression-control
+              allowed:
+                - bypass
+                - target
+              max_target_tokens: 16000
+            failure_mode: fail_open
         - type: tools
           configuration:
             enabled: true
@@ -1730,6 +1751,7 @@ global:
             - config.read
             - data.read
             - cache.read
+            - compression.read
           operator:
             - health.read
             - ready.read
@@ -1743,6 +1765,8 @@ global:
             - data.write
             - cache.read
             - cache.invalidate
+            - compression.read
+            - compression.preview
           admin:
             - "*"
     startup_status:

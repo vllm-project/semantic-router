@@ -39,6 +39,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ResponseCachePluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"context_compression": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ContextCompressionPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
+	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},

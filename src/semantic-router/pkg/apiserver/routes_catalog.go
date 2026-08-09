@@ -193,6 +193,38 @@ func apiResponseCacheRoutes() []apiRoute {
 	}
 }
 
+func apiContextCompressionRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/capabilities", Method: "GET", Description: "Get context-compression capabilities"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/health", Method: "GET", Description: "Check context-compression runtime health"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/stats", Method: "GET", Description: "Get redacted context-compression statistics"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/preview", Method: "POST", Description: "Preview context compression without persistence"},
+			routePolicy{Permission: PermCompressionPreview, Sensitivity: SensitivityOperational, AuditAction: AuditActionCompressionPreview},
+			(*ClassificationAPIServer).handleContextCompressionPreview,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/recovery/invalidate", Method: "POST", Description: "Invalidate a trusted context-recovery request scope"},
+			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
+			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
+			jsonBody(),
+		),
+	}
+}
+
 func apiConfigRoutes() []apiRoute {
 	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
 }

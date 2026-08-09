@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
@@ -30,6 +31,8 @@ type ClassificationAPIServer struct {
 	// start reading from a different backend after a successful reload.
 	startupStatusConfig     *config.StartupStatusConfig
 	responseCache           *cache.ResponseCacheService
+	contextCompression      *contextcompression.Service
+	compressionRecovery     contextcompression.RecoveryStore
 	managementAuditMu       sync.Mutex
 	managementAuditEntries  []managementAuditEntry
 	managementAuditLastHash string
@@ -37,6 +40,22 @@ type ClassificationAPIServer struct {
 	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
 	learningOutcomePolicyOnce sync.Once
 	learningOutcomePolicy     *learningOutcomeIngestPolicy
+}
+
+func (s *ClassificationAPIServer) currentContextCompression() (
+	*contextcompression.Service,
+	contextcompression.RecoveryStore,
+) {
+	if s == nil {
+		return nil, nil
+	}
+	if s.runtimeRegistry != nil {
+		service, recovery := s.runtimeRegistry.ContextCompression()
+		if service != nil {
+			return service, recovery
+		}
+	}
+	return s.contextCompression, s.compressionRecovery
 }
 
 func (s *ClassificationAPIServer) currentResponseCache() *cache.ResponseCacheService {

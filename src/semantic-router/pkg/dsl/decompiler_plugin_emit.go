@@ -10,19 +10,20 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":      emitSystemPromptPluginConfig,
-	"response_cache":     emitResponseCachePluginConfig,
-	"router_replay":      emitRouterReplayPluginConfig,
-	"memory":             emitMemoryPluginConfig,
-	"hallucination":      emitHallucinationPluginConfig,
-	"image_gen":          emitImageGenPluginConfig,
-	"fast_response":      emitFastResponsePluginConfig,
-	"request_params":     emitRequestParamsPluginConfig,
-	"tool_selection":     emitToolSelectionPluginConfig,
-	"tools":              emitToolsPluginConfig,
-	"rag":                emitRAGPluginConfig,
-	"header_mutation":    emitHeaderMutationPluginConfig,
-	"response_jailbreak": emitResponseJailbreakPluginConfig,
+	"system_prompt":       emitSystemPromptPluginConfig,
+	"response_cache":      emitResponseCachePluginConfig,
+	"context_compression": emitStructuredPluginConfig,
+	"router_replay":       emitRouterReplayPluginConfig,
+	"memory":              emitMemoryPluginConfig,
+	"hallucination":       emitHallucinationPluginConfig,
+	"image_gen":           emitImageGenPluginConfig,
+	"fast_response":       emitFastResponsePluginConfig,
+	"request_params":      emitRequestParamsPluginConfig,
+	"tool_selection":      emitToolSelectionPluginConfig,
+	"tools":               emitToolsPluginConfig,
+	"rag":                 emitRAGPluginConfig,
+	"header_mutation":     emitHeaderMutationPluginConfig,
+	"response_jailbreak":  emitResponseJailbreakPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -60,6 +61,10 @@ func emitSystemPromptPluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 }
 
 func emitResponseCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	emitStructuredPluginConfig(sb, p)
+}
+
+func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return

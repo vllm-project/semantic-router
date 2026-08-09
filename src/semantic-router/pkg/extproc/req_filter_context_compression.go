@@ -1,10 +1,14 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -20,57 +24,330 @@ type contextCompressionStats struct {
 	jsonBlocks      int
 }
 
+func (stats contextCompressionStats) format() string {
+	switch stats.jsonBlocks {
+	case 0:
+		return "text"
+	case stats.appliedBlocks:
+		return "json"
+	default:
+		return "mixed"
+	}
+}
+
 func (r *OpenAIRouter) applyContextCompression(
 	ctx *RequestContext,
 	requestBody []byte,
 ) []byte {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	compressed, err := r.applyContextCompressionPolicy(ctx, requestBody)
+	if err != nil {
 		return requestBody
+	}
+	return compressed
+}
+
+func (r *OpenAIRouter) applyContextCompressionPolicy(
+	ctx *RequestContext,
+	requestBody []byte,
+) ([]byte, error) {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return requestBody, nil
 	}
 	pluginConfig := ctx.VSRSelectedDecision.GetContextCompressionConfig()
 	if pluginConfig == nil || !pluginConfig.Enabled {
-		return requestBody
+		return requestBody, nil
 	}
-	if contextCompressionBypassed(ctx, pluginConfig.BypassHeader) {
+	applyContextCompressionRequestControls(ctx, pluginConfig)
+	if ctx.ContextCompressionSkipReason == "request_bypass" {
 		recordContextCompressionStatus(ctx, "bypassed", 0)
-		return requestBody
+		return requestBody, nil
 	}
 
 	start := time.Now()
+	request, err := parseContextCompressionRequest(ctx, requestBody, start)
+	if err != nil {
+		return compressionFailure(pluginConfig, requestBody, err)
+	}
+
+	service := r.contextCompressionService()
+	if service == nil {
+		return compressionFailure(
+			pluginConfig,
+			requestBody,
+			fmt.Errorf("context compression service is unavailable"),
+		)
+	}
+	callContext, compressionRequest, ragProtected := r.buildContextCompressionRequest(
+		ctx,
+		pluginConfig,
+		request,
+	)
+	result := service.Apply(callContext, compressionRequest)
+	return r.finishContextCompression(
+		ctx,
+		pluginConfig,
+		requestBody,
+		request,
+		result,
+		ragProtected,
+		start,
+	)
+}
+
+func parseContextCompressionRequest(
+	ctx *RequestContext,
+	requestBody []byte,
+	start time.Time,
+) (map[string]interface{}, error) {
 	var request map[string]interface{}
 	if err := json.Unmarshal(requestBody, &request); err != nil {
 		recordContextCompressionStatus(ctx, "parse_error_fail_open", time.Since(start).Seconds())
-		return requestBody
+		return nil, err
 	}
-	messages, ok := request["messages"].([]interface{})
-	if !ok {
+	if _, ok := request["messages"].([]interface{}); !ok {
 		recordContextCompressionStatus(ctx, "unsupported_shape_fail_open", time.Since(start).Seconds())
-		return requestBody
+		return nil, fmt.Errorf("context compression requires a messages array")
 	}
+	return request, nil
+}
 
-	stats := compressRequestMessages(
-		messages,
-		compressionQuery(messages, ctx.UserContent),
-		pluginConfig.MinTokens,
-		pluginConfig.TargetTokens,
-		pluginConfig.CompressRAG,
+func (r *OpenAIRouter) buildContextCompressionRequest(
+	ctx *RequestContext,
+	pluginConfig *config.ContextCompressionPluginConfig,
+	request map[string]interface{},
+) (context.Context, contextcompression.Request, bool) {
+	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.RequestModel)
+	}
+	policy := contextCompressionPolicy(
+		pluginConfig,
+		ctx.ContextCompressionTargetTokens,
 	)
-	if stats.appliedMessages == 0 {
-		status := "not_applied"
-		if stats.skippedRAG > 0 {
+	policy = compressionPolicyForRequest(policy, ctx)
+	ragProtected := requestContainsRAGToolResult(request) &&
+		policy.Targets.RAG.Mode == contextcompression.TargetPreserve
+	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
+		ctx.ContextCompressionRevision = revision[:12]
+	}
+	requestIR := contextcompression.ParseRequestIR(
+		request,
+		contextcompression.Provenance{
+			RAGToolCallIDs:       ctx.RAGToolCallIDs,
+			MemoryMessageIndexes: ctx.MemoryMessageIndexes,
+		},
+	)
+	callContext := ctx.TraceContext
+	if callContext == nil {
+		callContext = context.Background()
+	}
+	compressionRequest := contextcompression.Request{
+		Model:        model,
+		Scope:        r.contextCompressionScope(ctx),
+		Request:      requestIR,
+		Policy:       policy,
+		Capabilities: contextCompressionCapabilities(r.Config, ctx),
+		TokenCounter: r.contextCompressionTokenCounter(ctx),
+		Scorer:       r.contextCompressionScorer(callContext, pluginConfig),
+		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
+		Provenance: contextcompression.Provenance{
+			RAGToolCallIDs:       ctx.RAGToolCallIDs,
+			MemoryMessageIndexes: ctx.MemoryMessageIndexes,
+		},
+	}
+	return callContext, compressionRequest, ragProtected
+}
+
+func (r *OpenAIRouter) finishContextCompression(
+	ctx *RequestContext,
+	pluginConfig *config.ContextCompressionPluginConfig,
+	requestBody []byte,
+	request map[string]interface{},
+	result contextcompression.ServiceResult,
+	ragProtected bool,
+	start time.Time,
+) ([]byte, error) {
+	if result.Failure != nil {
+		recordContextCompressionStatus(ctx, "compression_failed", time.Since(start).Seconds())
+		return compressionFailure(pluginConfig, requestBody, result.Failure)
+	}
+	r.recordCompressionPlan(ctx, result)
+	if !result.Applied {
+		status := string(result.Plan.SkipReason)
+		if status == string(contextcompression.SkipNoTargets) && ragProtected {
 			status = "rag_protected"
 		}
+		if status == "" {
+			status = "not_applied"
+		}
 		recordContextCompressionStatus(ctx, status, time.Since(start).Seconds())
-		return requestBody
+		return requestBody, nil
+	}
+	if len(result.RecoveryKeys) > 0 {
+		if err := injectContextRecoveryTool(request, result.RecoveryKeys); err != nil {
+			return compressionFailure(pluginConfig, requestBody, err)
+		}
 	}
 
-	compressedBody, err := json.Marshal(request)
+	compressedBody, err := result.Request.Marshal()
 	if err != nil {
 		recordContextCompressionStatus(ctx, "marshal_error_fail_open", time.Since(start).Seconds())
-		return requestBody
+		return compressionFailure(pluginConfig, requestBody, err)
 	}
+	stats := contextCompressionStats{
+		appliedMessages: result.MessagesCompressed,
+		appliedBlocks:   result.BlocksCompressed,
+		beforeTokens:    result.TokensBefore,
+		afterTokens:     result.TokensAfter,
+		omittedChunks:   result.OmittedChunks,
+		jsonBlocks:      result.JSONBlocks,
+	}
+	ctx.ContextCompressionRecoveryKeys = append(
+		ctx.ContextCompressionRecoveryKeys[:0],
+		result.RecoveryKeys...,
+	)
 	recordContextCompressionApplied(ctx, stats, start)
-	return compressedBody
+	return compressedBody, nil
+}
+
+func requestContainsRAGToolResult(request map[string]interface{}) bool {
+	messages, _ := request["messages"].([]interface{})
+	for _, rawMessage := range messages {
+		message, ok := rawMessage.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if isRAGToolResult(message) {
+			return true
+		}
+		blocks, _ := message["content"].([]interface{})
+		for _, rawBlock := range blocks {
+			block, ok := rawBlock.(map[string]interface{})
+			if ok && isRAGToolResult(block) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func injectContextRecoveryTool(
+	request map[string]interface{},
+	keys []string,
+) error {
+	rawTools := request["tools"]
+	tools := make([]interface{}, 0)
+	if rawTools != nil {
+		existing, ok := rawTools.([]interface{})
+		if !ok {
+			return fmt.Errorf("tools must be an array for recoverable compression")
+		}
+		tools = append(tools, existing...)
+		for _, rawTool := range existing {
+			tool, _ := rawTool.(map[string]interface{})
+			function, _ := tool["function"].(map[string]interface{})
+			if function["name"] == contextcompression.RetrieveToolName {
+				return fmt.Errorf(
+					"request defines reserved tool %q",
+					contextcompression.RetrieveToolName,
+				)
+			}
+		}
+	}
+	enumValues := make([]interface{}, len(keys))
+	for index, key := range keys {
+		enumValues[index] = key
+	}
+	tools = append(tools, map[string]interface{}{
+		"type": "function",
+		"function": map[string]interface{}{
+			"name":        contextcompression.RetrieveToolName,
+			"description": "Retrieve original context omitted by vLLM Semantic Router compression.",
+			"parameters": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"key": map[string]interface{}{
+						"type": "string",
+						"enum": enumValues,
+					},
+				},
+				"required": []interface{}{"key"},
+			},
+		},
+	})
+	request["tools"] = tools
+	return nil
+}
+
+func compressionFailure(
+	plugin *config.ContextCompressionPluginConfig,
+	requestBody []byte,
+	err error,
+) ([]byte, error) {
+	if plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed {
+		return nil, err
+	}
+	return requestBody, nil
+}
+
+func (r *OpenAIRouter) recordCompressionPlan(
+	ctx *RequestContext,
+	result contextcompression.ServiceResult,
+) {
+	ctx.ContextCompressionStrategy = "extractive"
+	if len(result.RecoveryKeys) > 0 {
+		ctx.ContextCompressionStrategy = "recoverable"
+	}
+	ctx.ContextCompressionBudgetMode = "request_and_item"
+	ctx.ContextCompressionTokenSource = result.Plan.TokenCounterSource
+	ctx.ContextCompressionTrigger = result.Plan.TriggerReason
+	ctx.ContextCompressionQuality = result.Plan.Quality
+	ctx.ContextCompressionFallback = result.Plan.FallbackReason
+	status := "applied"
+	if !result.Applied {
+		status = string(result.Plan.SkipReason)
+	}
+	metrics.RecordContextCompressionPlan(
+		requestDecisionStateKey(ctx),
+		ctx.ContextCompressionStrategy,
+		"mixed",
+		status,
+		ctx.ContextCompressionTokenSource,
+		result.TokensBefore,
+		result.TokensAfter,
+		len(result.RecoveryKeys),
+		result.Plan.Quality,
+		result.Plan.FallbackReason,
+	)
+	savedTokens := max(0, result.TokensBefore-result.TokensAfter)
+	r.recordContextCompressionCostSavings(ctx, savedTokens)
+}
+
+func (r *OpenAIRouter) recordContextCompressionCostSavings(
+	ctx *RequestContext,
+	savedTokens int,
+) {
+	if r == nil || r.Config == nil || savedTokens <= 0 {
+		return
+	}
+	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.RequestModel)
+	}
+	params, ok := r.Config.ModelConfig[model]
+	if !ok || params.Pricing.PromptPer1M <= 0 {
+		return
+	}
+	ctx.ContextCompressionCostSaved = float64(savedTokens) *
+		params.Pricing.PromptPer1M / 1_000_000
+	metrics.RecordContextCompressionCostSavings(
+		model,
+		params.Pricing.Currency,
+		ctx.ContextCompressionCostSaved,
+	)
+	if service := r.contextCompressionService(); service != nil {
+		service.RecordEstimatedCostSavings(ctx.ContextCompressionCostSaved)
+	}
 }
 
 func recordContextCompressionStatus(
@@ -124,182 +401,6 @@ func recordContextCompressionApplied(
 	})
 }
 
-func contextCompressionBypassed(ctx *RequestContext, bypassHeader string) bool {
-	headerName := strings.TrimSpace(bypassHeader)
-	return headerName != "" &&
-		strings.EqualFold(strings.TrimSpace(headerValueCI(ctx, headerName)), "true")
-}
-
-func compressRequestMessages(
-	messages []interface{},
-	query string,
-	minTokens int,
-	targetTokens int,
-	compressRAG bool,
-) contextCompressionStats {
-	stats := contextCompressionStats{}
-	for _, rawMessage := range messages {
-		message, ok := rawMessage.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		role, _ := message["role"].(string)
-		switch role {
-		case "tool", "function":
-			if isRAGToolResult(message) && !compressRAG {
-				stats.skippedRAG++
-				continue
-			}
-			result := compressMessageContent(message, query, minTokens, targetTokens)
-			stats.addMessageResult(result)
-		case "user":
-			result := compressAnthropicToolResults(
-				message,
-				query,
-				minTokens,
-				targetTokens,
-				compressRAG,
-			)
-			stats.addMessageResult(result)
-		}
-	}
-	return stats
-}
-
-type messageCompressionResult struct {
-	applied       bool
-	appliedBlocks int
-	beforeTokens  int
-	afterTokens   int
-	omittedChunks int
-	skippedRAG    int
-	jsonBlocks    int
-}
-
-func (stats *contextCompressionStats) addMessageResult(result messageCompressionResult) {
-	if result.applied {
-		stats.appliedMessages++
-		stats.appliedBlocks += result.appliedBlocks
-		stats.beforeTokens += result.beforeTokens
-		stats.afterTokens += result.afterTokens
-		stats.omittedChunks += result.omittedChunks
-		stats.jsonBlocks += result.jsonBlocks
-	}
-	stats.skippedRAG += result.skippedRAG
-}
-
-func (stats contextCompressionStats) format() string {
-	switch stats.jsonBlocks {
-	case 0:
-		return "text"
-	case stats.appliedBlocks:
-		return "json"
-	default:
-		return "mixed"
-	}
-}
-
-func compressMessageContent(
-	message map[string]interface{},
-	query string,
-	minTokens int,
-	targetTokens int,
-) messageCompressionResult {
-	switch content := message["content"].(type) {
-	case string:
-		result := contextcompression.CompressToolOutput(content, query, minTokens, targetTokens)
-		if !result.Applied {
-			return messageCompressionResult{}
-		}
-		message["content"] = result.Content
-		return compressionResultFromBlock(result)
-	case []interface{}:
-		return compressTextBlocks(content, query, minTokens, targetTokens)
-	default:
-		return messageCompressionResult{}
-	}
-}
-
-func compressAnthropicToolResults(
-	message map[string]interface{},
-	query string,
-	minTokens int,
-	targetTokens int,
-	compressRAG bool,
-) messageCompressionResult {
-	blocks, ok := message["content"].([]interface{})
-	if !ok {
-		return messageCompressionResult{}
-	}
-	total := messageCompressionResult{}
-	for _, rawBlock := range blocks {
-		block, ok := rawBlock.(map[string]interface{})
-		if !ok || block["type"] != "tool_result" {
-			continue
-		}
-		if isRAGToolResult(block) && !compressRAG {
-			total.skippedRAG++
-			continue
-		}
-		result := compressMessageContent(block, query, minTokens, targetTokens)
-		total.merge(result)
-	}
-	return total
-}
-
-func compressTextBlocks(
-	blocks []interface{},
-	query string,
-	minTokens int,
-	targetTokens int,
-) messageCompressionResult {
-	total := messageCompressionResult{}
-	for _, rawBlock := range blocks {
-		block, ok := rawBlock.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		blockType, _ := block["type"].(string)
-		if blockType != "text" {
-			continue
-		}
-		text, ok := block["text"].(string)
-		if !ok {
-			continue
-		}
-		result := contextcompression.CompressToolOutput(text, query, minTokens, targetTokens)
-		if !result.Applied {
-			continue
-		}
-		block["text"] = result.Content
-		total.merge(compressionResultFromBlock(result))
-	}
-	return total
-}
-
-func compressionResultFromBlock(
-	result contextcompression.Result,
-) messageCompressionResult {
-	return messageCompressionResult{
-		applied:       true,
-		appliedBlocks: 1,
-		beforeTokens:  result.OriginalTokens,
-		afterTokens:   result.CompressedTokens,
-		omittedChunks: result.OmittedChunks,
-		jsonBlocks:    boolToInt(result.Format == "json"),
-	}
-}
-
-func (result *messageCompressionResult) merge(other messageCompressionResult) {
-	result.applied = result.applied || other.applied
-	result.appliedBlocks += other.appliedBlocks
-	result.beforeTokens += other.beforeTokens
-	result.afterTokens += other.afterTokens
-	result.omittedChunks += other.omittedChunks
-	result.skippedRAG += other.skippedRAG
-	result.jsonBlocks += other.jsonBlocks
-}
-
 func isRAGToolResult(value map[string]interface{}) bool {
 	for _, field := range []string{"tool_call_id", "tool_use_id"} {
 		id, _ := value[field].(string)
@@ -308,54 +409,4 @@ func isRAGToolResult(value map[string]interface{}) bool {
 		}
 	}
 	return false
-}
-
-func compressionQuery(messages []interface{}, fallback string) string {
-	recent := make([]string, 0, 3)
-	for index := len(messages) - 1; index >= 0 && len(recent) < 3; index-- {
-		message, ok := messages[index].(map[string]interface{})
-		if !ok || message["role"] != "user" {
-			continue
-		}
-		text := userMessageText(message["content"])
-		if strings.TrimSpace(text) != "" {
-			recent = append(recent, text)
-		}
-	}
-	if len(recent) == 0 {
-		return fallback
-	}
-	for left, right := 0, len(recent)-1; left < right; left, right = left+1, right-1 {
-		recent[left], recent[right] = recent[right], recent[left]
-	}
-	return strings.Join(recent, "\n")
-}
-
-func userMessageText(content interface{}) string {
-	switch typed := content.(type) {
-	case string:
-		return typed
-	case []interface{}:
-		parts := make([]string, 0, len(typed))
-		for _, rawBlock := range typed {
-			block, ok := rawBlock.(map[string]interface{})
-			if !ok || block["type"] != "text" {
-				continue
-			}
-			text, _ := block["text"].(string)
-			if text != "" {
-				parts = append(parts, text)
-			}
-		}
-		return strings.Join(parts, "\n")
-	default:
-		return ""
-	}
-}
-
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

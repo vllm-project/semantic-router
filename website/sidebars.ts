@@ -199,7 +199,6 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/image-gen',
                 'tutorials/plugin/context-compression',
-                'tutorials/plugin/provider-prompt-cache',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',

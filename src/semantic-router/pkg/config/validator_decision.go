@@ -425,6 +425,50 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
 			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
 	}
+	return validateDecisionContextCompressionRecovery(cfg, decision)
+}
+
+func validateDecisionContextCompressionRecovery(
+	cfg *RouterConfig,
+	decision *Decision,
+) error {
+	compression := decision.GetContextCompressionConfig()
+	if compression == nil ||
+		compression.Recovery == nil ||
+		!compression.Recovery.Enabled {
+		return nil
+	}
+	if !cfg.Looper.IsEnabled() {
+		return fmt.Errorf(
+			"decision %q: context_compression recovery requires global.integrations.looper.endpoint",
+			decision.Name,
+		)
+	}
+	store := strings.TrimSpace(compression.Recovery.Store)
+	if store == "response_cache" {
+		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
+	}
+	switch store {
+	case "redis":
+		if cfg.SemanticCache.Redis == nil {
+			return fmt.Errorf(
+				"decision %q: context_compression recovery requires response_cache.redis configuration",
+				decision.Name,
+			)
+		}
+	case "valkey":
+		if cfg.SemanticCache.Valkey == nil {
+			return fmt.Errorf(
+				"decision %q: context_compression recovery requires response_cache.valkey configuration",
+				decision.Name,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"decision %q: context_compression recovery requires a Redis or Valkey shared store",
+			decision.Name,
+		)
+	}
 	return nil
 }
 

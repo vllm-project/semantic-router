@@ -5,8 +5,8 @@
 `response_cache` is the route-local plugin for reusing exact or semantically
 compatible prior responses.
 
-It aligns to `config/plugin/response-cache/high-recall.yaml` and
-`config/plugin/response-cache/memory.yaml`.
+It aligns to `config/fragments/plugin/response-cache/high-recall.yaml` and
+`config/fragments/plugin/response-cache/memory.yaml`.
 
 ## Key Advantages
 

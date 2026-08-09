@@ -666,7 +666,6 @@ class PluginType(str, Enum):
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
-    PROVIDER_PROMPT_CACHE = "provider_prompt_cache"
     CONTEXT_COMPRESSION = "context_compression"
 
 
@@ -735,34 +734,112 @@ class ResponseCachePluginConfig(BaseModel):
 SemanticCachePluginConfig = ResponseCachePluginConfig
 
 
-class ProviderPromptCachePluginConfig(BaseModel):
-    """Configuration for provider_prompt_cache plugin."""
+CompressionTokenLimit = Literal["auto"] | int
 
-    enabled: bool
-    system: bool = False
-    tools: bool = False
-    last_user: bool = False
-    ttl: Optional[Literal["5m", "1h"]] = None
-    allow_request_controls: bool = False
-    control_header: Optional[str] = None
+
+class ContextCompressionBudgetConfig(BaseModel):
+    trigger_tokens: Optional[CompressionTokenLimit] = None
+    target_tokens: Optional[CompressionTokenLimit] = None
+    reserve_output_tokens: Optional[CompressionTokenLimit] = None
+
+    @model_validator(mode="after")
+    def validate_budget(self):
+        values = (
+            self.trigger_tokens,
+            self.target_tokens,
+            self.reserve_output_tokens,
+        )
+        if any(isinstance(value, int) and value < 0 for value in values):
+            raise ValueError("compression token limits cannot be negative")
+        if (
+            isinstance(self.trigger_tokens, int)
+            and isinstance(self.target_tokens, int)
+            and self.trigger_tokens > 0
+            and self.target_tokens >= self.trigger_tokens
+        ):
+            raise ValueError("budget.target_tokens must be less than trigger_tokens")
+        return self
+
+
+class ContextCompressionTargetConfig(BaseModel):
+    mode: Literal["preserve", "extractive", "recoverable"] = "preserve"
+    min_tokens: Optional[int] = Field(default=None, ge=0)
+    target_tokens: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_target_budget(self):
+        if (
+            self.min_tokens
+            and self.target_tokens
+            and self.target_tokens >= self.min_tokens
+        ):
+            raise ValueError("target_tokens must be less than min_tokens")
+        return self
+
+
+class ContextCompressionTargetsConfig(BaseModel):
+    tool_outputs: ContextCompressionTargetConfig = Field(
+        default_factory=lambda: ContextCompressionTargetConfig(
+            mode="extractive", min_tokens=2000, target_tokens=1000
+        )
+    )
+    history: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    rag: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    memory: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+
+
+class ContextCompressionScoringConfig(BaseModel):
+    method: Literal["bm25", "embedding", "hybrid"] = "bm25"
+    embedding_model_ref: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_embedding_model(self):
+        if self.method != "bm25" and not self.embedding_model_ref:
+            raise ValueError("embedding_model_ref is required for embedding scoring")
+        return self
+
+
+class ContextCompressionRecoveryConfig(BaseModel):
+    enabled: bool = False
+    store: Optional[Literal["redis", "valkey", "response_cache"]] = None
+    ttl_seconds: int = Field(default=900, ge=0)
+    max_bytes_per_request: int = Field(default=10 * 1024 * 1024, ge=0)
+    max_total_bytes: int = Field(default=256 * 1024 * 1024, ge=0)
+    max_retrievals: int = Field(default=8, ge=0)
+
+    @model_validator(mode="after")
+    def validate_store(self):
+        if self.enabled and self.store is None:
+            raise ValueError("recovery.store is required when recovery is enabled")
+        return self
+
+
+class ContextCompressionRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["bypass", "target"]] = Field(default_factory=list)
+    max_target_tokens: int = Field(default=16000, ge=0)
 
 
 class ContextCompressionPluginConfig(BaseModel):
     """Configuration for context_compression plugin."""
 
-    enabled: bool
-    min_tokens: Optional[int] = Field(default=None, ge=0)
-    target_tokens: Optional[int] = Field(default=None, ge=0)
-    bypass_header: Optional[str] = None
-    compress_rag: bool = False
+    model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def validate_token_budget(self):
-        min_tokens = self.min_tokens or 2000
-        target_tokens = self.target_tokens or (min_tokens // 2)
-        if target_tokens >= min_tokens:
-            raise ValueError("target_tokens must be less than min_tokens")
-        return self
+    enabled: bool
+    mode: Literal["auto", "always"] = "auto"
+    budget: Optional[ContextCompressionBudgetConfig] = None
+    targets: Optional[ContextCompressionTargetsConfig] = None
+    scoring: Optional[ContextCompressionScoringConfig] = None
+    recovery: Optional[ContextCompressionRecoveryConfig] = None
+    request_controls: Optional[ContextCompressionRequestControlsConfig] = None
+    failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
 
 
 class FastResponsePluginConfig(BaseModel):

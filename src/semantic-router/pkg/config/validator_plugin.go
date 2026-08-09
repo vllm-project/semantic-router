@@ -6,21 +6,20 @@ import (
 )
 
 var decisionPluginPayloadFactories = map[string]func() interface{}{
-	DecisionPluginResponseCache:       func() interface{} { return &ResponseCachePluginConfig{} },
-	DecisionPluginSystemPrompt:        func() interface{} { return &SystemPromptPluginConfig{} },
-	DecisionPluginHeaderMutation:      func() interface{} { return &HeaderMutationPluginConfig{} },
-	DecisionPluginHallucination:       func() interface{} { return &HallucinationPluginConfig{} },
-	DecisionPluginResponseJailbreak:   func() interface{} { return &ResponseJailbreakPluginConfig{} },
-	DecisionPluginRouterReplay:        func() interface{} { return &RouterReplayPluginConfig{} },
-	DecisionPluginMemory:              func() interface{} { return &MemoryPluginConfig{} },
-	DecisionPluginRAG:                 func() interface{} { return &RAGPluginConfig{} },
-	DecisionPluginImageGen:            func() interface{} { return &ImageGenPluginConfig{} },
-	DecisionPluginFastResponse:        func() interface{} { return &FastResponsePluginConfig{} },
-	DecisionPluginRequestParams:       func() interface{} { return &RequestParamsPluginConfig{} },
-	DecisionPluginTools:               func() interface{} { return &ToolsPluginConfig{} },
-	DecisionPluginToolSelection:       func() interface{} { return &ToolSelectionPluginConfig{} },
-	DecisionPluginProviderPromptCache: func() interface{} { return &ProviderPromptCachePluginConfig{} },
-	DecisionPluginContextCompression:  func() interface{} { return &ContextCompressionPluginConfig{} },
+	DecisionPluginResponseCache:      func() interface{} { return &ResponseCachePluginConfig{} },
+	DecisionPluginSystemPrompt:       func() interface{} { return &SystemPromptPluginConfig{} },
+	DecisionPluginHeaderMutation:     func() interface{} { return &HeaderMutationPluginConfig{} },
+	DecisionPluginHallucination:      func() interface{} { return &HallucinationPluginConfig{} },
+	DecisionPluginResponseJailbreak:  func() interface{} { return &ResponseJailbreakPluginConfig{} },
+	DecisionPluginRouterReplay:       func() interface{} { return &RouterReplayPluginConfig{} },
+	DecisionPluginMemory:             func() interface{} { return &MemoryPluginConfig{} },
+	DecisionPluginRAG:                func() interface{} { return &RAGPluginConfig{} },
+	DecisionPluginImageGen:           func() interface{} { return &ImageGenPluginConfig{} },
+	DecisionPluginFastResponse:       func() interface{} { return &FastResponsePluginConfig{} },
+	DecisionPluginRequestParams:      func() interface{} { return &RequestParamsPluginConfig{} },
+	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
+	DecisionPluginToolSelection:      func() interface{} { return &ToolSelectionPluginConfig{} },
+	DecisionPluginContextCompression: func() interface{} { return &ContextCompressionPluginConfig{} },
 }
 
 func validateDecisionPluginPayload(
@@ -58,7 +57,6 @@ func validateDecisionPluginPayload(
 	var err error
 	if normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
-		normalizedType == DecisionPluginProviderPromptCache ||
 		normalizedType == DecisionPluginContextCompression {
 		err = plugin.Configuration.DecodeIntoStrict(target)
 	} else {
@@ -94,8 +92,6 @@ func validateDecodedPluginContract(
 		return validateFastResponsePlugin(decisionName, index, pluginType, typed)
 	case *ResponseJailbreakPluginConfig:
 		return validateResponseJailbreakPlugin(decisionName, index, pluginType, typed)
-	case *ProviderPromptCachePluginConfig:
-		return validateProviderPromptCachePlugin(decisionName, index, pluginType, typed)
 	case *ContextCompressionPluginConfig:
 		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
 	}
@@ -229,54 +225,160 @@ func validateResponseJailbreakPlugin(
 	}
 }
 
-func validateProviderPromptCachePlugin(
-	decisionName string,
-	index int,
-	pluginType string,
-	typed *ProviderPromptCachePluginConfig,
-) error {
-	switch typed.TTL {
-	case "", "5m", "1h":
-		return nil
-	default:
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): ttl must be 5m or 1h",
-			decisionName,
-			index,
-			pluginType,
-		)
-	}
-}
-
 func validateContextCompressionPlugin(
 	decisionName string,
 	index int,
 	pluginType string,
 	typed *ContextCompressionPluginConfig,
 ) error {
-	if typed.MinTokens < 0 || typed.TargetTokens < 0 {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): token thresholds cannot be negative",
-			decisionName,
-			index,
-			pluginType,
-		)
+	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
+	checks := []func() error{
+		func() error { return validateContextCompressionMode(typed, scope) },
+		func() error { return validateContextCompressionBudget(typed, scope) },
+		func() error { return validateContextCompressionTargets(typed, scope) },
+		func() error { return validateContextCompressionScoring(typed, scope) },
+		func() error { return validateContextCompressionRecovery(typed, scope) },
+		func() error { return validateContextCompressionControls(typed, scope) },
 	}
-	minTokens := typed.MinTokens
-	if minTokens == 0 {
-		minTokens = 2000
+	for _, check := range checks {
+		if err := check(); err != nil {
+			return err
+		}
 	}
-	targetTokens := typed.TargetTokens
-	if targetTokens == 0 {
-		targetTokens = minTokens / 2
+	return nil
+}
+
+func ValidateContextCompressionPluginConfig(
+	typed *ContextCompressionPluginConfig,
+) error {
+	if typed == nil {
+		return fmt.Errorf("context_compression configuration is required")
 	}
-	if targetTokens >= minTokens {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): target_tokens must be less than min_tokens",
-			decisionName,
-			index,
-			pluginType,
-		)
+	return validateContextCompressionPlugin(
+		"preview",
+		0,
+		DecisionPluginContextCompression,
+		typed,
+	)
+}
+
+func validateContextCompressionBudget(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	if typed.Budget == nil {
+		return nil
+	}
+	trigger := typed.Budget.TriggerTokens
+	target := typed.Budget.TargetTokens
+	if trigger != nil && target != nil &&
+		!trigger.Auto && !target.Auto &&
+		trigger.Value > 0 && target.Value >= trigger.Value {
+		return fmt.Errorf("%s: budget.target_tokens must be less than budget.trigger_tokens", scope)
+	}
+	return nil
+}
+
+func validateContextCompressionMode(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	switch typed.EffectiveMode() {
+	case ContextCompressionModeAuto, ContextCompressionModeAlways:
+	default:
+		return fmt.Errorf("%s: mode must be auto or always", scope)
+	}
+	switch typed.EffectiveFailureMode() {
+	case ContextCompressionFailureOpen, ContextCompressionFailureClosed:
+		return nil
+	default:
+		return fmt.Errorf("%s: failure_mode must be fail_open or fail_closed", scope)
+	}
+}
+
+func validateContextCompressionTargets(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	targets := []ContextCompressionTargetConfig{typed.EffectiveToolOutputTarget()}
+	if typed.Targets != nil {
+		targets = append(targets, typed.Targets.History, typed.Targets.RAG, typed.Targets.Memory)
+	}
+	for _, target := range targets {
+		switch typed.EffectiveTargetMode(target) {
+		case ContextCompressionTargetPreserve,
+			ContextCompressionTargetExtractive,
+			ContextCompressionTargetRecoverable:
+		default:
+			return fmt.Errorf("%s: target mode must be preserve, extractive, or recoverable", scope)
+		}
+		if target.MinTokens < 0 || target.TargetTokens < 0 {
+			return fmt.Errorf("%s: target token thresholds cannot be negative", scope)
+		}
+		if target.MinTokens > 0 &&
+			target.TargetTokens > 0 &&
+			target.TargetTokens >= target.MinTokens {
+			return fmt.Errorf("%s: target_tokens must be less than min_tokens", scope)
+		}
+	}
+	return nil
+}
+
+func validateContextCompressionScoring(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	scoring := typed.EffectiveScoring()
+	switch scoring.Method {
+	case ContextCompressionScoringBM25:
+		return nil
+	case ContextCompressionScoringEmbedding, ContextCompressionScoringHybrid:
+		if strings.TrimSpace(scoring.EmbeddingModelRef) == "" {
+			return fmt.Errorf("%s: scoring.embedding_model_ref is required for %s", scope, scoring.Method)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%s: scoring.method must be bm25, embedding, or hybrid", scope)
+	}
+}
+
+func validateContextCompressionRecovery(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	if typed.Recovery == nil || !typed.Recovery.Enabled {
+		return nil
+	}
+	switch strings.TrimSpace(typed.Recovery.Store) {
+	case "redis", "valkey", "response_cache":
+	default:
+		return fmt.Errorf("%s: recovery.store must be redis, valkey, or response_cache", scope)
+	}
+	if typed.Recovery.TTLSeconds < 0 ||
+		typed.Recovery.MaxBytesPerRequest < 0 ||
+		typed.Recovery.MaxTotalBytes < 0 ||
+		typed.Recovery.MaxRetrievals < 0 {
+		return fmt.Errorf("%s: recovery limits cannot be negative", scope)
+	}
+	return nil
+}
+
+func validateContextCompressionControls(
+	typed *ContextCompressionPluginConfig,
+	scope string,
+) error {
+	if typed.RequestControls == nil {
+		return nil
+	}
+	if typed.RequestControls.MaxTargetTokens < 0 {
+		return fmt.Errorf("%s: request_controls.max_target_tokens cannot be negative", scope)
+	}
+	for _, directive := range typed.RequestControls.Allowed {
+		switch strings.TrimSpace(directive) {
+		case "bypass", "target":
+		default:
+			return fmt.Errorf("%s: unsupported request control %q", scope, directive)
+		}
 	}
 	return nil
 }

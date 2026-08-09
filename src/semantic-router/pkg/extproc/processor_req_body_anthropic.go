@@ -71,7 +71,6 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	if passthrough != nil {
 		passthrough.SetHeadersFromIncoming(ctx.Headers)
 	}
-	passthrough = applyProviderPromptCachePlugin(ctx, passthrough)
 	ctx.AnthropicPassthrough = passthrough
 
 	anthropicBody, err := anthropic.ToAnthropicRequestBodyWithPassthrough(openAIRequest, passthrough)

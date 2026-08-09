@@ -80,7 +80,6 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -103,7 +102,6 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -126,7 +124,6 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -149,7 +146,6 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
 routing:
   decisions:
     - description: Premium-only route for high-value legal and compliance analysis.

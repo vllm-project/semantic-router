@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -150,6 +151,27 @@ func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPrompt
 	if category := tokenCalibrationCategory(ctx); category != "" {
 		classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
 	}
+	if compressionCategory := contextCompressionTokenCalibrationCategory(ctx); compressionCategory != "" {
+		classifier.ObserveTokenUsage(
+			compressionCategory,
+			len(ctx.workingRequestBody()),
+			actualPromptTokens,
+		)
+	}
+}
+
+func contextCompressionTokenCalibrationCategory(ctx *RequestContext) string {
+	if ctx == nil || ctx.ContextCompressionRevision == "" {
+		return ""
+	}
+	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.RequestModel)
+	}
+	if model == "" {
+		return ""
+	}
+	return "context_compression:" + model
 }
 
 func tokenCalibrationByteLen(ctx *RequestContext) int {

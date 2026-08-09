@@ -202,6 +202,7 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: [
           { kind: 'route', label: 'Status', to: '/status' },
           { kind: 'route', label: 'Response Cache', to: '/response-cache' },
+          { kind: 'route', label: 'Context Compression', to: '/context-compression' },
         ],
       },
       {
