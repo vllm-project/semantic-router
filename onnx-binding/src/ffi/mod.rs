@@ -1,5 +1,6 @@
 //! Foreign Function Interface (FFI) for Go bindings
 
+pub mod abi_receipt;
 pub mod classification;
 pub mod embedding;
 pub mod memory;
