@@ -19,7 +19,6 @@ export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
-export const loadSecurityPolicyPage = () => import('../pages/SecurityPolicyPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
 export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
@@ -45,7 +44,6 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   },
   { matches: (pathname) => pathname.startsWith('/knowledge-bases'), load: loadTaxonomyPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
-  { matches: (pathname) => pathname.startsWith('/security'), load: loadSecurityPolicyPage },
   { matches: (pathname) => pathname.startsWith('/clawos'), load: loadOpenClawPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },

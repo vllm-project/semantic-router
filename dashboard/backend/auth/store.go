@@ -50,6 +50,10 @@ func NewStore(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := store.purgeRetiredPermissions(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := store.PruneInactiveSessions(context.Background(), time.Now()); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("prune auth sessions: %w", err)
