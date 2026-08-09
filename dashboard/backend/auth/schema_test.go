@@ -7,7 +7,7 @@ import (
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()
 
-	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, PermSecurityManage}
+	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead}
 	allSet := make(map[string]bool, len(AllPermissions))
 	for _, p := range AllPermissions {
 		allSet[p] = true
@@ -20,40 +20,24 @@ func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	}
 }
 
-func TestAdminRoleHasSecurityManage(t *testing.T) {
+// TestRetiredPermissionsAbsentFromRoleMetadata pins the removal of the dashboard security
+// policy surface. A retired key left in role metadata would be handed back out by
+// syncDefaultRolePermissions on every start and shown as grantable in the admin UI.
+func TestRetiredPermissionsAbsentFromRoleMetadata(t *testing.T) {
 	t.Parallel()
 
-	adminPerms := DefaultRolePermissions[RoleAdmin]
-	found := false
-	for _, p := range adminPerms {
-		if p == PermSecurityManage {
-			found = true
-			break
+	for _, retired := range retiredPermissions {
+		for _, p := range AllPermissions {
+			if p == retired {
+				t.Fatalf("retired permission %q is still advertised in AllPermissions", retired)
+			}
 		}
-	}
-	if !found {
-		t.Fatalf("admin role should have %q permission", PermSecurityManage)
-	}
-}
-
-func TestWriteRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	writePerms := DefaultRolePermissions[RoleWrite]
-	for _, p := range writePerms {
-		if p == PermSecurityManage {
-			t.Fatalf("write role should not have %q permission", PermSecurityManage)
-		}
-	}
-}
-
-func TestReadRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	readPerms := DefaultRolePermissions[RoleRead]
-	for _, p := range readPerms {
-		if p == PermSecurityManage {
-			t.Fatalf("read role should not have %q permission", PermSecurityManage)
+		for role, perms := range DefaultRolePermissions {
+			for _, p := range perms {
+				if p == retired {
+					t.Fatalf("role %q still grants retired permission %q", role, retired)
+				}
+			}
 		}
 	}
 }

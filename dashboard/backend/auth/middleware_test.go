@@ -224,9 +224,11 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate/", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate///", expected: PermTopologyRead},
+		// The retired security surface keeps the generic authenticated read requirement, so
+		// its 410 cannot be reached anonymously and cannot mutate anything.
 		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
-		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
-		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
+		{method: http.MethodPut, path: "/api/security/policy", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermConfigRead},
 	}
 
 	for _, tc := range testCases {

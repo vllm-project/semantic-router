@@ -92,3 +92,65 @@ ON CONFLICT(role, permission_key) DO UPDATE SET allowed = 1`,
 		t.Fatalf("legacy readonly role permissions should be removed")
 	}
 }
+
+// TestNewStorePurgesRetiredPermissionGrants covers the migration half of retiring the
+// dashboard security policy surface. Role rows are rebuilt from DefaultRolePermissions on
+// every start, but a direct per-user grant is never rebuilt, so without the purge it would
+// keep reporting a permission that no longer backs anything.
+func TestNewStorePurgesRetiredPermissionGrants(t *testing.T) {
+	t.Parallel()
+
+	const retired = "security.manage"
+
+	path := filepath.Join(t.TempDir(), "auth.db")
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	user := newTestUser(t, NewService(store, "test-secret", 1), "granted@example.com", RoleWrite, "active")
+	if _, execErr := store.db.ExecContext(
+		context.Background(),
+		`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,1)`,
+		user.ID,
+		retired,
+	); execErr != nil {
+		t.Fatalf("insert retired user grant error = %v", execErr)
+	}
+	if _, execErr := store.db.ExecContext(
+		context.Background(),
+		`INSERT INTO role_permissions(role, permission_key, allowed) VALUES(?,?,1)
+ON CONFLICT(role, permission_key) DO UPDATE SET allowed = 1`,
+		RoleAdmin,
+		retired,
+	); execErr != nil {
+		t.Fatalf("insert retired role grant error = %v", execErr)
+	}
+	if closeErr := store.Close(); closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+
+	reopened, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("reopen NewStore() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = reopened.Close()
+	})
+
+	effective, err := reopened.GetEffectivePermissions(context.Background(), RoleWrite, user.ID)
+	if err != nil {
+		t.Fatalf("GetEffectivePermissions() error = %v", err)
+	}
+	if effective[retired] {
+		t.Fatalf("retired permission %q survived startup as a direct user grant", retired)
+	}
+
+	rolePerms, err := reopened.ListRolePermissions(context.Background())
+	if err != nil {
+		t.Fatalf("ListRolePermissions() error = %v", err)
+	}
+	if slices.Contains(rolePerms[RoleAdmin], retired) {
+		t.Fatalf("retired permission %q survived startup on role %q", retired, RoleAdmin)
+	}
+}

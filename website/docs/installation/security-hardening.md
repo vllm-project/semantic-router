@@ -56,14 +56,29 @@ boundary and allow only that component to supply identity headers.
 
 ## Configure authorization and rate limits
 
-The Dashboard **Security Policy** page maps users or groups to Router roles and
-model access, and can define per-subject request and token limits. Saving a
-valid policy updates the canonical Router configuration and applies it to the
-active stack.
+`routing.signals.role_bindings` maps request subjects to a role name so a
+decision can branch on who is calling, and `global.services.ratelimit` defines
+limiter providers and rules. Both are edited through the Router configuration
+surfaces.
 
-Use preview before saving when a policy changes several mappings. Keep the
-management surface authenticated and grant write permissions only to operators
-who are allowed to change live routing policy.
+Neither is model authorization. A role binding decides which decision a request
+can match; it does not stop a caller from reaching a model through another
+decision, and it is only as trustworthy as the identity headers Envoy passes
+through. The `local-limiter` provider keeps counters in the Router process, so
+each replica enforces its own limits and they reset on restart. Use a shared
+provider such as `redis` when a limit must hold across replicas, and treat model
+access control as a concern of the layer that authenticates the caller.
+
+The Dashboard Security Policy page that used to generate this configuration has
+been retired; `/api/security/*` now returns `410 Gone`. Configuration it wrote
+stays active and is not removed automatically, because the generator recorded no
+ownership metadata and name-based cleanup could delete operator-authored
+entries. To clean it up, read the active config and its version history, identify
+likely generated entries (decisions named `rbac-*`, the role bindings they
+reference, and `local-limiter` rules), preview a complete diff with
+`POST /api/router/config/deploy/preview`, activate the reviewed snapshot, and
+roll back with `POST /api/router/config/rollback` if routing behavior changes
+unexpectedly.
 
 Relevant Dashboard permissions include:
 
@@ -71,7 +86,6 @@ Relevant Dashboard permissions include:
 | --- | --- | --- |
 | `feedback.submit` | Submit routing feedback. | admin, write |
 | `replay.read` | List replay records. | admin, write, read |
-| `security.manage` | Change security policy. | admin |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 
 The Router management API distinguishes replay metadata from replay detail.

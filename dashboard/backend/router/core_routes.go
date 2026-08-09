@@ -45,7 +45,7 @@ func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *s
 	registerStatusRoutes(mux, cfg, store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
-	registerSecurityPolicyRoutes(mux, cfg)
+	registerRetiredSecurityPolicyRoutes(mux)
 }
 
 func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*recipe.Store) {
@@ -97,36 +97,13 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 	}
 }
 
-func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
-	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	handlers.SetSecurityPolicyConfigPaths(cfg.AbsConfigPath, cfg.ConfigDir)
-	mux.HandleFunc("/api/security/policy", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.HandleGetSecurityPolicy(w, r)
-		case http.MethodPut:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard is in read-only mode", http.StatusForbidden)
-				return
-			}
-			handlers.HandleUpdateSecurityPolicy(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/security/policy/preview", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard runtime configuration is read-only", http.StatusForbidden)
-				return
-			}
-			handlers.HandlePreviewSecurityFragment(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
+// registerRetiredSecurityPolicyRoutes keeps the retired /api/security surface claimed so it
+// answers 410 rather than falling through to the generic /api/ proxy.
+func registerRetiredSecurityPolicyRoutes(mux *http.ServeMux) {
+	retired := handlers.RetiredSecurityPolicyHandler()
+	mux.HandleFunc("/api/security", retired)
+	mux.HandleFunc("/api/security/", retired)
+	log.Printf("Security Policy API endpoints retired: /api/security returns 410 Gone")
 }
 
 func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {

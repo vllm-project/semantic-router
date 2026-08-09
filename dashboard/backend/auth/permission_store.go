@@ -93,6 +93,31 @@ ON CONFLICT(role, permission_key) DO UPDATE SET allowed = 1`, role, strings.Trim
 	return tx.Commit()
 }
 
+// purgeRetiredPermissions removes grants for permissions that no longer back a surface.
+// syncDefaultRolePermissions already rebuilds role_permissions from DefaultRolePermissions
+// on every start, so role rows heal on their own; per-user grants are never rebuilt and
+// would otherwise survive indefinitely.
+func (s *Store) purgeRetiredPermissions() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	for _, permission := range retiredPermissions {
+		if _, err := tx.Exec(`DELETE FROM user_permissions WHERE permission_key = ?`, permission); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM role_permissions WHERE permission_key = ?`, permission); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID string) (map[string]bool, error) {
 	permMap := map[string]bool{}
 	rows, err := s.db.QueryContext(ctx, `SELECT permission_key FROM role_permissions WHERE role = ? AND allowed = 1`, role)
