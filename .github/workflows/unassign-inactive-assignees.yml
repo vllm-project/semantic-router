@@ -3,8 +3,7 @@ name: Unassign Inactive Assignees
 # Manages issue assignments based on activity:
 # - At 15 days: posts a reminder comment (if no PR activity)
 # - At 30 days: removes the assignment (if no PR activity, adds label)
-# Measures staleness from actual assignment event (not updated_at).
-# PR activity checks for any linked PR, not just recently-updated ones.
+# Measures staleness from per-assignee human timeline events and provides recovery paths.
 
 on:
   schedule:
@@ -31,245 +30,216 @@ jobs:
             const now = new Date();
             const millis = d => d * 24 * 60 * 60 * 1000;
 
-            // Fetch all PRs once per run for reuse (performance optimization)
-            let allPRs = [];
-            try {
-              let page = 1;
-              let hasMore = true;
-              while (hasMore) {
-                const resp = await github.rest.pulls.list({
-                  owner,
-                  repo,
-                  state: 'all',
-                  per_page: 100,
-                  page
-                });
-                if (!resp.data || resp.data.length === 0) {
-                  hasMore = false;
-                  break;
-                }
-                allPRs = allPRs.concat(resp.data);
-                page += 1;
-                if (resp.data.length < 100) {
-                  hasMore = false;
-                }
+            // Helper: fetch timeline events (paginated)
+            async function fetchTimeline(issue_number) {
+              try {
+                const timeline = await github.paginate(
+                  github.rest.issues.listEventsForTimeline,
+                  { owner, repo, issue_number, per_page: 100 }
+                );
+                return { timeline };
+              } catch (err) {
+                console.log(`ERROR fetching timeline for #${issue_number}: ${err.message}`);
+                return { error: err };
               }
-              console.log(`Fetched ${allPRs.length} PRs for reuse`);
-            } catch (e) {
-              console.log(`Warning: Could not fetch PRs: ${e.message}`);
             }
 
-            // Helper: check if any PR mentions this issue (with word boundary)
-            function hasPRMentioningIssue(issueNum) {
-              const pattern = new RegExp(`#${issueNum}\\b`);
-              return allPRs.some(pr => pr.body && pattern.test(pr.body));
+            // Helper: determine last human activity for an assignee from timeline
+            function lastHumanActivityForAssignee(assignee, timeline) {
+              let last = null;
+              for (const ev of timeline || []) {
+                if (!ev.actor || !ev.created_at) continue;
+                const actor = ev.actor;
+                if (actor.type !== 'User') continue; // ignore bots/apps
+
+                // If the actor is the assignee, count the event
+                if (actor.login && actor.login.toLowerCase() === assignee.login.toLowerCase()) {
+                  const t = new Date(ev.created_at);
+                  if (!last || t > last) last = t;
+                }
+
+                // Comment events may appear as 'commented' with actor info
+                if (ev.event === 'commented' && ev.actor && ev.actor.login && ev.actor.login.toLowerCase() === assignee.login.toLowerCase()) {
+                  const t = new Date(ev.created_at);
+                  if (!last || t > last) last = t;
+                }
+              }
+              return last;
             }
 
-            // Get all open assigned issues, paginate
-            let page = 1;
-            let hasMore = true;
+            // Helper: detect recent linked PR activity via cross-references in timeline
+            async function hasRecentLinkedPRActivity(issue_number) {
+              try {
+                const { timeline, error } = await fetchTimeline(issue_number);
+                if (error) return { error };
 
-            while (hasMore) {
-              const issues = await github.rest.issues.listForRepo({
-                owner,
-                repo,
-                state: 'open',
-                per_page: 100,
-                page
-              });
+                for (const ev of timeline || []) {
+                  if (ev.event === 'cross-referenced' && ev.source && ev.source.issue && ev.source.issue.pull_request) {
+                    const prNum = ev.source.issue.number;
+                    try {
+                      const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNum });
+                      const prUpdated = new Date(pr.updated_at || pr.created_at);
+                      if (now - prUpdated < millis(daysWarning)) {
+                        return { recent: true };
+                      }
+                    } catch (err) {
+                      console.log(`ERROR fetching linked PR #${prNum} for issue #${issue_number}: ${err.message}`);
+                      // Fail-closed: on error determining PR activity, assume there is activity
+                      return { error: err };
+                    }
+                  }
+                }
 
-              if (!issues.data || issues.data.length === 0) {
-                hasMore = false;
-                break;
+                return { recent: false };
+              } catch (err) {
+                console.log(`ERROR checking linked PRs for #${issue_number}: ${err.message}`);
+                return { error: err };
               }
+            }
 
-              for (const issue of issues.data) {
-                // Skip PRs and issues with no assignees
-                if (issue.pull_request || !issue.assignees || issue.assignees.length === 0) {
+            // Iterate all open issues (paginated)
+            const issuesIterator = github.paginate.iterator(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            for await (const { data: issues } of issuesIterator) {
+              for (const issue of issues) {
+                if (issue.pull_request) continue; // ignore PRs
+
+                // Load timeline once
+                const { timeline, error: timelineErr } = await (async () => {
+                  try {
+                    const t = await github.paginate(github.rest.issues.listEventsForTimeline, { owner, repo, issue_number: issue.number, per_page: 100 });
+                    return { timeline: t };
+                  } catch (err) {
+                    console.log(`WARN: failed to load timeline for #${issue.number}: ${err.message}`);
+                    return { error: err };
+                  }
+                })();
+
+                const timelineFetchFailed = !!timelineErr;
+
+                const assignees = issue.assignees || [];
+                const labels = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+                const hasUnassignedLabel = labels.includes('assignment-inactive-unassigned');
+                const hasWarningLabel = labels.includes('assignment-inactive-warning');
+
+                // Recovery: if no assignees but bot previously unassigned them and label/comment didn't get applied
+                if ((!assignees || assignees.length === 0) && !hasUnassignedLabel && !timelineFetchFailed && timeline) {
+                  const hadBotUnassign = timeline.some(ev => ev.event === 'unassigned' && ev.actor && ev.actor.login === 'github-actions[bot]');
+                  if (hadBotUnassign) {
+                    try {
+                      await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['assignment-inactive-unassigned'] });
+                    } catch (err) {
+                      console.log(`Failed to add unassigned label to #${issue.number}: ${err.message}`);
+                    }
+
+                    try {
+                      await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `**Automated notice:** Assignment removed previously by automation. If you are still working on this, please re-assign yourself or open a draft PR and mention this issue.` });
+                    } catch (err) {
+                      console.log(`Failed to create recovery comment on #${issue.number}: ${err.message}`);
+                    }
+                  }
                   continue;
                 }
 
-                // Get the issue timeline to find actual assignment events per assignee
-                let assignmentDates = {};
-                try {
-                  let timelinePage = 1;
-                  let timelineHasMore = true;
-                  while (timelineHasMore) {
-                    const timeline = await github.rest.issues.listEventsForTimeline({
-                      owner,
-                      repo,
-                      issue_number: issue.number,
-                      per_page: 100,
-                      page: timelinePage
-                    });
+                // If timeline fetch failed, be conservative and skip this issue
+                if (timelineFetchFailed) {
+                  console.log(`Skipping #${issue.number} due to timeline fetch failure`);
+                  continue;
+                }
 
-                    if (!timeline.data || timeline.data.length === 0) {
-                      timelineHasMore = false;
+                // Determine if any assignee has recent human activity or linked PR activity
+                let anyAssigneeActive = false;
+                let encounteredPRCheckError = false;
+
+                for (const a of assignees) {
+                  const lastHuman = lastHumanActivityForAssignee(a, timeline || []);
+                  if (lastHuman) {
+                    if (now - lastHuman < millis(daysWarning)) {
+                      anyAssigneeActive = true;
                       break;
                     }
-
-                    for (const event of timeline.data) {
-                      if (event.event === 'assigned' && event.assignee) {
-                        // Store the most recent assignment date for each assignee
-                        assignmentDates[event.assignee.login] = new Date(event.created_at);
-                      }
-                    }
-
-                    timelinePage += 1;
-                    if (timeline.data.length < 100) {
-                      timelineHasMore = false;
-                    }
                   }
-                } catch (e) {
-                  console.log(`Could not fetch timeline for #${issue.number}: ${e.message}`);
+
+                  const { recent, error: prErr } = await hasRecentLinkedPRActivity(issue.number);
+                  if (prErr) {
+                    encounteredPRCheckError = true; // fail-closed behavior
+                    break;
+                  }
+                  if (recent) {
+                    anyAssigneeActive = true;
+                    break;
+                  }
                 }
 
-                // Check if there's been any PR activity (ANY PR mentioning this issue)
-                const hasPRActivity = hasPRMentioningIssue(issue.number);
-
-                // Get existing comments to check for warning
-                let comments = [];
-                try {
-                  const resp = await github.rest.issues.listComments({
-                    owner,
-                    repo,
-                    issue_number: issue.number,
-                    per_page: 100
-                  });
-                  comments = resp.data || [];
-                } catch (e) {
-                  console.log(`Could not fetch comments for #${issue.number}: ${e.message}`);
-                }
-
-                const hasWarningComment = comments.some(c =>
-                  c.user.login === 'github-actions[bot]' &&
-                  c.body && c.body.includes('Automated reminder: no activity for')
-                );
-
-                if (hasPRActivity) {
-                  // Reset: remove warning label if present
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner,
-                      repo,
-                      issue_number: issue.number,
-                      name: 'assignment-inactive-warning'
-                    });
-                  } catch (e) {
-                    // Label may not exist, ignore
-                  }
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner,
-                      repo,
-                      issue_number: issue.number,
-                      name: 'assignment-inactive-unassigned'
-                    });
-                  } catch (e) {
-                    // Label may not exist, ignore
-                  }
+                if (encounteredPRCheckError) {
+                  console.log(`Skipping #${issue.number} due to error while checking linked PRs`);
                   continue;
                 }
 
-                // Check each assignee's individual age
-                const assigneesToRemove = [];
-                for (const assignee of issue.assignees) {
-                  const assignmentDate = assignmentDates[assignee.login];
-                  if (!assignmentDate) {
-                    // No assignment event found (shouldn't happen, but be safe)
-                    continue;
-                  }
-
-                  const age = now - assignmentDate;
-
-                  if (age >= millis(daysUnassign)) {
-                    assigneesToRemove.push(assignee.login);
-                  }
+                if (anyAssigneeActive) {
+                  // remove warning/unassigned labels if present
+                  try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issue.number, name: 'assignment-inactive-warning' }); } catch (e) {}
+                  try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issue.number, name: 'assignment-inactive-unassigned' }); } catch (e) {}
+                  continue;
                 }
 
-                if (assigneesToRemove.length > 0) {
-                  // Unassign stale assignees
+                // No recent activity from assignees or linked PRs. Compute most recent human activity across assignees
+                let mostRecentHuman = null;
+                for (const a of assignees) {
+                  const t = lastHumanActivityForAssignee(a, timeline || []);
+                  if (t && (!mostRecentHuman || t > mostRecentHuman)) mostRecentHuman = t;
+                }
+                const refTime = mostRecentHuman || new Date(issue.created_at);
+                const ageSinceHuman = now - refTime;
+
+                if (ageSinceHuman >= millis(daysUnassign)) {
+                  // Attempt unassignment (idempotent) then ensure comment/label are present; failures will be retried by recovery path
+                  const assigneeLogins = assignees.map(a => a.login);
+                  if (assigneeLogins.length > 0) {
+                    try {
+                      await github.rest.issues.removeAssignees({ owner, repo, issue_number: issue.number, assignees: assigneeLogins });
+                      console.log(`Unassigned #${issue.number}: ${assigneeLogins.join(', ')}`);
+                    } catch (err) {
+                      console.log(`Failed to remove assignees from #${issue.number}: ${err.message}`);
+                      continue; // cannot proceed if unassign failed
+                    }
+                  }
+
+                  // Create comment (best-effort)
                   try {
-                    await github.rest.issues.removeAssignees({
-                      owner,
-                      repo,
-                      issue_number: issue.number,
-                      assignees: assigneesToRemove
-                    });
-                    console.log(`Unassigned #${issue.number}: ${assigneesToRemove.join(', ')}`);
-
-                    // Post unassignment notice
-                    await github.rest.issues.createComment({
-                      owner,
-                      repo,
-                      issue_number: issue.number,
-                      body: `**Automated notice:** Assignment removed after ${daysUnassign} days of inactivity. ` +
-                            `If you are still working on this, please re-assign yourself or ` +
-                            `[open a draft PR](https://github.com/${owner}/${repo}/compare/main?expand=1) and mention this issue.`
-                    });
-
-                    // Add label for tracking
-                    try {
-                      await github.rest.issues.addLabels({
-                        owner,
-                        repo,
-                        issue_number: issue.number,
-                        labels: ['assignment-inactive-unassigned']
-                      });
-                    } catch (e) {
-                      // Ignore label add failures
-                    }
-                  } catch (e) {
-                    console.log(`Failed to unassign #${issue.number}: ${e.message}`);
-                  }
-                } else {
-                  // Check if any assignee is approaching warning threshold
-                  let shouldWarn = false;
-                  for (const assignee of issue.assignees) {
-                    const assignmentDate = assignmentDates[assignee.login];
-                    if (assignmentDate) {
-                      const age = now - assignmentDate;
-                      if (age >= millis(daysWarning) && age < millis(daysUnassign)) {
-                        shouldWarn = true;
-                        break;
-                      }
-                    }
+                    await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `**Automated notice:** Assignment removed after ${daysUnassign} days of inactivity. If you are still working on this, please re-assign yourself or open a draft PR and mention this issue.` });
+                  } catch (err) {
+                    console.log(`Failed to post unassignment comment on #${issue.number}: ${err.message}`);
                   }
 
-                  if (shouldWarn && !hasWarningComment) {
-                    // Post reminder comment
-                    try {
-                      await github.rest.issues.createComment({
-                        owner,
-                        repo,
-                        issue_number: issue.number,
-                        body: `⏰ **Automated reminder:** no activity for ${daysWarning} days. ` +
-                              `Please respond or [open a draft PR](https://github.com/${owner}/${repo}/compare/main?expand=1) ` +
-                              `within ${daysUnassign - daysWarning} days or your assignment will be removed.`
-                      });
+                  // Add tracking label (best-effort)
+                  try {
+                    await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['assignment-inactive-unassigned'] });
+                  } catch (err) {
+                    console.log(`Failed to add unassigned label on #${issue.number}: ${err.message}`);
+                  }
+
+                } else if (ageSinceHuman >= millis(daysWarning) && !hasWarningLabel) {
+                  // Post warning and add warning label
+                  try {
+                    await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `⏰ **Automated reminder:** no human activity for ${daysWarning} days. Please respond or open a draft PR within ${daysUnassign - daysWarning} days or your assignment will be removed.` });
                     console.log(`Reminded assignees for #${issue.number}`);
+                  } catch (err) {
+                    console.log(`Failed to post warning comment on #${issue.number}: ${err.message}`);
+                    continue; // don't add label if comment couldn't be posted
+                  }
 
-                      // Add warning label
-                      try {
-                        await github.rest.issues.addLabels({
-                          owner,
-                          repo,
-                          issue_number: issue.number,
-                          labels: ['assignment-inactive-warning']
-                        });
-                      } catch (e) {
-                        // Ignore label add failures
-                      }
-                    } catch (e) {
-                      console.log(`Failed to comment on #${issue.number}: ${e.message}`);
-                    }
+                  try {
+                    await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['assignment-inactive-warning'] });
+                  } catch (err) {
+                    console.log(`Failed to add warning label on #${issue.number}: ${err.message}`);
                   }
                 }
-              }
-
-              page += 1;
-              if (issues.data.length < 100) {
-                hasMore = false;
               }
             }
 
