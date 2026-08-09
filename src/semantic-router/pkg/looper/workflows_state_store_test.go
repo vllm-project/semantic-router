@@ -454,7 +454,7 @@ func TestWorkflowRedisToolStateStore_ConnectionPoolStable(t *testing.T) {
 	wg.Wait()
 
 	stats := s.client.PoolStats()
-	if stats.TotalConns > uint32(cfg.PoolSize) {
+	if int(stats.TotalConns) > cfg.PoolSize {
 		t.Fatalf("redis pool exceeded configured size: total=%d pool_size=%d", stats.TotalConns, cfg.PoolSize)
 	}
 }

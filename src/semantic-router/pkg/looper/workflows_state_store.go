@@ -337,7 +337,7 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	s.cleanupExpiredLocked(time.Now().UTC())
 
 	var oldSize int64
-	if info, err := os.Stat(path); err == nil {
+	if info, statErr := os.Stat(path); statErr == nil {
 		oldSize = info.Size()
 	}
 
@@ -346,12 +346,12 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	}
 
 	tmp := path + ".tmp-" + newWorkflowToolStateID()
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return "", fmt.Errorf("write workflow state: %w", err)
+	if writeErr := os.WriteFile(tmp, data, 0o600); writeErr != nil {
+		return "", fmt.Errorf("write workflow state: %w", writeErr)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if renameErr := os.Rename(tmp, path); renameErr != nil {
 		_ = os.Remove(tmp)
-		return "", fmt.Errorf("commit workflow state: %w", err)
+		return "", fmt.Errorf("commit workflow state: %w", renameErr)
 	}
 
 	committedInfo, err := os.Stat(path)

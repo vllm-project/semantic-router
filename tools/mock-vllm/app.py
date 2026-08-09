@@ -94,8 +94,7 @@ def is_workflow_worker_request(req: ChatRequest) -> bool:
 
 def has_assistant_tool_calls(req: ChatRequest) -> bool:
     return any(
-        message.role == "assistant" and message.tool_calls
-        for message in req.messages
+        message.role == "assistant" and message.tool_calls for message in req.messages
     )
 
 
@@ -299,7 +298,12 @@ async def health():
 
 @app.get("/v1/models")
 async def models():
-    return {"data": [{"id": "openai/gpt-oss-20b", "object": "model"}, {"id": "openai/workflow-planner", "object": "model"}]}
+    return {
+        "data": [
+            {"id": "openai/gpt-oss-20b", "object": "model"},
+            {"id": "openai/workflow-planner", "object": "model"},
+        ]
+    }
 
 
 @app.post("/v1/chat/completions")
