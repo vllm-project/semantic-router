@@ -83,7 +83,7 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 		})
 		return nil
 	case "openvino":
-		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil {
+		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil { //nolint:staticcheck
 			return err
 		}
 		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{

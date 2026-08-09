@@ -536,6 +536,85 @@ func TestFileStateStore_AggregateByteCap(t *testing.T) {
 	store.mu.Unlock()
 }
 
+func assertFileStoreCurrentBytes(t *testing.T, store *workflowFileToolStateStore, want int64) {
+	t.Helper()
+	store.mu.Lock()
+	actual := store.currentBytes
+	store.mu.Unlock()
+	if actual != want {
+		t.Fatalf("expected currentBytes %d, got %d", want, actual)
+	}
+}
+
+func assertNoWorkflowStateStoreArtifacts(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasSuffix(name, ".json") || strings.Contains(name, ".take-") || strings.Contains(name, ".tmp-") {
+			t.Fatalf("unexpected leftover file on disk: %s", name)
+		}
+	}
+}
+
+func fileStorePutTakeWorker(t *testing.T, store *workflowFileToolStateStore, ctx context.Context, workerID, ops int) {
+	t.Helper()
+	for i := 0; i < ops; i++ {
+		id := fmt.Sprintf("race-state-%d-%d", workerID, i)
+		st := makeTestState(id)
+		if _, putErr := store.Put(ctx, st); putErr != nil {
+			t.Errorf("worker %d Put failed: %v", workerID, putErr)
+			return
+		}
+		taken, ok, takeErr := store.Take(ctx, id)
+		if takeErr != nil || !ok || taken == nil {
+			t.Errorf("worker %d Take failed: ok=%v, err=%v", workerID, ok, takeErr)
+			return
+		}
+	}
+}
+
+func writeWorkflowStateJSONFile(t *testing.T, dir, name string, state *workflowPendingToolState) []byte {
+	t.Helper()
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", name, err)
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	return data
+}
+
+func writeStartupOrphanArtifacts(t *testing.T, dir string) {
+	t.Helper()
+	for _, name := range []string{"startup-1.json.take-orphan", "startup-3.json.tmp-orphan"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("orphan"), 0o600); err != nil {
+			t.Fatalf("write orphan %s: %v", path, err)
+		}
+	}
+}
+
+func assertPathNotExist(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected %s to be removed, stat err=%v", path, err)
+	}
+}
+
+func requireWorkflowStateTake(t *testing.T, store *workflowFileToolStateStore, ctx context.Context, id string) {
+	t.Helper()
+	taken, ok, err := store.Take(ctx, id)
+	if err != nil || !ok || taken == nil {
+		t.Fatalf("Take %s failed: ok=%v err=%v", id, ok, err)
+	}
+}
+
 func TestFileStateStore_ReclamationAndRaceSafety(t *testing.T) {
 	dir := t.TempDir()
 	store := newWorkflowFileToolStateStore(dir, time.Hour)
@@ -550,102 +629,30 @@ func TestFileStateStore_ReclamationAndRaceSafety(t *testing.T) {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			for i := 0; i < opsPerWorker; i++ {
-				id := fmt.Sprintf("race-state-%d-%d", workerID, i)
-				st := makeTestState(id)
-				if _, putErr := store.Put(ctx, st); putErr != nil {
-					t.Errorf("worker %d Put failed: %v", workerID, putErr)
-					return
-				}
-				taken, ok, takeErr := store.Take(ctx, id)
-				if takeErr != nil || !ok || taken == nil {
-					t.Errorf("worker %d Take failed: ok=%v, err=%v", workerID, ok, takeErr)
-					return
-				}
-			}
+			fileStorePutTakeWorker(t, store, ctx, workerID, opsPerWorker)
 		}(w)
 	}
 	wg.Wait()
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if store.currentBytes != 0 {
-		t.Fatalf("expected currentBytes = 0 after taking all items, got %d", store.currentBytes)
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), ".take-") || strings.Contains(e.Name(), ".tmp-") {
-			t.Fatalf("unexpected leftover file on disk: %s", e.Name())
-		}
-	}
+	assertFileStoreCurrentBytes(t, store, 0)
+	assertNoWorkflowStateStoreArtifacts(t, dir)
 }
 
 func TestFileStateStore_StartupRecovery(t *testing.T) {
 	dir := t.TempDir()
-	st1 := makeTestState("startup-1")
-	st2 := makeTestState("startup-2")
-
-	d1, err := json.Marshal(st1)
-	if err != nil {
-		t.Fatalf("marshal st1: %v", err)
-	}
-	d2, err := json.Marshal(st2)
-	if err != nil {
-		t.Fatalf("marshal st2: %v", err)
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, "startup-1.json"), d1, 0o600); err != nil {
-		t.Fatalf("write st1: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "startup-2.json"), d2, 0o600); err != nil {
-		t.Fatalf("write st2: %v", err)
-	}
-	// Write orphaned temporary and claim files from a previous crash
-	if err := os.WriteFile(filepath.Join(dir, "startup-1.json.take-orphan"), []byte("orphan"), 0o600); err != nil {
-		t.Fatalf("write orphan take: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "startup-3.json.tmp-orphan"), []byte("orphan"), 0o600); err != nil {
-		t.Fatalf("write orphan tmp: %v", err)
-	}
+	d1 := writeWorkflowStateJSONFile(t, dir, "startup-1.json", makeTestState("startup-1"))
+	d2 := writeWorkflowStateJSONFile(t, dir, "startup-2.json", makeTestState("startup-2"))
+	writeStartupOrphanArtifacts(t, dir)
 
 	store := newWorkflowFileToolStateStore(dir, time.Hour)
 	defer store.Close()
 
-	expectedBytes := int64(len(d1) + len(d2))
-	store.mu.Lock()
-	actualBytes := store.currentBytes
-	store.mu.Unlock()
-
-	if actualBytes != expectedBytes {
-		t.Fatalf("expected initial currentBytes %d, got %d", expectedBytes, actualBytes)
-	}
-
-	// Verify orphaned files were cleaned up
-	if _, err := os.Stat(filepath.Join(dir, "startup-1.json.take-orphan")); !os.IsNotExist(err) {
-		t.Fatalf("expected orphan take file to be removed")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "startup-3.json.tmp-orphan")); !os.IsNotExist(err) {
-		t.Fatalf("expected orphan tmp file to be removed")
-	}
+	assertFileStoreCurrentBytes(t, store, int64(len(d1)+len(d2)))
+	assertPathNotExist(t, filepath.Join(dir, "startup-1.json.take-orphan"))
+	assertPathNotExist(t, filepath.Join(dir, "startup-3.json.tmp-orphan"))
 
 	ctx := context.Background()
-	taken1, ok1, err1 := store.Take(ctx, "startup-1")
-	if err1 != nil || !ok1 || taken1 == nil {
-		t.Fatalf("Take startup-1 failed: %v", err1)
-	}
-	taken2, ok2, err2 := store.Take(ctx, "startup-2")
-	if err2 != nil || !ok2 || taken2 == nil {
-		t.Fatalf("Take startup-2 failed: %v", err2)
-	}
-
-	store.mu.Lock()
-	if store.currentBytes != 0 {
-		store.mu.Unlock()
-		t.Fatalf("expected currentBytes 0 after taking all states, got %d", store.currentBytes)
-	}
-	store.mu.Unlock()
+	requireWorkflowStateTake(t, store, ctx, "startup-1")
+	requireWorkflowStateTake(t, store, ctx, "startup-2")
+	assertFileStoreCurrentBytes(t, store, 0)
 }

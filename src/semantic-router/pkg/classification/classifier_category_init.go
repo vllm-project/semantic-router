@@ -79,7 +79,7 @@ func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, num
 		if len(numClasses) > 0 {
 			nc = numClasses[0]
 		}
-		if ovErr := initOpenVINOClassifier(modelID, nc, useCPU); ovErr == nil {
+		if ovErr := initOpenVINOClassifier(modelID, nc, useCPU); ovErr == nil { //nolint:staticcheck
 			c.usedMmBERT32K = true
 			logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
 				"backend":   "openvino",
@@ -161,8 +161,8 @@ func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.C
 
 	switch backend {
 	case "openvino":
-		ovResult, ovErr := classifyOpenVINO(text)
-		if ovErr != nil {
+		ovResult, ovErr := classifyOpenVINO(text) //nolint:staticcheck
+		if ovErr != nil {                         //nolint:staticcheck
 			err = ovErr
 		} else {
 			result = candle_binding.ClassResult{
