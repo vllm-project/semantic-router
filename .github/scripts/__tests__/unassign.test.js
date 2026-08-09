@@ -2,4 +2,3 @@ const { run } = require('../unassign');\n\n// Minimal mock runner\nconst makeTim
   const res = await runTestCase({ now, issues, timelines, prs: {} });
   expect(res.find(r => r.issue === 3).action).toBe('unassigned');
 });
-
