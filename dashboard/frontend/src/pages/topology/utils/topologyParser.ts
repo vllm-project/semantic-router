@@ -26,7 +26,7 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const signals = extractSignals(config)
   const decisions = extractDecisions(config)
   const models = extractModels(config)
-  const strategy = config.global?.router?.strategy || 'priority'
+  const strategy = config.routing?.strategy || config.global?.router?.strategy || 'priority'
   const defaultModel = config.providers?.defaults?.default_model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }

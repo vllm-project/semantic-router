@@ -46,7 +46,6 @@ providers:
         currency: USD
         prompt_per_1m: 0.01
       provider_model_id: google/gemini-2.5-flash-lite
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -59,7 +58,6 @@ providers:
         currency: USD
         prompt_per_1m: 0.48
       provider_model_id: google/gemini-3.1-pro
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -72,7 +70,6 @@ providers:
         currency: USD
         prompt_per_1m: 1.2
       provider_model_id: openai/gpt5.4
-      reasoning_family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
           name: vllm_primary
@@ -85,7 +82,6 @@ providers:
         currency: USD
         prompt_per_1m: 1.8
       provider_model_id: anthropic/claude-opus-4.6
-      reasoning_family: qwen3
 routing:
   decisions:
     - description: Premium-only route for high-value legal and compliance analysis.
@@ -1701,6 +1697,7 @@ routing:
           - Explain the trade-offs between battery chemistries for grid storage.
           - Analyze a protein-folding pipeline and its computational bottlenecks.
           - Design an anomaly-detection method for sensor networks.
+          - In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.
         name: complex_stem
         threshold: 0.77
       - aggregation_method: max

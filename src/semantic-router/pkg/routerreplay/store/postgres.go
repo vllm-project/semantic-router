@@ -45,6 +45,7 @@ const postgresCreateTableQueryTemplate = `
 			id VARCHAR(255) PRIMARY KEY,
 			timestamp TIMESTAMP NOT NULL,
 			request_id VARCHAR(255),
+			recipe TEXT,
 			decision VARCHAR(255),
 			decision_tier INTEGER DEFAULT 0,
 			decision_priority INTEGER DEFAULT 0,
@@ -97,6 +98,8 @@ const postgresCreateTableQueryTemplate = `
 			baseline_model VARCHAR(255),
 			created_at TIMESTAMP DEFAULT NOW()
 		);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;
+		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS projections JSONB;

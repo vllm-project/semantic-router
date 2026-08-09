@@ -15,7 +15,7 @@ translation:
 - `add`：从工具数据库中检索工具
 - `filter`：筛选传入请求中已有的工具
 
-它对应 `config/plugin/tool-selection/` 下的片段。
+它对应 `config/fragments/plugin/tool-selection/` 下的片段。
 
 ## 主要优势
 

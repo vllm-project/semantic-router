@@ -5,6 +5,7 @@ algorithm:
     model_distribution: round_robin
     temperature: 0.7
     max_concurrent: 3
+    max_completion_tokens: 1024
     round_timeout_seconds: 120
     min_successful_responses: 2
     include_intermediate_responses: false

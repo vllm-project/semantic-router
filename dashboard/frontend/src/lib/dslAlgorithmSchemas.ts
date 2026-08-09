@@ -148,6 +148,14 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           placeholder: '0 (no limit)',
         },
         {
+          key: 'max_completion_tokens',
+          label: 'Max Completion Tokens',
+          type: 'number',
+          min: 1,
+          placeholder: '1024',
+          description: 'Apply a completion limit to every ReMoM subrequest',
+        },
+        {
           key: 'round_timeout_seconds',
           label: 'Round Timeout',
           type: 'number',

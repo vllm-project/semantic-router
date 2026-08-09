@@ -11,17 +11,46 @@ import (
 
 // IsFactCheckEnabled checks if fact-check classification is enabled and properly configured.
 func (c *Classifier) IsFactCheckEnabled() bool {
-	return c.Config.IsFactCheckClassifierEnabled()
+	return c.ownsDefaultAPIConsumer() && c.Config.NeedsFactCheckModelForAPI()
 }
 
-// IsHallucinationDetectionEnabled checks if hallucination detection is enabled and properly configured.
+func (c *Classifier) needsFactCheckModelForRuntime() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.NeedsFactCheckModelForRouting() ||
+			(c.ownsDefaultAPIConsumer() && c.Config.NeedsFactCheckModelForAPI()))
+}
+
+// IsHallucinationDetectionEnabled reports whether the configured detector can
+// run with the active backend. Endpoint detectors do not depend on native
+// binding capabilities.
 func (c *Classifier) IsHallucinationDetectionEnabled() bool {
-	return c.Config.IsHallucinationModelEnabled()
+	if !c.needsHallucinationDetectorForRuntime() {
+		return false
+	}
+	if c.Config.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendEndpoint {
+		return true
+	}
+	return CurrentNativeBackendCapabilities().LocalHallucinationDetection
+}
+
+func (c *Classifier) needsHallucinationDetectorForRuntime() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.NeedsHallucinationDetectorForRouting() ||
+			(c.ownsDefaultAPIConsumer() && c.Config.NeedsHallucinationDetectorForDefaultRuntime()))
+}
+
+func (c *Classifier) needsLocalHallucinationNLIForRuntime() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.NeedsLocalHallucinationNLIForRouting() ||
+			(c.ownsDefaultAPIConsumer() && c.Config.NeedsLocalHallucinationNLIForAPI()))
 }
 
 // initializeFactCheckClassifier initializes the fact-check classification model.
 func (c *Classifier) initializeFactCheckClassifier() error {
-	if !c.IsFactCheckEnabled() {
+	if !c.needsFactCheckModelForRuntime() {
 		return nil
 	}
 
@@ -40,7 +69,7 @@ func (c *Classifier) initializeFactCheckClassifier() error {
 
 // initializeHallucinationDetector initializes the hallucination detection model.
 func (c *Classifier) initializeHallucinationDetector() error {
-	if !c.IsHallucinationDetectionEnabled() {
+	if !c.needsHallucinationDetectorForRuntime() {
 		return nil
 	}
 
@@ -58,6 +87,11 @@ func (c *Classifier) initializeHallucinationDetector() error {
 		// gracefully skip ("nli backend not configured") under on_error: skip.
 		wireEndpointFusionGroundingBackend(detector.Detect)
 		return nil
+	}
+
+	capabilities := CurrentNativeBackendCapabilities()
+	if !capabilities.LocalHallucinationDetection {
+		return fmt.Errorf("native backend %q does not support local hallucination detection", capabilities.Name)
 	}
 
 	detector, err := NewHallucinationDetector(&c.Config.HallucinationMitigation.HallucinationModel)
@@ -117,7 +151,10 @@ func wireEndpointFusionGroundingBackend(detect func(context, question, answer st
 }
 
 func (c *Classifier) initializeHallucinationNLI(detector *HallucinationDetector) {
-	if c.Config.HallucinationMitigation.NLIModel.ModelID == "" {
+	if !c.needsLocalHallucinationNLIForRuntime() {
+		return
+	}
+	if !CurrentNativeBackendCapabilities().LocalHallucinationNLI {
 		return
 	}
 
@@ -237,7 +274,9 @@ func (c *Classifier) IsHallucinationDetectorReady() bool {
 	return false
 }
 
-// IsHallucinationExplainerReady returns true if either detector can provide explanations (NLI).
+// IsHallucinationExplainerReady reports local NLI classifier readiness for the
+// public NLI API. Endpoint-generated span explanations are part of detector
+// responses and are not a local NLI classifier.
 func (c *Classifier) IsHallucinationExplainerReady() bool {
 	if c.endpointHallucinationDetector != nil {
 		return c.endpointHallucinationDetector.IsNLIInitialized()

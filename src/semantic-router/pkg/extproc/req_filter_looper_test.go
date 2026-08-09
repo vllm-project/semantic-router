@@ -665,6 +665,7 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 	assert.Equal(t, "Bearer secret", headerMap["Authorization"])
 	assert.Equal(t, "1", headerMap["x-extra"])
 	assert.Contains(t, removeHeaders, "content-length")
+	assert.Contains(t, removeHeaders, headers.VSRSelectedRecipe)
 	assert.Contains(t, removeHeaders, "x-remove-me")
 }
 

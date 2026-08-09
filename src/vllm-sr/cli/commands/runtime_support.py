@@ -22,6 +22,7 @@ from cli.commands.runtime_config_mutation import (
     apply_platform_gpu_defaults,
 )
 from cli.commands.runtime_kb import _sync_runtime_kb_store
+from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_paths import (
     _container_runtime_config_path,
     _container_source_config_path,
@@ -254,6 +255,7 @@ def resolve_effective_config_path(
         stack = resolve_runtime_stack()
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
+        changed = apply_local_looper_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
     if (

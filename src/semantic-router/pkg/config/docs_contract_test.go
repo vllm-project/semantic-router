@@ -31,12 +31,12 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"`config/config.yaml`",
 			"exhaustive canonical reference config",
-			"`config/signal/`",
+			"`config/fragments/signal/`",
 			"`tutorials/signal/heuristic/`",
 			"`tutorials/signal/learned/`",
-			"`config/decision/`",
-			"`config/algorithm/`",
-			"`config/plugin/`",
+			"`config/fragments/decision/`",
+			"`config/fragments/algorithm/`",
+			"`config/fragments/plugin/`",
 			"`tutorials/global/`",
 			"`go test ./pkg/config/...`",
 			"`make agent-lint`",
@@ -57,7 +57,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`global.integrations`",
 			"`global.model_catalog`",
 			"`global.model_catalog.modules`",
-			"`config/algorithm/`",
+			"`config/fragments/algorithm/`",
 			"`tutorials/global/`",
 			"`tutorials/signal/heuristic/`",
 			"`tutorials/signal/learned/`",
@@ -75,7 +75,7 @@ var configContractRequiredDocs = []docNeedles{
 			"version:\nlisteners:\nproviders:\nrouting:\nglobal:",
 			"`routing.modelCards`",
 			"`routing.modelCards[].loras`",
-			"`config/algorithm/`",
+			"`config/fragments/algorithm/`",
 			"`providers.defaults`",
 			"`providers.models[].backend_refs[]`",
 			"`lora_name`",
@@ -494,7 +494,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
-			"`config/signal/`",
+			"`config/fragments/signal/`",
 			"### Heuristic Signals",
 			"### Learned Signals",
 			"[Keyword](./heuristic/keyword)",
@@ -504,7 +504,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
-			"`config/decision/`",
+			"`config/fragments/decision/`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -512,7 +512,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
-			"`config/algorithm/`",
+			"`config/fragments/algorithm/`",
 			"### Selection Algorithms",
 			"### Looper Algorithms",
 			"[Static](./selection/static)",
@@ -522,7 +522,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
-			"`config/plugin/`",
+			"`config/fragments/plugin/`",
 			"`routing.decisions[].plugins`",
 			"[Fast Response](./fast-response)",
 			"[Semantic Cache](./semantic-cache)",
