@@ -97,8 +97,7 @@ jobs:
               }
             }
 
-            // Iterate all open issues (paginated)
-            const issuesIterator = github.paginate.iterator(github.rest.issues.listForRepo, {
+            // Iterate all open issues (paginated) ensureLabels();\n issuesIterator = github.paginate.iterator(github.rest.issues.listForRepo, {
               owner,
               repo,
               state: 'open',
@@ -244,3 +243,5 @@ jobs:
             }
 
             console.log('✅ Inactive assignee check completed');
+
+
