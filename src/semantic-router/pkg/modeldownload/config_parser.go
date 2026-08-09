@@ -64,7 +64,7 @@ func recordModelPath(fieldName string, field reflect.Value, paths *[]string, see
 		return
 	}
 
-	path := field.String()
+	path := resolveAliasForField(fieldName, field.String())
 	if path == "" || !strings.HasPrefix(path, "models/") || seen[path] {
 		return
 	}
@@ -82,6 +82,20 @@ func isModelPathField(fieldName string) bool {
 		fieldName == "Qwen3ModelPath" ||
 		fieldName == "GemmaModelPath" ||
 		strings.HasSuffix(fieldName, "ModelPath")
+}
+
+// resolveAliasForField canonicalizes the registry aliases the runtime itself resolves,
+// so the snapshot lands in the directory that will actually be loaded.
+//
+// Every consumer of a *ModelPath field passes it through config.ResolveModelPath first:
+// the embedding runtime, local classifier signal rules, and the modality detector. A
+// ModelID reaches the candle bindings verbatim, so canonicalizing one here would move
+// its download away from the directory the classifier opens.
+func resolveAliasForField(fieldName, path string) string {
+	if fieldName == "ModelID" {
+		return path
+	}
+	return config.ResolveModelPath(path)
 }
 
 // isModelDirectory checks if a path looks like a model directory (not a file)
@@ -185,7 +199,7 @@ func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByMod
 	}
 
 	// MmBertModelPath holds the configured semantic embedding model directory.
-	path := cfg.MmBertModelPath
+	path := config.ResolveModelPath(cfg.MmBertModelPath)
 	if path == "" || !strings.HasPrefix(path, "models/") {
 		return
 	}
