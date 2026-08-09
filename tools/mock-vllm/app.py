@@ -183,9 +183,7 @@ def should_emit_tool_call(req: ChatRequest) -> bool:
         return False
     if is_workflow_final_synthesis_request(req):
         return False
-    if has_assistant_tool_calls(req):
-        return False
-    return True
+    return not has_assistant_tool_calls(req)
 
 
 def build_tool_call_response(req: ChatRequest, usage: dict, created_ts: int) -> dict:

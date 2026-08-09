@@ -227,10 +227,10 @@ func resumeAndVerifyWorkflowStateAfterRestart(
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"state_id":  stateID,
-			"resumed":   true,
-			"consumed":  true,
-			"survived":  true,
+			"state_id": stateID,
+			"resumed":  true,
+			"consumed": true,
+			"survived": true,
 		})
 	}
 	return nil
