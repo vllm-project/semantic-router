@@ -4,7 +4,7 @@
 
 `confidence` is a **looper** algorithm that escalates across candidate models until confidence is high enough. It tries smaller/cheaper models first and only escalates to larger models when the response confidence is below a configured threshold.
 
-It aligns to `config/algorithm/looper/confidence.yaml`.
+It aligns to `config/fragments/algorithm/looper/confidence.yaml`.
 
 ## Key Advantages
 

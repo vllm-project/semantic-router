@@ -11,7 +11,7 @@ translation:
 
 `router_dc` 用于**语义查询到模型匹配**的选择算法。
 
-对应 `config/algorithm/selection/router-dc.yaml`。
+对应 `config/fragments/algorithm/selection/router-dc.yaml`。
 
 ## 主要优势
 

@@ -10,6 +10,7 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_gpu_isolation import router_runtime_env
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -278,13 +279,14 @@ def _build_router_runtime_command(
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
 ):
+    router_env = router_runtime_env(common_env, normalized_platform)
     return _build_service_run_command(
         runtime=runtime,
         image=router_image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
-        env_vars=common_env,
+        env_vars=router_env,
         mount_specs=_runtime_mount_specs(runtime_paths, include_models=True),
         port_mappings=[
             (stack_layout.router_port, 50051),
@@ -293,7 +295,7 @@ def _build_router_runtime_command(
         ],
         entrypoint="/app/start-router.sh",
         command_args=[
-            common_env.get("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/config.yaml"),
+            router_env.get("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/config.yaml"),
             "/app/.vllm-sr",
         ],
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
@@ -400,6 +402,16 @@ def _build_dashboard_runtime_env(
         value = os.getenv(name)
         if value:
             dashboard_env[name] = value
+
+    bootstrap_policy_env = "DASHBOARD_ALLOW_OPEN_BOOTSTRAP"
+    if bootstrap_policy_env in os.environ:
+        dashboard_env[bootstrap_policy_env] = os.environ[bootstrap_policy_env]
+    elif bootstrap_policy_env not in dashboard_env:
+        bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
+        bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
+        if not (bootstrap_email and bootstrap_password):
+            dashboard_env[bootstrap_policy_env] = "true"
+
     dashboard_env.setdefault(
         "TARGET_ROUTER_API_URL", stack_layout.router_api_service_url
     )

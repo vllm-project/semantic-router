@@ -14,48 +14,75 @@ ROUTING {
 # MODELS
 # =============================================================================
 
-MODEL anthropic/claude-opus-4.6 {
+MODEL local/deepseek-v4-flash-analyst {
   context_window_size: 262144
-  description: "Highest-quality model for accuracy-first routing."
+  description: "Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration."
+  capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity"]
+  tags: ["tier:experimental_frontier", "cost:high", "deployment:self_hosted", "physical:deepseek-v4-flash-0731"]
+  quality_score: 0.88
+  modality: "text"
+}
+
+MODEL local/gemma4-26b-balanced {
+  context_window_size: 32768
+  description: "Fast architecture-diverse MoE tier for balanced general reasoning."
+  capabilities: ["reasoning", "multilingual", "structured_output", "long_context"]
+  tags: ["tier:balanced", "cost:medium", "latency:fastest_measured", "deployment:self_hosted", "physical:gemma4-26b-a4b"]
+  quality_score: 0.89
+  modality: "text"
+}
+
+MODEL local/qwen3.5-122b-frontier {
+  context_window_size: 262144
+  description: "Large local MoE tier for accuracy-first synthesis and review."
   capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis"]
-  tags: ["tier:premium", "cost:highest"]
+  tags: ["tier:premium", "cost:highest", "deployment:self_hosted", "physical:qwen3.5-122b-a10b-fp8"]
   quality_score: 0.94
   modality: "text"
 }
 
-MODEL google/gemini-2.5-flash-lite {
-  context_window_size: 262144
-  description: "Low-cost managed lane for fast general workloads."
-  capabilities: ["fast_qa", "explanation", "coding"]
-  tags: ["tier:medium", "cost:low", "latency:fast"]
+MODEL local/qwen3.5-9b-economy {
+  context_window_size: 32768
+  description: "Small dense local tier for low-cost and short interactive workloads."
+  capabilities: ["fast_qa", "explanation", "general_chat"]
+  tags: ["tier:economy", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
   quality_score: 0.68
   modality: "text"
 }
 
-MODEL google/gemini-3.1-pro {
-  context_window_size: 262144
-  description: "Strong general reasoning and long-context model."
-  capabilities: ["reasoning", "architecture", "long_context"]
-  tags: ["tier:complex", "cost:upper_mid"]
-  quality_score: 0.82
+MODEL local/qwen3.5-9b-economy-replica {
+  context_window_size: 32768
+  description: "Independent replica of the economy tier for latency and load-aware selection."
+  capabilities: ["fast_qa", "explanation", "general_chat"]
+  tags: ["tier:economy_replica", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
+  quality_score: 0.68
   modality: "text"
 }
 
-MODEL openai/gpt5.4 {
-  context_window_size: 262144
-  description: "Frontier formal reasoning and proof model."
-  capabilities: ["reasoning", "proofs", "formal_derivation"]
-  tags: ["tier:reasoning", "cost:high"]
+MODEL local/qwen3.5-9b-private {
+  context_window_size: 32768
+  description: "Isolated alias of the local 9B tier for privacy-policy routes."
+  capabilities: ["privacy_locality", "sensitive_data", "general_chat"]
+  tags: ["tier:private", "cost:low", "deployment:self_hosted", "physical:qwen3.5-9b"]
+  quality_score: 0.68
+  modality: "text"
+}
+
+MODEL local/qwen3.6-27b-coder {
+  context_window_size: 32768
+  description: "Dense Qwen3.6 tier for coding, structured output, and verification."
+  capabilities: ["reasoning", "coding", "structured_output", "tool_use"]
+  tags: ["tier:coder", "cost:upper_mid", "deployment:self_hosted", "physical:qwen3.6-27b"]
   quality_score: 0.9
   modality: "text"
 }
 
-MODEL qwen/qwen3.5-rocm {
-  context_window_size: 262144
-  description: "Self-hosted general model and strict local-policy target."
-  capabilities: ["fast_qa", "self_hosted", "general_chat", "privacy_locality"]
-  tags: ["tier:simple", "cost:lowest", "deployment:self_hosted"]
-  quality_score: 0.58
+MODEL local/qwen3.6-35b-flash {
+  context_window_size: 32768
+  description: "Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning."
+  capabilities: ["fast_qa", "coding", "reasoning"]
+  tags: ["tier:flash", "cost:medium", "latency:fast", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
+  quality_score: 0.84
   modality: "text"
 }
 
@@ -115,9 +142,21 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     method: "regex"
   }
 
+  SIGNAL keyword unified_balance_terse_markers {
+    operator: "OR"
+    keywords: ["concise and direct", "brief and direct", "简洁直接", "简短直接", "breve y directa", "brève et directe", "簡潔で直接的", "kurz und direkt"]
+    method: "regex"
+  }
+
+  SIGNAL keyword unified_balance_negated_reasoning {
+    operator: "OR"
+    keywords: ["do not analyze", "don't analyze", "without analysis", "不要分析", "无需分析", "no analices", "sans analyse", "分析しない", "nicht analysieren"]
+    method: "regex"
+  }
+
   SIGNAL keyword unified_balance_reasoning_markers {
     operator: "OR"
-    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "分析取舍", "第一性原理", "根因分析", "逐步推理", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "kompromisse analysieren"]
+    keywords: ["analyze the tradeoffs", "analyze the trade-offs", "from first principles", "root cause", "step by step", "system design", "consistency tradeoffs", "competing production failure", "分析取舍", "第一性原理", "根因分析", "逐步推理", "取舍", "根因", "analizar las ventajas y desventajas", "causa raíz", "analyser les compromis", "cause racine", "根本原因を分析", "段階的に推論", "トレードオフ", "根本原因", "トレードオフを分析", "根本原因と", "kompromisse analysieren"]
     method: "regex"
   }
 
@@ -133,11 +172,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     method: "regex"
   }
 
-  SIGNAL fact_check unified_balance_needs_fact_check {
+  SIGNAL fact_check needs_fact_check {
     description: "Detect claims that benefit from evidence-backed verification."
   }
 
-  SIGNAL user_feedback unified_balance_wrong_answer {
+  SIGNAL user_feedback wrong_answer {
     description: "Detect explicit correction or dissatisfaction with the previous answer."
   }
 
@@ -145,12 +184,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     description: "Detect an immediate semantic repeat after an unsatisfactory answer."
     threshold: 0.8
     lookback_turns: 1
-  }
-
-  SIGNAL preference unified_balance_terse_preference {
-    description: "Detect a durable preference for concise, direct answers beyond exact trigger phrases."
-    examples: ["Keep the answer concise and direct.", "请保持回答简洁直接。", "Responde de forma breve y directa.", "Réponds de manière brève et directe.", "簡潔で直接的に答えてください。"]
-    threshold: 0.72
   }
 
   SIGNAL language zh {
@@ -197,7 +230,7 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   }
 
   SIGNAL complexity unified_balance_difficulty {
-    threshold: 0.72
+    threshold: 0.08
     description: "Semantic boundary between direct requests and synthesis-heavy work."
     hard: { candidates: ["Analyze a production failure from several competing root causes.", "Design a distributed system and justify its consistency tradeoffs.", "Synthesize conflicting evidence into a defensible recommendation."] }
     easy: { candidates: ["Give a short definition of a common term.", "Summarize one paragraph in a single sentence.", "Explain a basic concept with one example."] }
@@ -205,14 +238,14 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
 
   PROJECTION score unified_balance_effort_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "preference", weight: -0.25, name: "unified_balance_terse_preference", value_source: "confidence" }, { type: "keyword", weight: 0.34, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.32, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.35, name: "unified_balance_needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "unified_balance_wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.12, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.3, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.2, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
+    inputs: [{ type: "keyword", weight: -0.35, name: "unified_balance_simple_markers", value_source: "confidence" }, { type: "keyword", weight: -0.1, name: "unified_balance_terse_markers", value_source: "confidence" }, { type: "keyword", weight: -1, name: "unified_balance_negated_reasoning", value_source: "confidence" }, { type: "keyword", weight: 0.85, name: "unified_balance_reasoning_markers", value_source: "confidence" }, { type: "keyword", weight: 0.45, name: "unified_balance_verification_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.45, name: "needs_fact_check" }, { type: "user_feedback", weight: 0.35, name: "wrong_answer" }, { type: "keyword", weight: 0.35, name: "unified_balance_correction_markers", value_source: "confidence" }, { type: "reask", weight: 0.25, name: "unified_balance_reask", value_source: "confidence" }, { type: "context", weight: 0.18, name: "unified_balance_long_context" }, { type: "structure", weight: 0.45, name: "unified_balance_constraint_dense" }, { type: "complexity", weight: 0.4, name: "unified_balance_difficulty:hard" }, { type: "complexity", weight: -0.05, name: "unified_balance_difficulty:easy" }, { type: "conversation", weight: 0.08, name: "unified_balance_multi_turn" }, { type: "language", weight: 0.06, name: "zh" }, { type: "language", weight: 0.06, name: "es" }, { type: "language", weight: 0.06, name: "fr" }, { type: "language", weight: 0.06, name: "ja" }, { type: "language", weight: 0.06, name: "de" }]
   }
 
   PROJECTION mapping unified_balance_effort_band {
     source: "unified_balance_effort_score"
     method: "threshold_bands"
     calibration: { method: "sigmoid_distance", slope: 10 }
-    outputs: [{ name: "unified_balance_standard", lt: 0.32 }, { name: "unified_balance_deliberate", gte: 0.32 }]
+    outputs: [{ name: "unified_balance_standard", lt: 0.3 }, { name: "unified_balance_deliberate", gte: 0.3 }]
   }
 
   # =============================================================================
@@ -222,10 +255,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.") {
     PRIORITY 300
     TIER 1
-    WHEN (user_feedback("unified_balance_wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    WHEN (user_feedback("wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "first"
@@ -242,10 +276,10 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 200
     TIER 2
     WHEN projection("unified_balance_deliberate")
-    MODEL "google/gemini-2.5-flash-lite" (reasoning = true, effort = "medium"),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -256,11 +290,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_route (description = "Balance quality, observed latency, configured cost, and current load.") {
     PRIORITY 100
     TIER 3
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "medium"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -323,9 +357,11 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     PRIORITY 200
     TIER 1
     WHEN projection("unified_speed_heavy")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.5-9b-economy-replica" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false)
     ALGORITHM latency_aware {
       description: "Minimize observed generation and first-token latency."
       tpot_percentile: 90
@@ -336,8 +372,10 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   ROUTE unified_speed_first_route (description = "Choose the fastest healthy candidate from live p90 latency and load.") {
     PRIORITY 100
     TIER 2
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false),
-          "google/gemini-2.5-flash-lite" (reasoning = false)
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.5-9b-economy-replica" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 90
       on_no_candidates: "first"
@@ -405,15 +443,23 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     PRIORITY 200
     TIER 1
     WHEN projection("unified_cost_reasoning")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
-    ALGORITHM static
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
+          "local/qwen3.5-9b-economy-replica" (reasoning = true, effort = "medium")
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.6, load: 0.4 }
+    }
   }
 
   ROUTE unified_cost_first_route (description = "Deterministic local route with semantic reuse for ordinary requests.") {
     PRIORITY 100
     TIER 2
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false)
-    ALGORITHM static
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.5-9b-economy-replica" (reasoning = false)
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.8, load: 0.2 }
+    }
     PLUGIN semantic_cache {
       enabled: true
       similarity_threshold: 0.88
@@ -442,25 +488,25 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL keyword unified_frontier_workflow_markers {
     operator: "OR"
-    keywords: ["investigate and implement", "plan and execute", "multi-agent workflow", "delegate to agents", "coordinate multiple agents", "调查并实现", "规划并执行", "多智能体工作流", "协调多个智能体", "investigar e implementar", "planificar y ejecutar", "enquêter et implémenter", "planifier et exécuter", "調査して実装", "計画して実行", "untersuchen und implementieren"]
+    keywords: ["investigate and implement", "plan and execute", "multi-agent workflow", "delegate to agents", "coordinate multiple agents", "use tools", "use search_web", "search then synthesize", "research and synthesize", "call the tool then", "调查并实现", "规划并执行", "多智能体工作流", "协调多个智能体", "investigar e implementar", "planificar y ejecutar", "enquêter et implémenter", "planifier et exécuter", "調査して実装", "計画して実行", "untersuchen und implementieren"]
     method: "regex"
   }
 
   SIGNAL keyword unified_frontier_fusion_markers {
     operator: "OR"
-    keywords: ["independent analyses", "compare multiple expert opinions", "cross-check the answer", "panel of experts", "resolve disagreements", "独立分析", "比较多个专家意见", "交叉验证答案", "解决分歧", "análisis independientes", "comparar opiniones de expertos", "analyses indépendantes", "comparer plusieurs avis d'experts", "独立した分析", "複数の専門家の意見を比較", "unabhängige analysen"]
+    keywords: ["independent analyses", "compare multiple expert opinions", "cross-check the answer", "panel of experts", "resolve disagreements", "compare several independent viewpoints", "ask multiple models", "get a second and third opinion", "synthesize competing answers", "独立分析", "比较多个专家意见", "交叉验证答案", "解决分歧", "análisis independientes", "comparar opiniones de expertos", "analyses indépendantes", "comparer plusieurs avis d'experts", "独立した分析", "複数の専門家の意見を比較", "unabhängige analysen"]
     method: "regex"
   }
 
   SIGNAL keyword unified_frontier_deep_markers {
     operator: "OR"
-    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "厳密な証明", "mehrere ansätze untersuchen"]
+    keywords: ["explore several approaches", "search multiple reasoning paths", "from first principles", "rigorous proof", "derive step by step", "hard reasoning problem", "difficult result", "multiple possible derivations", "think deeply before answering", "think deeply", "solve this thoroughly", "reason through alternative paths", "alternative paths", "do a deep analysis", "探索多种方法", "多条推理路径", "第一性原理", "严格证明", "逐步推导", "explorar varios enfoques", "demostración rigurosa", "explorer plusieurs approches", "preuve rigoureuse", "複数のアプローチを探索", "複数のアプローチと推論経路を探索", "推論経路を探索", "厳密な証明", "mehrere ansätze untersuchen", "denkwege untersuchen"]
     method: "regex"
   }
 
   SIGNAL keyword unified_frontier_verification_markers {
     operator: "OR"
-    keywords: ["verify with evidence", "verify the answer", "cite reliable sources", "check every factual claim", "用证据核实", "核实每个事实", "verificar con evidencia", "vérifier avec des preuves", "証拠で検証", "mit belegen überprüfen"]
+    keywords: ["verify with evidence", "verify the answer", "cite reliable sources", "check every factual claim", "用证据核实", "核实每个事实", "verificar con evidencia", "vérifier avec des preuves", "証拠で検証", "mit belegen überprüfen", "\\b(is|was|were)\\b.{0,80}\\b(accurate|true|correct)\\b", "\\b(when was|who invented|what is the population|how tall is)\\b"]
     method: "regex"
   }
 
@@ -480,10 +526,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     threshold: 0.78
     candidates: ["Explore several reasoning paths and synthesize the strongest rigorous solution.", "Build a careful derivation from first principles for a difficult problem.", "从多个推理路径探索难题并综合最强答案。", "Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.", "複数の推論経路を探索し、最も厳密な解答を統合してください。"]
     aggregation_method: "max"
-  }
-
-  SIGNAL fact_check unified_frontier_fact_check {
-    description: "Detect factual requests that benefit from independent verification."
   }
 
   SIGNAL language zh {
@@ -530,7 +572,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   SIGNAL structure unified_frontier_direct_reference {
     description: "Detect requests that quote orchestration vocabulary only to define, translate, or briefly explain it; this independently suppresses workflow and fusion escalation even when their keyword signals match."
-    feature: { source: { pattern: "^\\s*((define|translate|explain|définis|traduis|explique|traduce|explica|definiere|übersetze)\\b|(定义|翻译|解释|説明|翻訳))", type: "regex" }, type: "exists" }
+    feature: { source: { pattern: "(?i)(\\b(define|translate|explain)\\b.{0,48}\\b(phrase|term|expression)\\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))", type: "regex" }, type: "exists" }
   }
 
   SIGNAL conversation unified_frontier_tooling_available {
@@ -545,7 +587,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   }
 
   SIGNAL complexity unified_frontier_complexity {
-    threshold: 0.74
+    threshold: 0.15
     description: "Semantic boundary for tasks that merit multi-round reasoning."
     hard: { candidates: ["Prove a difficult result by exploring multiple possible derivations.", "Diagnose a complex distributed-system failure with incomplete evidence.", "Synthesize competing scientific explanations into a rigorous conclusion."] }
     easy: { candidates: ["Explain a familiar concept in plain language.", "Summarize a short paragraph.", "Answer a direct factual question."] }
@@ -553,17 +595,17 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
 
   PROJECTION score unified_frontier_workflow_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_workflow_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_workflow_intent", value_source: "confidence" }, { type: "conversation", weight: 0.4, name: "unified_frontier_tooling_available" }, { type: "conversation", weight: 0.5, name: "unified_frontier_active_tool_loop" }, { type: "structure", weight: 0.25, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
+    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_workflow_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_workflow_intent", value_source: "confidence" }, { type: "conversation", weight: 0.1, name: "unified_frontier_tooling_available" }, { type: "conversation", weight: 0.1, name: "unified_frontier_active_tool_loop" }, { type: "structure", weight: 0.25, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
   }
 
   PROJECTION score unified_frontier_fusion_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.15, name: "unified_frontier_fact_check" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
+    inputs: [{ type: "keyword", weight: 0.7, name: "unified_frontier_fusion_markers", value_source: "confidence" }, { type: "embedding", weight: 0.55, name: "unified_frontier_fusion_intent", value_source: "confidence" }, { type: "structure", weight: -0.9, name: "unified_frontier_direct_reference" }]
   }
 
   PROJECTION score unified_frontier_deliberation_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "fact_check", weight: 0.2, name: "unified_frontier_fact_check" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
+    inputs: [{ type: "keyword", weight: 0.45, name: "unified_frontier_deep_markers", value_source: "confidence" }, { type: "embedding", weight: 0.35, name: "unified_frontier_deep_intent", value_source: "confidence" }, { type: "context", weight: 0.2, name: "unified_frontier_long_context" }, { type: "structure", weight: 0.15, name: "unified_frontier_ordered_workflow" }, { type: "structure", weight: 0.1, name: "unified_frontier_constraint_dense" }, { type: "complexity", weight: 0.35, name: "unified_frontier_complexity:hard" }, { type: "structure", weight: -0.65, name: "unified_frontier_direct_reference" }, { type: "language", weight: 0.05, name: "zh" }, { type: "language", weight: 0.05, name: "es" }, { type: "language", weight: 0.05, name: "fr" }, { type: "language", weight: 0.05, name: "ja" }, { type: "language", weight: 0.05, name: "de" }]
   }
 
   PROJECTION mapping unified_frontier_workflow_band {
@@ -584,14 +626,8 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     source: "unified_frontier_deliberation_score"
     method: "threshold_bands"
     calibration: { method: "sigmoid_distance", slope: 10 }
-    outputs: [{ name: "unified_frontier_direct", lt: 0.45 }, { name: "unified_frontier_deliberate", gte: 0.45 }]
+    outputs: [{ name: "unified_frontier_direct", lt: 0.35 }, { name: "unified_frontier_deliberate", gte: 0.35 }]
   }
-
-  # =============================================================================
-  # PLUGINS
-  # =============================================================================
-
-  PLUGIN hallucination hallucination {}
 
   # =============================================================================
   # ROUTES
@@ -600,83 +636,81 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_workflow (description = "Use Router Flow for explicit investigate-plan-execute tasks with separable roles.") {
     PRIORITY 400
     TIER 1
-    WHEN projection("unified_frontier_use_workflow")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    WHEN projection("unified_frontier_use_workflow") AND (keyword("unified_frontier_workflow_markers") OR structure("unified_frontier_ordered_workflow"))
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM workflows {
       include_intermediate_responses: false
-      max_completion_tokens: 32768
       max_parallel: 3
       max_steps: 4
       min_successful_responses: 2
       mode: "dynamic"
       on_error: "skip"
-      planner: { model: "google/gemini-3.1-pro" }
-      round_timeout_seconds: 300
+      planner: { model: "local/qwen3.6-27b-coder" }
+      round_timeout_seconds: 120
       template: "micro_agent"
+    }
+  }
+
+  ROUTE unified_frontier_tool_result_synthesis (description = "Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.") {
+    PRIORITY 375
+    TIER 2
+    WHEN conversation("unified_frontier_active_tool_loop") AND NOT keyword("unified_frontier_workflow_markers")
+    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, effort = "medium")
+    ALGORITHM static
+    PLUGIN tools {
+      enabled: true
+      mode: "none"
     }
   }
 
   ROUTE unified_frontier_fusion (description = "Use independent expert answers plus a frontier judge when disagreement resolution matters.") {
     PRIORITY 350
-    TIER 2
-    WHEN projection("unified_frontier_use_fusion")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    TIER 3
+    WHEN projection("unified_frontier_use_fusion") AND keyword("unified_frontier_fusion_markers")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/deepseek-v4-flash-analyst" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM fusion {
-      analysis_models: ["google/gemini-3.1-pro", "openai/gpt5.4", "anthropic/claude-opus-4.6"]
+      analysis_models: ["local/qwen3.6-27b-coder", "local/gemma4-26b-balanced", "local/deepseek-v4-flash-analyst"]
       include_analysis: false
       include_intermediate_responses: false
       judge_prompt_version: "fusion-v1"
-      max_completion_tokens: 32768
       max_concurrent: 3
       min_successful_responses: 2
-      model: "anthropic/claude-opus-4.6"
+      model: "local/qwen3.5-122b-frontier"
       on_error: "skip"
-      round_timeout_seconds: 300
+      round_timeout_seconds: 180
       temperature: 0.2
-    }
-    PLUGIN hallucination {
-      enabled: true
-      use_nli: true
-      hallucination_action: "header"
-      unverified_factual_action: "header"
-      include_hallucination_details: true
     }
   }
 
   ROUTE unified_frontier_verified_answer (description = "Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.") {
     PRIORITY 325
-    TIER 3
-    WHEN (keyword("unified_frontier_verification_markers") OR fact_check("unified_frontier_fact_check"))
-    MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
-          "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    TIER 4
+    WHEN keyword("unified_frontier_verification_markers")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
+          "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM confidence {
-      confidence_method: "hybrid"
+      confidence_method: "avg_logprob"
       escalation_order: "small_to_large"
       on_error: "skip"
       threshold: 0.72
-    }
-    PLUGIN hallucination {
-      enabled: true
-      use_nli: true
-      hallucination_action: "header"
-      unverified_factual_action: "header"
-      include_hallucination_details: true
     }
   }
 
   ROUTE unified_frontier_remom (description = "Use bounded multi-round search and synthesis for deep reasoning tasks.") {
     PRIORITY 300
-    TIER 4
+    TIER 5
     WHEN projection("unified_frontier_deliberate")
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    MODEL "local/qwen3.6-27b-coder" (reasoning = true, effort = "high"),
+          "local/deepseek-v4-flash-analyst" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
       compaction_strategy: "last_n_tokens"
@@ -687,18 +721,19 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       min_successful_responses: 2
       model_distribution: "round_robin"
       on_error: "skip"
-      round_timeout_seconds: 300
-      synthesis_model: "anthropic/claude-opus-4.6"
+      round_timeout_seconds: 180
+      synthesis_model: "local/qwen3.5-122b-frontier"
       temperature: 0.6
     }
   }
 
-  ROUTE unified_accuracy_first_route (description = "Use the strongest direct model when orchestration would add little value.") {
+  ROUTE unified_frontier_direct (description = "Use the strongest direct model when orchestration would add little value.") {
     PRIORITY 100
-    TIER 5
-    MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "high"),
-          "openai/gpt5.4" (reasoning = true, effort = "high"),
-          "anthropic/claude-opus-4.6" (reasoning = true, effort = "high")
+    TIER 6
+    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
+          "local/qwen3.6-35b-flash" (reasoning = false),
+          "local/gemma4-26b-balanced" (reasoning = false),
+          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { quality: 1 }
@@ -730,6 +765,12 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     method: "regex"
   }
 
+  SIGNAL keyword unified_privacy_sensitive_markers {
+    operator: "OR"
+    keywords: ["\\b\\d{3}-\\d{2}-\\d{4}\\b", "\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", "\\b(ssn|social security number|credit card|passport number)\\b", "(身份证|邮箱|护照号码|银行卡号)", "(número de seguridad social|correo electrónico|pasaporte)", "(numéro de sécurité sociale|adresse e-mail|passeport)", "(マイナンバー|メールアドレス|パスポート番号)", "(sozialversicherungsnummer|e-mail-adresse|reisepassnummer)"]
+    method: "regex"
+  }
+
   SIGNAL keyword unified_privacy_attack_markers {
     operator: "OR"
     keywords: ["ignore previous instructions", "reveal the system prompt", "exfiltrate credentials", "bypass the safety policy", "忽略之前的指令", "泄露系统提示词", "导出凭据", "绕过安全策略", "ignora las instrucciones anteriores", "extraer credenciales", "ignorer les instructions précédentes", "exfiltrer les identifiants", "以前の指示を無視", "認証情報を流出", "vorherige anweisungen ignorieren"]
@@ -755,7 +796,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
 
   PROJECTION score unified_privacy_risk_score {
     method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.5, name: "unified_privacy_local_only_markers", value_source: "confidence" }, { type: "pii", weight: 0.9, name: "unified_privacy_pii_strict" }, { type: "jailbreak", weight: 0.9, name: "unified_privacy_jailbreak_strict" }, { type: "keyword", weight: 0.9, name: "unified_privacy_attack_markers", value_source: "confidence" }, { type: "kb", weight: 0.7, name: "unified_privacy_policy" }]
+    inputs: [{ type: "keyword", weight: 0.5, name: "unified_privacy_local_only_markers", value_source: "confidence" }, { type: "keyword", weight: 0.75, name: "unified_privacy_sensitive_markers", value_source: "confidence" }, { type: "pii", weight: 0.9, name: "unified_privacy_pii_strict" }, { type: "jailbreak", weight: 0.9, name: "unified_privacy_jailbreak_strict" }, { type: "keyword", weight: 0.9, name: "unified_privacy_attack_markers", value_source: "confidence" }, { type: "kb", weight: 0.3, name: "unified_privacy_policy" }]
   }
 
   PROJECTION mapping unified_privacy_risk_band {
@@ -779,7 +820,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 300
     TIER 1
     WHEN (jailbreak("unified_privacy_jailbreak_strict") OR keyword("unified_privacy_attack_markers"))
-    MODEL "qwen/qwen3.5-rocm" (reasoning = false)
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -791,7 +832,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 200
     TIER 2
     WHEN projection("unified_privacy_sensitive")
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -802,7 +843,7 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
   ROUTE unified_privacy_local_default (description = "Route non-sensitive traffic locally as the privacy-first default.") {
     PRIORITY 100
     TIER 3
-    MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-private" (reasoning = false)
   }
 
 }

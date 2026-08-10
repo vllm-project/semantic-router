@@ -7,7 +7,7 @@
  * - Editor mode switching (DSL / Visual / NL)
  * - Debounced validation on keystroke
  * - Full compile on demand
- * - Decompile router YAML → routing-only DSL for import workflows
+ * - Decompile router YAML → DSL-owned models, routing, entrypoints, and recipes
  * - Format (canonical pretty-print)
  */
 
@@ -51,11 +51,13 @@ import {
   normalizeBuilderNLValidation,
   type DeployStatusResponse,
 } from './dslStoreSupport'
+import { renderCanonicalYaml } from './dslStoreYamlSupport'
 
 // ---------- Debounce helper ----------
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
+let renderedYamlRequestId = 0
 
 // ---------- Store ----------
 
@@ -89,10 +91,17 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   compile() {
-    const { dslSource, wasmReady } = get()
+    const { dslSource, wasmReady, baseConfigYaml } = get()
     if (!wasmReady) return
     if (!dslSource.trim()) {
-      set({ yamlOutput: '', crdOutput: '', diagnostics: [], compileError: null, dirty: false })
+      set({
+        renderedYamlOutput: '',
+        yamlOutput: '',
+        crdOutput: '',
+        diagnostics: [],
+        compileError: null,
+        dirty: false,
+      })
       return
     }
 
@@ -118,8 +127,10 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         console.log('[dslStore.compile] YAML "- name:" lines count=%d', decMatch?.length ?? 0)
       }
 
+      const compiledYaml = result.yaml || ''
       set({
-        yamlOutput: result.yaml || '',
+        renderedYamlOutput: compiledYaml,
+        yamlOutput: compiledYaml,
         crdOutput: result.crd || '',
         diagnostics: result.diagnostics || [],
         ast: result.ast || null,
@@ -128,6 +139,17 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         lastCompileAt: Date.now(),
         loading: false,
       })
+      if (compiledYaml) {
+        const requestId = ++renderedYamlRequestId
+        void renderCanonicalYaml(compiledYaml, dslSource, baseConfigYaml)
+          .then((renderedYamlOutput) => {
+            if (requestId !== renderedYamlRequestId || get().yamlOutput !== compiledYaml) return
+            set({ renderedYamlOutput })
+          })
+          .catch((error) => {
+            console.warn('[dslStore.compile] Full YAML preview unavailable:', error)
+          })
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[dslStore.compile] Compile threw error:', msg)
@@ -220,6 +242,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       diagnostics: [],
       compileError: null,
       baseConfigYaml: '',
+      renderedYamlOutput: '',
     })
     // Trigger validation after load
     const state = get()
@@ -239,6 +262,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       diagnostics: [],
       compileError: null,
       baseConfigYaml: yaml,
+      renderedYamlOutput: yaml,
     })
     const state = get()
     if (state.wasmReady && dsl.trim()) {
@@ -724,6 +748,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       compileError: null,
       ast: null,
       symbols: null,
+      renderedYamlOutput: '',
       yamlOutput: '',
       crdOutput: '',
       mode: 'dsl',

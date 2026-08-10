@@ -38,13 +38,17 @@ interface TestQueryResponse {
 /**
  * Call backend Dry-Run API for accurate routing verification
  */
-export async function testQueryDryRun(query: string): Promise<TestQueryResult> {
+export async function testQueryDryRun(
+  query: string,
+  model?: string,
+): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query,
       mode: 'dry-run',
+      model,
     }),
   })
 
@@ -74,13 +78,17 @@ export async function testQueryDryRun(query: string): Promise<TestQueryResult> {
 /**
  * Call backend Simulate API for simulated routing (also uses backend now)
  */
-export async function testQuerySimulate(query: string): Promise<TestQueryResult> {
+export async function testQuerySimulate(
+  query: string,
+  model?: string,
+): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query,
       mode: 'simulate',
+      model,
     }),
   })
 

@@ -582,10 +582,24 @@
   background: var(--color-bg-elevated);
 }
 
+.decisionIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
 .decisionName {
   color: var(--color-text);
   font-family: var(--font-mono);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decisionScope {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

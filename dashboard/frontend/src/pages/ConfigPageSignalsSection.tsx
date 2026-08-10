@@ -3,31 +3,18 @@ import styles from './ConfigPage.module.css'
 import signalStyles from './ConfigPageSignalsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import TableHeader from '../components/TableHeader'
+import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import { DataTable, type Column } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
   ConfigData,
-  ComplexitySignal,
-  ContextSignal,
-  DomainSignal,
-  EmbeddingSignal,
-  FactCheckSignal,
   JailbreakSignal,
-  KBSignal,
-  KeywordSignal,
-  LanguageSignal,
-  ModalitySignal,
   MetadataSignal,
-  PIISignal,
-  PreferenceSignal,
-  ReaskSignal,
-  RoleBindingSignal,
   SignalType,
-  StructureSignal,
   ClassifierSignal,
-  UserFeedbackSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { hasFlatSignals } from '../types/config'
@@ -44,13 +31,15 @@ import {
 import {
   DEFAULT_STRUCTURE_FEATURE,
   DEFAULT_STRUCTURE_PREDICATE,
-  getSignalReferenceCount,
+  getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
   normalizeStringList,
   normalizeStructureFeature,
   normalizeStructurePredicate,
   normalizeSubjects,
 } from './configPageSignalFormSupport'
+import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import type { UnifiedSignal } from './configPageSignalTableTypes'
 
 interface ConfigPageSignalsSectionProps {
   config: ConfigData | null
@@ -63,34 +52,6 @@ interface ConfigPageSignalsSectionProps {
   openViewModal: OpenViewModal
   listInputToArray: (input: string) => string[]
   removeSignalByName: (cfg: ConfigData, type: SignalType, targetName: string) => void
-}
-
-type UnifiedSignalData = Partial<
-  KeywordSignal &
-    EmbeddingSignal &
-    DomainSignal &
-    PreferenceSignal &
-    FactCheckSignal &
-    UserFeedbackSignal &
-    ReaskSignal &
-    LanguageSignal &
-    ContextSignal &
-    StructureSignal &
-    ComplexitySignal &
-    ModalitySignal &
-    RoleBindingSignal &
-    JailbreakSignal &
-    PIISignal &
-    KBSignal &
-    MetadataSignal &
-    ClassifierSignal
->
-
-interface UnifiedSignal {
-  name: string
-  type: SignalType
-  summary: string
-  rawData: UnifiedSignalData
 }
 
 export default function ConfigPageSignalsSection({
@@ -109,7 +70,20 @@ export default function ConfigPageSignalsSection({
   const [deletePending, setDeletePending] = React.useState(false)
   const [deleteError, setDeleteError] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
-  const signals = config?.signals
+  const {
+    applyScopedConfig,
+    routingScopes,
+    scopedConfig,
+    selectedScope,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useRoutingScopeManager(config)
+  React.useEffect(() => {
+    setSelectedSignalKeys(new Set())
+    setSignalsPendingDelete([])
+    setActionError(null)
+  }, [selectedScopeId])
+  const signals = scopedConfig?.signals
   const flatSignals: ConfigData['signals'] | null =
     !signals && hasFlatSignals(config)
       ? {
@@ -323,17 +297,20 @@ export default function ConfigPageSignalsSection({
       signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
       signal.summary.toLowerCase().includes(signalsSearch.toLowerCase()),
   )
-
   const signalKey = (signal: UnifiedSignal) => `${signal.type}-${signal.name}`
   const signalReferenceCount = (signal: UnifiedSignal) =>
-    getSignalReferenceCount(config, signal.type, signal.name)
+    getSignalReferenceCountInRoutingProfile(
+      (selectedScope ?? routingScopes[0])?.routing as ConfigData['routing'],
+      signal.type,
+      signal.name,
+    )
 
   const signalsColumns: Column<UnifiedSignal>[] = [
     {
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
+      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
     },
     {
       key: 'type',
@@ -937,7 +914,10 @@ export default function ConfigPageSignalsSection({
         throw new Error('Type is required.')
       }
 
-      const newConfig: ConfigData = cloneConfigData(config)
+      if (!scopedConfig) {
+        throw new Error('Routing profile not loaded yet.')
+      }
+      const newConfig: ConfigData = cloneConfigData(scopedConfig)
       if (!newConfig.signals) newConfig.signals = {}
 
       if (mode === 'edit' && signal) {
@@ -1280,7 +1260,7 @@ export default function ConfigPageSignalsSection({
           throw new Error('Unsupported signal type.')
       }
 
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
     }
 
     openEditModal<AddSignalFormState>(
@@ -1333,12 +1313,13 @@ export default function ConfigPageSignalsSection({
 
     setDeletePending(true)
     setDeleteError(null)
-    const newConfig: ConfigData = cloneConfigData(config)
+    if (!scopedConfig) return
+    const newConfig: ConfigData = cloneConfigData(scopedConfig)
     signalsPendingDelete.forEach((signal) =>
       removeSignalByName(newConfig, signal.type, signal.name),
     )
     try {
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
       setSelectedSignalKeys(new Set())
       setSignalsPendingDelete([])
     } catch (err) {
@@ -1352,6 +1333,7 @@ export default function ConfigPageSignalsSection({
     <ConfigPageManagerLayout
       title="Signals"
       description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
+      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         {actionError ? (
@@ -1360,6 +1342,11 @@ export default function ConfigPageSignalsSection({
           </div>
         ) : null}
         <div className={styles.sectionTableBlock}>
+          <RoutingScopeSelector
+            scopes={routingScopes}
+            value={selectedScopeId}
+            onChange={setSelectedScopeId}
+          />
           <TableHeader
             title="Signals"
             count={filteredSignals.length}
@@ -1414,7 +1401,7 @@ export default function ConfigPageSignalsSection({
               pageSize: 25,
               pageSizeOptions: [10, 25, 50],
               itemLabel: 'signals',
-              resetKey: signalsSearch,
+              resetKey: `${selectedScopeId}:${signalsSearch}`,
             }}
             selection={
               !isReadonly && isPythonCLI

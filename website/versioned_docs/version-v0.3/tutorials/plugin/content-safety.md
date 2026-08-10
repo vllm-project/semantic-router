@@ -4,7 +4,7 @@
 
 `content-safety` is a reusable route-local safety bundle that combines supported safety-oriented plugins in one fragment.
 
-It aligns to `config/plugin/content-safety/hybrid.yaml`.
+It aligns to `config/fragments/plugin/content-safety/hybrid.yaml`.
 
 ## Key Advantages
 

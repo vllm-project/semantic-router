@@ -2,7 +2,7 @@
 
 ## Overview
 
-`jailbreak` detects prompt-injection and jailbreak attempts before the router commits to a route. It maps to `config/signal/jailbreak/` and is declared under `routing.signals.jailbreak`.
+`jailbreak` detects prompt-injection and jailbreak attempts before the router commits to a route. It maps to `config/fragments/signal/jailbreak/` and is declared under `routing.signals.jailbreak`.
 
 This family is learned: it uses `global.model_catalog.modules.prompt_guard` and the router-owned jailbreak model bindings in `global.model_catalog.system`.
 
@@ -30,7 +30,7 @@ Use `jailbreak` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/jailbreak/`
+Source fragment family: `config/fragments/signal/jailbreak/`
 
 ```yaml
 routing:

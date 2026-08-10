@@ -16,6 +16,7 @@ export interface DecisionPreviewRow {
   category: ReturnType<typeof getDecisionCategory>
   typeLabel: string
   modelNames: string
+  scopeLabel?: string
 }
 
 export function buildSignalBreakdownRows(byType: Record<string, number>): SignalBreakdownRow[] {
@@ -40,6 +41,7 @@ export function buildDecisionPreviewRows(
   return decisions.slice(0, limit).map((decision, index) => {
     const category = getDecisionCategory(decision.priority)
     const name = decision.name || `Decision ${index + 1}`
+    const scopeLabel = decision.routingEntrypoints?.[0] ?? decision.routingScope
     return {
       key: `${name}-${index}`,
       name,
@@ -48,6 +50,7 @@ export function buildDecisionPreviewRows(
       category,
       typeLabel: category === 'guardrail' ? 'Guard' : category === 'fallback' ? 'Default' : 'Route',
       modelNames: formatDecisionModelNames(decision.modelRefs),
+      ...(scopeLabel ? { scopeLabel } : {}),
     }
   })
 }

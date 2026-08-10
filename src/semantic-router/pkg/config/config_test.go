@@ -3175,15 +3175,19 @@ default_model: "test-model"
 	})
 
 	Describe("IsFactCheckClassifierEnabled", func() {
-		It("should return true when fully configured with legacy config", func() {
+		It("should return true when routing uses the configured model", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.FactCheckRules = []FactCheckRule{{Name: "needs_fact_check"}}
+			cfg.Decisions = []Decision{{
+				Name:  "verified-route",
+				Rules: RuleNode{Type: SignalTypeFactCheck, Name: "needs_fact_check"},
+			}}
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
 
-		It("should return true when fact_check_rules are configured", func() {
+		It("should return true for default API rules even when routing does not reference them", func() {
 			cfg := &RouterConfig{}
 			cfg.FactCheckRules = []FactCheckRule{
 				{Name: "needs_fact_check", Description: "Query needs fact verification"},
@@ -3216,6 +3220,10 @@ default_model: "test-model"
 			cfg.FeedbackDetector.Enabled = true
 			cfg.FeedbackDetector.ModelID = "models/feedback"
 			cfg.UserFeedbackRules = []UserFeedbackRule{{Name: "satisfied"}}
+			cfg.Decisions = []Decision{{
+				Name:  "feedback-route",
+				Rules: RuleNode{Type: SignalTypeUserFeedback, Name: "satisfied"},
+			}}
 
 			Expect(cfg.IsFeedbackDetectorEnabled()).To(BeTrue())
 		})
@@ -3252,17 +3260,24 @@ default_model: "test-model"
 	})
 
 	Describe("IsHallucinationModelEnabled", func() {
-		It("should return true when fully configured", func() {
+		It("should return true when a decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeTrue())
 		})
 
-		It("should return false when hallucination mitigation is disabled", func() {
+		It("should return false when no decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = false
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
@@ -3270,7 +3285,15 @@ default_model: "test-model"
 
 		It("should return false when model_id is missing", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
 		})

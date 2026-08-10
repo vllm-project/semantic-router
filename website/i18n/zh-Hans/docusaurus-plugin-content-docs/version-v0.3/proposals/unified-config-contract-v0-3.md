@@ -123,9 +123,9 @@ DSL 导入仍接受完整路由器配置 YAML，但仅将 `routing` 节反编译
 仓库不再在 `config/intelligent-routing/` 等目录下提供大型完整示例树，而是：
 
 - `config/config.yaml` 为详尽的 canonical 参考配置
-- `config/signal/`、`config/decision/`、`config/algorithm/`、`config/plugin/` 存放可复用的路由片段
-- `config/decision/` 按布尔规则形状组织（`single`、`and`、`or`、`not`、`composite`）
-- `config/algorithm/` 按路由策略族组织（`looper`、`selection`）
+- `config/fragments/signal/`、`config/fragments/decision/`、`config/fragments/algorithm/`、`config/fragments/plugin/` 存放可复用的路由片段
+- `config/fragments/decision/` 按布尔规则形状组织（`single`、`and`、`or`、`not`、`composite`）
+- `config/fragments/algorithm/` 按路由策略族组织（`looper`、`selection`）
 - 最新 `docs/tutorials/` 源码树与 `signal/decision/algorithm/plugin/global` 对齐，旧教程树已从活跃文档面移除
 - 运行时支持示例如 `config/runtime/semantic-cache/`、`response-api/`、`tools/` 保持独立，因其不属于面向用户的配置契约
 - 仅测试台使用的清单位于 `e2e/config/`

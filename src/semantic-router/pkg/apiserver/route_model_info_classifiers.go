@@ -14,13 +14,20 @@ func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelA
 		return classifierModelAvailability{}
 	}
 
-	return classifierModelAvailability{
+	availability := classifierModelAvailability{
 		core:                   s.classificationSvc.HasClassifier(),
 		factCheck:              s.classificationSvc.HasFactCheckClassifier(),
 		hallucination:          s.classificationSvc.HasHallucinationDetector(),
 		hallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
 		feedback:               s.classificationSvc.HasFeedbackDetector(),
 	}
+	if inventory, ok := s.classificationSvc.(classificationInventoryReadinessService); ok {
+		availability.factCheck = inventory.HasAnyFactCheckClassifier()
+		availability.hallucination = inventory.HasAnyHallucinationDetector()
+		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()
+		availability.feedback = inventory.HasAnyFeedbackDetector()
+	}
+	return availability
 }
 
 // getClassifierModelsInfo returns information about configured classifier models.
@@ -136,24 +143,38 @@ func buildHallucinationModels(
 	}
 
 	hallucinationModel := cfg.HallucinationMitigation.HallucinationModel
+	hallucinationBackend := hallucinationModel.NormalizedBackend()
+	metadata := map[string]string{
+		"backend":    hallucinationBackend,
+		"model_type": "modernbert",
+		"lifecycle":  "router_local",
+	}
+	if hallucinationBackend == routerconfig.HallucinationBackendEndpoint {
+		metadata = map[string]string{
+			"backend":             hallucinationBackend,
+			"model_type":          "openai_compatible_endpoint",
+			"lifecycle":           "external",
+			"include_explanation": fmt.Sprintf("%t", hallucinationModel.IncludeExplanation),
+		}
+	} else {
+		metadata["threshold"] = fmt.Sprintf("%.2f", hallucinationModel.Threshold)
+		metadata["min_span_length"] = fmt.Sprintf("%d", hallucinationModel.MinSpanLength)
+		metadata["min_span_confidence"] = fmt.Sprintf("%.2f", hallucinationModel.MinSpanConfidence)
+		metadata["context_window_size"] = fmt.Sprintf("%d", hallucinationModel.ContextWindowSize)
+		metadata["nli_filtering_enabled"] = fmt.Sprintf("%t", hallucinationModel.EnableNLIFiltering)
+		metadata["use_cpu"] = fmt.Sprintf("%t", hallucinationModel.UseCPU)
+	}
 	models = append(models, ModelInfo{
 		Name:      "hallucination_detector",
 		Type:      "hallucination_detection",
 		Loaded:    availability.hallucination,
 		ModelPath: hallucinationModel.ModelID,
-		Metadata: map[string]string{
-			"model_type":            "modernbert",
-			"threshold":             fmt.Sprintf("%.2f", hallucinationModel.Threshold),
-			"min_span_length":       fmt.Sprintf("%d", hallucinationModel.MinSpanLength),
-			"min_span_confidence":   fmt.Sprintf("%.2f", hallucinationModel.MinSpanConfidence),
-			"context_window_size":   fmt.Sprintf("%d", hallucinationModel.ContextWindowSize),
-			"nli_filtering_enabled": fmt.Sprintf("%t", hallucinationModel.EnableNLIFiltering),
-			"use_cpu":               fmt.Sprintf("%t", hallucinationModel.UseCPU),
-		},
+		Metadata:  metadata,
 	})
 
 	nliModel := cfg.HallucinationMitigation.NLIModel
-	if nliModel.ModelID != "" {
+	if cfg.NeedsLocalHallucinationNLIForAPI() ||
+		cfg.NeedsLocalHallucinationNLIForRouting() {
 		models = append(models, ModelInfo{
 			Name:      "hallucination_explainer",
 			Type:      "nli_explainer",

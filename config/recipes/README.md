@@ -16,7 +16,8 @@ Every child directory has the same four files:
 - `README.md` — intended use, routing policy, tradeoffs, and validation steps.
 
 The repository contract tests reject incomplete directories, invalid YAML or
-DSL, and YAML/DSL drift.
+DSL, YAML/DSL drift, missing decision reachability, stale aliases, and loss of
+YAML-only decision adaptation policy during DSL merge.
 
 ## Catalog
 
@@ -33,6 +34,23 @@ DSL, and YAML/DSL drift.
 `bounded-candidate-iteration.dsl` and other syntax-only demonstrations are not
 deployable recipes. Their behavior is covered by DSL unit tests instead of
 being mixed into this catalog.
+
+## Maintained acceptance baseline
+
+The August 2026 isolated-runtime baseline for the six single-profile recipes is
+155/155 Eval probes and 42/42 decisions. Five deterministic
+framing/whitespace wrappers expand that baseline to 775/775 passing stress
+cases:
+
+- Accuracy: 13 probes, 4 decisions.
+- Agent: 27 probes, 11 decisions.
+- Balance: 57 probes, 14 decisions.
+- Feedback: 23 probes, 7 decisions.
+- Knowledge: 15 probes, 2 decisions.
+- Privacy: 20 probes, 4 decisions.
+
+Acceptance also requires real classifier/KB/store initialization and non-empty
+generation responses; a parse-only or lazy-fallback pass is insufficient.
 
 ## Validate a recipe
 

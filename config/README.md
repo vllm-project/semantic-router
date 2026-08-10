@@ -3,14 +3,19 @@
 `config/` is now the user-facing config surface only.
 
 - `config/config.yaml`: exhaustive canonical reference config
-- `config/signal/`: reusable `routing.signals` fragments
-- `config/decision/`: reusable `routing.decisions` rule-shape fragments
-- `config/algorithm/`: reusable `decision.algorithm` snippets
-- `config/plugin/`: reusable route plugin snippets
+- `config/fragments/signal/`: reusable `routing.signals` fragments
+- `config/fragments/decision/`: reusable `routing.decisions` rule-shape fragments
+- `config/fragments/algorithm/`: reusable `decision.algorithm` snippets
+- `config/fragments/plugin/`: reusable route plugin snippets
 - `config/recipes/`: complete use-case deliveries with symmetric YAML, DSL,
   Eval API probes, and documentation
 - `config/runtime/`: backend-specific runtime examples referenced by configs
   and tests; these are support assets rather than schema fragments
+
+The four fragment families previously lived directly under `config/`. Update
+repository links and automation to use `config/fragments/...`. This is an asset
+path migration only; the YAML configuration schema and runtime field names do
+not change.
 
 Inside canonical `config.yaml`:
 
@@ -47,7 +52,7 @@ Inside canonical `config.yaml`:
 - `global.model_catalog.modules.hallucination_mitigation.detector.backend` selects the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` calls a generative span detector behind an OpenAI-compatible server. The `endpoint` backend requires an absolute `http(s)` `detector.endpoint` and a `detector.model_id`; an unknown backend fails config validation.
 - `global.model_catalog.modules.prompt_guard.backend` selects the jailbreak classifier backend: `candle` (default, LoRA/BERT auto-detect), `mmbert32k` (in-process mmBERT-32K), `http_chat` (external chat-completion model, role `guardrail`), or `http_classify` (external sequence-classifier endpoint speaking the HuggingFace text-classification pipeline contract, role `guardrail`). The two `http_*` backends require an `external_models` entry with `model_role: guardrail`; an unknown backend fails config validation. `prompt_guard.positive_labels` overrides which mapping label(s) count as unsafe, for models whose positive class isn't literally `jailbreak`; if set, at least one label must exist in the loaded `jailbreak_mapping` or the router fails to start.
 
-`config/decision/` is organized by boolean rule shape:
+`config/fragments/decision/` is organized by boolean rule shape:
 
 - `single/`: one signal condition
 - `and/`: conjunction examples
@@ -58,14 +63,17 @@ Inside canonical `config.yaml`:
 Decision fragments may reference `modelRefs[].lora_name`, but those adapter names must be declared in the base config's `routing.modelCards[].loras`.
 Candidate iteration fragments must stay bounded to `decision.candidates` or an explicit model list and feed existing decision outputs such as `MODEL <iterator>`.
 
-`config/algorithm/` is organized by routing policy:
+`config/fragments/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
 - `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, `latency_aware`, and `prompt`
 
+The ReMoM looper fragment includes `max_completion_tokens` as an optional
+per-subrequest completion budget.
+
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 
-`config/plugin/` is organized by route-local plugin or reusable plugin bundle:
+`config/fragments/plugin/` is organized by route-local plugin or reusable plugin bundle:
 
 - one directory per plugin or bundle, such as `semantic-cache/`, `rag/`, `memory/`, or `content-safety/`
 - route-local tool policy examples live under `tools/`

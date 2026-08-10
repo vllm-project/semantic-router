@@ -32,6 +32,12 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/ollama',
+        'installation/amd-rocm',
+        {
+          type: 'link',
+          label: 'AMD Multi-Objective Model Pool',
+          href: '/blog/multi-objective-mom-on-amd-developer-cloud',
+        },
         'installation/k8s/operator',
         'installation/configuration',
         'installation/native-backends',

@@ -38,7 +38,8 @@ Replace `providers.models[].backend_refs[]` and alias names when binding this re
 
 ## Route Order
 
-Higher priority wins. The probe suite calibrates the 13 non-fallback lanes below; `casual_chat` remains an absolute safety net rather than a first-class calibration target.
+Higher priority wins. The probe suite calibrates all 14 lanes below, including
+the absolute `casual_chat` fallback with a long unclassified boundary case.
 
 | Priority | Decision | Target model | Reasoning | Purpose |
 |---|---|---|---|---|
@@ -148,6 +149,7 @@ These samples come from `probes.yaml`. The full suite includes paraphrase and mu
 ### `complex_specialist`
 
 - `Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and validation after each phase.`
+- `In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.`
 
 ### `feedback_wrong_answer_verified`
 
@@ -184,6 +186,11 @@ These samples come from `probes.yaml`. The full suite includes paraphrase and mu
 ### `simple_general`
 
 - `In one short paragraph, explain how induction cooktops work for a home kitchen user.`
+
+### `casual_chat`
+
+- A long, unclassified placeholder request that falls outside every preceding
+  context and specialist guard.
 
 ## Validation Commands
 

@@ -11,7 +11,7 @@ translation:
 
 `ratings` 是循环算法：在复用路由级评分信号的同时协调多个候选。
 
-对应 `config/algorithm/looper/ratings.yaml`。
+对应 `config/fragments/algorithm/looper/ratings.yaml`。
 
 ## 主要优势
 

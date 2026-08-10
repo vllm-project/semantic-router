@@ -661,6 +661,7 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
 		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
 	}
+	preserveBaseDecisionField(routing, base["routing"], "adaptations")
 
 	base["routing"] = routing
 	if len(canonical.Entrypoints) > 0 {

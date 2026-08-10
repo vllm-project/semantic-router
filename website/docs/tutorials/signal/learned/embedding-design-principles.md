@@ -2,7 +2,7 @@
 
 ## Overview
 
-This page consolidates the design principles for authoring **embedding anchor packs** - the candidate phrase sets that `embedding` signal rules cosine-match against. It generalizes the authoring guidance introduced with the opt-in image-modality pack (`config/signal/embedding/image-routing.yaml`) so the same reasoning applies to text-modality and image-modality packs alike.
+This page consolidates the design principles for authoring **embedding anchor packs** - the candidate phrase sets that `embedding` signal rules cosine-match against. It generalizes the authoring guidance introduced with the opt-in image-modality pack (`config/fragments/signal/embedding/image-routing.yaml`) so the same reasoning applies to text-modality and image-modality packs alike.
 
 Read this after the [Embedding Signal](./embedding) tutorial. That page covers the mechanics (`candidates`, `threshold`, `aggregation_method`, `query_modality`); this page covers how to make a pack that routes reliably instead of one that looks reasonable and misfires at scale.
 
@@ -73,6 +73,6 @@ A pack is a small classifier. Treat changes to it the way you would treat a mode
 
 ### Reference: the opt-in image pack
 
-`config/signal/embedding/image-routing.yaml` is a worked example of all five principles: three categories (`identifier_document_imagery`, `code_or_terminal_imagery`, `ambient_office_imagery`), 8 anchors each, `aggregation_method: max`, and a model-calibrated `0.10` threshold. Inline it under `routing.signals.embeddings`, then replace the `ambient_office_imagery` anchors with content specific to your own deployment surface and recalibrate.
+`config/fragments/signal/embedding/image-routing.yaml` is a worked example of all five principles: three categories (`identifier_document_imagery`, `code_or_terminal_imagery`, `ambient_office_imagery`), 8 anchors each, `aggregation_method: max`, and a model-calibrated `0.10` threshold. Inline it under `routing.signals.embeddings`, then replace the `ambient_office_imagery` anchors with content specific to your own deployment surface and recalibrate.
 
 See the [Embedding Signal](./embedding) tutorial for the field reference and a full worked routing example.
