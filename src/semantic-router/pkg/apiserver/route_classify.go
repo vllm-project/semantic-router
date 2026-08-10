@@ -15,9 +15,9 @@ import (
 
 // writeClassificationError maps a classification service error to an HTTP
 // status code: empty/whitespace input is a client error (400 INVALID_INPUT);
-// anything else is treated as an internal error (500 CLASSIFICATION_ERROR).
-// This keeps the classify endpoints aligned with their documented OpenAPI
-// contract ({200, 400}) and with sibling endpoints (combined/batch/embeddings).
+// a model-not-ready condition is a service-unavailable error (503
+// CLASSIFIER_NOT_READY); anything else is an internal error (500
+// CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
 	if errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) {
@@ -26,6 +26,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrModelNotReady) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_NOT_READY", err.Error())
 		return
 	}
 	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
