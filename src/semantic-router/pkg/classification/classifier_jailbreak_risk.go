@@ -97,6 +97,17 @@ func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, resu
 	return 1 - result.Confidence
 }
 
+// isJailbreakRiskAboveThreshold reports whether result's summed positive-label
+// risk score meets or exceeds threshold, returning that score alongside the
+// decision. Shared by CheckForJailbreakWithRisk and the signal-evaluation
+// path (findBestJailbreakMatch) so both always threshold the exact same
+// value - see jailbreakRiskScore's doc comment for why this must stay
+// independent of which class wins argmax.
+func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []string, result candle_binding.ClassResultWithProbs, threshold float32) (bool, float32) {
+	riskScore := jailbreakRiskScore(mapping, positiveLabels, result)
+	return riskScore >= threshold, riskScore
+}
+
 // CheckForJailbreakWithRisk analyzes text for jailbreak attempts and additionally
 // returns a risk score equal to P(jailbreak class), independent of which class the
 // model predicts. It mirrors CheckForJailbreak but is intended for callers (such as
@@ -123,13 +134,7 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
 	}
 
-	// Threshold the same summed positive-label mass riskScore reports, not the
-	// argmax class's confidence: with more than one positive_labels entry, no
-	// single label may win argmax while their combined probability still
-	// exceeds threshold, which would otherwise report a high risk score while
-	// still returning isJailbreak=false.
-	riskScore := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result)
-	isJailbreak := riskScore >= threshold
+	isJailbreak, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result, threshold)
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",

@@ -168,11 +168,8 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 }
 
 // findBestJailbreakMatch scans cached BERT results and returns the highest
-// combined-positive-label-risk match. It thresholds jailbreakRiskScore (the
-// same summed positive_labels mass CheckForJailbreakWithRisk uses), not the
-// argmax class's confidence: with more than one positive_labels entry, no
-// single label may win argmax while their combined probability still
-// exceeds threshold, which would otherwise silently drop the match here.
+// combined-positive-label-risk match, via the same isJailbreakRiskAboveThreshold
+// helper CheckForJailbreakWithRisk uses.
 func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32) {
 	var bestType string
 	var bestScore float32
@@ -194,8 +191,8 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
 				continue
 			}
-			riskScore := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result)
-			if riskScore < rule.Threshold {
+			aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
+			if !aboveThreshold {
 				continue
 			}
 			if riskScore > bestScore {
