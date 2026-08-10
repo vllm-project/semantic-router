@@ -146,6 +146,43 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 			positiveLabels:   []string{"malicious"},
 			expectError:      true,
 		},
+		{
+			// A 2-class mapping only has room for one positive index; treating
+			// both classes as positive is a real contradiction for a backend
+			// that only ever produces a single binary verdict, not a benign
+			// "use the first one" case.
+			name: "positive labels resolve to conflicting class indices - should error",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: "192.168.1.100",
+					Port:    8080,
+				},
+				ModelName: "qwen_guard",
+			},
+			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
+			positiveLabels:   []string{"safe", "jailbreak"},
+			expectError:      true,
+		},
+		{
+			// Repeating the same label (or an unmatched label alongside a real
+			// one) isn't a conflict - only genuinely different indices are.
+			name: "duplicate positive label entries are not a conflict",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: "192.168.1.100",
+					Port:    8080,
+				},
+				ModelName: "qwen_guard",
+			},
+			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
+			positiveLabels:   []string{"jailbreak", "jailbreak", "unmatched-label"},
+			expectedThresh:   0.7,
+			expectedParser:   "auto",
+			expectedTimeout:  30,
+			expectError:      false,
+		},
 	}
 
 	for _, tt := range tests {
