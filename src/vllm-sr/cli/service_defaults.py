@@ -25,7 +25,7 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
 }
 
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
-    "semantic_cache": {
+    "response_cache": {
         "enabled": True,
         "backend_type": "milvus",
     },
@@ -55,7 +55,7 @@ def detect_canonical_storage_backends(
         if backend in {"redis", "postgres"}:
             backends.add(backend)
 
-    if _semantic_cache_requires_managed_milvus(config, stack_layout):
+    if _response_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)
@@ -65,28 +65,28 @@ def detect_canonical_storage_backends(
     return backends
 
 
-def _semantic_cache_requires_managed_milvus(
+def _response_cache_requires_managed_milvus(
     config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None
 ) -> bool:
-    if _effective_store_backend(config, "semantic_cache", "backend_type") != "milvus":
+    if _effective_store_backend(config, "response_cache", "backend_type") != "milvus":
         return False
 
     if stack_layout is None:
         return True
 
-    host = _semantic_cache_milvus_connection_host(config)
+    host = _response_cache_milvus_connection_host(config)
     if not host:
         return True
 
     return host == stack_layout.milvus_container_name
 
 
-def _semantic_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
+def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
     stores = _stores_mapping(config)
     if stores is _INVALID_MAPPING:
         return None
 
-    cache_config = stores.get("semantic_cache")
+    cache_config = _response_cache_mapping(stores)
     if not isinstance(cache_config, Mapping):
         return None
 
@@ -102,6 +102,19 @@ def _semantic_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | N
     if host is None:
         return None
     return str(host).strip() or None
+
+
+def _response_cache_mapping(stores: Mapping[str, Any]) -> object:
+    canonical = stores.get("response_cache")
+    legacy = stores.get("semantic_cache")
+    if canonical is not None:
+        if legacy is not None:
+            log.warning(
+                "Ignoring deprecated global.stores.semantic_cache because "
+                "global.stores.response_cache is configured"
+            )
+        return canonical
+    return legacy
 
 
 def effective_service_backend(
@@ -341,7 +354,7 @@ def inject_local_store_runtime_defaults(
         return False
 
     wants_milvus_cache = (
-        _effective_store_backend(config, "semantic_cache", "backend_type") == "milvus"
+        _effective_store_backend(config, "response_cache", "backend_type") == "milvus"
     )
     wants_vector_metadata_postgres = (
         _vector_store_metadata_backend(config) == "postgres"
@@ -356,7 +369,7 @@ def inject_local_store_runtime_defaults(
     changed = False
     if wants_milvus_cache:
         changed = (
-            _inject_semantic_cache_milvus_defaults(stores, stack_layout) or changed
+            _inject_response_cache_milvus_defaults(stores, stack_layout) or changed
         )
     if wants_vector_metadata_postgres:
         changed = (
@@ -366,17 +379,19 @@ def inject_local_store_runtime_defaults(
     return changed
 
 
-def _inject_semantic_cache_milvus_defaults(
+def _inject_response_cache_milvus_defaults(
     stores: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
-    cache_config = stores.get("semantic_cache")
+    if "response_cache" not in stores and "semantic_cache" in stores:
+        stores["response_cache"] = stores.pop("semantic_cache")
+    cache_config = stores.get("response_cache")
     if cache_config is None:
         cache_mapping: dict[str, object] = {}
-        stores["semantic_cache"] = cache_mapping
+        stores["response_cache"] = cache_mapping
         cache_config = cache_mapping
     elif not isinstance(cache_config, dict):
         log.warning(
-            "Skipping local store default injection for global.stores.semantic_cache "
+            "Skipping local store default injection for global.stores.response_cache "
             "because it is not a mapping"
         )
         return False
@@ -426,7 +441,7 @@ def _inject_semantic_cache_milvus_defaults(
     if not isinstance(milvus_block, dict):
         log.warning(
             "Skipping local store default injection for "
-            "global.stores.semantic_cache.milvus because it is not a mapping"
+            "global.stores.response_cache.milvus because it is not a mapping"
         )
         return False
 
@@ -496,7 +511,11 @@ def _effective_store_backend(
     if stores is _INVALID_MAPPING:
         return None
 
-    store_config = stores.get(store_key)
+    store_config = (
+        _response_cache_mapping(stores)
+        if store_key == "response_cache"
+        else stores.get(store_key)
+    )
     if store_config is None:
         return str(defaults.get(backend_field) or "").strip().lower() or None
     if not isinstance(store_config, Mapping):

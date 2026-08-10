@@ -214,14 +214,33 @@ The test suite includes:
 
 Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
 
-#### CI tiers
+#### Domain CI
 
-GitHub Actions uses path-aware CI profiles:
+The `Pull Request` workflow classifies changed files once, then invokes affected
+domain workflows in parallel:
 
-| Profile | When it runs | What runs |
-| --- | --- | --- |
-| **Docs/website lightweight** | PR changes only `website/**`, `tools/agent/docs/**`, or other markdown/agent-text paths | `make agent-docs-ci-gate`, markdown lint, website build |
-| **Full baseline** | Router, bindings, dashboard, e2e, CI, or mixed PRs | Full pre-commit, Go/Rust lint, security scans, integration tests as applicable |
+- docs/website-only changes run the lightweight docs gate
+- router/core changes run full quality, core test/build, one Kubernetes smoke
+  profile, and only image builds not already supplied by that E2E receipt
+- dashboard changes run dashboard checks and the dashboard image build; owned
+  E2E profiles run when their contract files change
+- operator changes run the four operator compatibility checks plus one Kind
+  smoke backend and the complementary Kubernetes smoke; nightly retains the
+  full backend matrix
+- CLI and memory keep their path-scoped integration receipts, and their local
+  image builds are subtracted from the standalone PR image matrix
+- Candle, ML, NLP, and ONNX source changes use the existing core/native
+  validation path instead of a duplicate Candle-only workflow; the known ONNX
+  mandatory-coverage gap is tracked as TD046
+- OpenVINO runs only for `openvino-binding/**`, router-learning runs only for
+  its runtime/eval paths, and performance runs only for `perf/**`
+- workflow-only CI changes run static workflow validation plus one Kubernetes
+  smoke; Docker validator changes add one representative read-only image build
+
+`PR Gate` aggregates every affected domain. During the branch-protection
+transition, the dispatcher also reports these stable compatibility contexts:
+`Run pre-commit hooks check file lint`, `test-and-build`, `Lint`, `Unit Tests`,
+`Verify Manifests`, and `Validate OLM Bundle`.
 
 Reproduce the lightweight docs gate locally:
 
@@ -230,6 +249,13 @@ make agent-docs-ci-gate AGENT_BASE_REF=origin/main
 ```
 
 Maintainers can force the full baseline on a docs-only PR by adding the `ci/full` label.
+
+Validate workflow YAML, local reusable-workflow contracts, inputs/outputs, and
+GitHub expression syntax locally:
+
+```bash
+make workflow-ci-validate
+```
 
 **Step 1: Install pre-commit tool**
 

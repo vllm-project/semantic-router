@@ -1,6 +1,6 @@
 # Streamed ExtProc and immediate responses
 
-This guide explains how to run vLLM Semantic Router behind an Envoy-compatible gateway when request bodies are delivered to ExtProc in streamed mode, and how streamed clients receive Semantic Router immediate responses such as looper, semantic-cache, and `fast_response` results.
+This guide explains how to run vLLM Semantic Router behind an Envoy-compatible gateway when request bodies are delivered to ExtProc in streamed mode, and how streamed clients receive Semantic Router immediate responses such as looper, `response_cache`, and `fast_response` results.
 
 Use this guide when you need one of the following:
 

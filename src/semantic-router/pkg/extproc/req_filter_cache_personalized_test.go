@@ -125,9 +125,12 @@ func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockCache.updateCalled = false
+			mockCache.addEntryCalled = false
+			tt.ctx.RequestModel = "test"
+			tt.ctx.RequestQuery = "hello"
+			tt.ctx.OriginalRequestBody = []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
 			router.updateResponseCache(tt.ctx, []byte(`{"choices":[]}`))
-			assert.Equal(t, tt.wantUpdate, mockCache.updateCalled,
+			assert.Equal(t, tt.wantUpdate, mockCache.addEntryCalled,
 				"updateResponseCache should %s for %s", map[bool]string{true: "write", false: "skip"}[tt.wantUpdate], tt.name)
 		})
 	}

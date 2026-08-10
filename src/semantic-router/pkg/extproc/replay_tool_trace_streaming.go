@@ -50,8 +50,20 @@ func replayStreamingToolCalls(choice map[string]interface{}) []replayStreamingIn
 // mergeReplayStreamingToolCall merges one streaming fragment into the
 // accumulating StreamingToolCallState keyed by the tool-call index.
 func mergeReplayStreamingToolCall(ctx *RequestContext, rawIndex int, toolCall map[string]interface{}) {
+	mergeReplayStreamingToolCallMap(ctx.StreamingToolCalls, rawIndex, toolCall)
+}
+
+func mergeReplayStreamingToolCallMap(
+	toolCalls map[int]*StreamingToolCallState,
+	rawIndex int,
+	toolCall map[string]interface{},
+) {
 	index := replayStreamingToolCallIndex(rawIndex, toolCall)
-	state := replayStreamingToolCallState(ctx, index)
+	state := toolCalls[index]
+	if state == nil {
+		state = &StreamingToolCallState{}
+		toolCalls[index] = state
+	}
 
 	if id, ok := toolCall["id"].(string); ok && id != "" {
 		state.ID = mergeReplayStreamingFragment(state.ID, id)
@@ -66,17 +78,6 @@ func replayStreamingToolCallIndex(rawIndex int, toolCall map[string]interface{})
 		return int(value)
 	}
 	return rawIndex
-}
-
-func replayStreamingToolCallState(ctx *RequestContext, index int) *StreamingToolCallState {
-	state := ctx.StreamingToolCalls[index]
-	if state != nil {
-		return state
-	}
-
-	state = &StreamingToolCallState{}
-	ctx.StreamingToolCalls[index] = state
-	return state
 }
 
 func mergeReplayStreamingFunctionFragment(state *StreamingToolCallState, fn map[string]interface{}) {

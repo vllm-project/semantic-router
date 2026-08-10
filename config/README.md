@@ -27,7 +27,7 @@ Inside canonical `config.yaml`:
 - `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`
 - `routing.projections.scores` and `routing.projections.mappings` let maintained configs turn learned and heuristic signals into named routing bands that decisions can reference with `type: projection`
 - `routing.decisions[].candidateIterations` carries bounded DSL `FOR ... IN` metadata for candidate-model authoring; it is declarative selection policy input, not a general scripting runtime
-- `routing.decisions[].emits[]` carries typed side-effect directives from DSL `EMIT` blocks; the current supported kind is `retention`, where `drop: true` skips response-side semantic-cache writes and the remaining fields stay structured/auditable for follow-up runtime consumers such as turn-aware cache TTL, current-model affinity, prefix/KV-cache warmth, and session transition telemetry
+- `routing.decisions[].emits[]` carries typed side-effect directives from DSL `EMIT` blocks; the current supported kind is `retention`, where `drop: true` skips response-cache writes and the remaining fields stay structured/auditable for follow-up runtime consumers such as turn-aware cache TTL, current-model affinity, prefix/KV-cache warmth, and session transition telemetry
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
 - `routing.signals.metadata` matches bounded, untrusted caller hints; authenticated identity remains owned by `authz`
 - `routing.signals.classifiers` exposes generic native or constrained-LLM label scores; decisions select a declared label and apply a numeric predicate
@@ -39,6 +39,7 @@ Inside canonical `config.yaml`:
 - top-level `recipes` adds named routing profiles beside the `routing` block. The top-level `routing` profile is the `default` recipe; each `recipes[].routing` block carries the same profile shape (`signals`, `projections`, `decisions`, `strategy`) but never `modelCards`. Signal, projection, and decision names are local to one recipe, cross-recipe references are invalid, and PII/jailbreak/authz rules, algorithms, plugins, cache, replay, and learning state stay isolated. The model catalog, providers, model assets, and service/store infrastructure remain shared. See `website/docs/tutorials/global/entrypoints-and-recipes.md`
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - `global.router.learning.adaptation` adds online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. Decisions can opt out with `routing.decisions[].adaptations.mode: bypass`, use component-level `adaptations.adaptation.mode` / `adaptations.protection.mode`, or override the adaptation search space with `adaptations.adaptation.candidate_set`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is no longer a supported public algorithm.
+- `global.router.learning.state_store` optionally mirrors protection snapshots to Redis with bounded request-time reads and fail-open local fallback for multi-replica deployments.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
@@ -74,7 +75,8 @@ Each supported algorithm now has its own tutorial page under `website/docs/tutor
 
 `config/fragments/plugin/` is organized by route-local plugin or reusable plugin bundle:
 
-- one directory per plugin or bundle, such as `semantic-cache/`, `rag/`, `memory/`, or `content-safety/`
+- one directory per plugin or bundle, such as `response-cache/`, `context-compression/`, `rag/`, `memory/`, or `content-safety/`
+- `context-compression/` protects RAG-injected tool results by default; set `targets.rag.mode: extractive` only for routes that accept extractive RAG compression
 - route-local tool policy examples live under `tools/`
 - one fragment example per directory in the current catalog
 

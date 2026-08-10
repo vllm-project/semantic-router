@@ -29,14 +29,18 @@ pip install llm-katan
 #### Option 2: Docker
 
 ```bash
-# Pull and run the latest Docker image
-docker pull ghcr.io/vllm-project/semantic-router/llm-katan:latest
-docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:latest
+# Pull and run the maintained nightly test-fixture image
+docker pull ghcr.io/vllm-project/semantic-router/llm-katan:nightly
+docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:nightly
 
 # Or with custom model
-docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:latest \
+docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:nightly \
   llm-katan --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 ```
+
+`llm-katan` is an integration fixture, not a production release image. Nightly
+publishing updates the mutable `nightly` tag and also preserves a dated
+`nightly-YYYYMMDD` tag.
 
 #### Option 3: Kubernetes
 

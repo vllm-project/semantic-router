@@ -53,6 +53,7 @@ def recipe_config(*, recipe_model: str = "model-a", recipe_name: str = "private"
                                 "name": "private-route",
                                 "description": "private",
                                 "priority": 1,
+                                "tier": 7,
                                 "rules": {"operator": "AND", "conditions": []},
                                 "modelRefs": [{"model": recipe_model}],
                             }
@@ -68,6 +69,12 @@ def test_recipe_model_references_are_validated():
     errors = validate_user_config(recipe_config(recipe_model="missing-model"))
 
     assert any("unknown model 'missing-model'" in error.message for error in errors)
+
+
+def test_recipe_decision_tier_survives_schema_parse():
+    config = recipe_config()
+
+    assert config.recipes[0].routing.decisions[0].tier == 7
 
 
 def test_entrypoints_must_reference_known_recipe():

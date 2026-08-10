@@ -228,6 +228,56 @@ func assertRouterReplayPluginRoundTrip(t *testing.T, decision config.Decision) {
 	}
 }
 
+func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "compress",
+				ModelRefs: []config.ModelRef{{Model: "model"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginContextCompression,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+						"mode":    "auto",
+						"targets": map[string]interface{}{
+							"tool_outputs": map[string]interface{}{
+								"mode":          "extractive",
+								"min_tokens":    2000,
+								"target_tokens": 1000,
+							},
+							"rag": map[string]interface{}{"mode": "preserve"},
+						},
+						"request_controls": map[string]interface{}{
+							"enabled": true,
+							"allowed": []string{"bypass", "target"},
+						},
+					}),
+				}},
+			}},
+		},
+	}
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		"PLUGIN context_compression",
+		"tool_outputs:",
+		"request_controls:",
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	plugin := findDecisionPluginForTest(
+		t,
+		compiled.Decisions[0],
+		config.DecisionPluginContextCompression,
+	)
+	var pluginConfig config.ContextCompressionPluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("context_compression decode error: %v", err)
+	}
+	if pluginConfig.Targets == nil ||
+		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 {
+		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
+	}
+}
+
 func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 

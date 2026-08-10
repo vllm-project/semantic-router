@@ -124,6 +124,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	RecordLastModel(p.SessionID, p.SelectedModel)
 
 	s := globalRouterSessionMemory
+	defer persistRouterSessionState(p.SessionID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -166,6 +167,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 		return
 	}
 	s := globalRouterSessionMemory
+	defer persistRouterSessionState(p.SessionID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -204,11 +206,10 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	}
 	s := globalRouterSessionMemory
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	st := s.sessions[sessionID]
 	if st == nil {
-		return RouterSessionSnapshot{}, false
+		s.mu.Unlock()
+		return loadSharedRouterSessionSnapshot(sessionID, now)
 	}
 	if now.IsZero() {
 		now = s.nowFn()
@@ -219,9 +220,10 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	}
 	if idleFor > routerMemoryTTL {
 		delete(s.sessions, sessionID)
+		s.mu.Unlock()
 		return RouterSessionSnapshot{}, false
 	}
-	return RouterSessionSnapshot{
+	snapshot := RouterSessionSnapshot{
 		SessionID:                       st.sessionID,
 		UserID:                          st.userID,
 		CurrentModel:                    st.currentModel,
@@ -242,7 +244,9 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		LastDecisionReason:              st.lastDecisionReason,
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
-	}, true
+	}
+	s.mu.Unlock()
+	return snapshot, true
 }
 
 func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessionState {

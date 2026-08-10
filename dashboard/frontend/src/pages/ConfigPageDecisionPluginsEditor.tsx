@@ -132,7 +132,7 @@ export default function ConfigPageDecisionPluginsEditor({
 
       <button
         type="button"
-        onClick={() => onChange([...rows, { type: 'semantic-cache', configuration: {} }])}
+        onClick={() => onChange([...rows, { type: 'response_cache', configuration: {} }])}
         className={decisionStyles.editorButtonSecondary}
       >
         Add Plugin

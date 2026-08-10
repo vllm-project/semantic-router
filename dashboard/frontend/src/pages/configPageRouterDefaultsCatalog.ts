@@ -28,7 +28,7 @@ export const PYTHON_ROUTER_KEYS: RouterSystemKey[] = [
   'authz',
   'ratelimit',
   'memory',
-  'semantic_cache',
+  'response_cache',
   'vector_store',
   'tools',
   'prompt_guard',
@@ -96,7 +96,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     default_similarity_threshold: 0.7,
     extraction_batch_size: 10,
   } satisfies MemoryConfig,
-  semantic_cache: {
+  response_cache: {
     enabled: true,
     backend_type: 'memory',
     max_entries: 1000,
@@ -286,8 +286,8 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
     eyebrow: 'Stores',
     description: 'Cross-session memory extraction, storage, retrieval thresholds, and reflection policy.',
   },
-  semantic_cache: {
-    title: 'Semantic Cache',
+  response_cache: {
+    title: 'Response Cache',
     eyebrow: 'Stores',
     description: 'Similarity cache backend, retention policy, and embedding-backed cache behavior.',
   },

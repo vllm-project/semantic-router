@@ -293,9 +293,10 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.8
       - name: biology_decision
         description: Biology and life sciences questions
@@ -364,9 +365,10 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.8
       - name: economics_decision
         description: Economics and financial topics
@@ -543,9 +545,10 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.75
     signals:
       keywords:
@@ -777,7 +780,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

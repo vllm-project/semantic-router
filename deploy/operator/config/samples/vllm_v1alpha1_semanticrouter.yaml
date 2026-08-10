@@ -132,7 +132,7 @@ spec:
       use_cpu: true
 
     # Semantic cache for response caching
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: "memory"
       similarity_threshold: "0.8"
