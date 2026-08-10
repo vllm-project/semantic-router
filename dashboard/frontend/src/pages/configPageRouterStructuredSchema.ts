@@ -324,7 +324,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       }),
     },
   },
-  semantic_cache: {
+  response_cache: {
     redis: {
       label: 'Redis Backend',
       description: 'Typed Redis connection, index, search, and lifecycle settings.',

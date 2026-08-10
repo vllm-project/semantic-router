@@ -42,7 +42,7 @@ translation:
 ```yaml
 global:
   stores:
-    semantic_cache:
+    response_cache:
       similarity_threshold: 0.8
 ```
 

@@ -174,7 +174,7 @@ global:
           queue_depth_estimation: true
           max_models: 50
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

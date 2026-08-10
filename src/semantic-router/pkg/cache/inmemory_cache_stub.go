@@ -4,8 +4,7 @@ package cache
 
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
-	SimilarityTracker // embedded — provides LastSimilarity()
-	enabled           bool
+	enabled bool
 }
 
 // InMemoryCacheOptions contains configuration for the in-memory cache
@@ -34,17 +33,34 @@ func (c *InMemoryCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *InMemoryCache) AddPendingRequest(
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	ttlSeconds int,
+) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *InMemoryCache) UpdateWithResponse(
+	requestID string,
+	responseBody []byte,
+	ttlSeconds int,
+) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	responseBody []byte,
+	ttlSeconds int,
+) error {
 	return nil
 }
 
@@ -63,6 +79,14 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		return nil, false, nil
 	}
 	return nil, false, nil
+}
+
+// LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
+func (c *InMemoryCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+	if !c.enabled {
+		return LookupResult{}, nil
+	}
+	return LookupResult{}, nil
 }
 
 // Close releases all resources

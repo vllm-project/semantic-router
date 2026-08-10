@@ -717,6 +717,8 @@ export interface CanonicalServiceGlobalConfig {
 }
 
 export interface CanonicalStoreGlobalConfig {
+  response_cache?: SemanticCacheConfig
+  /** @deprecated Use response_cache. */
   semantic_cache?: SemanticCacheConfig
   memory?: MemoryConfig
   vector_store?: VectorStoreConfig
@@ -1193,6 +1195,8 @@ export interface ConfigData {
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]
   global?: CanonicalGlobalConfig
+  response_cache?: SemanticCacheConfig
+  /** @deprecated Use response_cache. */
   semantic_cache?: SemanticCacheConfig
   tools?: ToolIntegrationConfig
   prompt_guard?: ModelConfig & { enabled: boolean }

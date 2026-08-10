@@ -406,7 +406,7 @@ routing:
   decisions:
     - name: "cached-route"
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             similarity_threshold: 0.70
 ```

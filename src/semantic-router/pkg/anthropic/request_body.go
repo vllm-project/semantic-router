@@ -50,7 +50,8 @@ func buildSystem(systemPrompt string, pt *AnthropicPassthrough) []anthropic.Text
 	if systemPrompt == "" {
 		return nil
 	}
-	return []anthropic.TextBlockParam{{Text: systemPrompt}}
+	block := anthropic.TextBlockParam{Text: systemPrompt}
+	return []anthropic.TextBlockParam{block}
 }
 
 // applySampling sets temperature, top_p, and stop_sequences from the OpenAI
@@ -90,16 +91,14 @@ func applyMetadata(params *anthropic.MessageNewParams, req *openai.ChatCompletio
 // applyToolsCacheControl attaches cache_control markers to tool definitions
 // based on the `tools[i]` keys in the passthrough.
 func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {
-	if pt == nil || len(pt.CacheControl) == 0 {
+	if pt == nil {
 		return
 	}
 	for i := range params.Tools {
 		spec, ok := pt.CacheControl[fmt.Sprintf("tools[%d]", i)]
-		if !ok {
-			continue
-		}
-		if params.Tools[i].OfTool != nil {
+		if ok && params.Tools[i].OfTool != nil {
 			params.Tools[i].OfTool.CacheControl = toSDKCacheControl(spec)
+			continue
 		}
 	}
 }
@@ -109,7 +108,7 @@ func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPas
 // key no longer matches a block on the outbound side are silently dropped to
 // match the surrounding lossy-translation discipline.
 func applyMessagesCacheControl(messages []anthropic.MessageParam, pt *AnthropicPassthrough) {
-	if pt == nil || len(pt.CacheControl) == 0 {
+	if pt == nil {
 		return
 	}
 	for i := range messages {
@@ -118,19 +117,24 @@ func applyMessagesCacheControl(messages []anthropic.MessageParam, pt *AnthropicP
 			if !ok {
 				continue
 			}
-			sdkCC := toSDKCacheControl(spec)
-			block := &messages[i].Content[j]
-			switch {
-			case block.OfText != nil:
-				block.OfText.CacheControl = sdkCC
-			case block.OfImage != nil:
-				block.OfImage.CacheControl = sdkCC
-			case block.OfToolUse != nil:
-				block.OfToolUse.CacheControl = sdkCC
-			case block.OfToolResult != nil:
-				block.OfToolResult.CacheControl = sdkCC
-			}
+			applyCacheControlToBlock(&messages[i].Content[j], toSDKCacheControl(spec))
 		}
+	}
+}
+
+func applyCacheControlToBlock(
+	block *anthropic.ContentBlockParamUnion,
+	cacheControl anthropic.CacheControlEphemeralParam,
+) {
+	switch {
+	case block.OfText != nil:
+		block.OfText.CacheControl = cacheControl
+	case block.OfImage != nil:
+		block.OfImage.CacheControl = cacheControl
+	case block.OfToolUse != nil:
+		block.OfToolUse.CacheControl = cacheControl
+	case block.OfToolResult != nil:
+		block.OfToolResult.CacheControl = cacheControl
 	}
 }
 

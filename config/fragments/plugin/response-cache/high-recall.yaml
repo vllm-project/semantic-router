@@ -1,0 +1,16 @@
+plugin:
+  type: response_cache
+  configuration:
+    enabled: true
+    mode: exact_then_semantic
+    scope: tenant
+    semantic:
+      similarity_threshold: 0.92
+    ttl_seconds: 86400
+    request_controls:
+      enabled: true
+      header: x-vsr-cache-control
+      allowed: [no-cache, no-store, bypass, max-age, ttl]
+      max_ttl_seconds: 86400
+    personalized:
+      mode: disabled

@@ -126,7 +126,7 @@ global:
             minimax: x-user-minimax-key
         - type: static-config
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       embedding_model: mmbert
     memory:

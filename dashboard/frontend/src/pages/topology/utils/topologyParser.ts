@@ -40,7 +40,11 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
   const piiModel =
     config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
-  const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
+  const responseCache =
+    config.global?.stores?.response_cache ||
+    config.global?.stores?.semantic_cache ||
+    config.response_cache ||
+    config.semantic_cache
   const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
   const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 
@@ -75,14 +79,14 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   }
 
   // 3. Semantic Cache (Global)
-  if (semanticCache) {
+  if (responseCache) {
     plugins.push({
-      type: 'semantic_cache',
-      enabled: semanticCache.enabled ?? false,
+      type: 'response_cache',
+      enabled: responseCache.enabled ?? false,
       config: {
-        backend_type: semanticCache.backend_type,
-        similarity_threshold: semanticCache.similarity_threshold,
-        ttl_seconds: semanticCache.ttl_seconds,
+        backend_type: responseCache.backend_type,
+        similarity_threshold: responseCache.similarity_threshold,
+        ttl_seconds: responseCache.ttl_seconds,
       },
     })
   }

@@ -616,8 +616,17 @@ func extractStreamingToolCalls(ctx *RequestContext, chunkData map[string]interfa
 		ctx.StreamingToolCalls = make(map[int]*StreamingToolCallState)
 	}
 	for _, choice := range choices {
+		choiceIndex := streamingChoiceIndex(choice)
+		choiceState := streamingChoiceState(ctx, choiceIndex)
 		for _, indexedToolCall := range replayStreamingToolCalls(choice) {
-			mergeReplayStreamingToolCall(ctx, indexedToolCall.rawIndex, indexedToolCall.toolCall)
+			mergeReplayStreamingToolCallMap(
+				choiceState.ToolCalls,
+				indexedToolCall.rawIndex,
+				indexedToolCall.toolCall,
+			)
+			if choiceIndex == 0 {
+				mergeReplayStreamingToolCall(ctx, indexedToolCall.rawIndex, indexedToolCall.toolCall)
+			}
 		}
 	}
 }

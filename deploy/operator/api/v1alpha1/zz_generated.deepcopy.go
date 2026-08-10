@@ -242,6 +242,11 @@ func (in *ConfigSpec) DeepCopyInto(out *ConfigSpec) {
 		*out = new(EmbeddingModelsConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ResponseCache != nil {
+		in, out := &in.ResponseCache, &out.ResponseCache
+		*out = new(SemanticCacheConfig)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.SemanticCache != nil {
 		in, out := &in.SemanticCache, &out.SemanticCache
 		*out = new(SemanticCacheConfig)

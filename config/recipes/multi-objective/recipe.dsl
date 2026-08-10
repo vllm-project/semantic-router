@@ -381,7 +381,7 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
       on_no_candidates: "first"
       weights: { latency: 0.85, load: 0.15 }
     }
-    PLUGIN semantic_cache {
+    PLUGIN response_cache {
       enabled: true
       similarity_threshold: 0.9
       ttl_seconds: 900
@@ -460,7 +460,7 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
       on_no_candidates: "first"
       weights: { cost: 0.8, load: 0.2 }
     }
-    PLUGIN semantic_cache {
+    PLUGIN response_cache {
       enabled: true
       similarity_threshold: 0.88
       ttl_seconds: 3600

@@ -39,6 +39,23 @@ type RouterLearningConfig struct {
 	Enabled    bool                           `yaml:"enabled,omitempty"`
 	Adaptation RouterLearningAdaptationConfig `yaml:"adaptation,omitempty"`
 	Protection RouterLearningProtectionConfig `yaml:"protection,omitempty"`
+	StateStore RouterLearningStateStoreConfig `yaml:"state_store,omitempty"`
+}
+
+// RouterLearningStateStoreConfig configures optional shared protection state.
+type RouterLearningStateStoreConfig struct {
+	Backend    string                              `yaml:"backend,omitempty"`
+	TTLSeconds int                                 `yaml:"ttl_seconds,omitempty"`
+	TimeoutMS  int                                 `yaml:"timeout_ms,omitempty"`
+	Redis      RouterLearningRedisStateStoreConfig `yaml:"redis,omitempty"`
+}
+
+// RouterLearningRedisStateStoreConfig configures Redis connectivity.
+type RouterLearningRedisStateStoreConfig struct {
+	Address   string `yaml:"address,omitempty"`
+	Password  string `yaml:"password,omitempty"`
+	Database  int    `yaml:"database,omitempty"`
+	KeyPrefix string `yaml:"key_prefix,omitempty"`
 }
 
 // RouterLearningAdaptationConfig configures online model-choice learning.
