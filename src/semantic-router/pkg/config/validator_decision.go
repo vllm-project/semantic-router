@@ -362,7 +362,19 @@ func validateOneDecisionPluginContracts(
 	cfg *RouterConfig,
 	decision *Decision,
 ) error {
+	seenPluginTypes := make(map[string]string, len(decision.Plugins))
 	for index, plugin := range decision.Plugins {
+		normalizedType := NormalizeDecisionPluginType(plugin.Type)
+		if previous, exists := seenPluginTypes[normalizedType]; exists {
+			return fmt.Errorf(
+				"decision %q has duplicate plugin %q via %q and %q",
+				decision.Name,
+				normalizedType,
+				previous,
+				plugin.Type,
+			)
+		}
+		seenPluginTypes[normalizedType] = plugin.Type
 		if err := validateDecisionPluginPayload(
 			decision.Name,
 			index,
@@ -399,7 +411,7 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 		}
 	}
 
-	cacheCfg := decision.GetSemanticCacheConfig()
+	cacheCfg := decision.GetResponseCacheConfig()
 	memCfg := decision.GetMemoryConfig()
 	cacheActive := cacheCfg != nil && cacheCfg.Enabled
 	ragActive := ragCfg != nil && ragCfg.Enabled
@@ -408,10 +420,54 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 		memActive = memCfg == nil
 	}
 	if cacheActive && (ragActive || memActive) {
-		logging.Warnf("Decision '%s': semantic-cache is enabled alongside %s. "+
+		logging.Warnf("Decision '%s': response_cache is enabled alongside %s. "+
 			"Cache reads will be automatically bypassed to preserve personalized responses. "+
 			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
 			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
+	}
+	return validateDecisionContextCompressionRecovery(cfg, decision)
+}
+
+func validateDecisionContextCompressionRecovery(
+	cfg *RouterConfig,
+	decision *Decision,
+) error {
+	compression := decision.GetContextCompressionConfig()
+	if compression == nil ||
+		compression.Recovery == nil ||
+		!compression.Recovery.Enabled {
+		return nil
+	}
+	if !cfg.Looper.IsEnabled() {
+		return fmt.Errorf(
+			"decision %q: context_compression recovery requires global.integrations.looper.endpoint",
+			decision.Name,
+		)
+	}
+	store := strings.TrimSpace(compression.Recovery.Store)
+	if store == "response_cache" {
+		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
+	}
+	switch store {
+	case "redis":
+		if cfg.SemanticCache.Redis == nil {
+			return fmt.Errorf(
+				"decision %q: context_compression recovery requires response_cache.redis configuration",
+				decision.Name,
+			)
+		}
+	case "valkey":
+		if cfg.SemanticCache.Valkey == nil {
+			return fmt.Errorf(
+				"decision %q: context_compression recovery requires response_cache.valkey configuration",
+				decision.Name,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"decision %q: context_compression recovery requires a Redis or Valkey shared store",
+			decision.Name,
+		)
 	}
 	return nil
 }

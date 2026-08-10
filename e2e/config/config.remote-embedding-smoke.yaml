@@ -82,7 +82,7 @@ global:
     startup_status:
       store_backend: file
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:

@@ -4,9 +4,10 @@ name: Contributor Leaderboard
 # Opens/updates a PR instead of pushing to main (branch protection).
 
 on:
-  schedule:
-    - cron: "0 1 * * 1" # Weekly on Monday at 01:00 UTC
-  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   update-leaderboard:

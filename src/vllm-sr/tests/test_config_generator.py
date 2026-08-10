@@ -145,6 +145,7 @@ routing:
 
     # --- cluster assertions ---
     cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
     assert ep["address"]["socket_address"]["address"] == "10.0.0.1"
@@ -156,6 +157,70 @@ routing:
     assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
     assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+
+
+def test_provider_reliability_renders_retry_outlier_and_least_request(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 45s
+        max_ejection_percent: 25
+        health_check_path: /health
+        health_check_interval: 15s
+        health_check_timeout: 3s
+      backend_refs:
+        - endpoint: 10.0.0.1:8000
+        - endpoint: 10.0.0.2:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      description: default route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    route = _model_route(rendered, "test-model")["route"]
+    assert route["retry_policy"] == {
+        "retry_on": "connect-failure,refused-stream",
+        "num_retries": 2,
+    }
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["lb_policy"] == "LEAST_REQUEST"
+    assert cluster["least_request_lb_config"]["choice_count"] == 2
+    assert cluster["outlier_detection"]["consecutive_5xx"] == 5
+    assert cluster["outlier_detection"]["base_ejection_time"] == "45s"
+    assert cluster["outlier_detection"]["max_ejection_percent"] == 25
+    assert cluster["health_checks"][0]["http_health_check"]["path"] == "/health"
+    assert cluster["health_checks"][0]["interval"] == "15s"
+    assert cluster["health_checks"][0]["timeout"] == "3s"
+    assert cluster["circuit_breakers"]["thresholds"][0]["max_requests"] == 4096
 
 
 def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(

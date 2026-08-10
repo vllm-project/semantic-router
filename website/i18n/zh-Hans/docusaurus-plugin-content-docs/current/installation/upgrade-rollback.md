@@ -103,7 +103,6 @@ kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
 # Pull by version tag (substitute podman for docker if using podman)
 docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
-docker pull ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0
 
 # Get the immutable digest for maximum pinning stability
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
@@ -124,10 +123,9 @@ image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
 | `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc 运行时 |
 | `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm Router ExtProc 运行时 |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | 本地/运行时 CLI 镜像 |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.3.0` | CUDA 本地/运行时 CLI 镜像 |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm 本地/运行时 CLI 镜像 |
-| `ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0` | Anthropic 兼容 API shim 镜像 |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard 后端/前端镜像 |
-| `ghcr.io/vllm-project/semantic-router/llm-katan:v0.3.0` | Fleet simulation 服务镜像 |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator 镜像 |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle 镜像 |
 

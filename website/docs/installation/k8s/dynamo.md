@@ -859,7 +859,7 @@ When using `tensorParallelSize=N`, you must also set `resources.requests.gpu=N` 
 
 - Review the [NVIDIA Dynamo Integration Proposal](../../proposals/nvidia-dynamo-integration) for detailed architecture
 - Set up [monitoring and observability](../../tutorials/global/api-and-observability)
-- Configure [semantic cache](../../tutorials/plugin/semantic-cache) for production
+- Configure [semantic cache](../../tutorials/plugin/response-cache) for production
 - Scale the deployment for production workloads
 
 ## References

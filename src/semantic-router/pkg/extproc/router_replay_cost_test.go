@@ -54,6 +54,41 @@ func TestBuildReplayUsageCostComputesBaselineSavings(t *testing.T) {
 	}
 }
 
+func TestBuildCacheHitReplayUsageRecordsZeroActualCost(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"cheap-model": {
+						Pricing: config.ModelPricing{
+							Currency:        "USD",
+							PromptPer1M:     1,
+							CompletionPer1M: 2,
+						},
+					},
+					"expensive-model": {
+						Pricing: config.ModelPricing{
+							Currency:        "USD",
+							PromptPer1M:     10,
+							CompletionPer1M: 20,
+						},
+					},
+				},
+			},
+		},
+	}
+	usage := responseUsageMetrics{promptTokens: 1000, completionTokens: 500}
+
+	snapshot := router.buildCacheHitReplayUsage(
+		&RequestContext{RequestModel: "cheap-model"},
+		usage,
+	)
+
+	assertApproxFloat64(t, snapshot.ActualCost, 0)
+	assertApproxFloat64(t, snapshot.BaselineCost, 0.02)
+	assertApproxFloat64(t, snapshot.CostSavings, 0.02)
+}
+
 func TestBuildReplayUsageCostIncludesCacheWrites(t *testing.T) {
 	selectedWriteRate := 1.25
 	baselineWriteRate := 6.25

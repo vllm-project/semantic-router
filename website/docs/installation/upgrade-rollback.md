@@ -15,7 +15,7 @@ the vLLM Semantic Router in a production environment.
 |---------|-------------|------------|----------|
 | **Versioned** | `v0.3.0` / `0.3.0` | Tagged releases only | Production — immutable, recommended |
 | **Nightly** | `nightly-20260115` | Daily at 02:00 UTC | Pre-release testing |
-| **Latest** | `latest` | Every push to `main` + releases | Development only |
+| **Latest** | `latest` | Affected image changes on `main` + releases | Development only |
 
 :::tip Recommendation
 Always use a **versioned** tag in production. It is immutable — the digest
@@ -109,7 +109,6 @@ Find the latest version on the [GitHub Releases page](https://github.com/vllm-pr
 # Pull by version tag (substitute podman for docker if using podman)
 docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
-docker pull ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0
 
 # Get the immutable digest for maximum pinning stability
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
@@ -130,10 +129,9 @@ Published versioned images for a full release:
 | `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.3.0` | CUDA local/runtime CLI image |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0` | Anthropic-compatible API shim image |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
-| `ghcr.io/vllm-project/semantic-router/llm-katan:v0.3.0` | Fleet simulation service image |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |
 
@@ -302,8 +300,10 @@ A nightly build is promoted to a release by:
 
 1. Verifying all CI checks pass on the candidate commit.
 2. Bumping version fields in `src/vllm-sr/pyproject.toml` and `candle-binding/Cargo.toml` to the target version.
-3. Pushing a `v<version>` tag — this triggers `docker-release.yml`, `helm-publish.yml`, `pypi-publish.yml`, `publish-crate.yml`, and `release.yml` simultaneously.
-4. The `release.yml` workflow validates all surfaces are consistent before the GitHub Release is created.
+3. Pushing a `v<version>` tag — this triggers only `release.yml`.
+4. `release.yml` validates the cross-surface version contract, then invokes the
+   canonical Docker, Helm, PyPI, crate, and operator-image publishers. The
+   GitHub Release is created only after every publisher succeeds.
 
 For dashboard images, the Docker release workflow also passes the pushed `v<version>`
 tag into the dashboard backend build. The dashboard `/api/status` response therefore

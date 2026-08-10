@@ -96,7 +96,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			DefaultSimilarityThreshold: 0.70,
 			ExtractionBatchSize:        10,
 		},
-		SemanticCache: SemanticCache{
+		ResponseCache: SemanticCache{
 			Enabled:        true,
 			BackendType:    "memory",
 			MaxEntries:     1000,

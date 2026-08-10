@@ -469,15 +469,15 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// IsCacheEnabled resolves semantic-cache policy from a scoped decision.
+// IsCacheEnabled resolves response_cache policy from a scoped decision.
 func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
+		config := decision.GetResponseCacheConfig()
 		if config != nil {
 			return config.Enabled
 		}
 	}
-	// No explicit semantic-cache plugin configured for this decision
+	// No explicit response_cache plugin configured for this decision
 	// Return false to respect per-decision plugin scoping
 	return false
 }
@@ -490,13 +490,13 @@ func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName strin
 // GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
 func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
-		if config != nil && config.SimilarityThreshold != nil {
-			return *config.SimilarityThreshold
+		config := decision.GetResponseCacheConfig()
+		if config != nil && config.EffectiveSimilarityThreshold() != nil {
+			return *config.EffectiveSimilarityThreshold()
 		}
 	}
-	// Fall back to global cache threshold or bert threshold
-	return c.GetCacheSimilarityThreshold()
+	// Route policy does not cascade the backend's global threshold.
+	return 0.8
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision
@@ -509,7 +509,7 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 // GetCacheTTLSeconds resolves TTL from a scoped decision.
 func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
+		config := decision.GetResponseCacheConfig()
 		if config != nil && config.TTLSeconds != nil {
 			return *config.TTLSeconds
 		}

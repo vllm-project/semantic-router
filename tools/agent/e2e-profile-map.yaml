@@ -245,29 +245,35 @@ workflow_suite_rules:
     kind: workflow-integration
     summary: Real-container CLI integration coverage for serve, status, logs, stop, and image-pull behavior.
     workflow: .github/workflows/integration-test-vllm-sr-cli.yml
+    change_filter: cli
     local_command: make vllm-sr-test-integration
     paths:
       - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
       - tools/make/docker.mk
       - e2e/testing/vllm-sr-cli/**
-      - .github/workflows/integration-test-vllm-sr-cli.yml
   memory-integration:
     owner: router-core
     kind: workflow-integration
     summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack.
     workflow: .github/workflows/integration-test-memory.yml
+    change_filter: memory
     local_command: make memory-test-integration
     paths:
       - src/semantic-router/pkg/memory/**
       - src/semantic-router/pkg/extproc/*memory*
       - src/semantic-router/pkg/responseapi/**
-      - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
-      - tools/make/docker.mk
+      - src/semantic-router/pkg/responsestore/**
+      - src/semantic-router/pkg/apiserver/*memory*
+      - src/semantic-router/pkg/sessiontelemetry/*memory*
+      - src/semantic-router/pkg/vectorstore/*memory*
+      - src/semantic-router/pkg/cache/*memory*
+      - src/vllm-sr/**/*memory*
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
       - e2e/testing/llm-katan/**
       - e2e/config/config.memory*.yaml
-      - .github/workflows/integration-test-memory.yml
+      - e2e/profiles/response-api/**
+      - e2e/profiles/response-api-redis/**
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/**

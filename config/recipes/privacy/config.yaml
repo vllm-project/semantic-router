@@ -8,7 +8,7 @@ listeners:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
   router:

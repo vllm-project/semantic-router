@@ -22,7 +22,7 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
-	c.expandProjectionDependencies(usedSignals)
+	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
 }
@@ -64,9 +64,43 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
 		}
 	}
-	c.expandProjectionDependencies(allSignals)
+	c.expandTransitiveSignalDependencies(allSignals)
 
 	return allSignals
+}
+
+func (c *Classifier) expandTransitiveSignalDependencies(usedSignals map[string]bool) {
+	for {
+		before := len(usedSignals)
+		c.expandProjectionDependencies(usedSignals)
+		c.expandComplexityComposerDependencies(usedSignals)
+		if len(usedSignals) == before {
+			return
+		}
+	}
+}
+
+func (c *Classifier) expandComplexityComposerDependencies(usedSignals map[string]bool) {
+	for _, rule := range c.Config.ComplexityRules {
+		key := strings.ToLower(config.SignalTypeComplexity + ":" + rule.Name)
+		if !signalKeyOrLabelUsed(usedSignals, key) || rule.Composer == nil {
+			continue
+		}
+		c.analyzeRuleCombination(*rule.Composer, usedSignals)
+	}
+}
+
+func signalKeyOrLabelUsed(usedSignals map[string]bool, key string) bool {
+	if usedSignals[key] {
+		return true
+	}
+	prefix := key + ":"
+	for usedKey := range usedSignals {
+		if strings.HasPrefix(usedKey, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.

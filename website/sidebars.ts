@@ -198,6 +198,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/image-gen',
+                'tutorials/plugin/context-compression',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',
@@ -211,7 +212,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
-                'tutorials/plugin/semantic-cache',
+                'tutorials/plugin/response-cache',
               ],
             },
             {
@@ -261,6 +262,7 @@ const sidebars: SidebarsConfig = {
       label: 'Proposals',
       items: [
         'proposals/batch-and-capacity-aware-routing',
+        'proposals/model-execution-fallback',
         'proposals/unified-config-contract-v0-3',
         'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',

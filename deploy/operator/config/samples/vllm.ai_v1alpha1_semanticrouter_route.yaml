@@ -83,7 +83,7 @@ spec:
   # ====================
   config:
     # Semantic cache for better performance
-    semantic_cache:
+    response_cache:
       enabled: true
       similarity_threshold: "0.85"
       max_entries: 5000

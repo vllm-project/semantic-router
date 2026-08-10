@@ -107,7 +107,8 @@ func (r *OpenAIRouter) retrieveFromOpenAI(traceCtx context.Context, ctx *Request
 // addFileSearchToolToRequest adds the file_search tool to the request
 // This follows the Responses API workflow where tools are part of the request
 func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiConfig *config.OpenAIRAGConfig) error {
-	if len(ctx.OriginalRequestBody) == 0 {
+	requestBody := ctx.workingRequestBody()
+	if len(requestBody) == 0 {
 		return fmt.Errorf("original request body is empty")
 	}
 
@@ -118,7 +119,7 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 
 	// Parse the request body
 	var requestMap map[string]interface{}
-	if unmarshalErr := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); unmarshalErr != nil {
+	if unmarshalErr := json.Unmarshal(requestBody, &requestMap); unmarshalErr != nil {
 		return fmt.Errorf("failed to parse request body: %w", unmarshalErr)
 	}
 
@@ -158,7 +159,7 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 			if marshalErr != nil {
 				return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 			}
-			ctx.OriginalRequestBody = updatedBody
+			ctx.setWorkingRequestBody(updatedBody)
 			return nil
 		}
 	}
@@ -193,7 +194,7 @@ func (r *OpenAIRouter) addFileSearchToolToRequest(ctx *RequestContext, openaiCon
 		return fmt.Errorf("failed to marshal updated request: %w", marshalErr)
 	}
 
-	ctx.OriginalRequestBody = updatedBody
+	ctx.setWorkingRequestBody(updatedBody)
 	logging.Infof("Added file_search tool to request (vector_store_id: %s)", openaiConfig.VectorStoreID)
 
 	return nil

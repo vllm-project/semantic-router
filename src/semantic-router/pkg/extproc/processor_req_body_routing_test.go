@@ -94,3 +94,84 @@ func TestHandleAutoModelRoutingPreservesSelectedModelHeaderAndRewritesUpstreamMo
 		t.Fatalf("expected upstream body model rewrite, got %#v", got)
 	}
 }
+
+func TestHandleAutoModelRoutingSameModelStillEmitsCompressedBody(t *testing.T) {
+	original := []byte(`{"model":"auto","messages":[{"role":"tool","content":"full"}]}`)
+	compressed := []byte(`{"model":"auto","messages":[{"role":"tool","content":"short"}]}`)
+	ctx := &RequestContext{
+		Headers:             map[string]string{},
+		OriginalRequestBody: original,
+		WorkingRequestBody:  compressed,
+	}
+	response := &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{Status: ext_proc.CommonResponse_CONTINUE},
+			},
+		},
+	}
+
+	got, err := (&OpenAIRouter{}).handleAutoModelRouting(
+		&openai.ChatCompletionNewParams{Model: "auto"},
+		"auto",
+		"",
+		entropy.ReasoningDecision{},
+		"auto",
+		ctx,
+		response,
+	)
+	if err != nil {
+		t.Fatalf("handleAutoModelRouting returned error: %v", err)
+	}
+	common := got.GetRequestBody().GetResponse()
+	if string(common.GetBodyMutation().GetBody()) != string(compressed) {
+		t.Fatalf("compressed body was not emitted: %s", common.GetBodyMutation().GetBody())
+	}
+	headersToRemove := common.GetHeaderMutation().GetRemoveHeaders()
+	if len(headersToRemove) == 0 || headersToRemove[0] != "content-length" {
+		t.Fatalf("content-length was not removed: %#v", headersToRemove)
+	}
+}
+
+func TestSpecifiedModelBodyMutationUsesWorkingRequest(t *testing.T) {
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "test-model",
+			ModelConfig: map[string]config.ModelParams{
+				"test-model": {PreferredEndpoints: []string{"test-endpoint"}},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{{
+				Name:    "test-endpoint",
+				Address: "127.0.0.1",
+				Port:    8000,
+				Type:    "vllm",
+				Weight:  1,
+			}},
+		},
+	}
+	router := &OpenAIRouter{
+		Config:             cfg,
+		CredentialResolver: newTestCredentialResolver(cfg),
+	}
+	original := []byte(`{"model":"test-model","messages":[{"role":"tool","content":"full"}]}`)
+	compressed := []byte(`{"model":"test-model","messages":[{"role":"tool","content":"short"}]}`)
+	ctx := &RequestContext{
+		Headers:             map[string]string{},
+		TraceContext:        context.Background(),
+		OriginalRequestBody: original,
+		WorkingRequestBody:  compressed,
+	}
+
+	response := router.createSpecifiedModelResponse(
+		"test-model",
+		"test-model",
+		"127.0.0.1:8000",
+		"test-endpoint",
+		ctx,
+	)
+
+	got := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	if string(got) != string(compressed) {
+		t.Fatalf("specified-model route emitted stale body: %s", got)
+	}
+}

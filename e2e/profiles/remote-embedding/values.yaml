@@ -51,7 +51,7 @@ config:
       router_replay:
         enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
     model_catalog:
       kbs: []
