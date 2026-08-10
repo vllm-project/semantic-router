@@ -44,10 +44,9 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	if mapping.GetJailbreakTypeCount() != 2 {
 		return nil, fmt.Errorf("http_chat requires a 2-class (safe/jailbreak) jailbreak_mapping, got %d classes", mapping.GetJailbreakTypeCount())
 	}
-	positiveLabel := resolvePositiveLabels(positiveLabels)[0]
-	positiveIdx, ok := mapping.GetIndexForJailbreakType(positiveLabel)
-	if !ok {
-		return nil, fmt.Errorf("configured positive label %q not found in jailbreak_mapping", positiveLabel)
+	positiveIdx, err := resolveSinglePositiveIndex(mapping, positiveLabels)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create client with or without access key
