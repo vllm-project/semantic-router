@@ -45,7 +45,24 @@ describe('chat routing metadata', () => {
     }
     const markup = renderToStaticMarkup(createElement(HeaderReveal, { headers }))
 
-    expect(markup).toContain('confidence')
+    expect(markup).toContain('Confidence')
+  })
+
+  it('renders internal decision and signal identifiers as human-friendly labels', () => {
+    const headers = {
+      ...routingHeaders,
+      'x-vsr-selected-decision': 'unified_frontier_verified_answer',
+      'x-vsr-matched-embeddings': 'unified_frontier_workflow_intent',
+      'x-vsr-matched-fact-check': 'needs_fact_check',
+      'x-vsr-matched-complexity': 'unified_frontier_complexity:medium',
+    }
+    const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers }))
+
+    expect(markup).toContain('Frontier Verified Answer')
+    expect(markup).toContain('Frontier Workflow Intent')
+    expect(markup).toContain('Needs Fact Check')
+    expect(markup).toContain('Frontier Complexity: Medium')
+    expect(markup).not.toContain('unified_frontier_')
   })
 })
 

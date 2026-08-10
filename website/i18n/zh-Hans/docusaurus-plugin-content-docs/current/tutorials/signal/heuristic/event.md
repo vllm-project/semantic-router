@@ -11,7 +11,7 @@ translation:
 
 `event` 是启发式路由信号族，用于处理从请求文本中提取的**结构化事件元数据**：事件类型、严重级别、时间紧迫性和领域特定操作代码。
 
-它映射到 `config/signal/event/`，并在 `routing.signals.events` 下声明。
+它映射到 `config/fragments/signal/event/`，并在 `routing.signals.events` 下声明。
 
 ## 主要优势
 

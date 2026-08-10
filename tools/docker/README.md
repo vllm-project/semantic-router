@@ -9,22 +9,40 @@ This directory contains Dockerfiles used across the project.
 
 ## Build optimization (CI)
 
-The workflow [.github/workflows/docker-publish.yml](../../.github/workflows/docker-publish.yml) builds multi-arch images (e.g. vllm-sr, extproc) on push to `main`. To keep build times under **60 minutes** per image:
+The read-only reusable
+[.github/workflows/docker-validate.yml](../../.github/workflows/docker-validate.yml)
+workflow owns PR validation. The write-capable
+[.github/workflows/docker-publish.yml](../../.github/workflows/docker-publish.yml)
+workflow owns main, nightly, and release publication. Lifecycle dispatchers
+pass an explicit image matrix from shared PR classification or the full release
+inventory.
 
-### Architecture: Per-platform parallel builds
+### Architecture: Affected images and lifecycle modes
 
-Instead of building both amd64 and arm64 in a single Docker Buildx invocation (which serializes the builds), the workflow splits into **per-platform parallel jobs**:
+- PRs build only classified affected images on amd64, with no registry login or
+  package-write permission. Images already built by an active Kubernetes, CLI,
+  Memory, or Operator suite are removed from the standalone matrix.
+- A validator-only workflow change builds only representative `vllm-sr`;
+  publisher-only changes use static release/image contract checks.
+- Main publishes affected images with immutable commit tags plus `latest`.
+  Generic core changes publish `extproc` and `vllm-sr`; CUDA and ROCm variants
+  publish only for their platform-specific paths.
+- Stable releases contain the eight production deliverables: `dashboard`,
+  `extproc`, `extproc-rocm`, `operator`, `operator-bundle`, `vllm-sr`,
+  `vllm-sr-cuda`, and `vllm-sr-rocm`.
+- Nightly additionally publishes the `vllm-sr-sim` developer companion and the
+  `anthropic-shim` and `llm-katan` test fixtures. Fixtures receive dated
+  `nightly-YYYYMMDD` tags plus a mutable `nightly` tag used by maintained E2E
+  references; they are not production release artifacts.
+- Release, nightly, and main publication share the same image definitions and
+  build-argument resolver.
 
-1. **`build_platform` job** (matrix: image × platform): Builds each image for each platform independently. amd64 and arm64 builds run in parallel on separate runners.
-2. **`create_manifest` job**: After all platform builds complete, creates multi-arch manifest lists that combine the per-platform images.
+### Multi-architecture builds
 
-For **PR builds**, only amd64 is built (via `build_pr` job) for fast feedback.
-
-### Cross-compilation (no QEMU emulation)
-
-- **extproc** uses `Dockerfile.extproc.cross` for push/dispatch builds. The Rust and Go stages use `--platform=$BUILDPLATFORM` to run natively on amd64 and cross-compile for arm64 using `gcc-aarch64-linux-gnu`.
-- **vllm-sr** uses `TARGETARCH` in its Dockerfile so Rust and Go stages run on `--platform=$BUILDPLATFORM` and cross-compile for arm64 when needed.
-- This avoids the 10-40x slowdown of QEMU emulation for Rust/Go compilation.
+- Buildx and QEMU provide the multi-architecture builder used for publish modes.
+- `vllm-sr` uses `TARGETARCH` in its Dockerfile so build stages select the
+  target architecture correctly.
+- CUDA and ROCm definitions explicitly remain `linux/amd64`.
 
 ### Rust dependency pre-caching
 
@@ -38,8 +56,9 @@ The stale library deletion (`find target -name "libcandle_semantic_router.so" -d
 ### Other optimizations
 
 - **No `cargo clean`:** Dependency cache from the pre-build layer is reused; only application code is recompiled.
-- **Job timeouts:** Platform builds have a 90-minute timeout; PR builds have 60 minutes.
-- **Per-platform GHA cache:** Docker layer cache is scoped per image and platform (`scope=$image-$platform`) for better cache hit rates.
+- **Job timeouts:** Publication builds have a 180-minute timeout; PR builds have
+  a 120-minute timeout.
+- **GHA cache:** Docker layer cache is scoped per image and lifecycle.
 - **CARGO_BUILD_JOBS:** Set to 20 on push (8 on PR) for higher parallelism.
 - **Symbol verification:** Rust build stages verify the `.so` has exported symbols using `nm -D` to catch linking issues early.
 - **Build time metrics:** Each run reports build time in the job step summary and as a GitHub notice.

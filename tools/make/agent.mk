@@ -29,6 +29,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make agent-bootstrap"
 	@echo "  make agent-validate"
 	@echo "  make agent-scorecard"
+	@echo "  make workflow-ci-validate"
 	@echo "  make agent-ci-lint CHANGED_FILES=\"...\""
 	@echo "  make agent-docs-ci-gate CHANGED_FILES=\"...\""
 	@echo "  make agent-dev ENV=cpu|amd"
@@ -72,6 +73,21 @@ agent-bootstrap: agent-venv-install ## Install agent validation tooling
 agent-validate: agent-bootstrap ## Validate the shared agent harness manifests and docs
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py validate
+	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
+
+workflow-ci-validate: agent-venv-install ## Validate workflow YAML, expressions, and reusable contracts
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
+	@if command -v actionlint >/dev/null 2>&1; then \
+		actionlint -shellcheck=; \
+	elif command -v go >/dev/null 2>&1; then \
+		go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck=; \
+	else \
+		echo "actionlint or Go is required for workflow expression validation"; \
+		exit 1; \
+	fi
 
 agent-scorecard: agent-bootstrap ## Show the current harness governance scorecard
 	@$(LOG_TARGET)
@@ -292,4 +308,4 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
 
 .PHONY: agent-help agent-venv-install agent-bootstrap agent-ci-lint agent-docs-ci-gate agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
-	test-and-build-local agent-pr-gate agent-feature-gate
+	workflow-ci-validate test-and-build-local agent-pr-gate agent-feature-gate

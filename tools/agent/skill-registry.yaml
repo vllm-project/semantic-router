@@ -258,7 +258,9 @@ surfaces:
     paths:
     - tools/agent/*.yaml
     - tools/agent/scripts/**
+    - tools/ci/**
     - tools/make/agent.mk
+    - .mergify.yml
     task_rules:
     - agent_exec
   contributor_interface:
@@ -317,11 +319,8 @@ surfaces:
   ci_e2e:
     description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
-    - .github/workflows/ci-changes.yml
-    - .github/workflows/integration-test-k8s.yml
-    - .github/workflows/integration-test-memory.yml
-    - .github/workflows/integration-test-vllm-sr-cli.yml
-    - .github/workflows/pre-commit.yml
+    - .github/workflows/**
+    - .mergify.yml
     - e2e/testing/vllm-sr-cli/**
     - e2e/testing/09-memory-features-test.py
     - e2e/testing/llm-katan/**
@@ -358,15 +357,14 @@ skills:
     - e2e/testcases/AGENTS.md
     - tools/agent/*.yaml
     - tools/agent/scripts/**
+    - tools/ci/**
     - tools/make/agent.mk
     - .github/copilot-instructions.md
     - .github/PULL_REQUEST_TEMPLATE.md
     - .github/ISSUE_TEMPLATE/**
     - .prowlabels.yaml
-    - .github/workflows/ci-changes.yml
-    - .github/workflows/integration-test-k8s.yml
-    - .github/workflows/integration-test-vllm-sr-cli.yml
-    - .github/workflows/pre-commit.yml
+    - .github/workflows/**
+    - .mergify.yml
     required_surfaces:
     - harness_docs
     conditional_surfaces:

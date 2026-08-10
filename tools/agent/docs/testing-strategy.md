@@ -9,6 +9,12 @@ This document defines the harness-side validation ladder for repository changes.
   - validates manifests, docs inventory, rule layering, and link portability
 - `make agent-scorecard`
   - shows the current harness inventory and whether validation is passing
+- `make workflow-ci-validate`
+  - parses every workflow, validates local reusable-workflow inputs, outputs,
+    dependencies, lifecycle ownership, and stable check contexts, then runs
+    `actionlint`
+  - runs table-driven classifier fixtures covering representative product,
+    documentation, workflow-only, Docker, and CI-architecture PR shapes
 - `make agent-lint CHANGED_FILES="..."`
   - runs pre-commit, language lint, and structure checks for changed files
   - Go changed-file lint reuses stricter module configs when the repository defines them; `dashboard/backend` uses the same `golangci-lint` config as `make dashboard-lint`
@@ -66,7 +72,23 @@ See [environments.md](environments.md) for the concrete commands.
 
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
-- Core, common, startup-chain, Docker, or agent-execution changes may expand CI profile coverage beyond the locally affected set.
+- `tools/ci/classify_pr_changes.py` is the executable source for hosted PR
+  domain, E2E, and image selection. Workflow-local product path filters are not
+  a second source of truth.
+- Workflow-only and classifier-infrastructure changes receive static workflow
+  validation and one Kubernetes smoke; only classifier/core contract changes
+  add the core test receipt.
+- Core changes receive one Kubernetes smoke. Standalone image validation
+  subtracts images already built by active suites: Kubernetes E2E supplies
+  `extproc`; CLI supplies `extproc`, `vllm-sr`, `dashboard`, and `vllm-sr-sim`;
+  Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
+  `operator-bundle`.
+- Performance runs only for `perf/**` (plus its explicit manual/nightly
+  lifecycle). `ci/full` expands E2E and affected Operator coverage but does not
+  enable Performance.
+- Native Candle, ML, NLP, and ONNX paths select the core/native receipt.
+  `make test` builds Candle, ML, and NLP and runs Candle tests; mandatory ONNX
+  runtime coverage remains the explicit TD046 gap.
 - The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its exact path ownership and CI selection remain executable in `tools/agent/e2e-profile-map.yaml` and `.github/workflows/integration-test-k8s.yml`.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
 - Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
@@ -79,13 +101,12 @@ See [environments.md](environments.md) for the concrete commands.
 
 Tests that need the real `multi-modal-embed-small` model gate on the
 `MULTIMODAL_MODEL_PATH` environment variable and skip when it is unset.
-The `Test And Build` workflow (`test-and-build` job) exports
+The pull-request dispatcher invokes the reusable core test/build workflow for
+affected core changes. Its `test-and-build` compatibility result exports
 `MULTIMODAL_MODEL_PATH` pointing at `models/mom-embedding-multimodal`, which
 `make download-models` fetches earlier in the same `make test` invocation, so
-the following suites execute on every `test-and-build` run (PRs matching the
-job's path filters - core, make, ci, helm, e2e, docker - non-draft only,
-pushes to `main`, and the nightly schedule; docs-only changes do not fire the
-job):
+the following suites execute on every affected core run. The main and nightly
+lifecycle dispatchers call the same implementation; docs-only changes do not:
 
 - `TestEmbeddingClassifier_Integration*` in
   `src/semantic-router/pkg/classification/` (hermetic synthetic-PNG

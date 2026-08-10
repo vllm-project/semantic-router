@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`conversation` 检测传入 chat-completion 请求形态的结构事实：用户消息数量、是否存在 developer 消息、定义的工具数量、assistant 工具调用次数、已完成的工具周期，以及当前请求是否仍处于活跃工具循环中。它映射到 `config/signal/conversation/`，并在 `routing.signals.conversation` 下声明。
+`conversation` 检测传入 chat-completion 请求形态的结构事实：用户消息数量、是否存在 developer 消息、定义的工具数量、assistant 工具调用次数、已完成的工具周期，以及当前请求是否仍处于活跃工具循环中。它映射到 `config/fragments/signal/conversation/`，并在 `routing.signals.conversation` 下声明。
 
 该信号族为启发式：无需任何模型推理，直接检查请求的 `messages[]` 和 `tools[]` 数组。
 

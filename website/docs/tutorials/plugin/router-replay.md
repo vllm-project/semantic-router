@@ -4,7 +4,7 @@
 
 `router_replay` is a route-local plugin for overriding replay/debug capture on one route.
 
-It aligns to `config/plugin/router-replay/debug.yaml`.
+It aligns to `config/fragments/plugin/router-replay/debug.yaml`.
 
 ## Key Advantages
 

@@ -13,21 +13,37 @@ func TestCurrentNativeBackendCapabilitiesShape(t *testing.T) {
 
 	switch capabilities.Name {
 	case "candle":
-		if !capabilities.UnifiedBatchClassification {
-			t.Fatal("candle backend should advertise unified batch classification")
-		}
-		if !capabilities.LoRABatchClassification {
-			t.Fatal("candle backend should advertise LoRA batch classification")
-		}
-		if !capabilities.MultimodalEmbedding {
-			t.Fatal("candle backend should advertise multimodal embedding support")
-		}
+		assertCandleCapabilities(t, capabilities)
 	case "onnx", "stub":
-		if capabilities.LoRABatchClassification {
-			t.Fatalf("%s backend should not advertise LoRA batch classification", capabilities.Name)
-		}
+		assertLimitedCapabilities(t, capabilities)
 	default:
 		t.Fatalf("unexpected native backend capability name: %s", capabilities.Name)
+	}
+}
+
+func assertCandleCapabilities(t *testing.T, capabilities NativeBackendCapabilities) {
+	t.Helper()
+	if !capabilities.UnifiedBatchClassification {
+		t.Fatal("candle backend should advertise unified batch classification")
+	}
+	if !capabilities.LoRABatchClassification {
+		t.Fatal("candle backend should advertise LoRA batch classification")
+	}
+	if !capabilities.MultimodalEmbedding {
+		t.Fatal("candle backend should advertise multimodal embedding support")
+	}
+	if !capabilities.LocalHallucinationDetection || !capabilities.LocalHallucinationNLI {
+		t.Fatal("candle backend should advertise local hallucination support")
+	}
+}
+
+func assertLimitedCapabilities(t *testing.T, capabilities NativeBackendCapabilities) {
+	t.Helper()
+	if capabilities.LoRABatchClassification {
+		t.Fatalf("%s backend should not advertise LoRA batch classification", capabilities.Name)
+	}
+	if capabilities.LocalHallucinationDetection || capabilities.LocalHallucinationNLI {
+		t.Fatalf("%s backend should not advertise local hallucination support", capabilities.Name)
 	}
 }
 

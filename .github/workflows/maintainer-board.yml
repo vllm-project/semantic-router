@@ -5,9 +5,7 @@ name: Maintainer Board
 # closing stale items. This workflow only syncs state and publishes artifacts.
 
 on:
-  schedule:
-    - cron: "0 8 * * *" # Daily at 08:00 UTC
-  workflow_dispatch:
+  workflow_call:
     inputs:
       milestone:
         description: Optional GitHub milestone title filter (empty = all milestones)

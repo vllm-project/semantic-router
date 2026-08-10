@@ -111,7 +111,10 @@ make docs-check-translations || true
 
 ## CI Automation
 
-A daily GitHub Action ([check-translation-staleness.yml](../../.github/workflows/check-translation-staleness.yml)) automatically manages the `outdated` status:
+A weekly maintenance job
+([maintenance.yml](../../.github/workflows/maintenance.yml), using the reusable
+`check-translation-staleness.yml` workflow) automatically manages the
+`outdated` status:
 
 | Condition | Action |
 | --------- | ------ |

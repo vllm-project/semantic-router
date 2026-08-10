@@ -295,36 +295,8 @@ type ModelScore struct {
 	UseReasoning *bool   `yaml:"use_reasoning"`
 }
 
-type DomainAwarePolicies struct {
-	SystemPromptPolicy    `yaml:",inline"`
-	SemanticCachingPolicy `yaml:",inline"`
-	JailbreakPolicy       `yaml:",inline"`
-	PIIDetectionPolicy    `yaml:",inline"`
-}
-
 type CategoryMetadata struct {
 	Name           string   `yaml:"name"`
 	Description    string   `yaml:"description,omitempty"`
 	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
-}
-
-type SystemPromptPolicy struct {
-	SystemPrompt        string `yaml:"system_prompt,omitempty"`
-	SystemPromptEnabled *bool  `yaml:"system_prompt_enabled,omitempty"`
-	SystemPromptMode    string `yaml:"system_prompt_mode,omitempty"`
-}
-
-type SemanticCachingPolicy struct {
-	SemanticCacheEnabled             *bool    `yaml:"semantic_cache_enabled,omitempty"`
-	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
-}
-
-type JailbreakPolicy struct {
-	JailbreakEnabled   *bool    `yaml:"jailbreak_enabled,omitempty"`
-	JailbreakThreshold *float32 `yaml:"jailbreak_threshold,omitempty"`
-}
-
-type PIIDetectionPolicy struct {
-	PIIEnabled   *bool    `yaml:"pii_enabled,omitempty"`
-	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
 }

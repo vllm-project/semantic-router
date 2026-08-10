@@ -34,6 +34,13 @@ type classificationReadinessService interface {
 	HasFeedbackDetector() bool
 }
 
+type classificationInventoryReadinessService interface {
+	HasAnyFactCheckClassifier() bool
+	HasAnyHallucinationDetector() bool
+	HasAnyHallucinationExplainer() bool
+	HasAnyFeedbackDetector() bool
+}
+
 type configUpdateService interface {
 	UpdateConfig(newConfig *config.RouterConfig)
 	RefreshRuntimeConfig(newConfig *config.RouterConfig)
@@ -137,6 +144,38 @@ func (s *liveClassificationService) HasHallucinationExplainer() bool {
 
 func (s *liveClassificationService) HasFeedbackDetector() bool {
 	return s.current().HasFeedbackDetector()
+}
+
+func (s *liveClassificationService) HasAnyFactCheckClassifier() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyFactCheckClassifier()
+	}
+	return current.HasFactCheckClassifier()
+}
+
+func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyHallucinationDetector()
+	}
+	return current.HasHallucinationDetector()
+}
+
+func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyHallucinationExplainer()
+	}
+	return current.HasHallucinationExplainer()
+}
+
+func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyFeedbackDetector()
+	}
+	return current.HasFeedbackDetector()
 }
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {

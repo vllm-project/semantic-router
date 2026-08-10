@@ -3,6 +3,7 @@ package dsl
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -42,7 +43,7 @@ func assertRecipeDSLContract(t *testing.T, directory string) {
 	assertRecipeDSLValid(t, dslPath, dsl)
 	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
 	compiled := compileStableRecipeDSL(t, dslPath, dsl)
-	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, compiled)
+	assertMergedRecipeDSL(t, yamlPath, dslPath, dsl, runtimeConfig, compiled)
 }
 
 func assertRecipeDSLValid(t *testing.T, dslPath, dsl string) {
@@ -99,6 +100,7 @@ func assertMergedRecipeDSL(
 	yamlPath string,
 	dslPath string,
 	dsl string,
+	baseConfig *config.RouterConfig,
 	compiled *config.RouterConfig,
 ) {
 	t.Helper()
@@ -120,5 +122,34 @@ func assertMergedRecipeDSL(
 	}
 	if mergedDSL != dsl {
 		t.Fatalf("%s changes after compile, base merge, and runtime parse", dslPath)
+	}
+	assertDecisionAdaptationsPreserved(t, yamlPath, baseConfig.Decisions, mergedConfig.Decisions)
+}
+
+func assertDecisionAdaptationsPreserved(
+	t *testing.T,
+	yamlPath string,
+	baseDecisions []config.Decision,
+	mergedDecisions []config.Decision,
+) {
+	t.Helper()
+	mergedByName := make(map[string]config.Decision, len(mergedDecisions))
+	for _, decision := range mergedDecisions {
+		mergedByName[decision.Name] = decision
+	}
+	for _, decision := range baseDecisions {
+		merged, ok := mergedByName[decision.Name]
+		if !ok {
+			t.Fatalf("%s lost decision %q while merging DSL", yamlPath, decision.Name)
+		}
+		if !reflect.DeepEqual(merged.Adaptations, decision.Adaptations) {
+			t.Fatalf(
+				"%s decision %q adaptations changed after DSL merge: got %#v want %#v",
+				yamlPath,
+				decision.Name,
+				merged.Adaptations,
+				decision.Adaptations,
+			)
+		}
 	}
 }

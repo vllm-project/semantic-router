@@ -48,12 +48,10 @@ rules:
     paths:
       - tools/agent/*.yaml
       - tools/agent/scripts/**
+      - tools/ci/**
       - tools/make/agent.mk
-      - .github/workflows/ci-changes.yml
-      - .github/workflows/integration-test-k8s.yml
-      - .github/workflows/integration-test-memory.yml
-      - .github/workflows/integration-test-vllm-sr-cli.yml
-      - .github/workflows/pre-commit.yml
+      - .github/workflows/**
+      - .mergify.yml
     fast_tests:
       - make agent-validate
     feature_tests: []
@@ -87,11 +85,23 @@ rules:
     loop_mode: completion
     execution_plan_policy: long_horizon
     paths:
+      - src/semantic-router/pkg/memory/**
+      - src/semantic-router/pkg/extproc/*memory*
+      - src/semantic-router/pkg/responseapi/**
+      - src/semantic-router/pkg/responsestore/**
+      - src/semantic-router/pkg/apiserver/*memory*
+      - src/semantic-router/pkg/sessiontelemetry/*memory*
+      - src/semantic-router/pkg/vectorstore/*memory*
+      - src/semantic-router/pkg/cache/*memory*
+      - src/vllm-sr/**/*memory*
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
       - e2e/testing/llm-katan/**
       - e2e/config/config.memory*.yaml
-      - .github/workflows/integration-test-memory.yml
+      - e2e/profiles/response-api/**
+      - e2e/profiles/response-api-redis/**
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/**
       - tools/make/milvus.mk
     fast_tests: []
     feature_tests:
@@ -127,6 +137,7 @@ rules:
       - candle-binding/**
       - ml-binding/**
       - nlp-binding/**
+      - onnx-binding/**
     fast_tests:
       - make test-binding-minimal
     feature_tests:

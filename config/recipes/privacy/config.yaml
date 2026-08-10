@@ -42,7 +42,6 @@ providers:
           type: vllm
           weight: 1
     - name: cloud/frontier-reasoning
-      reasoning_family: qwen3
       provider_model_id: anthropic/claude-opus-4.6
       api_format: openai
       pricing:
@@ -484,6 +483,10 @@ routing:
             name: internal_document_request
             weight: 0.40
             value_source: confidence
+          - type: kb
+            name: privacy_policy
+            weight: 0.25
+            value_source: confidence
           - type: context
             name: long_context
             weight: 0.06
@@ -564,9 +567,9 @@ routing:
           slope: 10.0
         outputs:
           - name: policy_privacy_cloud_allowed
-            lt: 0.32
+            lt: 0.35
           - name: policy_privacy_local_only
-            gte: 0.32
+            gte: 0.35
       - name: reasoning_policy_band
         source: reasoning_pressure
         method: threshold_bands
