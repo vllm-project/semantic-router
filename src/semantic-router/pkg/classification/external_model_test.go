@@ -6,12 +6,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// twoClassJailbreakMapping is a standard safe/jailbreak mapping shared by
+// VLLMJailbreakInference constructor tests.
+func twoClassJailbreakMapping() *JailbreakMapping {
+	return &JailbreakMapping{
+		LabelToIdx: map[string]int{"safe": 0, "jailbreak": 1},
+		IdxToLabel: map[string]string{"0": "safe", "1": "jailbreak"},
+	}
+}
+
 // TestNewVLLMJailbreakInference tests creating vLLM inference with external config
 func TestNewVLLMJailbreakInference(t *testing.T) {
 	tests := []struct {
 		name             string
 		externalCfg      *config.ExternalModelConfig
 		defaultThreshold float32
+		mapping          *JailbreakMapping
+		positiveLabels   []string
 		expectedThresh   float32
 		expectedParser   string
 		expectedTimeout  int
@@ -30,6 +41,7 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 				TimeoutSeconds: 60,
 			},
 			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
 			expectedThresh:   0.8,          // From external config
 			expectedParser:   "qwen3guard", // From external config
 			expectedTimeout:  60,           // From external config
@@ -47,6 +59,7 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 				// Threshold not set - should use default
 			},
 			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
 			expectedThresh:   0.7,          // From default
 			expectedParser:   "qwen3guard", // From external config
 			expectedTimeout:  30,           // Default timeout
@@ -63,6 +76,7 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 				// ParserType not set - should use "auto"
 			},
 			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
 			expectedThresh:   0.7,
 			expectedParser:   "auto", // Default parser
 			expectedTimeout:  30,     // Default timeout
@@ -74,6 +88,7 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 				ModelName: "qwen_guard",
 			},
 			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
 			expectError:      true,
 		},
 		{
@@ -85,13 +100,57 @@ func TestNewVLLMJailbreakInference(t *testing.T) {
 				},
 			},
 			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
+			expectError:      true,
+		},
+		{
+			name: "missing mapping - should error",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: "192.168.1.100",
+					Port:    8080,
+				},
+				ModelName: "qwen_guard",
+			},
+			defaultThreshold: 0.7,
+			mapping:          nil,
+			expectError:      true,
+		},
+		{
+			name: "mapping with more than two classes - should error",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: "192.168.1.100",
+					Port:    8080,
+				},
+				ModelName: "qwen_guard",
+			},
+			defaultThreshold: 0.7,
+			mapping: &JailbreakMapping{
+				LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1, "INJECTION": 2},
+				IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak", "2": "INJECTION"},
+			},
+			expectError: true,
+		},
+		{
+			name: "configured positive label not in mapping - should error",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: "192.168.1.100",
+					Port:    8080,
+				},
+				ModelName: "qwen_guard",
+			},
+			defaultThreshold: 0.7,
+			mapping:          twoClassJailbreakMapping(),
+			positiveLabels:   []string{"malicious"},
 			expectError:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inference, err := NewVLLMJailbreakInference(tt.externalCfg, tt.defaultThreshold)
+			inference, err := NewVLLMJailbreakInference(tt.externalCfg, tt.defaultThreshold, tt.mapping, tt.positiveLabels)
 
 			if tt.expectError {
 				if err == nil {

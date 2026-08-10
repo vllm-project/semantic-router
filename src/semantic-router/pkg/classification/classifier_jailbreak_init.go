@@ -160,7 +160,7 @@ func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCf
 			"provider": externalCfg.Provider,
 		})
 		// Pass default threshold from PromptGuardConfig.
-		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold)
+		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
 
 	case config.PromptGuardBackendHTTPClassify:
 		externalCfg, err := findGuardrailExternalModel(routerCfg)
