@@ -28,7 +28,7 @@ jobs:
     needs: core
     uses: ./.github/workflows/integration-test-k8s.yml
     with:
-      profiles: '["kubernetes","dashboard","remote-embedding"]'
+      profiles: '["envoy-ai-gateway","dashboard","remote-embedding"]'
     secrets: inherit
 
   cli:

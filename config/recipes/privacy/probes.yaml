@@ -1,3 +1,4 @@
+schema_version: v1
 name: privacy
 description: >
   Executable eval probes for the privacy routing recipe. These probes verify
@@ -13,9 +14,24 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 21.2
+  min_projection_assertion_percent: 25.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, tools]
+  min_tag_counts:
+    language: 3
+    collision: 2
+    tools: 3
+  min_tag_pass_rate:
+    language: 100.0
+    collision: 100.0
+    tools: 100.0
 decisions:
   - id: local_security_containment
     expected_decision: local_security_containment
+    expected_algorithm: static
     expected_alias: local/private-qwen
     expected_plugins: [tools, router_replay]
     objective: >
@@ -54,6 +70,7 @@ decisions:
         tags: [security, privacy, collision, priority, shape:tools]
   - id: local_privacy_policy
     expected_decision: local_privacy_policy
+    expected_algorithm: static
     expected_alias: local/private-qwen
     expected_plugins: [tools, router_replay]
     objective: >
@@ -93,6 +110,7 @@ decisions:
         tags: [privacy, tools, shape:tools, filtered]
   - id: cloud_frontier_reasoning
     expected_decision: cloud_frontier_reasoning
+    expected_algorithm: static
     expected_alias: cloud/frontier-reasoning
     expected_plugins: [tools, router_replay]
     objective: >
@@ -123,6 +141,7 @@ decisions:
         tags: [reasoning, contrastive, public, shape:tools]
   - id: local_standard
     expected_decision: local_standard
+    expected_algorithm: static
     expected_alias: local/private-qwen
     expected_plugins: [tools, router_replay]
     objective: >

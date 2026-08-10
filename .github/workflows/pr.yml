@@ -110,6 +110,16 @@ jobs:
       && needs.changes.outputs.memory == 'true'
     uses: ./.github/workflows/integration-test-memory.yml
 
+  recipe-conformance:
+    name: Recipe conformance
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.recipe_conformance == 'true'
+    uses: ./.github/workflows/recipe-conformance.yml
+    secrets: inherit
+
   openvino:
     name: OpenVINO
     needs: changes
@@ -172,6 +182,7 @@ jobs:
       - e2e
       - cli
       - memory
+      - recipe-conformance
       - openvino
       - images
       - performance
@@ -220,6 +231,7 @@ jobs:
       - e2e
       - cli
       - memory
+      - recipe-conformance
       - openvino
       - images
       - performance

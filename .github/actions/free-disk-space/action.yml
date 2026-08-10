@@ -1,0 +1,27 @@
+name: Free hosted-runner disk space
+description: Remove preinstalled toolchains and unused Docker state before image-heavy tests.
+
+inputs:
+  show-usage:
+    description: Print disk usage before and after cleanup.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Reclaim disk space
+      shell: bash
+      env:
+        SHOW_USAGE: ${{ inputs.show-usage }}
+      run: |
+        if [[ "$SHOW_USAGE" == "true" ]]; then
+          df -h /
+        fi
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+          /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+        sudo apt-get clean
+        sudo docker system prune -af --volumes || true
+        if [[ "$SHOW_USAGE" == "true" ]]; then
+          df -h /
+        fi

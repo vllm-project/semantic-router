@@ -26,6 +26,7 @@ config:
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: premium-model
+        provider_model_id: base-model
         pricing:
           currency: USD
           prompt_per_1m: 10
@@ -34,6 +35,7 @@ config:
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: economy-model
+        provider_model_id: base-model
         pricing:
           currency: USD
           prompt_per_1m: 1
@@ -41,6 +43,32 @@ config:
           - name: local-vllm-economy
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+  entrypoints:
+    - model_names: [vllm-sr/metadata-policy]
+      recipe: metadata-policy
+  recipes:
+    - name: metadata-policy
+      description: Deterministic recipe-local metadata routing probe.
+      routing:
+        strategy: priority
+        signals:
+          metadata:
+            - name: canary_cohort
+              key: cohort
+              predicate:
+                equals: canary
+        decisions:
+          - name: metadata_recipe_decision
+            description: Route canary metadata inside the selected recipe.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: metadata
+                  name: canary_cohort
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
   routing:
     decisions:
       - name: quality_policy_decision
