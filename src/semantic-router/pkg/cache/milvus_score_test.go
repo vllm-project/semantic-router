@@ -128,3 +128,16 @@ func TestSearchDocumentsSurfacesResultError(t *testing.T) {
 
 	assert.ErrorContains(t, err, "field content not found")
 }
+
+// Err can coexist with ResultCount == 0 and must not read as "no results".
+func TestSearchDocumentsSurfacesErrorWithZeroResults(t *testing.T) {
+	results := []client.SearchResult{{
+		ResultCount: 0,
+		Err:         errors.New("collection not loaded"),
+	}}
+	cache, _ := milvusCacheWithFakeSearch("L2", results)
+
+	_, _, err := cache.SearchDocuments(context.Background(), "kb", []float32{0.1}, 0.5, 5, "", "content", "", "", 0)
+
+	assert.ErrorContains(t, err, "collection not loaded")
+}

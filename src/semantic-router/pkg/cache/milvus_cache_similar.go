@@ -108,6 +108,14 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, nil
 	}
 
+	// Err can coexist with ResultCount == 0, so check it first.
+	if len(searchResult) > 0 && searchResult[0].Err != nil {
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search result error: %v", searchResult[0].Err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		return nil, false, nil
+	}
+
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
@@ -116,13 +124,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	hit := &searchResult[0]
-	// The SDK may return results with Err set and Fields nil but Scores populated.
-	if hit.Err != nil {
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search result error: %v", hit.Err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
 	metricType := c.config.Collection.VectorField.MetricType
 	bestSimilarity := milvusScoreToSimilarity(metricType, hit.Scores[0])
 	c.StoreSimilarity(bestSimilarity)

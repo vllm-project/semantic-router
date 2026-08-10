@@ -105,12 +105,12 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
 	}
 
+	// Err can coexist with ResultCount == 0, so check it first.
+	if len(searchResult) > 0 && searchResult[0].Err != nil {
+		return nil, nil, fmt.Errorf("milvus search result error: %w", searchResult[0].Err)
+	}
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		return nil, nil, nil // No results, but not an error
-	}
-	// The SDK may return results with Err set and Fields nil but Scores populated.
-	if searchResult[0].Err != nil {
-		return nil, nil, fmt.Errorf("milvus search result error: %w", searchResult[0].Err)
 	}
 
 	// Extract results
