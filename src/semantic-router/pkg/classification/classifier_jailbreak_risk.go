@@ -123,8 +123,13 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
 	}
 
-	isJailbreak := result.Confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
+	// Threshold the same summed positive-label mass riskScore reports, not the
+	// argmax class's confidence: with more than one positive_labels entry, no
+	// single label may win argmax while their combined probability still
+	// exceeds threshold, which would otherwise report a high risk score while
+	// still returning isJailbreak=false.
 	riskScore := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result)
+	isJailbreak := riskScore >= threshold
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",

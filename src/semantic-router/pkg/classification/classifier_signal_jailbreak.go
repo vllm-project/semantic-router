@@ -148,8 +148,8 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 }
 
 func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	bestType, bestConf := c.findBestJailbreakMatch(rule, contentToAnalyze, jailbreakCache)
-	if bestConf <= 0 {
+	bestType, bestScore := c.findBestJailbreakMatch(rule, contentToAnalyze, jailbreakCache)
+	if bestScore <= 0 {
 		return
 	}
 
@@ -158,19 +158,24 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 
 	mu.Lock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-	if bestConf > results.JailbreakConfidence {
+	if bestScore > results.JailbreakConfidence {
 		results.JailbreakDetected = true
 		results.JailbreakType = bestType
-		results.JailbreakConfidence = bestConf
+		results.JailbreakConfidence = bestScore
 	}
-	results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
+	results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestScore)
 	mu.Unlock()
 }
 
-// findBestJailbreakMatch scans cached BERT results and returns the highest-confidence jailbreak match.
+// findBestJailbreakMatch scans cached BERT results and returns the highest
+// combined-positive-label-risk match. It thresholds jailbreakRiskScore (the
+// same summed positive_labels mass CheckForJailbreakWithRisk uses), not the
+// argmax class's confidence: with more than one positive_labels entry, no
+// single label may win argmax while their combined probability still
+// exceeds threshold, which would otherwise silently drop the match here.
 func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32) {
 	var bestType string
-	var bestConf float32
+	var bestScore float32
 	for _, content := range contentToAnalyze {
 		if content == "" {
 			continue
@@ -189,14 +194,15 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
 				continue
 			}
-			if cached.result.Confidence < rule.Threshold || !isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType) {
+			riskScore := jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result)
+			if riskScore < rule.Threshold {
 				continue
 			}
-			if cached.result.Confidence > bestConf {
-				bestConf = cached.result.Confidence
+			if riskScore > bestScore {
+				bestScore = riskScore
 				bestType = jailbreakType
 			}
 		}
 	}
-	return bestType, bestConf
+	return bestType, bestScore
 }
