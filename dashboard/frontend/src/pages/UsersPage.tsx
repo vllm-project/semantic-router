@@ -10,8 +10,10 @@ import UsersPageUserDialog, {
 } from './UsersPageUserDialog'
 import {
   createLatestUsersRequest,
+  describeUserUpdateFailure,
   EMPTY_ROLE_PERMISSIONS,
   isUsersRequestAbortError,
+  validateUserPassword,
   type UsersPageRolePermissions,
   type UsersPageRolePermissionsPayload,
 } from './usersPageSupport'
@@ -261,8 +263,21 @@ const UsersPage: React.FC = () => {
       return
     }
 
+    // Check the password before anything is sent. The edit path performs two
+    // writes, so a rejection caught here costs nothing, while the same
+    // rejection from the server arrives after the role change has committed.
+    const passwordError = validateUserPassword(values.password, dialogMode)
+    if (passwordError) {
+      setDialogError(passwordError)
+      return
+    }
+
     setDialogSubmitting(true)
     setDialogError(null)
+
+    // Tracks whether the role and status write committed, so a later failure is
+    // reported as the partial one it is instead of a flat failure.
+    let roleAndStatusSaved = false
 
     try {
       if (dialogMode === 'create') {
@@ -298,6 +313,8 @@ const UsersPage: React.FC = () => {
       if (!patchResponse.ok) {
         throw new Error(await getResponseError(patchResponse))
       }
+      // Past this point the role and status are committed on the server.
+      roleAndStatusSaved = true
 
       if (values.password.trim()) {
         const passwordResponse = await fetch('/api/admin/users/password', {
@@ -317,7 +334,16 @@ const UsersPage: React.FC = () => {
       })
       await fetchUsers()
     } catch (err) {
-      setDialogError((err as Error).message)
+      setDialogError(describeUserUpdateFailure(err, roleAndStatusSaved))
+      // A failed request does not prove nothing changed: a write can commit and
+      // still lose its response. Re-read so the table shows the server's state
+      // rather than the copy fetched before this edit.
+      //
+      // This is safe to run while the dialog is open. The dialog resets its
+      // fields from initialValues, which is memoised on selectedUser, and
+      // fetchUsers only replaces the users list. Nothing the admin typed is
+      // lost, which is also why selectedUser is deliberately not re-synced here.
+      void fetchUsers()
     } finally {
       setDialogSubmitting(false)
     }
