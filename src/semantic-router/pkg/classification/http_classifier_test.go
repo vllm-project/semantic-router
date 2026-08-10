@@ -151,3 +151,67 @@ func TestHTTPClassifierJailbreakInferenceClassify_EmptyLabelList(t *testing.T) {
 		t.Error("expected an error on an empty label list")
 	}
 }
+
+// TestHTTPClassifierJailbreakInferenceClassify_PartialLabelList guards
+// against a top-k-style response that omits a configured label - previously
+// the missing label silently defaulted to a 0.0 probability instead of being
+// rejected, which could report a confident-looking "definitely safe" result
+// when the server simply never mentioned the jailbreak class.
+func TestHTTPClassifierJailbreakInferenceClassify_PartialLabelList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "safe", Score: 1.0},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	if _, err := inf.Classify("some text"); err == nil {
+		t.Error("expected an error when the response omits a configured label")
+	}
+}
+
+func TestHTTPClassifierJailbreakInferenceClassify_DuplicateLabel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "safe", Score: 0.5},
+			{Label: "safe", Score: 0.5},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	if _, err := inf.Classify("some text"); err == nil {
+		t.Error("expected an error on a duplicate label")
+	}
+}
+
+func TestHTTPClassifierJailbreakInferenceClassify_OutOfRangeScore(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "safe", Score: 0.1},
+			{Label: "jailbreak", Score: 1.5},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	if _, err := inf.Classify("some text"); err == nil {
+		t.Error("expected an error on an out-of-range score")
+	}
+}
+
+func TestHTTPClassifierJailbreakInferenceClassify_ScoresDoNotSumToOne(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "safe", Score: 0.1},
+			{Label: "jailbreak", Score: 0.1},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, testJailbreakMapping())
+	if _, err := inf.Classify("some text"); err == nil {
+		t.Error("expected an error when scores don't sum to ~1.0")
+	}
+}

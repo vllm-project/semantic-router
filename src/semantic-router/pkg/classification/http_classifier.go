@@ -6,12 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+// probabilitySumTolerance bounds how far an http_classify response's scores
+// may drift from summing to 1.0, tolerating floating-point rounding from
+// whatever serialized them without accepting a response with an
+// unaccounted-for probability mass.
+const probabilitySumTolerance = 0.02
 
 // HTTPClassifierJailbreakInference implements SequenceClassifierBackend by
 // calling an external sequence-classifier endpoint over HTTP. The wire
@@ -143,26 +150,56 @@ func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Reque
 
 // alignScoresToMapping matches response labels against the jailbreak_mapping
 // by name (not by array position) and builds the full-distribution result.
+// It requires the response to be a complete, valid distribution over exactly
+// the configured labels - not just "at least one label matched" - because an
+// incomplete response (e.g. a top-k response that omits the positive label)
+// would otherwise default the missing entries to 0.0 and silently under-report
+// risk instead of surfacing the mismatch.
 func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelScore) (candle_binding.ClassResultWithProbs, error) {
 	numClasses := mapping.GetJailbreakTypeCount()
 	probabilities := make([]float32, numClasses)
+	seenIdx := make([]bool, numClasses)
+	seenLabels := make([]string, 0, len(scores))
 	bestIdx := -1
-	var bestScore float32
-	var seenLabels []string
+	var bestScore, sum float32
+
 	for _, s := range scores {
 		seenLabels = append(seenLabels, s.Label)
 		idx, ok := mapping.GetIndexForJailbreakType(s.Label)
 		if !ok || idx < 0 || idx >= numClasses {
-			continue
+			return candle_binding.ClassResultWithProbs{}, fmt.Errorf(
+				"http_classify response label %q is not in the configured jailbreak_mapping", s.Label)
 		}
+		if seenIdx[idx] {
+			return candle_binding.ClassResultWithProbs{}, fmt.Errorf(
+				"http_classify response contains duplicate label %q", s.Label)
+		}
+		if score64 := float64(s.Score); math.IsNaN(score64) || math.IsInf(score64, 0) || s.Score < 0 || s.Score > 1 {
+			return candle_binding.ClassResultWithProbs{}, fmt.Errorf(
+				"http_classify response label %q has an invalid score %v (must be finite and within [0, 1])", s.Label, s.Score)
+		}
+
+		seenIdx[idx] = true
 		probabilities[idx] = s.Score
+		sum += s.Score
 		if bestIdx == -1 || s.Score > bestScore {
 			bestIdx = idx
 			bestScore = s.Score
 		}
 	}
-	if bestIdx == -1 {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("http_classify response labels %v did not match any configured jailbreak_mapping label", seenLabels)
+
+	for idx, present := range seenIdx {
+		if present {
+			continue
+		}
+		missingLabel, _ := mapping.GetJailbreakTypeFromIndex(idx)
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf(
+			"http_classify response is missing label %q from the configured jailbreak_mapping (got %v)", missingLabel, seenLabels)
+	}
+
+	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf(
+			"http_classify response scores sum to %v, want ~1.0 (labels: %v)", sum, seenLabels)
 	}
 
 	return candle_binding.ClassResultWithProbs{
