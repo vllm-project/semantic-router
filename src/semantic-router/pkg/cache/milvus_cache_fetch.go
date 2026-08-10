@@ -24,15 +24,14 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 
 	// Query all entries with embeddings and request_ids
 	// Filter to only get entries with complete responses (not pending)
-	queryResult, err := c.client.Query(
+	queryResult, err := c.queryCollection(
 		ctx,
-		c.collectionName,
-		[]string{}, // Empty partitions means search all
 		fmt.Sprintf(
 			`response_body != "" && query != %s`,
 			milvusStringLiteral(exactCacheQueryMarker),
 		),
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
+		c.rebuildQueryOptions()...,
 	)
 	if err != nil {
 		logging.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
@@ -117,10 +116,8 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]b
 
 	// Query Milvus by request_id (primary key)
 	// Filter for non-empty responses to avoid race condition with pending entries
-	queryResult, err := c.client.Query(
+	queryResult, err := c.queryCollection(
 		ctx,
-		c.collectionName,
-		[]string{}, // Empty partitions means search all
 		fmt.Sprintf(
 			"request_id == %s && model == %s && response_body != \"\"",
 			milvusStringLiteral(requestID),

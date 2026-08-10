@@ -26,10 +26,8 @@ func (c *MilvusCache) FindExact(
 		milvusStringLiteral(exactCacheQueryMarker),
 		time.Now().Unix(),
 	)
-	results, err := c.client.Query(
+	results, err := c.queryCollection(
 		context.Background(),
-		c.collectionName,
-		nil,
 		expr,
 		[]string{"response_body"},
 	)

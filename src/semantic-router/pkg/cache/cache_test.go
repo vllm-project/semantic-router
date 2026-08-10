@@ -2376,6 +2376,7 @@ search:
   params:
     ef: 64
   topk: 10
+  consistency_level: "Strong"
 development:
   auto_create_collection: true
   drop_collection_on_startup: %t

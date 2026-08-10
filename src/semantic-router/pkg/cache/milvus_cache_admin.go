@@ -85,7 +85,10 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
 	}
 
-	// Use Milvus Search with collection-specific or default parameters
+	// Use Milvus Search with collection-specific or default parameters.
+	// No consistency option on purpose: collectionName is an external RAG
+	// collection, so its own default consistency applies rather than the
+	// cache's search.consistency_level.
 	searchResult, err := c.client.Search(
 		ctx,
 		collectionName,

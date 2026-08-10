@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +72,12 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
 		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
+
+	if lvl := strings.TrimSpace(milvusConfig.Search.ConsistencyLevel); lvl != "" {
+		if _, ok := milvusConsistencyLevel(lvl); !ok {
+			logging.Warnf("MilvusCache: unrecognized search.consistency_level %q (valid: Strong, Session, Bounded, Eventually); falling back to the collection's default consistency level", lvl)
+		}
+	}
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", milvusConfig.Connection.Host, milvusConfig.Connection.Port)
@@ -197,6 +204,77 @@ func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 	return milvusConfig, nil
 }
 
+// milvusConsistencyLevel maps a configured consistency level name to the SDK
+// constant. ok is false when the name is empty or unrecognized, in which case
+// callers pass no explicit level and Milvus falls back to the collection's
+// default consistency.
+func milvusConsistencyLevel(name string) (entity.ConsistencyLevel, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "strong":
+		return entity.ClStrong, true
+	case "session":
+		return entity.ClSession, true
+	case "bounded":
+		return entity.ClBounded, true
+	case "eventually":
+		return entity.ClEventually, true
+	default:
+		return entity.DefaultConsistencyLevel, false
+	}
+}
+
+// consistencyLevel resolves the configured search.consistency_level once for
+// both collection creation and per-request options.
+func (c *MilvusCache) consistencyLevel() (entity.ConsistencyLevel, bool) {
+	if c.config == nil {
+		return entity.DefaultConsistencyLevel, false
+	}
+	return milvusConsistencyLevel(c.config.Search.ConsistencyLevel)
+}
+
+// searchQueryOptions returns the Query/Search options implied by the configured
+// consistency level; empty when unset so the collection's default applies.
+func (c *MilvusCache) searchQueryOptions() []client.SearchQueryOptionFunc {
+	if level, ok := c.consistencyLevel(); ok {
+		return []client.SearchQueryOptionFunc{client.WithSearchQueryConsistencyLevel(level)}
+	}
+	return nil
+}
+
+// pendingLookupOptions returns the options for the read-after-own-write query
+// that locates a pending entry this process just upserted. Session guarantees
+// read-your-writes here (the upsert set the client's session timestamp), so
+// never read weaker than that even when the configured level is unset,
+// Bounded, or Eventually; an explicit Strong configuration is kept as-is.
+func (c *MilvusCache) pendingLookupOptions() []client.SearchQueryOptionFunc {
+	if level, ok := c.consistencyLevel(); ok && level == entity.ClStrong {
+		return c.searchQueryOptions()
+	}
+	return []client.SearchQueryOptionFunc{client.WithSearchQueryConsistencyLevel(entity.ClSession)}
+}
+
+// rebuildQueryOptions returns the options for the startup full scan that
+// rebuilds the in-memory index. Session offers no guarantee before this
+// process's first write (the SDK degrades it to Eventually), so floor the
+// rebuild read at Bounded; other configured levels apply unchanged.
+func (c *MilvusCache) rebuildQueryOptions() []client.SearchQueryOptionFunc {
+	if level, ok := c.consistencyLevel(); ok && level == entity.ClSession {
+		return []client.SearchQueryOptionFunc{client.WithSearchQueryConsistencyLevel(entity.ClBounded)}
+	}
+	return c.searchQueryOptions()
+}
+
+// queryCollection wraps client.Query on the cache collection so every call
+// site applies an explicit consistency choice: the provided options, or the
+// configured search options when none are given. New Query call sites should
+// go through this so the configured level is never silently dropped.
+func (c *MilvusCache) queryCollection(ctx context.Context, expr string, outputFields []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+	if len(opts) == 0 {
+		opts = c.searchQueryOptions()
+	}
+	return c.client.Query(ctx, c.collectionName, nil, expr, outputFields, opts...)
+}
+
 // initializeCollection sets up the Milvus collection and index structures
 func (c *MilvusCache) initializeCollection() error {
 	ctx := context.Background()
@@ -219,6 +297,17 @@ func (c *MilvusCache) initializeCollection() error {
 			"collection": c.collectionName,
 			"reason":     "development_mode",
 		})
+	}
+
+	// A consistency level configured after the collection was created is not
+	// written back to the collection metadata; it is applied per request
+	// instead. Log this so external tools showing the stale collection-level
+	// setting don't mislead operators.
+	if hasCollection && !c.config.Development.DropCollectionOnStartup {
+		if _, ok := c.consistencyLevel(); ok {
+			logging.Infof("MilvusCache: collection '%s' already exists; keeping its collection-level consistency, configured level %q is applied per request",
+				c.collectionName, c.config.Search.ConsistencyLevel)
+		}
 	}
 
 	if err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
@@ -358,7 +447,11 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 	}
 
 	// Create collection
-	if createErr := c.client.CreateCollection(ctx, schema, 1); createErr != nil {
+	var createOpts []client.CreateCollectionOption
+	if level, ok := c.consistencyLevel(); ok {
+		createOpts = append(createOpts, client.WithConsistencyLevel(level))
+	}
+	if createErr := c.client.CreateCollection(ctx, schema, 1, createOpts...); createErr != nil {
 		return createErr
 	}
 
@@ -467,8 +560,8 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
 	// We request model, query, request_body and will detect which column is which
-	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "query", "request_body"})
+	results, err := c.queryCollection(ctx, queryExpr,
+		[]string{"model", "query", "request_body"}, c.pendingLookupOptions()...)
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())

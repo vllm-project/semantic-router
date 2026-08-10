@@ -74,6 +74,7 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 		entity.MetricType(c.config.Collection.VectorField.MetricType),
 		c.config.Search.TopK,
 		searchParam,
+		c.searchQueryOptions()...,
 	)
 }
 
