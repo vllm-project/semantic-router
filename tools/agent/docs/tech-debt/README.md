@@ -70,6 +70,11 @@ Every debt entry should include:
 
 - [TD044 Flow Tool State Durability Follow-Up](td-044-flow-tool-state-durability-gap.md)
 
+### PL0039 Domain CI Architecture
+
+- [TD045 Content Moderation Lacks a Reviewed Implementation](td-045-reviewed-content-moderation.md)
+- [TD046 ONNX Binding Changes Lack Mandatory Runtime Coverage](td-046-onnx-binding-ci-coverage-gap.md)
+
 ## Retired Debt Policy
 
 Retired TD files are removed from this directory. Keep the ID in commit history
