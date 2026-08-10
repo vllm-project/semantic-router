@@ -198,6 +198,7 @@ export default function ConfigPageEntrypointsRecipesSection({
           <ConfigPageRecipeDecisionsEditor
             value={Array.isArray(value) ? value : []}
             models={models}
+            signals={form.signals}
             onChange={(nextValue) => onChange(nextValue)}
           />
         ),

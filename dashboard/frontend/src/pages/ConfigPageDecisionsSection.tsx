@@ -7,22 +7,20 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import { DataTable } from '../components/DataTable'
+import DecisionRuleEditor from '../components/DecisionRuleEditor'
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type {
   ConfigData,
-  ConfigDecisionConditionType,
   DecisionConfig,
   DecisionFormState,
   DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
-import {
-  cloneDecisionConditions,
-  conditionHasNestedRules,
-  decisionRulesForSave,
-  mergeDecisionForSave,
-} from './configPageSupport'
+import { cloneDecisionRuleSet, mergeDecisionForSave } from './configPageSupport'
+import { buildAvailableSignals } from './configPageDecisionSignalCatalog'
+import { validateDecisionRules } from './configPageDecisionRuleBridge'
+import { DecisionConditionView } from './configPageDecisionRuleView'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -143,18 +141,7 @@ export default function ConfigPageDecisionsSection({
             value: decision.rules?.conditions?.length ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {decision.rules.conditions.map((cond, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '0.5rem',
-                      background: 'rgba(143, 148, 156, 0.1)',
-                      borderRadius: '4px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {cond.type}: {cond.name}
-                  </div>
+                  <DecisionConditionView key={i} condition={cond} depth={0} />
                 ))}
               </div>
             ) : (
@@ -228,77 +215,13 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = [
-      'keyword',
-      'domain',
-      'preference',
-      'user_feedback',
-      'reask',
-      'embedding',
-      'fact_check',
-      'language',
-      'context',
-      'structure',
-      'complexity',
-      'modality',
-      'authz',
-      'jailbreak',
-      'pii',
-      'projection',
-    ] as const
-    const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
-      (mapping.outputs || []).map((output) => output.name),
-    )
-
-    const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
-      switch (type) {
-        case 'keyword':
-          return config?.signals?.keywords?.map((k) => k.name) || []
-        case 'domain':
-          return config?.signals?.domains?.map((d) => d.name) || []
-        case 'preference':
-          return config?.signals?.preferences?.map((p) => p.name) || []
-        case 'user_feedback':
-          return config?.signals?.user_feedbacks?.map((u) => u.name) || []
-        case 'reask':
-          return config?.signals?.reasks?.map((r) => r.name) || []
-        case 'embedding':
-          return config?.signals?.embeddings?.map((e) => e.name) || []
-        case 'fact_check':
-          return config?.signals?.fact_check?.map((f) => f.name) || []
-        case 'language':
-          return config?.signals?.language?.map((l) => l.name) || []
-        case 'context':
-          return config?.signals?.context?.map((c) => c.name) || []
-        case 'structure':
-          return config?.signals?.structure?.map((s) => s.name) || []
-        case 'complexity':
-          return (config?.signals?.complexity || []).flatMap((signal) => [
-            `${signal.name}:easy`,
-            `${signal.name}:medium`,
-            `${signal.name}:hard`,
-          ])
-        case 'modality':
-          return config?.signals?.modality?.map((m) => m.name) || []
-        case 'authz':
-          return config?.signals?.role_bindings?.map((binding) => binding.name) || []
-        case 'jailbreak':
-          return config?.signals?.jailbreak?.map((rule) => rule.name) || []
-        case 'pii':
-          return config?.signals?.pii?.map((rule) => rule.name) || []
-        case 'projection':
-          return projectionOutputs
-        default:
-          return []
-      }
-    }
+    const availableSignals = buildAvailableSignals(config?.signals, config?.projections)
 
     const defaultForm: DecisionFormState = {
       name: '',
       description: '',
       priority: 1,
-      operator: 'AND',
-      conditions: [{ type: 'keyword', name: '' }],
+      rules: { operator: 'AND', conditions: [] },
       modelRefs: [
         {
           model: '',
@@ -317,8 +240,7 @@ export default function ConfigPageDecisionsSection({
             name: decision.name,
             description: decision.description || '',
             priority: decision.priority ?? 1,
-            operator: decision.rules?.operator || 'AND',
-            conditions: cloneDecisionConditions(decision.rules?.conditions),
+            rules: cloneDecisionRuleSet(decision.rules),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
               use_reasoning: !!ref.use_reasoning,
@@ -333,96 +255,6 @@ export default function ConfigPageDecisionsSection({
             })),
           }
         : defaultForm
-
-    const renderConditionsEditor = (
-      value: DecisionFormState['conditions'],
-      onChange: (value: DecisionFormState['conditions']) => void,
-    ) => {
-      const rows = (Array.isArray(value) ? value : []).length
-        ? value
-        : [{ type: 'keyword', name: '' }]
-      if (rows.some(conditionHasNestedRules)) {
-        return (
-          <p className={decisionStyles.editorHelp} role="note">
-            Nested boolean rules are preserved unchanged. Use DSL mode to edit this rule tree.
-          </p>
-        )
-      }
-
-      const updateItem = (index: number, key: 'type' | 'name', val: string) => {
-        const next = rows.map((item, idx) => {
-          if (idx !== index) return item
-          if (key === 'type') {
-            return { type: val, name: '' }
-          }
-          return { ...item, [key]: val }
-        })
-        onChange(next)
-      }
-
-      const removeItem = (index: number) => {
-        const next = rows.filter((_, idx) => idx !== index)
-        onChange(next.length ? next : [{ type: 'keyword', name: '' }])
-      }
-
-      const addItem = () => onChange([...rows, { type: 'keyword', name: '' }])
-
-      return (
-        <div className={decisionStyles.editorList}>
-          {rows.map((cond, idx) => (
-            <div key={idx} className={decisionStyles.editorGridConditions}>
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Signal type</span>
-                <select
-                  value={cond?.type || conditionTypeOptions[0]}
-                  onChange={(e) => updateItem(idx, 'type', e.target.value)}
-                  className={decisionStyles.editorSelect}
-                >
-                  {conditionTypeOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Signal name</span>
-                <select
-                  value={cond?.name || ''}
-                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                  className={decisionStyles.editorSelect}
-                >
-                  <option value="" disabled>
-                    Select name
-                  </option>
-                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  {getConditionNameOptions(cond?.type as ConfigDecisionConditionType).length ===
-                    0 && (
-                    <option value="" disabled>
-                      No matching signals
-                    </option>
-                  )}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => removeItem(idx)}
-                className={decisionStyles.editorButtonSecondary}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
-            Add Condition
-          </button>
-        </div>
-      )
-    }
 
     const renderModelRefsEditor = (
       value: DecisionFormState['modelRefs'],
@@ -613,24 +445,18 @@ export default function ConfigPageDecisionsSection({
         placeholder: '1',
       },
       {
-        name: 'operator',
-        label: 'Rules Operator',
-        type: 'select',
-        options: ['AND', 'OR', 'NOT'],
-        description:
-          'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
-        required: true,
-      },
-      {
-        name: 'conditions',
+        name: 'rules',
         label: 'Conditions',
         type: 'custom',
-        description: 'Add routing conditions (type and name).',
-        customRender: (value, onChange) =>
-          renderConditionsEditor(
-            Array.isArray(value) ? (value as DecisionFormState['conditions']) : [],
-            (nextValue) => onChange(nextValue),
-          ),
+        description:
+          'Build the routing rule with AND / OR / NOT groups. This is the same expression builder used for route conditions.',
+        customRender: (value, onChange) => (
+          <DecisionRuleEditor
+            value={value as DecisionFormState['rules']}
+            onChange={(nextValue) => onChange(nextValue)}
+            availableSignals={availableSignals}
+          />
+        ),
       },
       {
         name: 'modelRefs',
@@ -673,23 +499,10 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const normalizedConditions = (formData.conditions || []).filter(
-        (c) => (c?.type || '').trim() || (c?.name || '').trim(),
-      )
-      const conditions = normalizedConditions.map((condition, idx) => {
-        const type = (condition?.type || '').trim()
-        const conditionName = (condition?.name || '').trim()
-        if (!type || !conditionName) {
-          throw new Error(`Condition #${idx + 1} needs both type and name.`)
-        }
-        return {
-          type,
-          name: conditionName,
-          ...(condition.label ? { label: condition.label } : {}),
-          ...(condition.predicate ? { predicate: condition.predicate } : {}),
-          ...(condition.on_error ? { on_error: condition.on_error } : {}),
-        }
-      })
+      const ruleWarnings = validateDecisionRules(formData.rules, availableSignals)
+      if (ruleWarnings.length > 0) {
+        throw new Error(ruleWarnings.join(' '))
+      }
 
       const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
       const modelRefs = normalizedModelRefs.map((modelRefValue, idx) => {
@@ -754,10 +567,7 @@ export default function ConfigPageDecisionsSection({
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: decisionRulesForSave(decision?.rules, {
-          operator: formData.operator,
-          conditions,
-        }),
+        rules: formData.rules,
         modelRefs,
         plugins,
       })

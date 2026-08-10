@@ -22,13 +22,6 @@
   align-items: start;
 }
 
-.editorGridConditions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
 .editorInput,
 .editorSelect,
 .editorTextarea {
@@ -210,7 +203,6 @@
 }
 
 @media (max-width: 760px) {
-  .editorGridConditions,
   .editorGridTwo,
   .pluginConfigurationGrid,
   .viewMeta {
