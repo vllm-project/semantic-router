@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -60,6 +63,40 @@ func (c *reloadRendezvousCache) LookupSimilarWithThreshold(_, _ string, _ float3
 
 func (c *reloadRendezvousCache) Close() error {
 	c.closed.Store(true)
+	return nil
+}
+
+// reloadRendezvousSelector is a selection.Selector stub whose Select signals
+// entry on a channel and then blocks until released, mirroring
+// reloadRendezvousCache but for the classification/model-selection path.
+type reloadRendezvousSelector struct {
+	method  selection.SelectionMethod
+	entered chan struct{}
+	release chan struct{}
+	closed  atomic.Bool
+}
+
+func (s *reloadRendezvousSelector) Select(context.Context, *selection.SelectionContext) (*selection.SelectionResult, error) {
+	close(s.entered)
+	<-s.release
+	if s.closed.Load() {
+		return nil, errors.New("selector closed while classification request was in flight")
+	}
+	return &selection.SelectionResult{}, nil
+}
+
+func (s *reloadRendezvousSelector) Method() selection.SelectionMethod { return s.method }
+
+func (s *reloadRendezvousSelector) UpdateFeedback(context.Context, *selection.Feedback) error {
+	return nil
+}
+
+func (s *reloadRendezvousSelector) Tier() selection.AlgorithmTier { return selection.TierSupported }
+
+func (s *reloadRendezvousSelector) ExternalDependencies() []selection.Dependency { return nil }
+
+func (s *reloadRendezvousSelector) Close() error {
+	s.closed.Store(true)
 	return nil
 }
 
@@ -140,6 +177,178 @@ func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 	}
 	if !fakeCache.closed.Load() {
 		t.Fatal("Retire() did not close the old router's cache after the in-flight request finished")
+	}
+}
+
+// TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSelector
+// is the classification-path sibling of
+// TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache: routerLease
+// doesn't distinguish which OpenAIRouter-owned resource a call is using, but
+// issue #2470's validation calls out classification refresh against
+// long-lived requests specifically, so this exercises the same reload
+// sequence against ModelSelector instead of Cache.
+func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSelector(t *testing.T) {
+	fakeSelector := &reloadRendezvousSelector{
+		method:  selection.MethodKNN,
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	oldRegistry := selection.NewRegistry()
+	oldRegistry.Register(selection.MethodKNN, fakeSelector)
+	oldRouter := &OpenAIRouter{ModelSelector: oldRegistry}
+	rs := NewRouterService(oldRouter)
+
+	// Acquire a lease the same way RouterService.Process does for a real
+	// classification request, so the in-flight call below is protected
+	// exactly as it would be in production.
+	oldLease := rs.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	resultErr := make(chan error, 1)
+	go func() {
+		defer oldLease.release()
+		selector, ok := oldRouter.ModelSelector.Get(selection.MethodKNN)
+		if !ok {
+			resultErr <- errors.New("selector not registered")
+			return
+		}
+		_, err := selector.Select(context.Background(), &selection.SelectionContext{})
+		resultErr <- err
+	}()
+
+	<-fakeSelector.entered // wait until the "request" is inside the blocking call
+
+	newRouter := &OpenAIRouter{ModelSelector: selection.NewRegistry()}
+	retireDone := make(chan error, 1)
+	go func() {
+		swappedLease := rs.Swap(newRouter)
+		retireDone <- rs.Retire(swappedLease, 2*time.Second)
+	}()
+
+	// Retire must block on the still-held lease, so the model selector must
+	// not be closed yet even though the swap and retire have both started.
+	select {
+	case <-retireDone:
+		t.Fatal("Retire() returned before the in-flight classification request released its lease")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if fakeSelector.closed.Load() {
+		t.Fatal("model selector was closed while a classification request was still in flight")
+	}
+
+	close(fakeSelector.release) // let the "request" finish, releasing its lease
+
+	select {
+	case err := <-resultErr:
+		if err != nil {
+			t.Fatalf("in-flight classification request observed an error even though it finished before the reload closed its resources: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight classification request never returned")
+	}
+
+	select {
+	case err := <-retireDone:
+		if err != nil {
+			t.Fatalf("Retire() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Retire() did not return after the in-flight classification request released its lease")
+	}
+	if !fakeSelector.closed.Load() {
+		t.Fatal("Retire() did not close the old router's model selector after the in-flight classification request finished")
+	}
+}
+
+// TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases covers
+// issue #2470's "no loss of acknowledged state" validation ask: a response a
+// request has already stored — and could be told "stored" for — must stay
+// readable through that same store for as long as the request is still
+// considered in flight, even though a reload is concurrently retiring the
+// router that owns it. The store only actually goes away once the lease
+// drains, which Retire already blocks on; this proves that guarantee extends
+// to data the request wrote before this final read, not just to the store
+// object surviving.
+func TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases(t *testing.T) {
+	store, err := responsestore.NewMemoryStore(responsestore.StoreConfig{
+		Enabled:    true,
+		TTLSeconds: 60,
+	})
+	if err != nil {
+		t.Fatalf("NewMemoryStore() error = %v", err)
+	}
+	filter := NewResponseAPIFilter(store)
+	oldRouter := &OpenAIRouter{ResponseAPIFilter: filter}
+	rs := NewRouterService(oldRouter)
+
+	oldLease := rs.current.Load()
+	if !oldLease.acquire() {
+		t.Fatal("acquire() = false, want true before any reload")
+	}
+
+	// Acknowledge a response the way a real request would: store it, then
+	// keep the request in flight a while longer (translating or streaming
+	// the rest of the reply) before it actually returns.
+	stored := &responseapi.StoredResponse{ID: "resp_ack_1", Object: "response", Status: "completed"}
+	if err := store.StoreResponse(context.Background(), stored); err != nil {
+		t.Fatalf("StoreResponse() error = %v", err)
+	}
+
+	holdRelease := make(chan struct{})
+	requestDone := make(chan error, 1)
+	go func() {
+		defer oldLease.release()
+		<-holdRelease
+		got, err := store.GetResponse(context.Background(), stored.ID)
+		if err != nil {
+			requestDone <- err
+			return
+		}
+		if got.ID != stored.ID {
+			requestDone <- fmt.Errorf("GetResponse() ID = %q, want %q", got.ID, stored.ID)
+			return
+		}
+		requestDone <- nil
+	}()
+
+	newRouter := &OpenAIRouter{ResponseAPIFilter: NewResponseAPIFilter(nil)}
+	retireDone := make(chan error, 1)
+	go func() {
+		swappedLease := rs.Swap(newRouter)
+		retireDone <- rs.Retire(swappedLease, 2*time.Second)
+	}()
+
+	// Retire must not have closed the store yet, so the response acknowledged
+	// before the reload started must still be readable.
+	select {
+	case <-retireDone:
+		t.Fatal("Retire() returned before the in-flight request released its lease")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, err := store.GetResponse(context.Background(), stored.ID); err != nil {
+		t.Fatalf("acknowledged response was lost while its request was still in flight: %v", err)
+	}
+
+	close(holdRelease) // let the "request" read its own response and finish
+
+	select {
+	case err := <-requestDone:
+		if err != nil {
+			t.Fatalf("in-flight request could not read back its own acknowledged response: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight request never returned")
+	}
+
+	select {
+	case err := <-retireDone:
+		if err != nil {
+			t.Fatalf("Retire() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Retire() did not return after the in-flight request released its lease")
 	}
 }
 

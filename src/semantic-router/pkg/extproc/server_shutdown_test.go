@@ -8,6 +8,65 @@ import (
 	"time"
 )
 
+// TestServerStopWaitsForAllInFlightRequestsUnderLoad extends
+// TestServerStopWaitsForInFlightRequestBeforeReturning from one synthetic
+// caller to several concurrent ones, so the drain guarantee is proven under
+// load rather than for a single held lease that happens to look the same as
+// zero in-flight requests once it releases.
+func TestServerStopWaitsForAllInFlightRequestsUnderLoad(t *testing.T) {
+	server, startErrCh := startTestServer(t)
+
+	const concurrentRequests = 5
+	leases := make([]*routerLease, concurrentRequests)
+	for i := range leases {
+		lease, err := server.service.acquireCurrentLease()
+		if err != nil {
+			t.Fatalf("acquireCurrentLease() [%d] error = %v", i, err)
+		}
+		leases[i] = lease
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		server.Stop()
+		close(stopped)
+	}()
+
+	// Release all but the last request one at a time; Stop must stay blocked
+	// as long as any lease is still held, not just the first one.
+	for i := 0; i < concurrentRequests-1; i++ {
+		select {
+		case <-stopped:
+			t.Fatalf("Stop() returned while %d of %d requests were still in flight", concurrentRequests-i, concurrentRequests)
+		case <-time.After(20 * time.Millisecond):
+		}
+		leases[i].release()
+	}
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop() returned before the last in-flight request released")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	leases[concurrentRequests-1].release()
+
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop() did not return after every in-flight request released")
+	}
+
+	select {
+	case err := <-startErrCh:
+		if err != nil {
+			t.Fatalf("Start() error = %v, want nil after Stop()", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start() did not return after Stop()")
+	}
+}
+
 // TestServerStopWaitsForInFlightRequestBeforeReturning pins the guarantee the
 // process-level signal handler (cmd/runtime_bootstrap.go) is built on: it runs
 // Stop first and only then releases shared resources such as the vector store,

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -192,6 +193,82 @@ func requireGoroutinesSettleTo(t *testing.T, baseline int, msg string, args ...i
 	require.Eventuallyf(t, func() bool {
 		runtime.GC()
 		return runtime.NumGoroutine() <= baseline
+	}, 10*time.Second, 10*time.Millisecond, msg, args...)
+}
+
+// TestBuildRouterComponentsRepeatedReloadsHaveStableFileDescriptorCount is the
+// descriptor half of issue #2470's repeated-reload stability ask — see
+// TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable for the goroutine
+// half. This environment has no live Redis or MCP backend, so it only
+// exercises the default in-process construction path: it catches a leaked
+// file, socket, or pipe from the general build/close machinery, but not a real
+// Redis or MCP connection's lifecycle, which needs integration coverage
+// against a live backend instead.
+func TestBuildRouterComponentsRepeatedReloadsHaveStableFileDescriptorCount(t *testing.T) {
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{
+			Enabled:    true,
+			TTLSeconds: 60,
+		},
+	}
+
+	baseline := stableFDCount(t)
+
+	const iterations = 30
+	for i := 0; i < iterations; i++ {
+		components, err := buildRouterComponents(cfg)
+		require.NoError(t, err)
+		router := components.buildRouter()
+		require.NoError(t, router.Close())
+	}
+
+	requireFDsSettleTo(t, baseline,
+		"buildRouterComponents+Close leaked file descriptors across %d repeated reload cycles", iterations)
+}
+
+// openFDCount counts this process's open file descriptors via /proc/self/fd.
+// Linux-only, which is fine: CI builds and runs this package on Linux.
+func openFDCount() (int, error) {
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return 0, err
+	}
+	return len(entries), nil
+}
+
+// stableFDCount mirrors stableGoroutineCount: it polls for quiescence rather
+// than reading once, so descriptors an earlier test is still closing don't get
+// mistaken for this test's baseline.
+func stableFDCount(t *testing.T) int {
+	t.Helper()
+	if _, err := openFDCount(); err != nil {
+		t.Skipf("cannot read /proc/self/fd on this platform: %v", err)
+	}
+	var last int
+	consecutive := 0
+	require.Eventually(t, func() bool {
+		current, err := openFDCount()
+		if err != nil {
+			return false
+		}
+		if current == last {
+			consecutive++
+		} else {
+			consecutive = 0
+			last = current
+		}
+		return consecutive >= 3
+	}, 10*time.Second, 10*time.Millisecond, "file descriptor count never settled")
+	return last
+}
+
+// requireFDsSettleTo asserts the open file-descriptor count returns to
+// baseline after repeated builds/closes.
+func requireFDsSettleTo(t *testing.T, baseline int, msg string, args ...interface{}) {
+	t.Helper()
+	require.Eventuallyf(t, func() bool {
+		current, err := openFDCount()
+		return err == nil && current <= baseline
 	}, 10*time.Second, 10*time.Millisecond, msg, args...)
 }
 
