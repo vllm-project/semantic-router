@@ -4,7 +4,7 @@
 
 `remom` is a **looper** algorithm for breadth-controlled multi-model orchestration with intelligent synthesis. It performs multi-round parallel reasoning and synthesizes the best answer from all responses.
 
-It aligns to `config/algorithm/looper/remom.yaml`.
+It aligns to `config/fragments/algorithm/looper/remom.yaml`.
 
 **Inspired by**: [PaCoRe](https://arxiv.org/abs/2601.05593) — extended to support mixture of models.
 

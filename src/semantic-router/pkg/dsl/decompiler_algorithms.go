@@ -118,6 +118,9 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setStringValue(fields, "synthesis_template", r.SynthesisTemplate)
 	setStringValue(fields, "synthesis_model", r.SynthesisModel)
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
+	if r.MaxCompletionTokens != nil {
+		setIntValue(fields, "max_completion_tokens", *r.MaxCompletionTokens)
+	}
 	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
 	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
 	setStringValue(fields, "on_error", r.OnError)
@@ -165,10 +168,11 @@ func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[s
 	if !w.Final.IsZero() {
 		fields["final"] = workflowFinalValue(w.Final)
 	}
-	if w.Planner.Model != "" {
-		fields["planner"] = ObjectValue{Fields: map[string]Value{
-			"model": StringValue{V: w.Planner.Model},
-		}}
+	plannerFields := make(map[string]Value)
+	setStringValue(plannerFields, "model", w.Planner.Model)
+	setIntValue(plannerFields, "max_completion_tokens", w.Planner.MaxCompletionTokens)
+	if len(plannerFields) > 0 {
+		fields["planner"] = ObjectValue{Fields: plannerFields}
 	}
 	setIntValue(fields, "max_steps", w.MaxSteps)
 	setIntValue(fields, "max_parallel", w.MaxParallel)

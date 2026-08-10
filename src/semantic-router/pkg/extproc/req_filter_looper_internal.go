@@ -138,7 +138,10 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	ctx *RequestContext,
 ) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
 	setHeaders := []*core.HeaderValueOption{}
-	removeHeaders := []string{"content-length"}
+	removeHeaders := append(
+		[]string{"content-length"},
+		looperInternalHeadersForRemoval()...,
+	)
 
 	if route.found {
 		routedSetHeaders, routedRemoveHeaders, errorResponse := r.buildRoutedLooperHeaders(modelName, route, ctx)
@@ -234,7 +237,8 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	decisionName := ctx.Headers[headers.VSRLooperDecision]
+	r.hydrateLooperRoutingContext(ctx)
+	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -342,10 +346,7 @@ func (r *OpenAIRouter) resolveLooperDecision(
 		"decision":   decisionName,
 	})
 
-	decision := ctx.VSRSelectedDecision
-	if decision != nil && decision.Name != decisionName {
-		decision = nil
-	}
+	decision := r.looperDecisionForRoutingContext(ctx, decisionName)
 	if decision != nil {
 		return decision, nil
 	}

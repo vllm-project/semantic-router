@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import styles from './HeaderReveal.module.css'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
+import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 interface HeaderRevealProps {
   headers: Record<string, string>
@@ -285,6 +286,9 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
             const displayValue = isLearningHeader(key)
               ? formatLearningHeaderValue(key, value)
               : value
+                  .split(',')
+                  .map((item) => formatRoutingMetadataValue(key, item))
+                  .join(', ')
             return (
               <div
                 key={key}

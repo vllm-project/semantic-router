@@ -54,6 +54,7 @@ class K8sBackend:
         config_file: str,
         env_vars: dict[str, str] | None = None,
         *,
+        source_config_file: str | None = None,
         image: str | None = None,
         pull_policy: str | None = None,
         enable_observability: bool = True,
@@ -70,11 +71,17 @@ class K8sBackend:
         if self.context:
             log.info(f"  Context:   {self.context}")
 
-        secret_name = self._sync_env_secret(env_vars)
+        # env_vars was discovered against source_config_file (runtime.py forwards it
+        # before algorithm/platform overrides rewrite the config), so sensitivity must
+        # be re-checked against that same file, not the rewritten effective one, or a
+        # name dropped by the rewrite silently loses its secret classification.
+        sensitivity_config_file = source_config_file or config_file
+        secret_name = self._sync_env_secret(env_vars, sensitivity_config_file)
 
         profile_values = load_profile_values(self.profile, self.chart_dir)
         values = translate_config_to_helm_values(
             config_file,
+            source_config_file=sensitivity_config_file,
             image=image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
@@ -208,14 +215,16 @@ class K8sBackend:
 
     # -- helpers --------------------------------------------------------------
 
-    def _sync_env_secret(self, env_vars: dict[str, str] | None) -> str | None:
+    def _sync_env_secret(
+        self, env_vars: dict[str, str] | None, config_file: str | None = None
+    ) -> str | None:
         """Create or update a K8s Secret with sensitive env vars; return the secret name or None."""
         if not env_vars:
             return None
 
-        from cli.commands.runtime_support import PASSTHROUGH_ENV_RULES  # noqa: PLC0415
+        from cli.commands.runtime_support import sensitive_env_names  # noqa: PLC0415
 
-        sensitive_names = {name for name, masked in PASSTHROUGH_ENV_RULES if masked}
+        sensitive_names = sensitive_env_names(config_file)
         secret_data = {k: v for k, v in env_vars.items() if k in sensitive_names and v}
 
         if not secret_data:

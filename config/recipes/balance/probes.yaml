@@ -84,7 +84,7 @@ decisions:
         query: In electrochemistry terms, compare SEI growth, lithium plating, and cathode cracking as causes of lithium-ion battery degradation, then propose experiments to isolate the dominant mechanism.
         tags: [baseline, stem]
       - id: qubit_decoherence
-        query: Compare modeling approaches for turbulent fluid simulation.
+        query: In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.
         tags: [paraphrase, stem]
 
   - id: feedback_wrong_answer_verified
@@ -110,6 +110,11 @@ decisions:
           - role: user
             content: That answer is wrong. Please correct it and cite reliable historical sources.
         tags: [feedback, messages, history, verified]
+      - id: health_error_correction_priority
+        query: This is wrong. Please correct the chest-pain guidance and cite reliable medical sources.
+        expected_signals:
+          keywords: [correction_feedback_markers, verification_markers]
+        tags: [feedback, health, collision, priority, verified]
 
   - id: medium_code_general
     expected_decision: medium_code_general
@@ -274,3 +279,15 @@ decisions:
       - id: celebratory_reply_zh
         query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
         tags: [zh, drafting]
+
+  - id: casual_chat
+    expected_decision: casual_chat
+    expected_alias: qwen/qwen3.5-rocm
+    objective: Inputs outside every classified context and specialist band reach the absolute fallback.
+    variants:
+      - id: long_unclassified_fallback
+        query: zxqv nplm ordinary neutral placeholder
+        repeat: 3000
+        expected_signals:
+          context: [long_context]
+        tags: [fallback, boundary, stress:long-input, negative]

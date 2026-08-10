@@ -11,7 +11,7 @@ translation:
 
 `elo` 使用类 Elo 反馈分数对候选模型排序的选择算法。
 
-对应 `config/algorithm/selection/elo.yaml`。
+对应 `config/fragments/algorithm/selection/elo.yaml`。
 
 ## 主要优势
 

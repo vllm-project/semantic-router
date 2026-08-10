@@ -2,7 +2,7 @@
 
 ## Overview
 
-`conversation` detects structural facts about the shape of the incoming chat-completion request: how many user messages, whether a developer message is present, how many tools are defined, assistant tool-call counts, completed tool cycles, and whether the current request is still inside an active tool loop. It maps to `config/signal/conversation/` and is declared under `routing.signals.conversation`.
+`conversation` detects structural facts about the shape of the incoming chat-completion request: how many user messages, whether a developer message is present, how many tools are defined, assistant tool-call counts, completed tool cycles, and whether the current request is still inside an active tool loop. It maps to `config/fragments/signal/conversation/` and is declared under `routing.signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 

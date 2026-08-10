@@ -6,7 +6,7 @@ metadata:
 spec:
   signals:
     # Image-modality embedding rules mirroring the opt-in pack shipped in
-    # config/signal/embedding/image-routing.yaml (PR #1896). Each rule's
+    # config/fragments/signal/embedding/image-routing.yaml (PR #1896). Each rule's
     # candidates are short text anchors that get embedded in the shared
     # multimodal text/image space; the request-path image embedding
     # cosine-matches against them. Requires

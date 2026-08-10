@@ -137,6 +137,7 @@ type ReMoMAlgorithmConfig struct {
 	SynthesisTemplate            string  `yaml:"synthesis_template,omitempty"`
 	SynthesisModel               string  `yaml:"synthesis_model,omitempty"`
 	MaxConcurrent                int     `yaml:"max_concurrent,omitempty"`
+	MaxCompletionTokens          *int    `yaml:"max_completion_tokens,omitempty"`
 	RoundTimeoutSeconds          int     `yaml:"round_timeout_seconds,omitempty"`
 	MinSuccessfulResponses       int     `yaml:"min_successful_responses,omitempty"`
 	OnError                      string  `yaml:"on_error,omitempty"`

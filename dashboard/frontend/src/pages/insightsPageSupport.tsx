@@ -1,5 +1,6 @@
 import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDate } from '../types/evaluation'
 import { Link } from 'react-router-dom'
@@ -21,6 +22,10 @@ interface InsightsFilterState {
   decisionFilter: string
   modelFilter: string
 }
+
+export const formatInsightsDecisionName = (decision: string): string =>
+  formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -117,7 +122,7 @@ export function buildInsightsRecordTitle(record: InsightsRecord | null | undefin
     return `Record: ${record.request_id.substring(0, 8)}...`
   }
 
-  return `Record: ${record.decision || record.id}`
+  return `Record: ${record.decision ? formatInsightsDecisionName(record.decision) : record.id}`
 }
 
 function formatCompactIdentifier(value: string) {
@@ -177,7 +182,11 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => <span className={styles.decision}>{row.decision || '-'}</span>,
+      render: (row) => (
+        <span className={styles.decision}>
+          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
+        </span>
+      ),
     },
     {
       key: 'signals',
@@ -301,7 +310,10 @@ export function buildInsightsRecordSections(
     title: 'Decision Information',
     fields: [
       { label: 'Recipe', value: record.recipe || 'default' },
-      { label: 'Decision name', value: record.decision || '-' },
+      {
+        label: 'Decision name',
+        value: record.decision ? formatInsightsDecisionName(record.decision) : '-',
+      },
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
@@ -406,22 +418,32 @@ export function buildInsightsRecordSections(
 
 export function collectSignals(signals: Signal): string[] {
   const allSignals: string[] = []
-  if (signals.keyword?.length) allSignals.push(...signals.keyword)
-  if (signals.embedding?.length) allSignals.push(...signals.embedding)
-  if (signals.domain?.length) allSignals.push(...signals.domain)
-  if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
-  if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
-  if (signals.reask?.length) allSignals.push(...signals.reask)
-  if (signals.preference?.length) allSignals.push(...signals.preference)
-  if (signals.language?.length) allSignals.push(...signals.language)
-  if (signals.context?.length) allSignals.push(...signals.context)
-  if (signals.structure?.length) allSignals.push(...signals.structure)
-  if (signals.complexity?.length) allSignals.push(...signals.complexity)
-  if (signals.modality?.length) allSignals.push(...signals.modality)
-  if (signals.authz?.length) allSignals.push(...signals.authz)
-  if (signals.jailbreak?.length) allSignals.push(...signals.jailbreak)
-  if (signals.pii?.length) allSignals.push(...signals.pii)
-  if (signals.kb?.length) allSignals.push(...signals.kb)
+  const append = (key: keyof Signal) => {
+    allSignals.push(
+      ...(signals[key] ?? []).map((value) =>
+        formatRoutingMetadataValue(`x-vsr-matched-${key.replace(/_/g, '-')}`, value),
+      ),
+    )
+  }
+  const signalKeys: Array<keyof Signal> = [
+    'keyword',
+    'embedding',
+    'domain',
+    'fact_check',
+    'user_feedback',
+    'reask',
+    'preference',
+    'language',
+    'context',
+    'structure',
+    'complexity',
+    'modality',
+    'authz',
+    'jailbreak',
+    'pii',
+    'kb',
+  ]
+  signalKeys.forEach(append)
   return allSignals
 }
 
@@ -469,7 +491,10 @@ function buildSignalFields(signals: Signal): ViewField[] {
           <div className={styles.modalSignalList}>
             {values.map((value) => (
               <span key={`${label}-${value}`} className={styles.modalSignalPill}>
-                {value}
+                {formatRoutingMetadataValue(
+                  `x-vsr-matched-${String(key).replace(/_/g, '-')}`,
+                  value,
+                )}
               </span>
             ))}
           </div>

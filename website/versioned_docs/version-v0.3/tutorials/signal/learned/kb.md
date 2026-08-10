@@ -2,7 +2,7 @@
 
 ## Overview
 
-`kb` binds routing signals to the output of a named knowledge base instance. It maps to `config/signal/kb/` and is declared under `routing.signals.kb`.
+`kb` binds routing signals to the output of a named knowledge base instance. It maps to `config/fragments/signal/kb/` and is declared under `routing.signals.kb`.
 
 This signal family is for maintained embedding-backed knowledge bases that are loaded at router startup and then reused across several routes.
 
@@ -34,7 +34,7 @@ Use `kb` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/kb/`
+Source fragment family: `config/fragments/signal/kb/`
 
 ```yaml
 global:

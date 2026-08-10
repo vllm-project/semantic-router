@@ -2,7 +2,7 @@
 
 ## Overview
 
-Latest algorithm tutorials mirror the fragment catalog under `config/algorithm/`.
+Latest algorithm tutorials mirror the fragment catalog under `config/fragments/algorithm/`.
 
 Algorithms only matter after a decision matches and exposes multiple candidate models in `modelRefs`. The router then uses `decision.algorithm` to choose or coordinate those candidates.
 
@@ -11,7 +11,7 @@ Algorithms only matter after a decision matches and exposes multiple candidate m
 - Separates route eligibility from model selection policy.
 - Lets one decision keep several candidate models without inlining ranking logic.
 - Supports both one-model ranking and multi-model orchestration.
-- Mirrors the repo fragment tree exactly: one tutorial page per algorithm under `config/algorithm/selection/` and `config/algorithm/looper/`.
+- Mirrors the repo fragment tree exactly: one tutorial page per algorithm under `config/fragments/algorithm/selection/` and `config/fragments/algorithm/looper/`.
 
 ## What Problem Does It Solve?
 
