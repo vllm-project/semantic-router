@@ -98,6 +98,56 @@ func TestCheckForJailbreakWithRisk(t *testing.T) {
 	}
 }
 
+// TestCheckForJailbreakWithRisk_MultiplePositiveLabels guards against
+// isJailbreak and riskScore disagreeing when positive_labels has more than
+// one entry: isJailbreak used to threshold only the argmax class's
+// confidence, while riskScore sums every configured positive label's
+// probability. A configuration where no single positive label wins argmax
+// but their combined mass exceeds the threshold used to report a high risk
+// score while still returning isJailbreak=false - the same "high risk_score,
+// still allowed" failure mode #2587 was filed against, just triggered by a
+// multi-label config instead of an inverted mapping.
+func TestCheckForJailbreakWithRisk_MultiplePositiveLabels(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.PromptGuard.Enabled = true
+	cfg.PromptGuard.ModelID = "test-model"
+	cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
+	cfg.PromptGuard.Threshold = 0.5
+	cfg.PromptGuard.PositiveLabels = []string{"jailbreak", "INJECTION"}
+
+	mapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1, "INJECTION": 2},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak", "2": "INJECTION"},
+	}
+	// Argmax is "benign" (0.40), but jailbreak (0.35) + INJECTION (0.25) = 0.60
+	// combined risk, above the 0.5 threshold.
+	inference := withProbsMock(0, 0.40, []float32{0.40, 0.35, 0.25})
+
+	classifier, err := newClassifierWithOptions(cfg,
+		withJailbreak(mapping, &MockJailbreakInitializer{}, inference))
+	if err != nil {
+		t.Fatalf("failed to construct classifier: %v", err)
+	}
+
+	isJailbreak, jbType, confidence, risk, err := classifier.CheckForJailbreakWithRisk("some text")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !isJailbreak {
+		t.Errorf("isJailbreak = false, want true (combined positive-label risk %v exceeds threshold %v)",
+			risk, cfg.PromptGuard.Threshold)
+	}
+	if jbType != "benign" {
+		t.Errorf("jailbreakType = %q, want %q (argmax winner, for display)", jbType, "benign")
+	}
+	if math.Abs(float64(confidence-0.40)) > 1e-6 {
+		t.Errorf("confidence = %v, want 0.40 (argmax confidence)", confidence)
+	}
+	if math.Abs(float64(risk-0.60)) > 1e-6 {
+		t.Errorf("riskScore = %v, want 0.60 (sum of positive labels)", risk)
+	}
+}
+
 func TestJailbreakRiskScore(t *testing.T) {
 	// Binary mapping: index 0 = benign, index 1 = jailbreak.
 	mapping := &JailbreakMapping{

@@ -1,0 +1,60 @@
+package classification
+
+import (
+	"math"
+	"testing"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+// TestFindBestJailbreakMatch_MultiplePositiveLabels guards against the
+// signal-evaluation path (used by routing decisions) disagreeing with
+// CheckForJailbreakWithRisk on multi-label configs: no single positive label
+// wins argmax, but positive_labels' combined probability mass exceeds the
+// rule's threshold. Thresholding argmax confidence instead of the summed
+// positive-label mass would silently drop this match.
+func TestFindBestJailbreakMatch_MultiplePositiveLabels(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.PromptGuard.Enabled = true
+	cfg.PromptGuard.ModelID = "test-model"
+	cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
+	cfg.PromptGuard.PositiveLabels = []string{"jailbreak", "INJECTION"}
+
+	mapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1, "INJECTION": 2},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak", "2": "INJECTION"},
+	}
+	classifier, err := newClassifierWithOptions(cfg,
+		withJailbreak(mapping, &MockJailbreakInitializer{}, &MockJailbreakInference{
+			responseMap: make(map[string]MockJailbreakInferenceResponse),
+		}))
+	if err != nil {
+		t.Fatalf("failed to construct classifier: %v", err)
+	}
+
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	// Argmax is "benign" (0.40), but jailbreak (0.35) + INJECTION (0.25) = 0.60
+	// combined risk, above the rule's threshold.
+	cache := map[string][]cachedJailbreakResult{
+		"some text": {
+			{result: candle_binding.ClassResultWithProbs{
+				Class:         0,
+				Confidence:    0.40,
+				Probabilities: []float32{0.40, 0.35, 0.25},
+			}},
+		},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"some text"}, cache)
+
+	if bestScore < rule.Threshold {
+		t.Errorf("bestScore = %v, want >= %v (combined positive-label risk)", bestScore, rule.Threshold)
+	}
+	if math.Abs(float64(bestScore-0.60)) > 1e-6 {
+		t.Errorf("bestScore = %v, want 0.60", bestScore)
+	}
+	if bestType != "benign" {
+		t.Errorf("bestType = %q, want %q (argmax winner, for display)", bestType, "benign")
+	}
+}
