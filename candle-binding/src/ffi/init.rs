@@ -17,9 +17,15 @@ use crate::BertClassifier;
 // - Thread-safe initialization guarantee
 // - No dependency on lazy_static
 pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+// Exported for use in classify.rs: classify.rs used to redeclare its own
+// module-local statics of these same names, which the initializers below
+// never wrote to (aside from BERT_CLASSIFIER, which classify.rs's own
+// init_generic_classifier happened to also write - but only to its own,
+// separate copy). Every reader in classify.rs keyed off its own dead or
+// partially-dead copy instead of the one these init_* functions populate.
+pub static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 // Feedback detector classifier (exported for use in classify.rs)
 pub static FEEDBACK_DETECTOR_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
