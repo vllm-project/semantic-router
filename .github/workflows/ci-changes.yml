@@ -96,9 +96,11 @@ on:
       e2e_streaming:
         value: ${{ jobs.classify.outputs.e2e_streaming }}
       e2e_anthropic_shim:
-        value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
+        value: ${{ jobs.classify.outputs.e2e_anthropic_shim }}
       e2e_common:
         value: ${{ jobs.classify.outputs.e2e_common }}
+      e2e_no_model:
+        value: ${{ jobs.classify.outputs.e2e_no_model }}
 
 permissions:
   contents: read
@@ -159,10 +161,18 @@ jobs:
       e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
       e2e_no_model: ${{ steps.changes.outputs.e2e_no_model }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
+      perf: ${{ steps.changes.outputs.perf }}
+      bindings: ${{ steps.changes.outputs.bindings }}
+      
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - id: matrix
+        name: Build domain, image, and E2E matrices
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
       - id: changes
         uses: dorny/paths-filter@v3
         with:
@@ -328,6 +338,8 @@ jobs:
               - 'e2e/testing/anthropic-shim/**'
               - 'deploy/kubernetes/anthropic-backend/**'
               - 'src/semantic-router/pkg/anthropic/outbound*.go'
+            e2e_no_model:
+              - 'path/to/no-model/files/**'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'
