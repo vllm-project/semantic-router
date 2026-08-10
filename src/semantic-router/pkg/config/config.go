@@ -21,7 +21,14 @@ const (
 )
 
 // PromptGuardConfig.Backend values, selecting which jailbreak classifier
-// backend to use. An empty/unset value defaults to PromptGuardBackendCandle.
+// backend to use. An empty/unset value passed directly to
+// createJailbreakInference falls back to PromptGuardBackendCandle. This is
+// NOT the same as the canonical-config default: canonical resolution starts
+// from defaultPromptGuardModule()'s baseline (PromptGuardBackendMmBERT32K,
+// matching the bundled mmbert32k model it also defaults ModelID to) and
+// overlays user YAML, so a canonical-resolved config with no explicit
+// backend gets mmbert32k, not candle. A user who wants the plain candle
+// backend under canonical resolution must set backend: candle explicitly.
 const (
 	// PromptGuardBackendCandle runs the bundled Candle model locally
 	// (LoRA/BERT auto-detect, falling back to ModernBERT).

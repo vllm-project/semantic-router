@@ -141,7 +141,11 @@ func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
 
 // createJailbreakInference creates the appropriate jailbreak inference based on
 // the configured prompt_guard.backend (candle, mmbert32k, http_chat, or
-// http_classify). An empty/unset backend defaults to candle.
+// http_classify). An empty/unset backend value reaching this switch falls
+// back to candle - but a canonical-resolved config never actually reaches
+// here empty: canonical defaults set backend to mmbert32k explicitly (see
+// config.PromptGuardBackendCandle's doc comment). This fallback only fires
+// for configs built without going through canonical resolution.
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (SequenceClassifierBackend, error) {
 	switch promptGuardCfg.Backend {
 	case config.PromptGuardBackendMmBERT32K:
