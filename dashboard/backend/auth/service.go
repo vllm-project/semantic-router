@@ -82,8 +82,6 @@ func (s *Service) BootstrapRegister(ctx context.Context, email, name, hash strin
 }
 
 func (s *Service) HashPassword(password string) (string, error) {
-	// Validate before hashing so an input bcrypt would reject is reported as a
-	// typed policy error rather than an opaque failure from the crypto layer.
 	if err := ValidatePassword(password); err != nil {
 		return "", err
 	}

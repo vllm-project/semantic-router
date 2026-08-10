@@ -13,6 +13,7 @@ func TestValidatePasswordMeasuresBytesNotCharacters(t *testing.T) {
 
 	// 25 CJK runes are 75 bytes, so a rune count would wrongly accept this.
 	multibyte := strings.Repeat("好", 25)
+
 	if len([]rune(multibyte)) > MaxPasswordBytes {
 		t.Fatalf("test input has %d runes, expected it to be short in characters", len([]rune(multibyte)))
 	}
@@ -48,16 +49,12 @@ func TestHashPasswordRejectsOversizedInputBeforeBcrypt(t *testing.T) {
 		t.Fatalf("HashPassword() error = %v, want %v", err, ErrPasswordTooLong)
 	}
 
-	// The limit is enforced inside HashPassword so every call site is covered,
-	// but it must not reject anything bcrypt would have accepted.
+	// Must not reject anything bcrypt would have accepted.
 	if _, err := svc.HashPassword(strings.Repeat("a", MaxPasswordBytes)); err != nil {
 		t.Fatalf("HashPassword() at the limit error = %v, want nil", err)
 	}
 }
 
-// An oversized password is a caller mistake. Returning 500 made an ordinary
-// input error look like a server fault and leaked the bcrypt error text into
-// the dashboard, where it was shown to the admin verbatim.
 func TestPasswordRotationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	t.Parallel()
 

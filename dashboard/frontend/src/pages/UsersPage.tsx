@@ -263,9 +263,8 @@ const UsersPage: React.FC = () => {
       return
     }
 
-    // Check the password before anything is sent. The edit path performs two
-    // writes, so a rejection caught here costs nothing, while the same
-    // rejection from the server arrives after the role change has committed.
+    // Reject before sending: a server-side rejection arrives after the role
+    // change has already committed.
     const passwordError = validateUserPassword(values.password, dialogMode)
     if (passwordError) {
       setDialogError(passwordError)
@@ -275,8 +274,6 @@ const UsersPage: React.FC = () => {
     setDialogSubmitting(true)
     setDialogError(null)
 
-    // Tracks whether the role and status write committed, so a later failure is
-    // reported as the partial one it is instead of a flat failure.
     let roleAndStatusSaved = false
 
     try {
@@ -313,7 +310,7 @@ const UsersPage: React.FC = () => {
       if (!patchResponse.ok) {
         throw new Error(await getResponseError(patchResponse))
       }
-      // Past this point the role and status are committed on the server.
+      // Role and status are committed on the server from here.
       roleAndStatusSaved = true
 
       if (values.password.trim()) {
@@ -335,14 +332,9 @@ const UsersPage: React.FC = () => {
       await fetchUsers()
     } catch (err) {
       setDialogError(describeUserUpdateFailure(err, roleAndStatusSaved))
-      // A failed request does not prove nothing changed: a write can commit and
-      // still lose its response. Re-read so the table shows the server's state
-      // rather than the copy fetched before this edit.
-      //
-      // This is safe to run while the dialog is open. The dialog resets its
-      // fields from initialValues, which is memoised on selectedUser, and
-      // fetchUsers only replaces the users list. Nothing the admin typed is
-      // lost, which is also why selectedUser is deliberately not re-synced here.
+      // A failed request does not prove nothing changed. Safe while the dialog
+      // is open: the dialog resets from initialValues, memoised on
+      // selectedUser, which is deliberately not re-synced here.
       void fetchUsers()
     } finally {
       setDialogSubmitting(false)

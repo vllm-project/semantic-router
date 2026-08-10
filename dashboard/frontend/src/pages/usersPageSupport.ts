@@ -6,26 +6,15 @@ export type UsersPageRolePermissionsPayload = {
 
 export const EMPTY_ROLE_PERMISSIONS = Object.freeze({}) as UsersPageRolePermissions
 
-/**
- * Mirrors MaxPasswordBytes in dashboard/backend/auth/password.go. The server is
- * the enforcing side; this exists so the dialog can reject an oversized
- * password before it sends anything, rather than after a partial write.
- */
+// Mirrors MaxPasswordBytes in dashboard/backend/auth/password.go.
 export const MAX_PASSWORD_BYTES = 72
 
-/**
- * bcrypt measures passwords in bytes, so a character count is not a substitute:
- * 25 CJK characters are 75 bytes. This is also why the password input carries no
- * maxLength attribute, which counts UTF-16 units and would silently truncate a
- * pasted password into one the user cannot sign in with.
- */
+// bcrypt counts bytes, not characters: 25 CJK characters are 75 bytes. A
+// maxLength attribute is not a substitute, it counts UTF-16 units and would
+// silently truncate a pasted password.
 export const passwordByteLength = (password: string) => new TextEncoder().encode(password).length
 
-/**
- * Returns a message when the password cannot be submitted, or null when it can.
- * A blank password means "leave the current one alone" while editing, but a new
- * account has nothing to fall back to.
- */
+// Blank means "keep the current password" when editing; a new account has none.
 export const validateUserPassword = (password: string, mode: 'create' | 'edit') => {
   if (!password) {
     return mode === 'create' ? 'A password is required to create a user.' : null
@@ -39,14 +28,8 @@ export const validateUserPassword = (password: string, mode: 'create' | 'edit') 
   return null
 }
 
-/**
- * Builds the dialog error for a failed user edit.
- *
- * The role and status update and the password rotation are two requests, so the
- * first can commit and the second still fail, whether from a rejected password,
- * an expired session, or a dropped connection. Reporting that as a flat failure
- * is what made the dialog lie about what had been saved.
- */
+// The role write can commit and the password write still fail, so the message
+// has to say which of the two happened.
 export const describeUserUpdateFailure = (error: unknown, roleAndStatusSaved: boolean) => {
   const reason = error instanceof Error ? error.message : String(error)
   if (!roleAndStatusSaved) {
