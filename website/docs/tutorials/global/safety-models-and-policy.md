@@ -34,7 +34,7 @@ Use these blocks when:
 
 Jailbreak detection supports four backends via `prompt_guard.backend`:
 
-- `candle` (default): the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT). Used when `backend` is unset or `candle`.
+- `candle`: the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT).
 - `mmbert32k`: the in-process mmBERT-32K model (32K context, YaRN RoPE, multilingual).
 - `http_chat`: an external model with role `guardrail`, called through a generative chat-completion prompt (Qwen3Guard-style). Requires an `external_models` entry with `model_role: guardrail`.
 - `http_classify`: an external sequence-classifier endpoint with role `guardrail`, speaking the widely-used HuggingFace text-classification pipeline contract - `POST {endpoint}/classify` with `{"inputs": "<text>"}`, returning every label's score, not just the top prediction. This lets a self-hosted classifier (wrapped by an existing `transformers` pipeline, or a Text Embeddings Inference deployment) plug in without disguising it as a chat completion.
@@ -67,6 +67,7 @@ Notes:
 - `http_classify` response labels are matched against `jailbreak_mapping` by name, not by array position (the server is free to order them however it likes, e.g. sorted by score).
 - `http_chat` is restricted to this binary guardrail use case; it isn't offered for N-way classifiers (`classifier.domain`, `complexity`) since a generative model can't reliably produce a calibrated multi-class distribution.
 - Breaking change: the legacy `use_modernbert`, `use_mmbert_32k`, and `use_vllm` boolean flags are removed. Migrate `use_mmbert_32k: true` to `backend: mmbert32k`, and `use_vllm: true` (plus its `external_models` entry) to `backend: http_chat`.
+- **`backend`'s effective default is `mmbert32k`, not `candle`.** `backend` is unset only falls back to `candle` for a config built directly in code without going through canonical default resolution. Canonical resolution (the path the dashboard, canonical export, and any config that doesn't set every field explicitly all go through) starts from a baseline where `backend` is already set to `mmbert32k`, matching the bundled `mmbert32k-jailbreak-detector-merged` model it also defaults `model_id` to - so simply deleting `use_mmbert_32k: false` (or `use_modernbert: false`) without adding anything in its place does **not** get you `candle`. If you were relying on the plain Candle backend, set `backend: candle` explicitly.
 
 ### Hallucination Detector Backend
 
