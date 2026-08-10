@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,7 +34,7 @@ func TestValidatePasswordMeasuresBytesNotCharacters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := ValidatePassword(tt.password); err != tt.wantErr {
+			if err := ValidatePassword(tt.password); !errors.Is(err, tt.wantErr) {
 				t.Fatalf("ValidatePassword() error = %v, want %v", err, tt.wantErr)
 			}
 		})
@@ -45,7 +46,7 @@ func TestHashPasswordRejectsOversizedInputBeforeBcrypt(t *testing.T) {
 
 	svc := newTestAuthService(t)
 
-	if _, err := svc.HashPassword(strings.Repeat("a", MaxPasswordBytes+1)); err != ErrPasswordTooLong {
+	if _, err := svc.HashPassword(strings.Repeat("a", MaxPasswordBytes+1)); !errors.Is(err, ErrPasswordTooLong) {
 		t.Fatalf("HashPassword() error = %v, want %v", err, ErrPasswordTooLong)
 	}
 
