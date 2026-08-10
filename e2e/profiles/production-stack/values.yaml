@@ -224,9 +224,10 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.8
     signals:
       domains:
@@ -328,7 +329,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

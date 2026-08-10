@@ -63,6 +63,13 @@ func registerRouterAPIProxy(
 	}
 
 	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
+		if cfg.ReadonlyMode &&
+			(strings.HasPrefix(r.URL.Path, "/api/router/api/v1/response-cache/") ||
+				strings.HasPrefix(r.URL.Path, "/api/router/api/v1/context-compression/")) &&
+			r.Method != http.MethodGet {
+			http.Error(w, "dashboard is read-only", http.StatusForbidden)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
 			http.NotFound(w, r)
 			return

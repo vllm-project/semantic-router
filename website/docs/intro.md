@@ -48,7 +48,7 @@ Extensible plugin system for request/response processing:
 
 | Plugin Type         | Description                                   | Use Case                                      |
 | ------------------- | --------------------------------------------- | --------------------------------------------- |
-| **semantic-cache**  | Semantic similarity-based caching             | Reduce latency and costs for similar queries  |
+| **response_cache**  | Semantic similarity-based caching             | Reduce latency and costs for similar queries  |
 | **jailbreak**       | Adversarial prompt detection                  | Block prompt injection and jailbreak attempts |
 | **pii**             | Personally identifiable information detection | Protect sensitive data and ensure compliance  |
 | **system_prompt**   | Dynamic system prompt injection               | Add context-aware instructions per route      |

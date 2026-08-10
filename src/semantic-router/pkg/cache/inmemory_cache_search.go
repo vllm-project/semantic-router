@@ -131,11 +131,17 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	result, err := c.LookupSimilarWithThreshold(model, query, threshold)
+	return result.ResponseBody, result.Found, err
+}
+
+// LookupSimilarWithThreshold returns a request-scoped lookup result.
+func (c *InMemoryCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
 	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
 		model, logging.ContentDescriptor(query), threshold)
@@ -143,7 +149,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	queryEmbedding, err := c.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(
@@ -189,7 +195,7 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	bestSimilarity float32,
 	entriesChecked int,
 	expiredCount int,
-) ([]byte, bool, error) {
+) (LookupResult, error) {
 	if expiredCount > 0 {
 		logging.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
 			expiredCount, c.ttlSeconds)
@@ -204,10 +210,8 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
+		return LookupResult{}, nil
 	}
-
-	c.StoreSimilarity(bestSimilarity)
 
 	if bestSimilarity >= threshold {
 		atomic.AddInt64(&c.hitCount, 1)
@@ -225,7 +229,11 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		return bestEntry.ResponseBody, true, nil
+		return LookupResult{
+			ResponseBody: bestEntry.ResponseBody,
+			Found:        true,
+			Similarity:   bestSimilarity,
+		}, nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
@@ -239,5 +247,5 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-	return nil, false, nil
+	return LookupResult{Similarity: bestSimilarity}, nil
 }

@@ -133,11 +133,11 @@ spec:
                               as a raw JSON object
                             x-kubernetes-preserve-unknown-fields: true
                           type:
-                            description: Type is the plugin type (fast_response, hallucination,
-                              header_mutation, image_gen, memory, rag, request_params,
-                              response_jailbreak, router_replay, semantic-cache, system_prompt,
-                              tools)
+                            description: |-
+                              Type is the plugin type. response_cache is canonical; semantic-cache,
+                              semantic_cache, and response-cache are deprecated aliases.
                             enum:
+                            - context_compression
                             - fast_response
                             - hallucination
                             - header_mutation
@@ -147,6 +147,9 @@ spec:
                             - request_params
                             - response_jailbreak
                             - router_replay
+                            - response_cache
+                            - response-cache
+                            - semantic_cache
                             - semantic-cache
                             - system_prompt
                             - tools

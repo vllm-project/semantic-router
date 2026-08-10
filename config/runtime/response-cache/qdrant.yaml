@@ -2,7 +2,7 @@
 # This configuration file contains settings for using Qdrant as the semantic cache backend.
 # To use this configuration:
 # 1. Set backend_type: "qdrant" in your main config.yaml
-# 2. Inline the Qdrant settings from this file into global.stores.semantic_cache.qdrant
+# 2. Inline the Qdrant settings from this file into global.stores.response_cache.qdrant
 # 3. Ensure a Qdrant server is running and accessible
 
 # Qdrant server host (change for production deployment)

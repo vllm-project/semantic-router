@@ -13,7 +13,7 @@ export default function ConfigPageSafetyCacheSection({
   const piiModel = routerConfig.classifier?.pii_model
   const promptGuard = routerConfig.prompt_guard
   const embeddingModels = routerConfig.embedding_models
-  const semanticCache = routerConfig.semantic_cache
+  const semanticCache = routerConfig.response_cache
 
   const renderPIIModernBERT = () => (
     <div className={styles.section}>
@@ -231,7 +231,7 @@ export default function ConfigPageSafetyCacheSection({
 	        {semanticCache && (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
-              <span className={styles.featureTitle}>Semantic Cache</span>
+              <span className={styles.featureTitle}>Response Cache</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
 	                <span className={`${styles.statusBadge} ${semanticCache.enabled ? styles.statusActive : styles.statusInactive}`}>
 	                  {semanticCache.enabled ? '✓ Enabled' : '✗ Disabled'}
@@ -241,10 +241,10 @@ export default function ConfigPageSafetyCacheSection({
                     className={styles.sectionEditButton}
                     onClick={() => {
                       openEditModal(
-                        'Edit Semantic Cache Configuration',
-                        config?.semantic_cache || {},
+                        'Edit Response Cache Configuration',
+                        config?.response_cache || {},
                         [
-                          { name: 'enabled', label: 'Enable Semantic Cache', type: 'boolean', description: 'Enable or disable semantic caching' },
+                          { name: 'enabled', label: 'Enable Response Cache', type: 'boolean', description: 'Enable or disable semantic caching' },
                           { name: 'backend_type', label: 'Backend Type', type: 'select', options: ['memory', 'redis', 'memcached'], description: 'Cache backend storage type' },
                           { name: 'similarity_threshold', label: 'Similarity Threshold', type: 'percentage', required: true, placeholder: '90', description: 'Minimum similarity score for cache hits (0-100%)', step: 1 },
                           { name: 'max_entries', label: 'Max Entries', type: 'number', placeholder: '10000', description: 'Maximum number of cached entries' },
@@ -253,7 +253,7 @@ export default function ConfigPageSafetyCacheSection({
                         ],
                         async (data) => {
                           const newConfig = cloneConfig(config)
-                          newConfig.semantic_cache = data
+                          newConfig.response_cache = data
                           await saveConfig(newConfig)
                         }
                       )

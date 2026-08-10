@@ -186,11 +186,11 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
     label: 'Retention: Drop',
-    description: 'Matched decision asked to skip the semantic-cache write',
+    description: 'Matched decision asked to skip the response-cache write',
   },
   'x-vsr-retention-ttl-turns': {
     label: 'Retention TTL (turns)',
-    description: 'Per-entry semantic-cache lifetime override, in conversation turns',
+    description: 'Per-entry response-cache lifetime override, in conversation turns',
   },
   'x-vsr-retention-keep-current-model': {
     label: 'Keep Current Model',

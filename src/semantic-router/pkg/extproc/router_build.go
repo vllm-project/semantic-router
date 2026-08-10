@@ -126,11 +126,31 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+	if err := validateResponseCacheScopeSecret(cfg); err != nil {
+		return nil, err
+	}
 	components, err := buildRouterComponents(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return components.buildRouter(), nil
+}
+
+func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
+	if cfg == nil || !cfg.ManagementAPI.RemoteExposure || cache.UserScopeSecretConfigured() {
+		return nil
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetResponseCacheConfig()
+		if plugin == nil || !plugin.Enabled || plugin.Scope == "global" {
+			continue
+		}
+		return fmt.Errorf(
+			"USER_SCOPE_NAMESPACE_SECRET is required for remotely exposed response_cache scope %q",
+			plugin.Scope,
+		)
+	}
+	return nil
 }
 
 func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
@@ -150,6 +170,7 @@ func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 }
 
 func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+	configureRouterLearningStateStore(cfg)
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, err

@@ -120,7 +120,7 @@ Recipe-local:
 - signal definitions, including PII, jailbreak, and authorization role bindings
 - projection partitions, scores, mappings, and their dependency graph
 - decisions, priorities, `strategy`, decision algorithms, and route-local plugins
-- semantic-cache namespaces, replay identities, learning/session state,
+- response-cache namespaces, replay identities, learning/session state,
   handoff penalties, and routing metric labels
 
 Shared infrastructure:

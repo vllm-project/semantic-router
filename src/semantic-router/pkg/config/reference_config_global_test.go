@@ -164,17 +164,25 @@ func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[stri
 
 func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]interface{}) {
 	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores")
-	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "semantic_cache"))
+	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
 }
 
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
-	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(SemanticCache{}), "global.stores.semantic_cache")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "redis"), reflect.TypeOf(RedisConfig{}), "global.stores.semantic_cache.redis")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "valkey"), reflect.TypeOf(ValkeyConfig{}), "global.stores.semantic_cache.valkey")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.semantic_cache.milvus")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "qdrant"), reflect.TypeOf(QdrantConfig{}), "global.stores.semantic_cache.qdrant")
+	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(responseCacheStoreReference{}), "global.stores.response_cache")
+	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.response_cache.milvus")
+}
+
+type responseCacheStoreReference struct {
+	BackendType         string        `yaml:"backend_type,omitempty"`
+	Enabled             bool          `yaml:"enabled"`
+	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
+	MaxEntries          int           `yaml:"max_entries,omitempty"`
+	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
+	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
+	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
