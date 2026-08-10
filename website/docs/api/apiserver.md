@@ -156,9 +156,6 @@ Example response (fields vary by recipe):
 
 ### Router config and recipes
 
-Start with `GET /config/router` to read the active canonical document and its
-ETag before applying updates.
-
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/config/router/recipes` | List the default and named routing recipes with their entrypoints |
