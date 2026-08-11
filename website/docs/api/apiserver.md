@@ -207,6 +207,23 @@ These require the corresponding service to be enabled; otherwise the API returns
 | `GET` | `/v1/files/{id}` | Read uploaded-file metadata |
 | `DELETE` | `/v1/files/{id}` | Delete an uploaded file |
 | `GET` | `/v1/files/{id}/content` | Download uploaded-file content |
+
+### Other endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/response-cache/capabilities` | Get response-cache backend capabilities |
+| `GET` | `/api/v1/response-cache/health` | Check response-cache backend health |
+| `GET` | `/api/v1/response-cache/stats` | Get redacted response-cache statistics |
+| `GET` | `/api/v1/response-cache/audit` | Get redacted response-cache mutation audit entries |
+| `POST` | `/api/v1/response-cache/test` | Validate and probe a response-cache candidate configuration |
+| `POST` | `/api/v1/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
+| `POST` | `/api/v1/response-cache/flush` | Advance a scoped or global response-cache epoch |
+| `GET` | `/api/v1/context-compression/capabilities` | Get context-compression capabilities |
+| `GET` | `/api/v1/context-compression/health` | Check context-compression runtime health |
+| `GET` | `/api/v1/context-compression/stats` | Get redacted context-compression statistics |
+| `POST` | `/api/v1/context-compression/preview` | Preview context compression without persistence |
+| `POST` | `/api/v1/context-compression/recovery/invalidate` | Invalidate a trusted context-recovery request scope |
 <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 ## Worked examples
