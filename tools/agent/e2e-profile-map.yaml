@@ -159,17 +159,6 @@ profile_rules:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
-manual_profile_rules:
-  anthropic-shim:
-    owner: e2e
-    coverage_role: anthropic-shape-backend-translation-contracts
-    selection_mode: manual-only
-    summary: Manual diagnostic for the incomplete llama.cpp + Anthropic shim backend route; unit translation contracts remain blocking.
-    paths:
-      - e2e/profiles/anthropic-shim/**
-      - e2e/testing/anthropic-shim/**
-      - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
   no-model:
     owner: e2e
     coverage_role: readiness-503-contract
@@ -182,6 +171,16 @@ manual_profile_rules:
       - src/semantic-router/pkg/apiserver/route_classify.go
 
 manual_profile_rules:
+  anthropic-shim:
+    owner: e2e
+    coverage_role: anthropic-shape-backend-translation-contracts
+    selection_mode: manual-only
+    summary: Manual diagnostic for the incomplete llama.cpp + Anthropic shim backend route; unit translation contracts remain blocking.
+    paths:
+      - e2e/profiles/anthropic-shim/**
+      - e2e/testing/anthropic-shim/**
+      - deploy/kubernetes/anthropic-backend/**
+      - src/semantic-router/pkg/anthropic/outbound*.go
   response-api:
     owner: e2e
     coverage_role: responses-api-memory

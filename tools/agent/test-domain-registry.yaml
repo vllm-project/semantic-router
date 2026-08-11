@@ -357,6 +357,16 @@ profiles:
       - dashboard/backend/handlers/security_policy*.go
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
+  no-model:
+    owner: e2e
+    coverage_role: readiness-503-contract
+    selection: pr
+    full_ci: true
+    paths:
+      - e2e/profiles/no-model/**
+      - e2e/testcases/service_readiness_503.go
+      - src/semantic-router/pkg/apiserver/route_embeddings.go
+      - src/semantic-router/pkg/apiserver/route_classify.go
   dynamic-config:
     owner: e2e
     coverage_role: dynamic-crd-routing-contracts
