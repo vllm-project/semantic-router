@@ -214,6 +214,11 @@ jobs:
               - 'deploy/openshift/**'
             ci:
               - '.github/workflows/**'
+            pre_commit:
+              - '.github/workflows/**'
+              - '**/*.go'
+              - '**/*.py'
+              - '**/*.rs'
             docker:
               - 'src/vllm-sr/Dockerfile*'
               - 'dashboard/backend/Dockerfile'
