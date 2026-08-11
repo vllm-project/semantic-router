@@ -12,6 +12,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -23,15 +24,16 @@ const (
 // MilvusStore implements Storage using Milvus as the backend.
 // Records are stored as entities in a Milvus collection.
 type MilvusStore struct {
-	client         client.Client
-	collectionName string
-	ttl            time.Duration
-	asyncWrites    bool
-	asyncChan      chan asyncOp
-	done           chan struct{}
-	wg             sync.WaitGroup
-	pendingWrites  map[string]struct{}
-	mu             sync.RWMutex
+	client           client.Client
+	collectionName   string
+	consistencyLevel entity.ConsistencyLevel
+	ttl              time.Duration
+	asyncWrites      bool
+	asyncChan        chan asyncOp
+	done             chan struct{}
+	wg               sync.WaitGroup
+	pendingWrites    map[string]struct{}
+	mu               sync.RWMutex
 }
 
 // NewMilvusStore creates a new Milvus storage backend.
@@ -48,6 +50,10 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	if collectionName == "" {
 		collectionName = DefaultMilvusCollection
 	}
+	consistencyLevel, validConsistencyLevel := milvusConsistencyLevel(cfg.ConsistencyLevel)
+	if !validConsistencyLevel {
+		logging.Warnf("unknown router replay Milvus consistency level %q; using %q", cfg.ConsistencyLevel, DefaultMilvusConsistencyLevel)
+	}
 
 	milvusClient, err := milvuslifecycle.Connect(context.Background(), client.Config{
 		Address:  cfg.Address,
@@ -59,12 +65,13 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	}
 
 	store := &MilvusStore{
-		client:         milvusClient,
-		collectionName: collectionName,
-		ttl:            time.Duration(ttlSeconds) * time.Second,
-		asyncWrites:    asyncWrites,
-		done:           make(chan struct{}),
-		pendingWrites:  make(map[string]struct{}),
+		client:           milvusClient,
+		collectionName:   collectionName,
+		consistencyLevel: consistencyLevel,
+		ttl:              time.Duration(ttlSeconds) * time.Second,
+		asyncWrites:      asyncWrites,
+		done:             make(chan struct{}),
+		pendingWrites:    make(map[string]struct{}),
 	}
 
 	if err := milvuslifecycle.Retry(
@@ -143,7 +150,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 
 			// Create collection
 			//nolint:gosec // shardNum is validated to be within int32 range
-			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum)); err != nil {
+			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum), client.WithConsistencyLevel(m.consistencyLevel)); err != nil {
 				return err
 			}
 
@@ -289,7 +296,7 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (Record, bool, error) 
 
 	// Query by ID
 	expr := fmt.Sprintf("id == '%s'", id)
-	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"})
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"}, client.WithSearchQueryConsistencyLevel(m.consistencyLevel))
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
 	}
@@ -333,6 +340,7 @@ func (m *MilvusStore) List(ctx context.Context) ([]Record, error) {
 		"",
 		[]string{"id", "timestamp", "data"},
 		client.WithLimit(10000),
+		client.WithSearchQueryConsistencyLevel(m.consistencyLevel),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
