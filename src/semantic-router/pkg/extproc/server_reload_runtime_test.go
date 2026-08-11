@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -201,15 +203,12 @@ func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSel
 	if !oldLease.acquire() {
 		t.Fatal("acquire() = false, want true before any reload")
 	}
+	selector, ok := oldRouter.ModelSelector.Get(selection.MethodKNN)
+	require.True(t, ok, "selector not registered")
 
 	resultErr := make(chan error, 1)
 	go func() {
 		defer oldLease.release()
-		selector, ok := oldRouter.ModelSelector.Get(selection.MethodKNN)
-		if !ok {
-			resultErr <- errors.New("selector not registered")
-			return
-		}
 		_, err := selector.Select(context.Background(), &selection.SelectionContext{})
 		resultErr <- err
 	}()
@@ -223,33 +222,22 @@ func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSel
 		retireDone <- rs.Retire(swappedLease, 2*time.Second)
 	}()
 
-	select {
-	case <-retireDone:
-		t.Fatal("Retire() returned before the in-flight classification request released its lease")
-	case <-time.After(50 * time.Millisecond):
-	}
+	requireStillBlocked(t, retireDone, 50*time.Millisecond,
+		"Retire() returned before the in-flight classification request released its lease")
 	if fakeSelector.closed.Load() {
 		t.Fatal("model selector was closed while a classification request was still in flight")
 	}
 
 	close(fakeSelector.release) // let the "request" finish, releasing its lease
 
-	select {
-	case err := <-resultErr:
-		if err != nil {
-			t.Fatalf("in-flight classification request observed an error even though it finished before the reload closed its resources: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("in-flight classification request never returned")
+	if err := requireReturnsWithin(t, resultErr, 2*time.Second,
+		"in-flight classification request never returned"); err != nil {
+		t.Fatalf("in-flight classification request observed an error even though it finished before the reload closed its resources: %v", err)
 	}
 
-	select {
-	case err := <-retireDone:
-		if err != nil {
-			t.Fatalf("Retire() error = %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Retire() did not return after the in-flight classification request released its lease")
+	if err := requireReturnsWithin(t, retireDone, 2*time.Second,
+		"Retire() did not return after the in-flight classification request released its lease"); err != nil {
+		t.Fatalf("Retire() error = %v", err)
 	}
 	if !fakeSelector.closed.Load() {
 		t.Fatal("Retire() did not close the old router's model selector after the in-flight classification request finished")
@@ -265,41 +253,26 @@ func TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases(t *test
 		Enabled:    true,
 		TTLSeconds: 60,
 	})
-	if err != nil {
-		t.Fatalf("NewMemoryStore() error = %v", err)
-	}
+	require.NoError(t, err)
 	filter := NewResponseAPIFilter(store)
 	oldRouter := &OpenAIRouter{ResponseAPIFilter: filter}
 	rs := NewRouterService(oldRouter)
 
 	oldLease := rs.current.Load()
-	if !oldLease.acquire() {
-		t.Fatal("acquire() = false, want true before any reload")
-	}
+	require.True(t, oldLease.acquire(), "acquire() = false, want true before any reload")
 
 	// Acknowledge a response the way a real request would: store it, then
 	// keep the request in flight a while longer (translating or streaming
 	// the rest of the reply) before it actually returns.
 	stored := &responseapi.StoredResponse{ID: "resp_ack_1", Object: "response", Status: "completed"}
-	if err := store.StoreResponse(context.Background(), stored); err != nil {
-		t.Fatalf("StoreResponse() error = %v", err)
-	}
+	require.NoError(t, store.StoreResponse(context.Background(), stored))
 
 	holdRelease := make(chan struct{})
 	requestDone := make(chan error, 1)
 	go func() {
 		defer oldLease.release()
 		<-holdRelease
-		got, err := store.GetResponse(context.Background(), stored.ID)
-		if err != nil {
-			requestDone <- err
-			return
-		}
-		if got.ID != stored.ID {
-			requestDone <- fmt.Errorf("GetResponse() ID = %q, want %q", got.ID, stored.ID)
-			return
-		}
-		requestDone <- nil
+		requestDone <- verifyStoredResponseReadable(store, stored.ID)
 	}()
 
 	newRouter := &OpenAIRouter{ResponseAPIFilter: NewResponseAPIFilter(nil)}
@@ -311,34 +284,37 @@ func TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases(t *test
 
 	// Retire must not have closed the store yet, so the response acknowledged
 	// before the reload started must still be readable.
-	select {
-	case <-retireDone:
-		t.Fatal("Retire() returned before the in-flight request released its lease")
-	case <-time.After(50 * time.Millisecond):
-	}
+	requireStillBlocked(t, retireDone, 50*time.Millisecond,
+		"Retire() returned before the in-flight request released its lease")
 	if _, err := store.GetResponse(context.Background(), stored.ID); err != nil {
 		t.Fatalf("acknowledged response was lost while its request was still in flight: %v", err)
 	}
 
 	close(holdRelease) // let the "request" read its own response and finish
 
-	select {
-	case err := <-requestDone:
-		if err != nil {
-			t.Fatalf("in-flight request could not read back its own acknowledged response: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("in-flight request never returned")
+	if err := requireReturnsWithin(t, requestDone, 2*time.Second,
+		"in-flight request never returned"); err != nil {
+		t.Fatalf("in-flight request could not read back its own acknowledged response: %v", err)
 	}
 
-	select {
-	case err := <-retireDone:
-		if err != nil {
-			t.Fatalf("Retire() error = %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Retire() did not return after the in-flight request released its lease")
+	if err := requireReturnsWithin(t, retireDone, 2*time.Second,
+		"Retire() did not return after the in-flight request released its lease"); err != nil {
+		t.Fatalf("Retire() error = %v", err)
 	}
+}
+
+// verifyStoredResponseReadable fetches id from store and confirms it
+// round-trips. Used by the "request" goroutine above so its two-step check
+// doesn't add to that test's own branch count.
+func verifyStoredResponseReadable(store responsestore.ResponseStore, id string) error {
+	got, err := store.GetResponse(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if got.ID != id {
+		return fmt.Errorf("GetResponse() ID = %q, want %q", got.ID, id)
+	}
+	return nil
 }
 
 // TestReloadPublishesRuntimeStateBeforeDrainingOldRouter asserts a reload

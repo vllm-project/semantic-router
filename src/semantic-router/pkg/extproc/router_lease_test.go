@@ -154,3 +154,51 @@ func TestRouterLeaseNilIsNoop(t *testing.T) {
 	lease.release()
 	lease.retire(time.Second)
 }
+
+// requireStillBlocked asserts done has not fired within wait, proving a
+// concurrent call is genuinely still blocked rather than having returned
+// early. Used to shrink the reload/shutdown drain tests below the repo's
+// complexity budget without collapsing the wait into a bare sleep.
+func requireStillBlocked(t *testing.T, done <-chan error, wait time.Duration, msg string) {
+	t.Helper()
+	select {
+	case <-done:
+		t.Fatal(msg)
+	case <-time.After(wait):
+	}
+}
+
+// requireReturnsWithin waits up to timeout for done to fire and returns the
+// error it carries, failing the test if the timeout elapses first.
+func requireReturnsWithin(t *testing.T, done <-chan error, timeout time.Duration, timeoutMsg string) error {
+	t.Helper()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(timeout):
+		t.Fatal(timeoutMsg)
+		return nil
+	}
+}
+
+// requireStillOpen is requireStillBlocked's counterpart for the
+// broadcast-by-close idiom (a done channel closed rather than sent a value).
+func requireStillOpen(t *testing.T, closed <-chan struct{}, wait time.Duration, msg string) {
+	t.Helper()
+	select {
+	case <-closed:
+		t.Fatal(msg)
+	case <-time.After(wait):
+	}
+}
+
+// requireClosesWithin waits up to timeout for closed to close, failing the
+// test if the timeout elapses first.
+func requireClosesWithin(t *testing.T, closed <-chan struct{}, timeout time.Duration, timeoutMsg string) {
+	t.Helper()
+	select {
+	case <-closed:
+	case <-time.After(timeout):
+		t.Fatal(timeoutMsg)
+	}
+}

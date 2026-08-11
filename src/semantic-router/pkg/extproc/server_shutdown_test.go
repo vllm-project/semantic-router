@@ -34,35 +34,19 @@ func TestServerStopWaitsForAllInFlightRequestsUnderLoad(t *testing.T) {
 	// Release all but the last request one at a time; Stop must stay blocked
 	// as long as any lease is still held, not just the first one.
 	for i := 0; i < concurrentRequests-1; i++ {
-		select {
-		case <-stopped:
-			t.Fatalf("Stop() returned while %d of %d requests were still in flight", concurrentRequests-i, concurrentRequests)
-		case <-time.After(20 * time.Millisecond):
-		}
+		requireStillOpen(t, stopped, 20*time.Millisecond,
+			fmt.Sprintf("Stop() returned while %d of %d requests were still in flight", concurrentRequests-i, concurrentRequests))
 		leases[i].release()
 	}
 
-	select {
-	case <-stopped:
-		t.Fatal("Stop() returned before the last in-flight request released")
-	case <-time.After(50 * time.Millisecond):
-	}
+	requireStillOpen(t, stopped, 50*time.Millisecond, "Stop() returned before the last in-flight request released")
 
 	leases[concurrentRequests-1].release()
 
-	select {
-	case <-stopped:
-	case <-time.After(10 * time.Second):
-		t.Fatal("Stop() did not return after every in-flight request released")
-	}
+	requireClosesWithin(t, stopped, 10*time.Second, "Stop() did not return after every in-flight request released")
 
-	select {
-	case err := <-startErrCh:
-		if err != nil {
-			t.Fatalf("Start() error = %v, want nil after Stop()", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("Start() did not return after Stop()")
+	if err := requireReturnsWithin(t, startErrCh, 10*time.Second, "Start() did not return after Stop()"); err != nil {
+		t.Fatalf("Start() error = %v, want nil after Stop()", err)
 	}
 }
 
