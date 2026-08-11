@@ -20,15 +20,13 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 		return nil, nil
 	}
 
+	// Not published to memory.SetGlobalMemoryStore here; see publishRouterState.
 	memoryStore, err := createMemoryStore(cfg)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
 		return nil, nil
 	}
 
-	// publishRouterState publishes the process-wide store once the build
-	// commits, not here: this one belongs to a candidate that a later step or a
-	// failed warmup can still discard and close.
 	backend := cfg.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
