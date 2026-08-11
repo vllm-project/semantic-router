@@ -1829,6 +1829,24 @@ func TestSemanticCacheEmbeddingDimensionDefaultsByModel(t *testing.T) {
 	}
 }
 
+func waitForHybridCacheHit(t *testing.T, cache *HybridCache, model, query string) []byte {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		response, found, err := cache.FindSimilar(model, query)
+		if err != nil {
+			t.Fatalf("FindSimilar failed while waiting for Milvus indexing: %v", err)
+		}
+		if found {
+			return response
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cache entry did not become visible before deadline")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func TestHybridCacheGenerateEmbeddingUsesMilvusEmbeddingModel(t *testing.T) {
 	cache := &HybridCache{
 		milvusCache: &MilvusCache{
@@ -1895,22 +1913,13 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	}
 
 	// Test FindSimilar with exact same query (should hit)
-	// Wait for Milvus to index the entry
-	time.Sleep(2 * time.Second)
-
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
-	if err != nil {
-		t.Fatalf("FindSimilar failed: %v", err)
-	}
-	if !found {
-		t.Error("Expected to find cached entry")
-	}
+	response := waitForHybridCacheHit(t, cache, "gpt-4", testQuery)
 	if string(response) != string(testResponse) {
 		t.Errorf("Response mismatch: got %s, want %s", string(response), string(testResponse))
 	}
 
 	// Test FindSimilar with similar query (should hit)
-	_, found, err = cache.FindSimilar("gpt-4", "What's the meaning of life?")
+	_, found, err := cache.FindSimilar("gpt-4", "What's the meaning of life?")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
