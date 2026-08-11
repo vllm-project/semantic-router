@@ -3,7 +3,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
+      default_model: base-model
       reasoning_families:
         deepseek:
           type: chat_template_kwargs
@@ -266,7 +266,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -296,7 +296,7 @@ config:
               similarity_threshold: 0.75
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent

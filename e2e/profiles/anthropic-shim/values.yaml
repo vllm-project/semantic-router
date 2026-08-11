@@ -16,10 +16,10 @@ config:
       - name: MoM
         backend_refs:
           - name: anthropic-backend-qwen
-            # The shim's Service exposes port 9080 (the Python FastAPI layer).
+            # The shim's Service exposes port 8080 (the Python FastAPI layer).
             # Requests from the router arrive as Anthropic Messages bodies;
             # the shim forwards them to llama-server after translation.
-            endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:9080
+            endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:8080
             weight: 1
             type: anthropic
   routing:
