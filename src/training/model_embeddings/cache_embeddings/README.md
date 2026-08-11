@@ -151,7 +151,6 @@ semantic_cache:
 | `lora_trainer.py` | Train LoRA adapter on triplets |
 | `evaluate_multi_domain.py` | Evaluate LoRA on test set |
 | `test_lora_model.py` | Quick test of trained model |
-| `train-domain.sh` | Helper script for training |
 
 ## Domain Configuration
 
