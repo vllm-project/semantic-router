@@ -216,7 +216,6 @@ structure_exceptions:
   - paths:
       - src/semantic-router/pkg/extproc/req_filter_looper.go
       - src/semantic-router/pkg/looper/ratings.go
-      - src/semantic-router/pkg/looper/rl_driven.go
       - src/semantic-router/pkg/selection/factory.go
       - src/semantic-router/pkg/tools/tools.go
     function_checks: relaxed

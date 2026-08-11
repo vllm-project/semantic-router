@@ -27,15 +27,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func isLooperAlgorithmType(algorithmType string) bool {
-	switch algorithmType {
-	case "confidence", "ratings", "remom", "fusion", "workflows":
-		return true
-	default:
-		return false
-	}
-}
-
 // isLooperRequest checks if the incoming request is from looper (internal request)
 // If so, extproc should skip plugin processing to avoid recursion
 func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
@@ -54,7 +45,7 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 	if decision.Algorithm == nil {
 		return false
 	}
-	if !isLooperAlgorithmType(decision.Algorithm.Type) {
+	if !config.IsLooperAlgorithmType(decision.Algorithm.Type) {
 		return false
 	}
 
@@ -71,11 +62,11 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 
 func hasLooperModelInputs(decision *config.Decision) bool {
 	switch decision.Algorithm.Type {
-	case "remom":
+	case config.DecisionAlgorithmReMoM:
 		return len(decision.ModelRefs) >= 1
-	case "fusion":
+	case config.DecisionAlgorithmFusion:
 		return len(decision.ModelRefs) >= 1 || hasFusionAnalysisModels(decision)
-	case "workflows":
+	case config.DecisionAlgorithmWorkflows:
 		return len(decision.ModelRefs) >= 1
 	default:
 		return len(decision.ModelRefs) > 1
@@ -96,7 +87,16 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.modelSelectorForRequest(reqCtx))
+	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
+			"request_id": reqCtx.RequestID,
+			"decision":   decision.Name,
+			"algorithm":  decision.Algorithm.Type,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
+	}
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
@@ -125,10 +125,10 @@ func (r *OpenAIRouter) handleLooperExecution(
 		OutputContract:     decision.OutputContract,
 		OutputContractSpec: decision.OutputContractSpec,
 	}
-	if decision.Algorithm.Type == "fusion" {
-		fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
-		if err != nil {
-			return r.createErrorResponse(400, "invalid Fusion plugin: "+err.Error()), nil
+	if decision.Algorithm.Type == config.DecisionAlgorithmFusion {
+		fusionOverride, parseErr := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
+		if parseErr != nil {
+			return r.createErrorResponse(400, "invalid Fusion plugin: "+parseErr.Error()), nil
 		}
 		looperReq.Fusion = fusionOverride
 	}
