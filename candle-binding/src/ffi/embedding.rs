@@ -1753,7 +1753,6 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
-
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn is_embedding_family_ready(model_type_str: *const c_char) -> bool {
