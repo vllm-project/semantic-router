@@ -83,57 +83,81 @@ func TestGenerationFaultInjectionExactOnceReverseCleanupAtEachStep(t *testing.T)
 	const steps = 6
 	for failAt := 0; failAt < steps; failAt++ {
 		t.Run(fmt.Sprintf("fail_at_step_%d", failAt), func(t *testing.T) {
-			var closeOrder []int
-			var closeCounts [steps]int
-			gen := NewGeneration()
-			var built int
-			for step := 0; step < steps; step++ {
-				if step == failAt {
-					break
-				}
-				gen.Defer(func() error {
-					closeOrder = append(closeOrder, step)
-					closeCounts[step]++
-					return nil
-				})
-				built++
-			}
-			if built != failAt {
-				t.Fatalf("test setup error: registered %d closers, want %d before failing at step %d", built, failAt, failAt)
-			}
-
-			// The failed constructor step itself rolls back via gen.Close(),
-			// mirroring rollbackGeneration in router_build.go.
-			if err := gen.Close(); err != nil {
-				t.Fatalf("Close() error = %v", err)
-			}
-
-			if len(closeOrder) != failAt {
-				t.Fatalf("closed %d resources, want %d (steps registered before the injected failure)", len(closeOrder), failAt)
-			}
-			for step, count := range closeCounts {
-				switch {
-				case step < failAt && count != 1:
-					t.Fatalf("step %d closer ran %d times, want exactly 1", step, count)
-				case step >= failAt && count != 0:
-					t.Fatalf("step %d closer ran %d times, want 0 (never registered — construction failed before this step)", step, count)
-				}
-			}
-			for i := 1; i < len(closeOrder); i++ {
-				if closeOrder[i] >= closeOrder[i-1] {
-					t.Fatalf("closers did not run in reverse registration order: %v", closeOrder)
-				}
-			}
-
-			// A caller may still hold the generation after a failed build
-			// (e.g. a deferred cleanup); Close must stay idempotent.
-			if err := gen.Close(); err != nil {
-				t.Fatalf("second Close() error = %v", err)
-			}
-			if len(closeOrder) != failAt {
-				t.Fatalf("second Close() re-ran closers: got %d calls, want %d", len(closeOrder), failAt)
-			}
+			verifyExactOnceReverseCleanup(t, steps, failAt)
 		})
+	}
+}
+
+// verifyExactOnceReverseCleanup builds a Generation with closers registered
+// for steps 0..failAt (simulating a constructor that fails at failAt right
+// after registering the previous step's closer) and asserts the resulting
+// rollback closes exactly those closers, each exactly once, in reverse
+// order — and that a second Close stays a no-op.
+func verifyExactOnceReverseCleanup(t *testing.T, steps, failAt int) {
+	t.Helper()
+	var closeOrder []int
+	closeCounts := make([]int, steps)
+	gen := NewGeneration()
+	var built int
+	for step := 0; step < steps; step++ {
+		if step == failAt {
+			break
+		}
+		gen.Defer(func() error {
+			closeOrder = append(closeOrder, step)
+			closeCounts[step]++
+			return nil
+		})
+		built++
+	}
+	if built != failAt {
+		t.Fatalf("test setup error: registered %d closers, want %d before failing at step %d", built, failAt, failAt)
+	}
+
+	// The failed constructor step itself rolls back via gen.Close(),
+	// mirroring rollbackGeneration in router_build.go.
+	if err := gen.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	if len(closeOrder) != failAt {
+		t.Fatalf("closed %d resources, want %d (steps registered before the injected failure)", len(closeOrder), failAt)
+	}
+	assertCloseCounts(t, closeCounts, failAt)
+	assertReverseOrder(t, closeOrder)
+
+	// A caller may still hold the generation after a failed build
+	// (e.g. a deferred cleanup); Close must stay idempotent.
+	if err := gen.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	if len(closeOrder) != failAt {
+		t.Fatalf("second Close() re-ran closers: got %d calls, want %d", len(closeOrder), failAt)
+	}
+}
+
+// assertCloseCounts checks every closer registered before failAt ran exactly
+// once, and every closer at or after failAt (never registered) never ran.
+func assertCloseCounts(t *testing.T, closeCounts []int, failAt int) {
+	t.Helper()
+	for step, count := range closeCounts {
+		switch {
+		case step < failAt && count != 1:
+			t.Fatalf("step %d closer ran %d times, want exactly 1", step, count)
+		case step >= failAt && count != 0:
+			t.Fatalf("step %d closer ran %d times, want 0 (never registered — construction failed before this step)", step, count)
+		}
+	}
+}
+
+// assertReverseOrder checks closeOrder is strictly decreasing, i.e. closers
+// ran in the reverse of their registration order.
+func assertReverseOrder(t *testing.T, closeOrder []int) {
+	t.Helper()
+	for i := 1; i < len(closeOrder); i++ {
+		if closeOrder[i] >= closeOrder[i-1] {
+			t.Fatalf("closers did not run in reverse registration order: %v", closeOrder)
+		}
 	}
 }
 
