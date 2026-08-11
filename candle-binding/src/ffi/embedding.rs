@@ -1765,22 +1765,32 @@ pub extern "C" fn is_embedding_family_ready(model_type_str: *const c_char) -> bo
         Err(_) => return false,
     };
 
-    if model_type_str == "multimodal" {
-        return get_multimodal_refs().is_some();
-    }
-
-    let Some(factory) = GLOBAL_MODEL_FACTORY.get() else {
-        return false;
-    };
-
+    // Each family is self-contained: no factory pre-guard, so a batched-only
+    // init (which never populates GLOBAL_MODEL_FACTORY) still reports the
+    // qwen3 family as ready.
     match model_type_str {
-        "qwen3" => factory.get_qwen3_model().is_some(),
-        "gemma" => factory.get_gemma_model().is_some(),
-        "mmbert" => factory.get_mmbert_model().is_some(),
+        // A successfully initialized batched model IS a loaded Qwen3 model, so
+        // it satisfies qwen3 readiness even though it lives outside the factory.
+        "qwen3" => {
+            GLOBAL_BATCHED_MODEL.get().is_some()
+                || GLOBAL_MODEL_FACTORY
+                    .get()
+                    .is_some_and(|f| f.get_qwen3_model().is_some())
+        }
+        "gemma" => GLOBAL_MODEL_FACTORY
+            .get()
+            .is_some_and(|f| f.get_gemma_model().is_some()),
+        "mmbert" => GLOBAL_MODEL_FACTORY
+            .get()
+            .is_some_and(|f| f.get_mmbert_model().is_some()),
+        "multimodal" => get_multimodal_refs().is_some(),
         "auto" | "" => {
-            factory.get_qwen3_model().is_some()
-                || factory.get_gemma_model().is_some()
-                || factory.get_mmbert_model().is_some()
+            GLOBAL_BATCHED_MODEL.get().is_some()
+                || GLOBAL_MODEL_FACTORY.get().is_some_and(|f| {
+                    f.get_qwen3_model().is_some()
+                        || f.get_gemma_model().is_some()
+                        || f.get_mmbert_model().is_some()
+                })
         }
         _ => false,
     }

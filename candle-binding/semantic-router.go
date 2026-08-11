@@ -832,6 +832,7 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 	}
 
 	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	return nil
 }
 
