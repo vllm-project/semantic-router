@@ -312,6 +312,30 @@ func SetMultiModalReady(ready bool) {
 	multiModalEmbeddingReady.Store(ready)
 }
 
+// IsEmbeddingFamilyReady reports whether the specific embedding model family
+// requested by a caller is loaded. onnx-binding serves text embedding requests
+// with the mmBERT model, so the "mmbert", "qwen3", and "gemma" families share
+// the mmBERT readiness state; "multimodal" reports multimodal-model readiness;
+// and "auto" (or "") reports readiness for any text embedding family.
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		return multiModalEmbeddingReady.Load()
+	default:
+		return embeddingReadyOverride.Load() || IsMmBertModelInitialized()
+	}
+}
+
+// SetEmbeddingFamilyReady sets the per-family embedding readiness flag for testing.
+func SetEmbeddingFamilyReady(modelType string, ready bool) {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		multiModalEmbeddingReady.Store(ready)
+	default:
+		embeddingReadyOverride.Store(ready)
+	}
+}
+
 // InitEmbeddingModels initializes embedding models (candle_binding compatible API)
 // For onnx_binding, only mmBERT is supported. qwen3 and gemma paths are ignored.
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
