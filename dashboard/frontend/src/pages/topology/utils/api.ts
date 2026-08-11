@@ -1,6 +1,24 @@
 // topology/utils/api.ts - API calls for topology
 
-import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData } from '../types'
+import {
+  TestQueryResult,
+  MatchedSignal,
+  SignalType,
+  EvaluatedRule,
+  DecisionTrace,
+  ConfigData,
+} from '../types'
+
+export interface TestQueryEnvelope {
+  messages?: Array<{
+    role: string
+    content: unknown
+    tool_calls?: unknown[]
+    tool_call_id?: string
+  }>
+  metadata?: Record<string, string>
+  tools?: unknown[]
+}
 
 /**
  * Backend API response format for test-query
@@ -8,6 +26,8 @@ import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData }
 interface TestQueryResponse {
   query: string
   mode: 'simulate' | 'dry-run'
+  requestedModel?: string
+  recipe?: string
   matchedSignals: Array<{
     type: string
     name: string
@@ -16,9 +36,11 @@ interface TestQueryResponse {
     reason?: string
   }>
   matchedDecision: string | null
+  algorithm?: string
   matchedModels: string[]
   highlightedPath: string[]
   isAccurate: boolean
+  evalTrace?: DecisionTrace[]
   evaluatedRules?: Array<{
     decisionName: string
     ruleOperator: string
@@ -31,16 +53,18 @@ interface TestQueryResponse {
   }>
   routingLatency?: number
   warning?: string
-  isFallbackDecision?: boolean  // True if matched decision is a system fallback
-  fallbackReason?: string       // Reason for fallback
+  isFallbackDecision?: boolean // True if matched decision is a system fallback
+  fallbackReason?: string // Reason for fallback
 }
 
 /**
- * Call backend Dry-Run API for accurate routing verification
+ * Call backend Dry-Run API for accurate routing verification. `envelope`
+ * carries optional messages/metadata/tools; simple text remains the default.
  */
 export async function testQueryDryRun(
   query: string,
   model?: string,
+  envelope?: TestQueryEnvelope,
 ): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
@@ -49,6 +73,9 @@ export async function testQueryDryRun(
       query,
       mode: 'dry-run',
       model,
+      messages: envelope?.messages,
+      metadata: envelope?.metadata,
+      tools: envelope?.tools,
     }),
   })
 
@@ -62,11 +89,15 @@ export async function testQueryDryRun(
   return {
     query: data.query,
     mode: data.mode,
+    requestedModel: data.requestedModel,
+    recipe: data.recipe,
     isAccurate: data.isAccurate,
     matchedSignals: convertSignals(data.matchedSignals),
     matchedDecision: data.matchedDecision,
+    algorithm: data.algorithm,
     matchedModels: data.matchedModels,
     highlightedPath: data.highlightedPath,
+    evalTrace: data.evalTrace,
     evaluatedRules: convertEvaluatedRules(data.evaluatedRules),
     routingLatency: data.routingLatency,
     warning: data.warning,
@@ -78,10 +109,7 @@ export async function testQueryDryRun(
 /**
  * Call backend Simulate API for simulated routing (also uses backend now)
  */
-export async function testQuerySimulate(
-  query: string,
-  model?: string,
-): Promise<TestQueryResult> {
+export async function testQuerySimulate(query: string, model?: string): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -118,7 +146,7 @@ export async function testQuerySimulate(
  * Convert backend signal format to frontend format
  */
 function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSignal[] {
-  return signals.map(s => ({
+  return signals.map((s) => ({
     type: s.type as SignalType,
     name: s.name,
     matched: true, // Backend only returns matched signals
@@ -133,10 +161,12 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
 /**
  * Convert backend evaluated rules to frontend format
  */
-function convertEvaluatedRules(rules?: TestQueryResponse['evaluatedRules']): EvaluatedRule[] | undefined {
+function convertEvaluatedRules(
+  rules?: TestQueryResponse['evaluatedRules'],
+): EvaluatedRule[] | undefined {
   if (!rules) return undefined
 
-  return rules.map(r => {
+  return rules.map((r) => {
     const conditions = r.conditions ?? []
     return {
       decisionName: r.decisionName,
@@ -163,13 +193,13 @@ export async function fetchTopologyConfig() {
     throw new Error(`Failed to fetch config: ${configResponse.statusText}`)
   }
 
-  const config = await configResponse.json() as ConfigData
+  const config = (await configResponse.json()) as ConfigData
 
   if (!globalResponse.ok) {
     return config
   }
 
-  const effectiveGlobal = await globalResponse.json() as ConfigData['global']
+  const effectiveGlobal = (await globalResponse.json()) as ConfigData['global']
   return {
     ...config,
     global: effectiveGlobal,

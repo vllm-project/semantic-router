@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 // TestQueryMode represents the test query mode
@@ -19,11 +21,16 @@ const (
 	TestQueryModeDryRun   TestQueryMode = "dry-run"
 )
 
-// TestQueryRequest represents a test query request
+// TestQueryRequest represents a test query request. Messages, metadata, and
+// tools are optional and forwarded to Eval as-is; simple text remains the
+// default request shape.
 type TestQueryRequest struct {
-	Query string        `json:"query"`
-	Mode  TestQueryMode `json:"mode"`
-	Model string        `json:"model,omitempty"`
+	Query    string                `json:"query"`
+	Mode     TestQueryMode         `json:"mode"`
+	Model    string                `json:"model,omitempty"`
+	Messages []RouterIntentMessage `json:"messages,omitempty"`
+	Metadata map[string]string     `json:"metadata,omitempty"`
+	Tools    []json.RawMessage     `json:"tools,omitempty"`
 }
 
 // MatchedSignal represents a matched signal
@@ -35,7 +42,10 @@ type MatchedSignal struct {
 	Reason     string   `json:"reason,omitempty"`
 }
 
-// EvaluatedRule represents an evaluated decision rule
+// EvaluatedRule is a derived, best-effort rule summary used only when the
+// router did not return a trace (older router, or a request that failed
+// before eval_trace could be produced). It is flat and cannot represent
+// nested rules, so IsAccurate must never be true while it is the source.
 type EvaluatedRule struct {
 	DecisionName  string   `json:"decisionName"`
 	RuleOperator  string   `json:"ruleOperator"`
@@ -49,18 +59,24 @@ type EvaluatedRule struct {
 
 // TestQueryResult represents the test query result
 type TestQueryResult struct {
-	Query              string          `json:"query"`
-	Mode               TestQueryMode   `json:"mode"`
-	MatchedSignals     []MatchedSignal `json:"matchedSignals"`
-	MatchedDecision    string          `json:"matchedDecision"`
-	MatchedModels      []string        `json:"matchedModels"`
-	HighlightedPath    []string        `json:"highlightedPath"`
-	IsAccurate         bool            `json:"isAccurate"`
-	EvaluatedRules     []EvaluatedRule `json:"evaluatedRules,omitempty"`
-	RoutingLatency     int64           `json:"routingLatency,omitempty"`
-	Warning            string          `json:"warning,omitempty"`
-	IsFallbackDecision bool            `json:"isFallbackDecision,omitempty"` // True if matched decision is a system fallback
-	FallbackReason     string          `json:"fallbackReason,omitempty"`     // Reason for fallback (e.g., "low_confidence", "no_match")
+	Query string        `json:"query"`
+	Mode  TestQueryMode `json:"mode"`
+	// RequestedModel and Recipe echo back what the router actually resolved,
+	// so the caller can verify the response matches the selected scope.
+	RequestedModel     string                   `json:"requestedModel,omitempty"`
+	Recipe             string                   `json:"recipe,omitempty"`
+	MatchedSignals     []MatchedSignal          `json:"matchedSignals"`
+	MatchedDecision    string                   `json:"matchedDecision"`
+	Algorithm          string                   `json:"algorithm,omitempty"`
+	MatchedModels      []string                 `json:"matchedModels"`
+	HighlightedPath    []string                 `json:"highlightedPath"`
+	IsAccurate         bool                     `json:"isAccurate"`
+	EvalTrace          []decision.DecisionTrace `json:"evalTrace,omitempty"`
+	EvaluatedRules     []EvaluatedRule          `json:"evaluatedRules,omitempty"`
+	RoutingLatency     int64                    `json:"routingLatency,omitempty"`
+	Warning            string                   `json:"warning,omitempty"`
+	IsFallbackDecision bool                     `json:"isFallbackDecision,omitempty"` // True if matched decision is a system fallback
+	FallbackReason     string                   `json:"fallbackReason,omitempty"`     // Reason for fallback (e.g., "low_confidence", "no_match")
 }
 
 // TopologyTestQueryHandler handles test query requests for topology visualization
@@ -116,11 +132,22 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string) http.HandlerFunc 
 	}
 }
 
-// RouterIntentRequest is the request body for Router's /api/v1/classify/intent
+// RouterIntentMessage mirrors services.IntentMessage for request forwarding.
+type RouterIntentMessage struct {
+	Role       string            `json:"role"`
+	Content    json.RawMessage   `json:"content"`
+	ToolCalls  []json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallID string            `json:"tool_call_id,omitempty"`
+}
+
+// RouterIntentRequest is the request body for Router's /api/v1/eval.
 type RouterIntentRequest struct {
-	Text    string               `json:"text"`
-	Model   string               `json:"model,omitempty"`
-	Options *RouterIntentOptions `json:"options,omitempty"`
+	Text     string                `json:"text"`
+	Messages []RouterIntentMessage `json:"messages,omitempty"`
+	Tools    []json.RawMessage     `json:"tools,omitempty"`
+	Model    string                `json:"model,omitempty"`
+	Metadata map[string]string     `json:"metadata,omitempty"`
+	Options  *RouterIntentOptions  `json:"options,omitempty"`
 }
 
 type RouterIntentOptions struct {
@@ -150,27 +177,38 @@ type RouterMatchedSignals struct {
 
 type RouterEvalDecisionResult struct {
 	DecisionName     string                `json:"decision_name"`
+	Algorithm        string                `json:"algorithm,omitempty"`
+	Plugins          []string              `json:"plugins,omitempty"`
 	UsedSignals      *RouterMatchedSignals `json:"used_signals,omitempty"`
 	MatchedSignals   *RouterMatchedSignals `json:"matched_signals,omitempty"`
 	UnmatchedSignals *RouterMatchedSignals `json:"unmatched_signals,omitempty"`
 }
 
 // RouterEvalResponse is the response from Router's /api/v1/eval endpoint.
+// Field names and JSON tags mirror services.EvalResponse; EvalTrace reuses
+// the router's own decision.DecisionTrace type rather than a second schema.
 type RouterEvalResponse struct {
 	OriginalText      string                    `json:"original_text,omitempty"`
+	RequestedModel    string                    `json:"requested_model,omitempty"`
+	Recipe            string                    `json:"recipe,omitempty"`
 	DecisionResult    *RouterEvalDecisionResult `json:"decision_result,omitempty"`
+	EvalTrace         []decision.DecisionTrace  `json:"eval_trace,omitempty"`
 	RecommendedModels []string                  `json:"recommended_models,omitempty"`
 	RoutingDecision   string                    `json:"routing_decision,omitempty"`
 	SignalConfidences map[string]float64        `json:"signal_confidences,omitempty"`
 	SignalValues      map[string]float64        `json:"signal_values,omitempty"`
+	SignalErrors      map[string]string         `json:"signal_errors,omitempty"`
 }
 
 // callRouterAPI calls the real Router API for classification
 func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQueryResult {
 	// Prepare request to Router API
 	intentReq := RouterIntentRequest{
-		Text:  req.Query,
-		Model: req.Model,
+		Text:     req.Query,
+		Messages: req.Messages,
+		Tools:    req.Tools,
+		Model:    req.Model,
+		Metadata: req.Metadata,
 		Options: &RouterIntentOptions{
 			ReturnProbabilities: true,
 		},
@@ -186,8 +224,9 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 		}
 	}
 
-	// Call Router eval API so topology can inspect all matched signals and signal scores.
-	apiURL := fmt.Sprintf("%s/api/v1/eval", strings.TrimSuffix(routerAPIURL, "/"))
+	// Call Router eval API with trace=true so topology can render the exact
+	// recipe-scoped evaluation tree instead of reconstructing it from flat signals.
+	apiURL := fmt.Sprintf("%s/api/v1/eval?trace=true", strings.TrimSuffix(routerAPIURL, "/"))
 	httpReq, err := http.NewRequest("POST", apiURL, bytes.NewReader(reqBody))
 	if err != nil {
 		return &TestQueryResult{
