@@ -175,6 +175,16 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
+        run: |
+          full_arg=()
+          if [[ "$FULL" == "true" ]]; then
+            full_arg+=(--full)
+          fi
+          python3 tools/ci/classify_pr_changes.py \
+            --base "$BASE_SHA" \
+            --head "$GITHUB_SHA" \
+            "${full_arg[@]}" \
+            --github-output "$GITHUB_OUTPUT"
       - id: changes
         uses: dorny/paths-filter@v3
         with:
@@ -355,14 +365,4 @@ jobs:
               - 'e2e/*.go'
               - 'e2e/go.mod'
               - 'e2e/go.sum'
-      - id: docs_only
-        run: |
-          full_arg=()
-          if [[ "$FULL" == "true" ]]; then
-            full_arg+=(--full)
-          fi
-          python3 tools/ci/classify_pr_changes.py \
-            --base "$BASE_SHA" \
-            --head "$GITHUB_SHA" \
-            "${full_arg[@]}" \
-            --github-output "$GITHUB_OUTPUT"
+
