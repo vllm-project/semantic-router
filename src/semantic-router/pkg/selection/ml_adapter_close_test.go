@@ -214,44 +214,60 @@ func (w *nativeHandleWalk) visit(v reflect.Value, owners []reflect.Type, depth i
 
 	switch v.Kind() {
 	case reflect.Interface:
-		if !v.IsNil() {
-			w.visit(v.Elem(), owners, depth+1)
-		}
-
+		w.visitInterface(v, owners, depth)
 	case reflect.Pointer:
-		if v.IsNil() {
-			return
-		}
-		if isNativeHandleType(v.Type()) {
-			w.chains = append(w.chains, append(append([]reflect.Type{}, owners...), v.Type()))
-			return
-		}
-		if w.seen[v.Pointer()] {
-			return
-		}
-		w.seen[v.Pointer()] = true
-		// A pointer hop is an ownership boundary: this is the type whose Close
-		// the level above has to call for anything below to be released.
-		w.visit(v.Elem(), append(owners, v.Type()), depth+1)
-
+		w.visitPointer(v, owners, depth)
 	case reflect.Struct:
-		// Fields of an inlined struct belong to the enclosing pointer, so the
-		// owner chain does not grow here.
-		for i := 0; i < v.NumField(); i++ {
-			w.visit(v.Field(i), owners, depth+1)
-		}
-
+		w.visitStruct(v, owners, depth)
 	case reflect.Slice, reflect.Array:
-		for i := 0; i < v.Len(); i++ {
-			w.visit(v.Index(i), owners, depth+1)
-		}
-
+		w.visitSequence(v, owners, depth)
 	case reflect.Map:
-		iter := v.MapRange()
-		for iter.Next() {
-			w.visit(iter.Key(), owners, depth+1)
-			w.visit(iter.Value(), owners, depth+1)
-		}
+		w.visitMap(v, owners, depth)
+	}
+}
+
+func (w *nativeHandleWalk) visitInterface(v reflect.Value, owners []reflect.Type, depth int) {
+	if !v.IsNil() {
+		w.visit(v.Elem(), owners, depth+1)
+	}
+}
+
+func (w *nativeHandleWalk) visitPointer(v reflect.Value, owners []reflect.Type, depth int) {
+	if v.IsNil() {
+		return
+	}
+	if isNativeHandleType(v.Type()) {
+		w.chains = append(w.chains, append(append([]reflect.Type{}, owners...), v.Type()))
+		return
+	}
+	if w.seen[v.Pointer()] {
+		return
+	}
+	w.seen[v.Pointer()] = true
+	// A pointer hop is an ownership boundary: this is the type whose Close
+	// the level above has to call for anything below to be released.
+	w.visit(v.Elem(), append(owners, v.Type()), depth+1)
+}
+
+func (w *nativeHandleWalk) visitStruct(v reflect.Value, owners []reflect.Type, depth int) {
+	// Fields of an inlined struct belong to the enclosing pointer, so the
+	// owner chain does not grow here.
+	for i := 0; i < v.NumField(); i++ {
+		w.visit(v.Field(i), owners, depth+1)
+	}
+}
+
+func (w *nativeHandleWalk) visitSequence(v reflect.Value, owners []reflect.Type, depth int) {
+	for i := 0; i < v.Len(); i++ {
+		w.visit(v.Index(i), owners, depth+1)
+	}
+}
+
+func (w *nativeHandleWalk) visitMap(v reflect.Value, owners []reflect.Type, depth int) {
+	iter := v.MapRange()
+	for iter.Next() {
+		w.visit(iter.Key(), owners, depth+1)
+		w.visit(iter.Value(), owners, depth+1)
 	}
 }
 
