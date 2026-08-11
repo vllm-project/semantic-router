@@ -27,13 +27,14 @@ func restoreProcessGlobals(t *testing.T) {
 	})
 }
 
-// TestBuildRouterComponentsDoesNotPublishProcessGlobals is the "construction
-// commits only after full success" invariant from issue #2470. A candidate build
-// can still be discarded by a later construction step or a failed warmup, and
-// its Close then tears down the very objects the globals would be pointing at —
-// leaving, for the selection registry, a closed Elo storage that silently drops
-// every rating write while the previous router keeps serving. Nothing rolls the
-// globals back, so the fix is to never publish from a candidate.
+// TestBuildRouterComponentsDoesNotPublishProcessGlobals guards the invariant
+// that construction only publishes process-wide globals once it fully
+// commits. A candidate build can still be discarded by a later construction
+// step or a failed warmup, and its Close then tears down the very objects the
+// globals would be pointing at, leaving, for the selection registry, a closed
+// Elo storage that silently drops every rating write while the previous
+// router keeps serving. Nothing rolls the globals back, so the fix is to
+// never publish from a candidate.
 func TestBuildRouterComponentsDoesNotPublishProcessGlobals(t *testing.T) {
 	restoreProcessGlobals(t)
 

@@ -197,13 +197,11 @@ func requireGoroutinesSettleTo(t *testing.T, baseline int, msg string, args ...i
 }
 
 // TestBuildRouterComponentsRepeatedReloadsHaveStableFileDescriptorCount is the
-// descriptor half of issue #2470's repeated-reload stability ask — see
-// TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable for the goroutine
-// half. This environment has no live Redis or MCP backend, so it only
-// exercises the default in-process construction path: it catches a leaked
-// file, socket, or pipe from the general build/close machinery, but not a real
-// Redis or MCP connection's lifecycle, which needs integration coverage
-// against a live backend instead.
+// descriptor half of the stability ask that
+// TestBuildRouterComponentsRepeatedReloadsAreGoroutineStable covers for
+// goroutines. No live Redis or MCP backend is available here, so this only
+// catches a leaked file, socket, or pipe from the general build/close
+// machinery, not a real connection's lifecycle.
 func TestBuildRouterComponentsRepeatedReloadsHaveStableFileDescriptorCount(t *testing.T) {
 	cfg := &config.RouterConfig{
 		SemanticCache: config.SemanticCache{
@@ -262,8 +260,6 @@ func stableFDCount(t *testing.T) int {
 	return last
 }
 
-// requireFDsSettleTo asserts the open file-descriptor count returns to
-// baseline after repeated builds/closes.
 func requireFDsSettleTo(t *testing.T, baseline int, msg string, args ...interface{}) {
 	t.Helper()
 	require.Eventuallyf(t, func() bool {

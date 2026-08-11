@@ -108,11 +108,11 @@ func (s *reloadRendezvousSelector) Close() error {
 // leaves the cache open the whole time it's in flight, and only closes it
 // once the request has safely finished.
 //
-// This test used to assert the opposite (that the in-flight call observed
-// an error from a concurrently-closed cache) back when Close() and reload
-// had no lease coordination — see issue #2470 finding #2. It flips here to
-// the safe-drain behavior now that RouterService leases every call (Stage 4)
-// and Retire waits on the lease before closing (Stage 6).
+// This test used to assert the opposite (that the in-flight call observed an
+// error from a concurrently-closed cache) back when Close() and reload had no
+// lease coordination. It flips here to the safe-drain behavior now that
+// RouterService leases every call and Retire waits on the lease before
+// closing.
 func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 	fakeCache := &reloadRendezvousCache{
 		entered: make(chan struct{}),
@@ -183,10 +183,9 @@ func TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache(t *testing.T) {
 // TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSelector
 // is the classification-path sibling of
 // TestReloadDrainsInFlightRequestBeforeClosingOldRouterCache: routerLease
-// doesn't distinguish which OpenAIRouter-owned resource a call is using, but
-// issue #2470's validation calls out classification refresh against
-// long-lived requests specifically, so this exercises the same reload
-// sequence against ModelSelector instead of Cache.
+// doesn't distinguish which resource a call is using, but ModelSelector's
+// Close fans out to per-recipe registries and native ML handles, so it's
+// worth exercising directly rather than only inferring safety from Cache.
 func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSelector(t *testing.T) {
 	fakeSelector := &reloadRendezvousSelector{
 		method:  selection.MethodKNN,
@@ -198,9 +197,6 @@ func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSel
 	oldRouter := &OpenAIRouter{ModelSelector: oldRegistry}
 	rs := NewRouterService(oldRouter)
 
-	// Acquire a lease the same way RouterService.Process does for a real
-	// classification request, so the in-flight call below is protected
-	// exactly as it would be in production.
 	oldLease := rs.current.Load()
 	if !oldLease.acquire() {
 		t.Fatal("acquire() = false, want true before any reload")
@@ -227,8 +223,6 @@ func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSel
 		retireDone <- rs.Retire(swappedLease, 2*time.Second)
 	}()
 
-	// Retire must block on the still-held lease, so the model selector must
-	// not be closed yet even though the swap and retire have both started.
 	select {
 	case <-retireDone:
 		t.Fatal("Retire() returned before the in-flight classification request released its lease")
@@ -262,15 +256,10 @@ func TestReloadDrainsInFlightClassificationRequestBeforeClosingOldRouterModelSel
 	}
 }
 
-// TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases covers
-// issue #2470's "no loss of acknowledged state" validation ask: a response a
-// request has already stored — and could be told "stored" for — must stay
-// readable through that same store for as long as the request is still
-// considered in flight, even though a reload is concurrently retiring the
-// router that owns it. The store only actually goes away once the lease
-// drains, which Retire already blocks on; this proves that guarantee extends
-// to data the request wrote before this final read, not just to the store
-// object surviving.
+// TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases extends
+// the drain guarantee from a store surviving in-flight requests to the data a
+// request already wrote to it being readable for as long as that request is
+// still in flight, even while a reload retires the router that owns it.
 func TestReloadPreservesAcknowledgedResponseUntilInFlightRequestReleases(t *testing.T) {
 	store, err := responsestore.NewMemoryStore(responsestore.StoreConfig{
 		Enabled:    true,

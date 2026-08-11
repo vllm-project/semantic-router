@@ -9,10 +9,9 @@ import (
 )
 
 // TestServerStopWaitsForAllInFlightRequestsUnderLoad extends
-// TestServerStopWaitsForInFlightRequestBeforeReturning from one synthetic
-// caller to several concurrent ones, so the drain guarantee is proven under
-// load rather than for a single held lease that happens to look the same as
-// zero in-flight requests once it releases.
+// TestServerStopWaitsForInFlightRequestBeforeReturning from one held lease to
+// several, so the drain guarantee is proven under load rather than for a
+// single caller whose release looks the same as having none in flight.
 func TestServerStopWaitsForAllInFlightRequestsUnderLoad(t *testing.T) {
 	server, startErrCh := startTestServer(t)
 
