@@ -1,3 +1,4 @@
+schema_version: v1
 name: feedback
 description: >
   Executable eval probes for the maintained feedback routing recipe. The suite
@@ -14,9 +15,27 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 10.0
+  min_projection_assertion_percent: 0.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages]
+  min_tag_counts:
+    language: 5
+    negative: 1
+    fallback: 1
+    multi_turn: 5
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    fallback: 100.0
+    multi_turn: 100.0
 decisions:
   - id: feedback_verified_recovery
     expected_decision: feedback_verified_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Explicit correction on verification-sensitive legal or health follow-ups
@@ -37,6 +56,8 @@ decisions:
 
   - id: feedback_code_recovery
     expected_decision: feedback_code_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: google/gemini-3.1-pro
     objective: >
       Code follow-ups with explicit failure signals should route to the repair
@@ -71,6 +92,8 @@ decisions:
 
   - id: feedback_persistent_code_recovery
     expected_decision: feedback_persistent_code_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Once the same coding failure has been re-asked across two consecutive
@@ -110,6 +133,8 @@ decisions:
 
   - id: feedback_general_recovery
     expected_decision: feedback_general_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: google/gemini-3.1-pro
     objective: >
       General dissatisfied follow-ups that are neither code-specific nor
@@ -130,6 +155,8 @@ decisions:
 
   - id: feedback_persistent_recovery
     expected_decision: feedback_persistent_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Repeated same-question dissatisfaction across two prior user turns should
@@ -168,6 +195,8 @@ decisions:
 
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
+    expected_algorithm: static
+    expected_plugins: [system_prompt, response_cache]
     expected_alias: qwen/qwen3.5-rocm
     objective: >
       Pure clarification requests should stay on the cheap lane when they do
@@ -188,6 +217,7 @@ decisions:
 
   - id: feedback_default
     expected_decision: feedback_default
+    expected_algorithm: static
     expected_alias: qwen/qwen3.5-rocm
     objective: Ordinary first-turn traffic without a recovery signal receives an explicit cheap fallback.
     variants:

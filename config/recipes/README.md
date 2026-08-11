@@ -19,6 +19,21 @@ The repository contract tests reject incomplete directories, invalid YAML or
 DSL, YAML/DSL drift, missing decision reachability, stale aliases, and loss of
 YAML-only decision adaptation policy during DSL merge.
 
+Probe manifests use `schema_version: v1` and are validated against
+`tools/agent/schemas/recipe-probes-v1.schema.json`. The conformance inventory
+discovers every immediate child directory automatically. Adding a recipe
+therefore adds it to static and live CI without a workflow or Go allowlist
+change.
+
+See [CONFORMANCE.md](CONFORMANCE.md) for the short contributor checklist,
+coverage tiers, tag conventions, and local commands.
+
+Single-profile recipes expose their `routing` block through the default
+`global.router.auto_model_names` entrypoint. Multi-profile configurations can
+disable that default and expose named `entrypoints` instead. Conformance counts
+and exercises both forms, so a default auto alias is not reported as zero
+entrypoints.
+
 ## Catalog
 
 | Use case | Purpose |
@@ -37,10 +52,10 @@ being mixed into this catalog.
 
 ## Maintained acceptance baseline
 
-The August 2026 isolated-runtime baseline for the six single-profile recipes is
-155/155 Eval probes and 42/42 decisions. Five deterministic
-framing/whitespace wrappers expand that baseline to 775/775 passing stress
-cases:
+The blocking August 2026 baseline covers 275 base probes, 58 decisions, and 11
+recipe-entrypoint bindings across all seven recipes. Decision, entrypoint,
+fallback, algorithm, and plugin coverage is complete; signal and projection
+assertions use checked-in per-recipe ratchets that cannot decrease:
 
 - Accuracy: 13 probes, 4 decisions.
 - Agent: 27 probes, 11 decisions.
@@ -48,15 +63,19 @@ cases:
 - Feedback: 23 probes, 7 decisions.
 - Knowledge: 15 probes, 2 decisions.
 - Privacy: 20 probes, 4 decisions.
+- Multi-objective: 120 probes, 16 decisions, 5 named entrypoints.
 
-Acceptance also requires real classifier/KB/store initialization and non-empty
-generation responses; a parse-only or lazy-fallback pass is insufficient.
+The live CPU gate requires router readiness and exact `/api/v1/eval?trace=true`
+results. Framing expansion, upstream generation, GPU parity, and latency SLOs
+are T4 reporting concerns rather than PR acceptance criteria.
 
 ## Validate a recipe
 
 From the repository root:
 
 ```bash
+make recipe-conformance-static
+
 vllm-sr validate --config config/recipes/<use-case>/config.yaml
 
 (cd src/semantic-router && \
@@ -72,11 +91,25 @@ vllm-sr validate --config config/recipes/<use-case>/config.yaml
 Run the backend-independent calibration suite against a live router:
 
 ```bash
-python tools/agent/scripts/router_calibration_loop.py \
-  eval \
-  --router-url http://127.0.0.1:8080 \
-  --probes config/recipes/<use-case>/probes.yaml
+make recipe-conformance-eval \
+  RECIPE_CONFORMANCE_RECIPE=<use-case> \
+  RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080
+
+# Build the local CPU image and evaluate every maintained recipe.
+make recipe-conformance-live-cpu-all
 ```
+
+Pull requests that touch recipes or their router semantics run the base probes
+through the reusable Recipe Conformance CI domain. Framing/whitespace
+expansion, real generation, GPU execution, and timing baselines remain
+scheduled or manual workloads rather than PR blockers.
+
+Each CI run publishes the coverage matrix in the GitHub Actions job summary and
+uploads a `recipe-conformance-report` artifact for 30 days. The consolidated
+artifact contains the inventory, per-recipe Eval reports, summaries, and
+failure logs, including partial results when a live shard fails. Its inventory
+lists configured, asserted, and uncovered signals, projections, algorithms,
+and plugins; live summaries include the T3 robustness pass-rate receipts.
 
 The multi-objective profile additionally checks requested model, selected
 recipe, decision, algorithm, plugins, signal evidence, multilingual variants,
