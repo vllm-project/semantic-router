@@ -212,6 +212,29 @@ async function mockRouterInventoryShell(page: Page, status: unknown = statusPayl
 }
 
 test.describe('Router model inventory surfaces', () => {
+  test('renders a null router model list as an empty inventory', async ({ page }) => {
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: null,
+        summary: {
+          ...statusPayload.models.summary,
+          loaded_models: 0,
+          total_models: 0,
+        },
+      },
+    })
+
+    await page.goto('/status')
+
+    await expect(page.getByTestId('status-overview')).toContainText('Healthy')
+    await expect(page.getByTestId('status-model-inventory-section')).toContainText(
+      'The router has not exposed any model metadata yet.',
+    )
+    await expect(page.getByTestId('status-services-section')).toContainText('Router')
+  })
+
   test('renders six preview cards and keeps embedding metadata clean in status view', async ({
     page,
   }) => {
