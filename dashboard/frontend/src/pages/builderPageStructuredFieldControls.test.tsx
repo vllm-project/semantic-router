@@ -88,6 +88,23 @@ describe('Builder structured field controls', () => {
     expect(markup).not.toContain('<textarea')
   })
 
+  it('enforces the ReMoM completion-token minimum', () => {
+    const maxCompletionTokens = requireField(
+      getAlgorithmFieldSchema('remom'),
+      'max_completion_tokens',
+    )
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: maxCompletionTokens,
+        value: 1,
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(maxCompletionTokens.min).toBe(1)
+    expect(markup).toContain('min="1"')
+  })
+
   it('renders recursive composer rules without falling back to JSON', () => {
     const composer = requireField(getSignalFieldSchema('complexity'), 'composer')
     const markup = renderToStaticMarkup(

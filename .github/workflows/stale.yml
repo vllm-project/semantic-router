@@ -5,9 +5,7 @@ name: Mark Stale Issues and PRs
 # Any new activity (comment, push, label change) removes the stale mark.
 
 on:
-  schedule:
-    - cron: "30 1 * * *" #daily at 01:30 AM UTC.
-  workflow_dispatch: {}
+  workflow_call:
 
 permissions: {}
 

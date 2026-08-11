@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfirmDialog from '../components/ConfirmDialog'
+import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
@@ -10,10 +11,8 @@ import type {
   ConfigData,
   ConfigProjections,
   ProjectionMapping,
-  ProjectionMappingOutput,
   ProjectionPartition,
   ProjectionScore,
-  ProjectionScoreInput,
 } from './configPageSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
@@ -35,6 +34,19 @@ import {
   ProjectionOutputsEditor,
 } from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
+import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import {
+  cloneProjections,
+  EMPTY_MAPPINGS,
+  EMPTY_PARTITIONS,
+  EMPTY_PROJECTIONS,
+  EMPTY_SCORES,
+  ensureProjectionConfig,
+  type ProjectionDeleteTarget,
+  type ProjectionMappingFormState,
+  type ProjectionPartitionFormState,
+  type ProjectionScoreFormState,
+} from './configPageProjectionTableSupport'
 
 interface ConfigPageProjectionsSectionProps {
   config: ConfigData | null
@@ -42,54 +54,6 @@ interface ConfigPageProjectionsSectionProps {
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-}
-
-interface ProjectionPartitionFormState {
-  name: string
-  semantics: string
-  members: string[]
-  temperature?: number
-  default?: string
-}
-
-interface ProjectionScoreFormState {
-  name: string
-  method: string
-  inputs: ProjectionScoreInput[]
-}
-
-interface ProjectionMappingFormState {
-  name: string
-  source: string
-  method: string
-  calibration?: ProjectionMapping['calibration']
-  outputs: ProjectionMappingOutput[]
-}
-
-type ProjectionDeleteTarget =
-  | { kind: 'partition'; name: string }
-  | { kind: 'score'; name: string }
-  | { kind: 'mapping'; name: string }
-
-const EMPTY_PROJECTIONS: ConfigProjections = { partitions: [], scores: [], mappings: [] }
-const EMPTY_PARTITIONS: ProjectionPartition[] = []
-const EMPTY_SCORES: ProjectionScore[] = []
-const EMPTY_MAPPINGS: ProjectionMapping[] = []
-
-const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
-  partitions: [...(cfg.projections?.partitions || [])],
-  scores: [...(cfg.projections?.scores || [])],
-  mappings: [...(cfg.projections?.mappings || [])],
-})
-
-const ensureProjectionConfig = (cfg: ConfigData) => {
-  if (!cfg.projections) {
-    cfg.projections = { partitions: [], scores: [], mappings: [] }
-  }
-  if (!cfg.projections.partitions) cfg.projections.partitions = []
-  if (!cfg.projections.scores) cfg.projections.scores = []
-  if (!cfg.projections.mappings) cfg.projections.mappings = []
-  return cfg.projections
 }
 
 export default function ConfigPageProjectionsSection({
@@ -103,9 +67,21 @@ export default function ConfigPageProjectionsSection({
   const [projectionPendingDelete, setProjectionPendingDelete] = useState<ProjectionDeleteTarget | null>(null)
   const [projectionDeletePending, setProjectionDeletePending] = useState(false)
   const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
+  const {
+    applyScopedConfig,
+    routingScopes,
+    scopedConfig,
+    selectedScope,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useRoutingScopeManager(config)
+  useEffect(() => {
+    setProjectionPendingDelete(null)
+    setProjectionDeleteError(null)
+  }, [selectedScopeId])
   const projections = useMemo<ConfigProjections>(
-    () => config?.projections || EMPTY_PROJECTIONS,
-    [config?.projections]
+    () => scopedConfig?.projections || EMPTY_PROJECTIONS,
+    [scopedConfig?.projections]
   )
   const partitions = projections.partitions || EMPTY_PARTITIONS
   const scores = projections.scores || EMPTY_SCORES
@@ -250,10 +226,10 @@ export default function ConfigPageProjectionsSection({
   ]
 
   const withClonedConfig = async (mutate: (next: ConfigData) => void) => {
-    if (!config) return
-    const next = cloneConfigData(config)
+    if (!scopedConfig) return
+    const next = cloneConfigData(scopedConfig)
     mutate(next)
-    await saveConfig(next)
+    await saveConfig(applyScopedConfig(next))
   }
 
   const handleAddPartition = () => {
@@ -637,6 +613,7 @@ export default function ConfigPageProjectionsSection({
     <ConfigPageManagerLayout
       title="Projections"
       description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
+      scope={selectedScope?.label ?? 'Routing profile'}
       pills={[
         { label: 'Models', active: false },
         { label: 'Signals', active: false },
@@ -645,6 +622,11 @@ export default function ConfigPageProjectionsSection({
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <RoutingScopeSelector
+          scopes={routingScopes}
+          value={selectedScopeId}
+          onChange={setSelectedScopeId}
+        />
         <p
           style={{
             margin: 0,

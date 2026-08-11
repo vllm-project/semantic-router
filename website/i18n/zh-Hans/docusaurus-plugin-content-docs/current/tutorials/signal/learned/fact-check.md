@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`fact-check` 判断提示是否应视为**证据敏感**流量。映射到 `config/signal/fact-check/`，在 `routing.signals.fact_check` 中声明。
+`fact-check` 判断提示是否应视为**证据敏感**流量。映射到 `config/fragments/signal/fact-check/`，在 `routing.signals.fact_check` 中声明。
 
 该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.fact_check` 下的事实核查分类路径。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/fact-check/`
+源片段族：`config/fragments/signal/fact-check/`
 
 ```yaml
 routing:

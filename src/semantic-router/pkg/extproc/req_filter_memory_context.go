@@ -34,9 +34,17 @@ func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
 // conversation, following the openai-agents-python pattern where context is
 // injected as conversation items rather than appended to the system prompt.
 func injectMemoryMessages(requestBody []byte, content string) ([]byte, error) {
+	modified, _, err := injectMemoryMessagesWithIndex(requestBody, content)
+	return modified, err
+}
+
+func injectMemoryMessagesWithIndex(
+	requestBody []byte,
+	content string,
+) ([]byte, int, error) {
 	var request map[string]interface{}
 	if err := json.Unmarshal(requestBody, &request); err != nil {
-		return nil, fmt.Errorf("failed to parse request body: %w", err)
+		return nil, -1, fmt.Errorf("failed to parse request body: %w", err)
 	}
 
 	messages, ok := request["messages"].([]interface{})
@@ -69,9 +77,9 @@ func injectMemoryMessages(requestBody []byte, content string) ([]byte, error) {
 
 	modifiedBody, err := json.Marshal(request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal modified request: %w", err)
+		return nil, -1, fmt.Errorf("failed to marshal modified request: %w", err)
 	}
 
 	logging.Debugf("Memory: Injected memory as separate message at position %d", insertIdx)
-	return modifiedBody, nil
+	return modifiedBody, insertIdx, nil
 }

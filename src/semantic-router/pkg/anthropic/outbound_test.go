@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
@@ -481,6 +482,9 @@ func TestRoundTrip_AnthropicResponse_StopReasonAndUsage(t *testing.T) {
 	ext := &ir.IRExtensions{SourceProtocol: SourceProtocolAnthropic}
 	openaiBody, err := toOpenAIResponseBody(originalBody, "claude-opus-4-7", ext)
 	require.NoError(t, err)
+	assert.Equal(t, int64(90), gjson.GetBytes(openaiBody, "usage.prompt_tokens").Int())
+	assert.Equal(t, int64(30), gjson.GetBytes(openaiBody, "usage.prompt_tokens_details.cached_tokens").Int())
+	assert.Equal(t, int64(10), gjson.GetBytes(openaiBody, "usage.prompt_tokens_details.cache_write_tokens").Int())
 
 	out, err := EmitAnthropicResponse(openaiBody, ext, "claude-opus-4-7")
 	require.NoError(t, err)

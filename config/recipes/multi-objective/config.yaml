@@ -6,101 +6,144 @@ listeners:
   timeout: 1200s
 providers:
   defaults:
-    default_model: qwen/qwen3.5-rocm
+    default_model: local/qwen3.5-9b-economy
     reasoning_families:
       qwen3:
         type: chat_template_kwargs
         parameter: enable_thinking
-      reasoning-effort:
-        type: reasoning_effort
-        parameter: reasoning_effort
     default_reasoning_effort: low
   models:
-  - name: anthropic/claude-opus-4.6
-    reasoning_family: reasoning-effort
-    provider_model_id: anthropic/claude-opus-4.6
-    backend_refs:
-    - name: anthropic/claude-opus-4.6_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.8
-      completion_per_1m: 7.2
-      cached_input_per_1m: 0.45
-    external_model_ids:
-      vllm: anthropic/claude-opus-4.6
-  - name: google/gemini-2.5-flash-lite
-    reasoning_family: reasoning-effort
-    provider_model_id: google/gemini-2.5-flash-lite
-    backend_refs:
-    - name: google/gemini-2.5-flash-lite_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.01
-      completion_per_1m: 0.04
-      cached_input_per_1m: 0.002
-    external_model_ids:
-      vllm: google/gemini-2.5-flash-lite
-  - name: google/gemini-3.1-pro
-    reasoning_family: reasoning-effort
-    provider_model_id: google/gemini-3.1-pro
-    backend_refs:
-    - name: google/gemini-3.1-pro_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.48
-      completion_per_1m: 1.92
-      cached_input_per_1m: 0.12
-    external_model_ids:
-      vllm: google/gemini-3.1-pro
-  - name: openai/gpt5.4
-    reasoning_family: reasoning-effort
-    provider_model_id: openai/gpt5.4
-    backend_refs:
-    - name: openai/gpt5.4_vllm_primary
-      endpoint: vllm:8000
-      protocol: http
-      weight: 1
-      type: vllm
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.2
-      completion_per_1m: 4.8
-      cached_input_per_1m: 0.3
-    external_model_ids:
-      vllm: openai/gpt5.4
-  - name: qwen/qwen3.5-rocm
+  - name: local/qwen3.5-122b-frontier
     reasoning_family: qwen3
     provider_model_id: qwen/qwen3.5-rocm
     backend_refs:
-    - name: qwen/qwen3.5-rocm_vllm_primary
+    - name: qwen3.5-122b_vllm_primary
       endpoint: vllm:8000
       protocol: http
       weight: 1
       type: vllm
     pricing:
       currency: USD
-      prompt_per_1m: 0.001
-      completion_per_1m: 0.004
-      cached_input_per_1m: 0.0001
+      prompt_per_1m: 0.35
+      completion_per_1m: 1.4
+      cached_input_per_1m: 0.0875
     external_model_ids:
       vllm: qwen/qwen3.5-rocm
+  - name: local/qwen3.5-9b-economy
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-economy
+    backend_refs:
+    - name: qwen3.5-9b-economy_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.02
+      completion_per_1m: 0.08
+      cached_input_per_1m: 0.005
+    external_model_ids:
+      vllm: local/qwen3.5-9b-economy
+  - name: local/qwen3.5-9b-economy-replica
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-economy
+    backend_refs:
+    - name: qwen3.5-9b-economy_vllm_replica
+      endpoint: vllm-qwen35-economy-replica:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.02
+      completion_per_1m: 0.08
+      cached_input_per_1m: 0.005
+    external_model_ids:
+      vllm: local/qwen3.5-9b-economy
+  - name: local/qwen3.5-9b-private
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-private
+    backend_refs:
+    - name: qwen3.5-9b-private_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.025
+      completion_per_1m: 0.1
+      cached_input_per_1m: 0.00625
+    external_model_ids:
+      vllm: local/qwen3.5-9b-private
+  - name: local/qwen3.6-27b-coder
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-27b-coder
+    backend_refs:
+    - name: qwen3.6-27b-coder_vllm_primary
+      endpoint: vllm-qwen36-coder:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.14
+      completion_per_1m: 0.56
+      cached_input_per_1m: 0.035
+    external_model_ids:
+      vllm: local/qwen3.6-27b-coder
+  - name: local/qwen3.6-35b-flash
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-35b-flash
+    backend_refs:
+    - name: qwen3.6-35b-flash_vllm_primary
+      endpoint: vllm-qwen36-flash:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.08
+      completion_per_1m: 0.32
+      cached_input_per_1m: 0.02
+    external_model_ids:
+      vllm: local/qwen3.6-35b-flash
+  - name: local/gemma4-26b-balanced
+    provider_model_id: local/gemma4-26b-balanced
+    backend_refs:
+    - name: gemma4-26b-balanced_vllm_primary
+      endpoint: vllm-gemma4-balanced:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.12
+      completion_per_1m: 0.48
+      cached_input_per_1m: 0.03
+    external_model_ids:
+      vllm: local/gemma4-26b-balanced
+  - name: local/deepseek-v4-flash-analyst
+    provider_model_id: deepseek-ai/DeepSeek-V4-Flash-0731
+    backend_refs:
+    - name: deepseek-v4-flash_vllm_primary
+      endpoint: vllm-deepseek-v4:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.22
+      completion_per_1m: 0.88
+      cached_input_per_1m: 0.055
+    external_model_ids:
+      vllm: deepseek-ai/DeepSeek-V4-Flash-0731
 routing:
   modelCards:
-  - name: anthropic/claude-opus-4.6
+  - name: local/qwen3.5-122b-frontier
     context_window_size: 262144
-    description: Highest-quality model for accuracy-first routing.
+    description: Large local MoE tier for accuracy-first synthesis and review.
     capabilities:
     - legal_analysis
     - high_risk_review
@@ -110,57 +153,113 @@ routing:
     tags:
     - tier:premium
     - cost:highest
-  - name: google/gemini-2.5-flash-lite
-    context_window_size: 262144
-    description: Low-cost managed lane for fast general workloads.
+    - deployment:self_hosted
+    - physical:qwen3.5-122b-a10b-fp8
+  - name: local/qwen3.5-9b-economy
+    context_window_size: 32768
+    description: Small dense local tier for low-cost and short interactive workloads.
     capabilities:
     - fast_qa
     - explanation
-    - coding
+    - general_chat
     quality_score: 0.68
     modality: text
     tags:
-    - tier:medium
-    - cost:low
-    - latency:fast
-  - name: google/gemini-3.1-pro
-    context_window_size: 262144
-    description: Strong general reasoning and long-context model.
+    - tier:economy
+    - cost:lowest
+    - latency:fastest
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.5-9b-economy-replica
+    context_window_size: 32768
+    description: Independent replica of the economy tier for latency and load-aware selection.
     capabilities:
-    - reasoning
-    - architecture
-    - long_context
-    quality_score: 0.82
+    - fast_qa
+    - explanation
+    - general_chat
+    quality_score: 0.68
     modality: text
     tags:
-    - tier:complex
-    - cost:upper_mid
-  - name: openai/gpt5.4
-    context_window_size: 262144
-    description: Frontier formal reasoning and proof model.
+    - tier:economy_replica
+    - cost:lowest
+    - latency:fastest
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.5-9b-private
+    context_window_size: 32768
+    description: Isolated alias of the local 9B tier for privacy-policy routes.
+    capabilities:
+    - privacy_locality
+    - sensitive_data
+    - general_chat
+    quality_score: 0.68
+    modality: text
+    tags:
+    - tier:private
+    - cost:low
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.6-27b-coder
+    context_window_size: 32768
+    description: Dense Qwen3.6 tier for coding, structured output, and verification.
     capabilities:
     - reasoning
-    - proofs
-    - formal_derivation
+    - coding
+    - structured_output
+    - tool_use
     quality_score: 0.9
     modality: text
     tags:
-    - tier:reasoning
-    - cost:high
-  - name: qwen/qwen3.5-rocm
-    context_window_size: 262144
-    description: Self-hosted general model and strict local-policy target.
+    - tier:coder
+    - cost:upper_mid
+    - deployment:self_hosted
+    - physical:qwen3.6-27b
+  - name: local/qwen3.6-35b-flash
+    context_window_size: 32768
+    description: Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning.
     capabilities:
     - fast_qa
-    - self_hosted
-    - general_chat
-    - privacy_locality
-    quality_score: 0.58
+    - coding
+    - reasoning
+    quality_score: 0.84
     modality: text
     tags:
-    - tier:simple
-    - cost:lowest
+    - tier:flash
+    - cost:medium
+    - latency:fast
     - deployment:self_hosted
+    - physical:qwen3.6-35b-a3b-fp8
+  - name: local/gemma4-26b-balanced
+    context_window_size: 32768
+    description: Fast architecture-diverse MoE tier for balanced general reasoning.
+    capabilities:
+    - reasoning
+    - multilingual
+    - structured_output
+    - long_context
+    quality_score: 0.89
+    modality: text
+    tags:
+    - tier:balanced
+    - cost:medium
+    - latency:fastest_measured
+    - deployment:self_hosted
+    - physical:gemma4-26b-a4b
+  - name: local/deepseek-v4-flash-analyst
+    context_window_size: 262144
+    description: Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration.
+    capabilities:
+    - independent_analysis
+    - long_context
+    - tool_use
+    - reasoning_diversity
+    quality_score: 0.88
+    modality: text
+    tags:
+    - tier:experimental_frontier
+    - cost:high
+    - deployment:self_hosted
+    - physical:deepseek-v4-flash-0731
   strategy: priority
 entrypoints:
 - model_names:
@@ -199,6 +298,33 @@ recipes:
         - kurz antworten
         case_sensitive: false
         method: regex
+      - name: unified_balance_terse_markers
+        operator: OR
+        keywords:
+        - concise and direct
+        - brief and direct
+        - 简洁直接
+        - 简短直接
+        - breve y directa
+        - brève et directe
+        - 簡潔で直接的
+        - kurz und direkt
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_negated_reasoning
+        operator: OR
+        keywords:
+        - do not analyze
+        - don't analyze
+        - without analysis
+        - 不要分析
+        - 无需分析
+        - no analices
+        - sans analyse
+        - 分析しない
+        - nicht analysieren
+        case_sensitive: false
+        method: regex
       - name: unified_balance_reasoning_markers
         operator: OR
         keywords:
@@ -208,16 +334,24 @@ recipes:
         - root cause
         - step by step
         - system design
+        - consistency tradeoffs
+        - competing production failure
         - 分析取舍
         - 第一性原理
         - 根因分析
         - 逐步推理
+        - 取舍
+        - 根因
         - analizar las ventajas y desventajas
         - causa raíz
         - analyser les compromis
         - cause racine
         - 根本原因を分析
         - 段階的に推論
+        - トレードオフ
+        - 根本原因
+        - トレードオフを分析
+        - 根本原因と
         - kompromisse analysieren
         case_sensitive: false
         method: regex
@@ -257,26 +391,16 @@ recipes:
         case_sensitive: false
         method: regex
       fact_check:
-      - name: unified_balance_needs_fact_check
+      - name: needs_fact_check
         description: Detect claims that benefit from evidence-backed verification.
       user_feedbacks:
-      - name: unified_balance_wrong_answer
+      - name: wrong_answer
         description: Detect explicit correction or dissatisfaction with the previous answer.
       reasks:
       - name: unified_balance_reask
         description: Detect an immediate semantic repeat after an unsatisfactory answer.
         threshold: 0.8
         lookback_turns: 1
-      preferences:
-      - name: unified_balance_terse_preference
-        description: Detect a durable preference for concise, direct answers beyond exact trigger phrases.
-        examples:
-        - Keep the answer concise and direct.
-        - 请保持回答简洁直接。
-        - Responde de forma breve y directa.
-        - Réponds de manière brève et directe.
-        - 簡潔で直接的に答えてください。
-        threshold: 0.72
       language:
       - name: zh
         description: Chinese-language requests.
@@ -328,7 +452,7 @@ recipes:
           gt: 0.08
       complexity:
       - name: unified_balance_difficulty
-        threshold: 0.72
+        threshold: 0.08
         description: Semantic boundary between direct requests and synthesis-heavy work.
         easy:
           candidates:
@@ -349,23 +473,27 @@ recipes:
           name: unified_balance_simple_markers
           weight: -0.35
           value_source: confidence
-        - type: preference
-          name: unified_balance_terse_preference
-          weight: -0.25
+        - type: keyword
+          name: unified_balance_terse_markers
+          weight: -0.1
+          value_source: confidence
+        - type: keyword
+          name: unified_balance_negated_reasoning
+          weight: -1
           value_source: confidence
         - type: keyword
           name: unified_balance_reasoning_markers
-          weight: 0.34
+          weight: 0.85
           value_source: confidence
         - type: keyword
           name: unified_balance_verification_markers
-          weight: 0.32
+          weight: 0.45
           value_source: confidence
         - type: fact_check
-          name: unified_balance_needs_fact_check
-          weight: 0.35
+          name: needs_fact_check
+          weight: 0.45
         - type: user_feedback
-          name: unified_balance_wrong_answer
+          name: wrong_answer
           weight: 0.35
         - type: keyword
           name: unified_balance_correction_markers
@@ -380,13 +508,13 @@ recipes:
           weight: 0.18
         - type: structure
           name: unified_balance_constraint_dense
-          weight: 0.12
+          weight: 0.45
         - type: complexity
           name: unified_balance_difficulty:hard
-          weight: 0.3
+          weight: 0.4
         - type: complexity
           name: unified_balance_difficulty:easy
-          weight: -0.2
+          weight: -0.05
         - type: conversation
           name: unified_balance_multi_turn
           weight: 0.08
@@ -414,9 +542,9 @@ recipes:
           slope: 10
         outputs:
         - name: unified_balance_standard
-          lt: 0.32
+          lt: 0.3
         - name: unified_balance_deliberate
-          gte: 0.32
+          gte: 0.3
     decisions:
     - name: unified_balance_recovery
       description: Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.
@@ -426,21 +554,20 @@ recipes:
         operator: OR
         conditions:
         - type: user_feedback
-          name: unified_balance_wrong_answer
+          name: wrong_answer
         - type: keyword
           name: unified_balance_correction_markers
         - type: reask
           name: unified_balance_reask
       modelRefs:
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: multi_factor
         multi_factor:
@@ -467,18 +594,14 @@ recipes:
         - type: projection
           name: unified_balance_deliberate
       modelRefs:
-      - model: google/gemini-2.5-flash-lite
-        use_reasoning: true
-        reasoning_effort: medium
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: multi_factor
         multi_factor:
@@ -497,19 +620,16 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.6-27b-coder
         use_reasoning: false
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: medium
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: multi_factor
         multi_factor:
@@ -600,11 +720,15 @@ recipes:
         - type: projection
           name: unified_speed_heavy
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy-replica
         use_reasoning: false
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
         use_reasoning: false
       algorithm:
         type: latency_aware
@@ -620,9 +744,13 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
         use_reasoning: false
       algorithm:
         type: multi_factor
@@ -633,7 +761,7 @@ recipes:
           latency_percentile: 90
           on_no_candidates: first
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.9
@@ -724,11 +852,19 @@ recipes:
         - type: projection
           name: unified_cost_reasoning
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: true
+        reasoning_effort: medium
+      - model: local/qwen3.5-9b-economy-replica
         use_reasoning: true
         reasoning_effort: medium
       algorithm:
-        type: static
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.6
+            load: 0.4
+          on_no_candidates: first
     - name: unified_cost_first_route
       description: Deterministic local route with semantic reuse for ordinary requests.
       priority: 100
@@ -737,12 +873,19 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.5-9b-economy-replica
         use_reasoning: false
       algorithm:
-        type: static
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.8
+            load: 0.2
+          on_no_candidates: first
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.88
@@ -761,6 +904,11 @@ recipes:
         - multi-agent workflow
         - delegate to agents
         - coordinate multiple agents
+        - use tools
+        - use search_web
+        - search then synthesize
+        - research and synthesize
+        - call the tool then
         - 调查并实现
         - 规划并执行
         - 多智能体工作流
@@ -782,6 +930,10 @@ recipes:
         - cross-check the answer
         - panel of experts
         - resolve disagreements
+        - compare several independent viewpoints
+        - ask multiple models
+        - get a second and third opinion
+        - synthesize competing answers
         - 独立分析
         - 比较多个专家意见
         - 交叉验证答案
@@ -804,6 +956,14 @@ recipes:
         - rigorous proof
         - derive step by step
         - hard reasoning problem
+        - difficult result
+        - multiple possible derivations
+        - think deeply before answering
+        - think deeply
+        - solve this thoroughly
+        - reason through alternative paths
+        - alternative paths
+        - do a deep analysis
         - 探索多种方法
         - 多条推理路径
         - 第一性原理
@@ -814,8 +974,11 @@ recipes:
         - explorer plusieurs approches
         - preuve rigoureuse
         - 複数のアプローチを探索
+        - 複数のアプローチと推論経路を探索
+        - 推論経路を探索
         - 厳密な証明
         - mehrere ansätze untersuchen
+        - denkwege untersuchen
         case_sensitive: false
         method: regex
       - name: unified_frontier_verification_markers
@@ -831,6 +994,8 @@ recipes:
         - vérifier avec des preuves
         - 証拠で検証
         - mit belegen überprüfen
+        - \b(is|was|were)\b.{0,80}\b(accurate|true|correct)\b
+        - \b(when was|who invented|what is the population|how tall is)\b
         case_sensitive: false
         method: regex
       embeddings:
@@ -861,9 +1026,6 @@ recipes:
         - 从多个推理路径探索难题并综合最强答案。
         - Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.
         - 複数の推論経路を探索し、最も厳密な解答を統合してください。
-      fact_check:
-      - name: unified_frontier_fact_check
-        description: Detect factual requests that benefit from independent verification.
       language:
       - name: zh
         description: Chinese-language requests.
@@ -945,10 +1107,10 @@ recipes:
           source:
             type: regex
             pattern: >-
-              ^\s*((define|translate|explain|définis|traduis|explique|traduce|explica|definiere|übersetze)\b|(定义|翻译|解释|説明|翻訳))
+              (?i)(\b(define|translate|explain)\b.{0,48}\b(phrase|term|expression)\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))
       complexity:
       - name: unified_frontier_complexity
-        threshold: 0.74
+        threshold: 0.15
         description: Semantic boundary for tasks that merit multi-round reasoning.
         easy:
           candidates:
@@ -975,10 +1137,10 @@ recipes:
           value_source: confidence
         - type: conversation
           name: unified_frontier_tooling_available
-          weight: 0.4
+          weight: 0.1
         - type: conversation
           name: unified_frontier_active_tool_loop
-          weight: 0.5
+          weight: 0.1
         - type: structure
           name: unified_frontier_ordered_workflow
           weight: 0.25
@@ -996,9 +1158,6 @@ recipes:
           name: unified_frontier_fusion_intent
           weight: 0.55
           value_source: confidence
-        - type: fact_check
-          name: unified_frontier_fact_check
-          weight: 0.15
         - type: structure
           name: unified_frontier_direct_reference
           weight: -0.9
@@ -1013,9 +1172,6 @@ recipes:
           name: unified_frontier_deep_intent
           weight: 0.35
           value_source: confidence
-        - type: fact_check
-          name: unified_frontier_fact_check
-          weight: 0.2
         - type: context
           name: unified_frontier_long_context
           weight: 0.2
@@ -1077,9 +1233,9 @@ recipes:
           slope: 10
         outputs:
         - name: unified_frontier_direct
-          lt: 0.45
+          lt: 0.35
         - name: unified_frontier_deliberate
-          gte: 0.45
+          gte: 0.35
     decisions:
     - name: unified_frontier_workflow
       description: Use Router Flow for explicit investigate-plan-execute tasks with separable roles.
@@ -1090,130 +1246,135 @@ recipes:
         conditions:
         - type: projection
           name: unified_frontier_use_workflow
+        - operator: OR
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+          - type: structure
+            name: unified_frontier_ordered_workflow
       modelRefs:
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: workflows
         workflows:
           mode: dynamic
           template: micro_agent
           planner:
-            model: google/gemini-3.1-pro
-            max_completion_tokens: 2048
+            model: local/qwen3.6-27b-coder
           max_steps: 4
           max_parallel: 3
-          max_completion_tokens: 32768
-          round_timeout_seconds: 300
+          round_timeout_seconds: 120
           min_successful_responses: 2
           include_intermediate_responses: false
           on_error: skip
+    - name: unified_frontier_tool_result_synthesis
+      description: Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.
+      priority: 375
+      tier: 2
+      rules:
+        operator: AND
+        conditions:
+        - type: conversation
+          name: unified_frontier_active_tool_loop
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+      modelRefs:
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: true
+        reasoning_effort: medium
+      algorithm:
+        type: static
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
     - name: unified_frontier_fusion
       description: Use independent expert answers plus a frontier judge when disagreement resolution matters.
       priority: 350
-      tier: 2
+      tier: 3
       rules:
         operator: AND
         conditions:
         - type: projection
           name: unified_frontier_use_fusion
+        - type: keyword
+          name: unified_frontier_fusion_markers
       modelRefs:
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/deepseek-v4-flash-analyst
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: fusion
         fusion:
-          model: anthropic/claude-opus-4.6
+          model: local/qwen3.5-122b-frontier
           analysis_models:
-          - google/gemini-3.1-pro
-          - openai/gpt5.4
-          - anthropic/claude-opus-4.6
+          - local/qwen3.6-27b-coder
+          - local/gemma4-26b-balanced
+          - local/deepseek-v4-flash-analyst
           max_concurrent: 3
-          max_completion_tokens: 32768
-          round_timeout_seconds: 300
+          round_timeout_seconds: 180
           min_successful_responses: 2
           temperature: 0.2
           include_analysis: false
           include_intermediate_responses: false
           on_error: skip
           judge_prompt_version: fusion-v1
-      plugins:
-      - type: hallucination
-        configuration:
-          enabled: true
-          use_nli: true
-          hallucination_action: header
-          unverified_factual_action: header
-          include_hallucination_details: true
     - name: unified_frontier_verified_answer
       description: Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.
       priority: 325
-      tier: 3
+      tier: 4
       rules:
-        operator: OR
+        operator: AND
         conditions:
         - type: keyword
           name: unified_frontier_verification_markers
-        - type: fact_check
-          name: unified_frontier_fact_check
       modelRefs:
-      - model: google/gemini-2.5-flash-lite
+      - model: local/qwen3.5-9b-economy
         use_reasoning: false
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: confidence
         confidence:
-          confidence_method: hybrid
+          confidence_method: avg_logprob
           threshold: 0.72
           escalation_order: small_to_large
           on_error: skip
-      plugins:
-      - type: hallucination
-        configuration:
-          enabled: true
-          use_nli: true
-          hallucination_action: header
-          unverified_factual_action: header
-          include_hallucination_details: true
     - name: unified_frontier_remom
       description: Use bounded multi-round search and synthesis for deep reasoning tasks.
       priority: 300
-      tier: 4
+      tier: 5
       rules:
         operator: AND
         conditions:
         - type: projection
           name: unified_frontier_deliberate
       modelRefs:
-      - model: google/gemini-3.1-pro
+      - model: local/qwen3.6-27b-coder
         use_reasoning: true
         reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
+      - model: local/deepseek-v4-flash-analyst
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
         use_reasoning: true
         reasoning_effort: high
       algorithm:
@@ -1227,30 +1388,29 @@ recipes:
           include_reasoning: true
           compaction_strategy: last_n_tokens
           compaction_tokens: 8000
-          synthesis_model: anthropic/claude-opus-4.6
+          synthesis_model: local/qwen3.5-122b-frontier
           max_concurrent: 3
-          round_timeout_seconds: 300
+          round_timeout_seconds: 180
           min_successful_responses: 2
           max_responses_per_round: 3
           include_intermediate_responses: false
           on_error: skip
-    - name: unified_accuracy_first_route
+    - name: unified_frontier_direct
       description: Use the strongest direct model when orchestration would add little value.
       priority: 100
-      tier: 5
+      tier: 6
       rules:
         operator: AND
         conditions: []
       modelRefs:
-      - model: google/gemini-3.1-pro
-        use_reasoning: true
-        reasoning_effort: high
-      - model: openai/gpt5.4
-        use_reasoning: true
-        reasoning_effort: high
-      - model: anthropic/claude-opus-4.6
-        use_reasoning: true
-        reasoning_effort: high
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
       algorithm:
         type: multi_factor
         multi_factor:
@@ -1286,6 +1446,19 @@ recipes:
         - ローカル処理のみ
         - クラウドに送信しない
         - nur lokale verarbeitung
+        case_sensitive: false
+        method: regex
+      - name: unified_privacy_sensitive_markers
+        operator: OR
+        keywords:
+        - \b\d{3}-\d{2}-\d{4}\b
+        - \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+        - \b(ssn|social security number|credit card|passport number)\b
+        - (身份证|邮箱|护照号码|银行卡号)
+        - (número de seguridad social|correo electrónico|pasaporte)
+        - (numéro de sécurité sociale|adresse e-mail|passeport)
+        - (マイナンバー|メールアドレス|パスポート番号)
+        - (sozialversicherungsnummer|e-mail-adresse|reisepassnummer)
         case_sensitive: false
         method: regex
       - name: unified_privacy_attack_markers
@@ -1333,6 +1506,10 @@ recipes:
           name: unified_privacy_local_only_markers
           weight: 0.5
           value_source: confidence
+        - type: keyword
+          name: unified_privacy_sensitive_markers
+          weight: 0.75
+          value_source: confidence
         - type: pii
           name: unified_privacy_pii_strict
           weight: 0.9
@@ -1345,7 +1522,7 @@ recipes:
           value_source: confidence
         - type: kb
           name: unified_privacy_policy
-          weight: 0.7
+          weight: 0.3
       mappings:
       - name: unified_privacy_risk_band
         source: unified_privacy_risk_score
@@ -1371,7 +1548,7 @@ recipes:
         - type: keyword
           name: unified_privacy_attack_markers
       modelRefs:
-      - model: qwen/qwen3.5-rocm
+      - model: local/qwen3.5-9b-private
         use_reasoning: false
       algorithm:
         type: static
@@ -1390,9 +1567,8 @@ recipes:
         - type: projection
           name: unified_privacy_sensitive
       modelRefs:
-      - model: qwen/qwen3.5-rocm
-        use_reasoning: true
-        reasoning_effort: medium
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
       algorithm:
         type: static
       plugins:
@@ -1408,9 +1584,8 @@ recipes:
         operator: AND
         conditions: []
       modelRefs:
-      - model: qwen/qwen3.5-rocm
-        use_reasoning: true
-        reasoning_effort: medium
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
     strategy: priority
 global:
   router:
@@ -1479,7 +1654,7 @@ global:
     startup_status:
       store_backend: redis
   stores:
-    semantic_cache:
+    response_cache:
       backend_type: memory
       enabled: true
       max_entries: 1000
@@ -1487,7 +1662,7 @@ global:
       eviction_policy: fifo
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1200
       flow:
         state:
@@ -1541,7 +1716,7 @@ global:
       hallucination_mitigation:
         fact_check:
           model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.6
+          threshold: 0.5
           use_cpu: true
           use_mmbert_32k: true
           model_ref: fact_check_classifier
@@ -1563,7 +1738,7 @@ global:
       feedback_detector:
         enabled: true
         model_id: models/mmbert32k-feedback-detector-merged
-        threshold: 0.7
+        threshold: 0.5
         use_cpu: true
         use_modernbert: false
         use_mmbert_32k: true

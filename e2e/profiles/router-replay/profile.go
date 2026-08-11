@@ -60,6 +60,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"router-replay-restart-recovery",
+		"router-replay-recipe-list-filter",
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
 	}

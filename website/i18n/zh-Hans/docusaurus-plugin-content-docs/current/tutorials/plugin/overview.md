@@ -18,7 +18,7 @@ translation:
 - 将路由局部行为挂在需要它的路由上。
 - 避免把所有行为推入 `global:` 默认。
 - 单条路由可选用缓存、变更、检索或安全控制而不影响其他路由。
-- 直接映射 `config/plugin/` 片段树，每个插件或插件包一页教程。
+- 直接映射 `config/fragments/plugin/` 片段树，每个插件或插件包一页教程。
 
 ## 解决什么问题？
 
@@ -33,7 +33,7 @@ translation:
 - 仅一条路由或路由族需要额外处理
 - 行为应在路由匹配之后发生
 - 共享后端在 `global:`，但每路由行为必须保持局部
-- 希望在 `config/plugin/` 下复用路由局部片段
+- 希望在 `config/fragments/plugin/` 下复用路由局部片段
 
 ## 配置
 
@@ -44,12 +44,12 @@ routing:
   decisions:
     - name: cached_support
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
 ```
 
-插件文档与 `config/plugin/` 一一对应。
+插件文档与 `config/fragments/plugin/` 一一对应。
 
 ### 响应与变更
 
@@ -65,7 +65,7 @@ routing:
 - [Memory](./memory)
 - [RAG](./rag)
 - [Router Replay](./router-replay)
-- [Semantic Cache](./semantic-cache)
+- [Semantic Cache](./response-cache)
 
 ### 安全与生成
 

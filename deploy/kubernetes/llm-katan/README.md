@@ -20,7 +20,7 @@ Each deployment consists of two containers:
   - Runs once before main container starts
 
 - **main container (llm-katan)**: Serves the LLM API
-  - Image: `ghcr.io/vllm-project/semantic-router/llm-katan:latest` (~1.35GB)
+  - Image: `ghcr.io/vllm-project/semantic-router/llm-katan:nightly` (~1.35GB)
   - Loads model from PVC cache
   - Exposes OpenAI-compatible API on port 8000
 

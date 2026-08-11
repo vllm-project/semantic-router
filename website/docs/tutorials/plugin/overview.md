@@ -11,7 +11,7 @@ In canonical v0.3 YAML, plugins live under `routing.decisions[].plugins`.
 - Keeps route-local behavior attached to the route that needs it.
 - Avoids pushing all behavior into `global:` defaults.
 - Lets one route opt into caching, mutation, retrieval, or safety controls without affecting others.
-- Maps directly to the fragment tree under `config/plugin/`, with one tutorial page per plugin or plugin bundle.
+- Maps directly to the fragment tree under `config/fragments/plugin/`, with one tutorial page per plugin or plugin bundle.
 
 ## What Problem Does It Solve?
 
@@ -26,7 +26,7 @@ Use `plugin/` when:
 - only one route or route family needs extra processing
 - behavior should happen after a route matches
 - shared backing services live in `global:`, but per-route behavior must stay local
-- you want reusable route-local fragments under `config/plugin/`
+- you want reusable route-local fragments under `config/fragments/plugin/`
 
 ## Configuration
 
@@ -37,12 +37,12 @@ routing:
   decisions:
     - name: cached_support
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
 ```
 
-The plugin docs now mirror `config/plugin/` one page at a time.
+The plugin docs now mirror `config/fragments/plugin/` one page at a time.
 
 ### Response and Mutation
 
@@ -52,13 +52,14 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 - [Request Parameters](./request-params)
 - [System Prompt](./system-prompt)
 - [Tools](./tools)
+- [Context Compression](./context-compression)
 
 ### Retrieval and Memory
 
 - [Memory](./memory)
 - [RAG](./rag)
 - [Router Replay](./router-replay)
-- [Semantic Cache](./semantic-cache)
+- [Response Cache](./response-cache)
 
 ### Safety and Generation
 

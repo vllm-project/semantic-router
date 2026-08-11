@@ -835,7 +835,7 @@ helm install dynamo-vllm ./deploy/kubernetes/dynamo/helm-chart \
 
 - 阅读 [NVIDIA Dynamo 集成提案](../../proposals/nvidia-dynamo-integration) 了解架构细节
 - 配置[监控与可观测性](../../tutorials/global/api-and-observability)
-- 生产环境配置[语义缓存](../../tutorials/plugin/semantic-cache)
+- 生产环境配置[语义缓存](../../tutorials/plugin/response-cache)
 - 按负载扩展部署
 
 ## 参考

@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`reask` 用于检测当前用户轮次是否在语义上重复同一对话中最近的用户轮次。它对应 `config/signal/reask/`，并在 `routing.signals.reasks` 下声明。
+`reask` 用于检测当前用户轮次是否在语义上重复同一对话中最近的用户轮次。它对应 `config/fragments/signal/reask/`，并在 `routing.signals.reasks` 下声明。
 
 该信号族属于学习型信号：它使用路由器共享的语义 embedding 路径，将当前用户轮次与之前的用户轮次进行比较。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段信号族：`config/signal/reask/`
+源片段信号族：`config/fragments/signal/reask/`
 
 ```yaml
 routing:

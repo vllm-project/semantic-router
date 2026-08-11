@@ -2,14 +2,10 @@ import React from "react";
 
 import type { BoolExprNode, EditorMode } from "@/types/dsl";
 import { useDSLStore } from "@/stores/dslStore";
+import { formatRoutingMetadataValue } from "@/components/routingMetadataDisplay";
 
 import styles from "./BuilderPage.module.css";
-import {
-  ModelIcon,
-  PluginIcon,
-  RouteIcon,
-  SignalIcon,
-} from "./builderPageFormPrimitives";
+import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from "./builderPageFormPrimitives";
 import type { EntityKind, Selection } from "./builderPageTypes";
 
 interface SidebarSectionProps {
@@ -120,9 +116,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const routes = ast?.routes ?? [];
   const defaultRoute = routes.find((r) => !r.when);
-  const conditionalRoutes = routes
-    .filter((r) => !!r.when)
-    .sort((a, b) => b.priority - a.priority);
+  const conditionalRoutes = routes.filter((r) => !!r.when).sort((a, b) => b.priority - a.priority);
 
   return (
     <div className={styles.dashboard}>
@@ -147,9 +141,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         <div
           className={`${styles.dashboardBadge} ${isValid ? styles.dashboardBadgeOk : styles.dashboardBadgeErr}`}
         >
-          {isValid
-            ? "✓ Valid"
-            : `${errorCount} error${errorCount !== 1 ? "s" : ""}`}
+          {isValid ? "✓ Valid" : `${errorCount} error${errorCount !== 1 ? "s" : ""}`}
         </div>
       </div>
 
@@ -208,28 +200,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className={styles.dashSection}>
         <div className={styles.dashSectionTitle}>Quick Actions</div>
         <div className={styles.quickActions}>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity("model")}
-          >
+          <button className={styles.quickActionBtn} onClick={() => onAddEntity("model")}>
             <span className={styles.quickActionIcon}>+</span> New Model
           </button>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity("signal")}
-          >
+          <button className={styles.quickActionBtn} onClick={() => onAddEntity("signal")}>
             <span className={styles.quickActionIcon}>+</span> New Signal
           </button>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity("route")}
-          >
+          <button className={styles.quickActionBtn} onClick={() => onAddEntity("route")}>
             <span className={styles.quickActionIcon}>+</span> New Route
           </button>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity("plugin")}
-          >
+          <button className={styles.quickActionBtn} onClick={() => onAddEntity("plugin")}>
             <span className={styles.quickActionIcon}>+</span> New Plugin
           </button>
         </div>
@@ -252,14 +232,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 >
                   <div className={styles.routeMapCondition}>
                     <span className={styles.routeMapCondIcon}>├─</span>
-                    <code className={styles.routeMapCondText}>
-                      {boolExprToText(route.when)}
-                    </code>
+                    <code className={styles.routeMapCondText}>{boolExprToText(route.when)}</code>
                   </div>
                   <div className={styles.routeMapTarget}>
                     <span className={styles.routeMapTargetArrow}>└→</span>
                     <span className={styles.routeMapRouteName}>
-                      &quot;{route.name}&quot;
+                      &quot;
+                      {formatRoutingMetadataValue("x-vsr-selected-decision", route.name)}
+                      &quot;
                     </span>
                     <span className={styles.routeMapTargetArrow}>→</span>
                     <span className={styles.routeMapModel}>
@@ -273,20 +253,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               {defaultRoute && (
                 <div
                   className={styles.routeMapBranch}
-                  onClick={() =>
-                    onSelect({ kind: "route", name: defaultRoute.name })
-                  }
+                  onClick={() => onSelect({ kind: "route", name: defaultRoute.name })}
                 >
                   <div className={styles.routeMapCondition}>
                     <span className={styles.routeMapCondIcon}>└─</span>
-                    <code className={styles.routeMapCondText}>
-                      (no match / default)
-                    </code>
+                    <code className={styles.routeMapCondText}>(no match / default)</code>
                   </div>
                   <div className={styles.routeMapTarget}>
                     <span className={styles.routeMapTargetArrow}>└→</span>
                     <span className={styles.routeMapRouteName}>
-                      &quot;{defaultRoute.name}&quot;
+                      &quot;
+                      {formatRoutingMetadataValue("x-vsr-selected-decision", defaultRoute.name)}
+                      &quot;
                     </span>
                     <span className={styles.routeMapTargetArrow}>→</span>
                     <span className={styles.routeMapModel}>
@@ -298,9 +276,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               )}
               {routes.length === 0 && (
-                <div className={styles.routeMapEmpty}>
-                  No routes defined yet
-                </div>
+                <div className={styles.routeMapEmpty}>No routes defined yet</div>
               )}
             </div>
           </div>
@@ -311,31 +287,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className={styles.dashSection}>
         <div className={styles.dashSectionTitle}>Editor Mode</div>
         <div className={styles.dashModes}>
-          <button
-            className={styles.dashModeBtn}
-            onClick={() => onModeSwitch("visual")}
-          >
+          <button className={styles.dashModeBtn} onClick={() => onModeSwitch("visual")}>
             <span className={styles.dashModeBtnIcon}>📐</span>
             <span className={styles.dashModeBtnLabel}>Visual</span>
             <span className={styles.dashModeBtnDesc}>Drag & drop builder</span>
           </button>
-          <button
-            className={styles.dashModeBtn}
-            onClick={() => onModeSwitch("dsl")}
-          >
+          <button className={styles.dashModeBtn} onClick={() => onModeSwitch("dsl")}>
             <span className={styles.dashModeBtnIcon}>📝</span>
             <span className={styles.dashModeBtnLabel}>DSL</span>
             <span className={styles.dashModeBtnDesc}>Code editor</span>
           </button>
-          <button
-            className={styles.dashModeBtn}
-            onClick={() => onModeSwitch("nl")}
-          >
+          <button className={styles.dashModeBtn} onClick={() => onModeSwitch("nl")}>
             <span className={styles.dashModeBtnIcon}>🤖</span>
             <span className={styles.dashModeBtnLabel}>Natural Language</span>
-            <span className={styles.dashModeBtnDesc}>
-              Prompt-driven DSL draft generation
-            </span>
+            <span className={styles.dashModeBtnDesc}>Prompt-driven DSL draft generation</span>
           </button>
         </div>
       </div>
@@ -399,10 +364,7 @@ const EntityListView: React.FC<EntityListViewProps> = ({
         return (ast?.routes ?? []).map((r) => ({
           name: r.name,
           type: r.when ? `P${r.priority}` : "default",
-          desc:
-            r.models.length > 0
-              ? r.models.map((m) => m.model).join(", ")
-              : undefined,
+          desc: r.models.length > 0 ? r.models.map((m) => m.model).join(", ") : undefined,
         }));
       case "plugin":
         return (ast?.plugins ?? []).map((p) => ({
@@ -421,11 +383,7 @@ const EntityListView: React.FC<EntityListViewProps> = ({
   return (
     <div className={styles.entityListPanel}>
       <div className={styles.entityListHeader}>
-        <button
-          className={styles.backBtn}
-          onClick={onBack}
-          title="Back to Dashboard"
-        >
+        <button className={styles.backBtn} onClick={onBack} title="Back to Dashboard">
           <svg
             width="16"
             height="16"
@@ -468,12 +426,19 @@ const EntityListView: React.FC<EntityListViewProps> = ({
           >
             <div className={styles.entityListCardHeader}>
               <Icon className={styles.entityListCardIcon} />
-              <span className={styles.entityListCardName}>{item.name}</span>
+              <span className={styles.entityListCardName}>
+                {kind === "route"
+                  ? formatRoutingMetadataValue("x-vsr-selected-decision", item.name)
+                  : kind === "signal"
+                    ? formatRoutingMetadataValue(
+                        `x-vsr-matched-${item.type.replace("_", "-")}`,
+                        item.name,
+                      )
+                    : item.name}
+              </span>
             </div>
             <span className={styles.entityListCardType}>{item.type}</span>
-            {item.desc && (
-              <span className={styles.entityListCardDesc}>{item.desc}</span>
-            )}
+            {item.desc && <span className={styles.entityListCardDesc}>{item.desc}</span>}
             <div className={styles.entityListCardArrow}>
               <svg
                 width="14"

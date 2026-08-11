@@ -122,7 +122,7 @@ global:
       embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
-    semantic_cache:
+    response_cache:
       embedding_model: mmbert
     vector_store:
       embedding_model: mmbert

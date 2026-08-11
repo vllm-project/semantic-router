@@ -11,7 +11,7 @@ translation:
 
 `semantic-cache` 是路由局部插件：复用语义相近的历史响应。
 
-对应 `config/plugin/semantic-cache/high-recall.yaml` 与 `config/plugin/semantic-cache/memory.yaml`。
+对应 `config/fragments/plugin/semantic-cache/high-recall.yaml` 与 `config/fragments/plugin/semantic-cache/memory.yaml`。
 
 ## 主要优势
 

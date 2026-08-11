@@ -12,6 +12,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -36,6 +38,13 @@ type OpenAIRouter struct {
 	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
+	ResponseCache         *cache.ResponseCacheService
+	responseCacheMu       sync.Mutex
+	ContextCompression    *contextcompression.Service
+	CompressionRecovery   contextcompression.RecoveryStore
+	CompressionEmbedding  embedding.Provider
+	CompressionScorer     contextcompression.RelevanceScorer
+	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
 	toolSelectionDBMu     sync.Mutex
@@ -87,6 +96,9 @@ func (r *OpenAIRouter) Close() error {
 	}
 	if r.WorkflowStateService != nil {
 		_ = r.WorkflowStateService.Close()
+	}
+	if r.CompressionRecovery != nil {
+		return r.CompressionRecovery.Close()
 	}
 	return nil
 }

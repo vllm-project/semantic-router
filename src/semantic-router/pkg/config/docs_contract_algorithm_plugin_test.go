@@ -33,20 +33,21 @@ var retiredAlgorithmTutorialDocs = []string{
 }
 
 var pluginTutorialBuckets = map[string]string{
-	"content-safety":     "safety-and-generation",
-	"fast-response":      "response-and-mutation",
-	"hallucination":      "safety-and-generation",
-	"header-mutation":    "response-and-mutation",
-	"image-gen":          "response-and-mutation",
-	"memory":             "retrieval-and-memory",
-	"rag":                "retrieval-and-memory",
-	"request-params":     "response-and-mutation",
-	"response-jailbreak": "safety-and-generation",
-	"router-replay":      "retrieval-and-memory",
-	"semantic-cache":     "retrieval-and-memory",
-	"system-prompt":      "response-and-mutation",
-	"tool-selection":     "response-and-mutation",
-	"tools":              "response-and-mutation",
+	"content-safety":      "safety-and-generation",
+	"context-compression": "response-and-mutation",
+	"fast-response":       "response-and-mutation",
+	"hallucination":       "safety-and-generation",
+	"header-mutation":     "response-and-mutation",
+	"image-gen":           "response-and-mutation",
+	"memory":              "retrieval-and-memory",
+	"rag":                 "retrieval-and-memory",
+	"request-params":      "response-and-mutation",
+	"response-jailbreak":  "safety-and-generation",
+	"router-replay":       "retrieval-and-memory",
+	"response-cache":      "retrieval-and-memory",
+	"system-prompt":       "response-and-mutation",
+	"tool-selection":      "response-and-mutation",
+	"tools":               "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{
@@ -58,7 +59,7 @@ var retiredPluginTutorialDocs = []string{
 func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 	t.Helper()
 
-	configRoot := filepath.Join(root, repoRel("config", "algorithm"))
+	configRoot := filepath.Join(root, repoRel("config", "fragments", "algorithm"))
 	remaining := copyStringStringMap(algorithmTutorialBuckets)
 	seen := 0
 
@@ -96,7 +97,7 @@ func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) 
 		t.Fatalf("%s should contain algorithm fragments", configRoot)
 	}
 	for algorithm := range remaining {
-		t.Fatalf("algorithm tutorial mapping declares %q, but config/algorithm is missing it", algorithm)
+		t.Fatalf("algorithm tutorial mapping declares %q, but config/fragments/algorithm is missing it", algorithm)
 	}
 
 	assertPathsDoNotExist(t, root, retiredAlgorithmTutorialDocs)
@@ -105,7 +106,7 @@ func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) 
 func assertPluginTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 	t.Helper()
 
-	configRoot := filepath.Join(root, repoRel("config", "plugin"))
+	configRoot := filepath.Join(root, repoRel("config", "fragments", "plugin"))
 	entries, err := os.ReadDir(configRoot)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", configRoot, err)
@@ -123,13 +124,13 @@ func assertPluginTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {
 
 		docPath := repoRel("website", "docs", "tutorials", "plugin", plugin+".md")
 		if _, err := os.Stat(filepath.Join(root, docPath)); err != nil {
-			t.Fatalf("%s should exist for config/plugin/%s: %v", docPath, plugin, err)
+			t.Fatalf("%s should exist for config/fragments/plugin/%s: %v", docPath, plugin, err)
 		}
 		delete(remaining, plugin)
 	}
 
 	for plugin := range remaining {
-		t.Fatalf("plugin tutorial mapping declares %q, but config/plugin/%s is missing", plugin, plugin)
+		t.Fatalf("plugin tutorial mapping declares %q, but config/fragments/plugin/%s is missing", plugin, plugin)
 	}
 
 	assertPathsDoNotExist(t, root, retiredPluginTutorialDocs)

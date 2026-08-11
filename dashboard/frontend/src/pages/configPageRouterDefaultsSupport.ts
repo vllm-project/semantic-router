@@ -23,7 +23,7 @@ export type RouterSystemKey =
   | 'authz'
   | 'ratelimit'
   | 'memory'
-  | 'semantic_cache'
+  | 'response_cache'
   | 'vector_store'
   | 'tools'
   | 'prompt_guard'
@@ -116,7 +116,7 @@ const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
   authz: ['services', 'authz'],
   ratelimit: ['services', 'ratelimit'],
   memory: ['stores', 'memory'],
-  semantic_cache: ['stores', 'semantic_cache'],
+  response_cache: ['stores', 'response_cache'],
   vector_store: ['stores', 'vector_store'],
   tools: ['integrations', 'tools'],
   prompt_guard: ['model_catalog', 'modules', 'prompt_guard'],
@@ -142,7 +142,7 @@ const ROUTER_SECTION_LAYERS: Record<RouterSystemKey, RouterLayerKey> = {
   authz: 'services',
   ratelimit: 'services',
   memory: 'stores',
-  semantic_cache: 'stores',
+  response_cache: 'stores',
   vector_store: 'stores',
   tools: 'integrations',
   prompt_guard: 'model_catalog',
@@ -165,7 +165,7 @@ const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
   response_api: 'response_api',
   router_replay: 'router_replay',
   memory: 'memory',
-  semantic_cache: 'semantic_cache',
+  response_cache: 'response_cache',
   tools: 'tools',
   prompt_guard: 'prompt_guard',
   classifier: 'classifier',
@@ -353,7 +353,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           value: percentOrFallback(section?.default_similarity_threshold),
         },
       ]
-    case 'semantic_cache':
+    case 'response_cache':
       return [
         { label: 'Backend', value: stringOrFallback(section?.backend_type) },
         { label: 'Similarity threshold', value: percentOrFallback(section?.similarity_threshold) },
@@ -690,9 +690,9 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         routerStructuredField(key, 'quality_scoring'),
         routerStructuredField(key, 'reflection'),
       ]
-    case 'semantic_cache':
+    case 'response_cache':
       return [
-        { name: 'enabled', label: 'Enable Semantic Cache', type: 'boolean' },
+        { name: 'enabled', label: 'Enable Response Cache', type: 'boolean' },
         {
           name: 'backend_type',
           label: 'Backend Type',
@@ -1179,9 +1179,9 @@ export function buildEffectiveRouterConfig(
     authz: getSectionValue(routerDefaults, 'authz') ?? getSectionValue(config, 'authz'),
     ratelimit: getSectionValue(routerDefaults, 'ratelimit') ?? getSectionValue(config, 'ratelimit'),
     memory: getSectionValue(routerDefaults, 'memory') ?? getSectionValue(config, 'memory'),
-    semantic_cache:
-      getSectionValue(routerDefaults, 'semantic_cache') ??
-      getSectionValue(config, 'semantic_cache'),
+    response_cache:
+      getSectionValue(routerDefaults, 'response_cache') ??
+      getSectionValue(config, 'response_cache'),
     vector_store:
       getSectionValue(routerDefaults, 'vector_store') ?? getSectionValue(config, 'vector_store'),
     tools: getSectionValue(routerDefaults, 'tools') ?? getSectionValue(config, 'tools'),

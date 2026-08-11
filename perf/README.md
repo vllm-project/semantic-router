@@ -190,8 +190,9 @@ Test cases:
 
 ### PR regression gate
 
-`performance-test.yml` runs on every PR that touches the router, bindings, or
-`perf/`:
+`performance-test.yml` runs on PRs that touch `perf/**`, and through its
+explicit manual or nightly lifecycle. Generic router, binding, workflow, and
+`ci/full` changes do not launch the performance suite:
 
 1. **Run benchmarks** — component suites + the Looper family, tee'd to
    `reports/bench-output.txt`.

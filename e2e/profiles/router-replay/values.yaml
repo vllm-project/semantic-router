@@ -37,6 +37,54 @@ config:
     signals: {}
     modelCards:
       - name: openai/gpt-oss-20b
+  entrypoints:
+    - model_names: ["vllm-sr/replay-first"]
+      recipe: replay-first
+    - model_names: ["vllm-sr/replay-second"]
+      recipe: replay-second
+  recipes:
+    - name: replay-first
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shared_replay_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: true
+                  capture_response_body: true
+                  max_body_bytes: 65536
+    - name: replay-second
+      routing:
+        strategy: priority
+        signals: {}
+        decisions:
+          - name: shared_replay_decision
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: openai/gpt-oss-20b
+                use_reasoning: false
+            plugins:
+              - type: router_replay
+                configuration:
+                  enabled: true
+                  max_records: 1000
+                  capture_request_body: true
+                  capture_response_body: true
+                  max_body_bytes: 65536
   global:
     router:
       strategy: priority
@@ -75,7 +123,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert

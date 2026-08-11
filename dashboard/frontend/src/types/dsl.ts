@@ -169,7 +169,23 @@ export interface ASTTestBlockDecl {
   pos: ASTPosition
 }
 
+export interface ASTEntrypointDecl {
+  modelNames: string[]
+  recipe: string
+  pos: ASTPosition
+}
+
+export interface ASTRecipeDecl {
+  name: string
+  description?: string
+  program: ASTProgram
+  pos: ASTPosition
+}
+
 export interface ASTProgram {
+  strategy?: string
+  entrypoints?: ASTEntrypointDecl[]
+  recipes?: ASTRecipeDecl[]
   signals: ASTSignalDecl[]
   projectionPartitions?: ASTProjectionPartitionDecl[]
   projectionScores?: ASTProjectionScoreDecl[]

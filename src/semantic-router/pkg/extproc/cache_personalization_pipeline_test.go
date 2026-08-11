@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +51,15 @@ func (s *spyCache) FindSimilarWithThreshold(_ string, query string, _ float32) (
 	return nil, false, nil
 }
 
+func (s *spyCache) LookupSimilarWithThreshold(_ string, query string, _ float32) (cache.LookupResult, error) {
+	s.findCalled = true
+	s.findQuery = query
+	if s.shouldHit {
+		return cache.LookupResult{ResponseBody: s.hitResponse, Found: true}, nil
+	}
+	return cache.LookupResult{}, nil
+}
+
 func makeOpenAIRequestBody(model, content string) []byte {
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": model,
@@ -82,7 +92,7 @@ func TestCacheBypassWhenRAGEnabled(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-bypass-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What are my recent orders?"),
@@ -112,7 +122,7 @@ func TestCacheBypassWhenMemoryEnabledGlobally(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-bypass-memory-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What did we discuss yesterday?"),
@@ -221,7 +231,7 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "test-normal-cache-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What is 2+2?"),
@@ -261,7 +271,7 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             make(map[string]string),
+		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "mem-disabled-1",
 		StartTime:           time.Now(),
 		OriginalRequestBody: makeOpenAIRequestBody("m", "Quick question"),
@@ -618,4 +628,35 @@ func TestMemoryContextClearedOnInjectionFailure(t *testing.T) {
 		"on injection failure, original body must be returned unchanged")
 	assert.Empty(t, ctx.MemoryContext,
 		"MemoryContext must be cleared on injection failure to prevent stale forced body mutation")
+}
+
+func TestRequestBodyAfterPreRoutingUsesRAGMutation(t *testing.T) {
+	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
+	ragBody := []byte(`{"model":"test","messages":[{"role":"system","content":"retrieved context"},{"role":"user","content":"hello"}]}`)
+	ctx := &RequestContext{OriginalRequestBody: ragBody}
+
+	assert.Equal(t, ragBody, requestBodyAfterPreRouting(original, ctx))
+}
+
+func TestAutoRoutingDoesNotInjectMemoryTwice(t *testing.T) {
+	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
+	const memoryContext = "project deadline is Friday"
+	injected, err := injectMemoryMessages(original, memoryContext)
+	require.NoError(t, err)
+	request, err := parseOpenAIRequest(injected)
+	require.NoError(t, err)
+	ctx := &RequestContext{
+		MemoryContext: memoryContext,
+	}
+
+	modified, err := (&OpenAIRouter{}).modifyRequestBodyForAutoRouting(
+		request,
+		"test",
+		"",
+		false,
+		nil,
+		ctx,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(modified), memoryContext))
 }

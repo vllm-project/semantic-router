@@ -48,7 +48,7 @@ global:
           switch_margin: 0.05
           stability_weight: 1.0
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
 
@@ -78,7 +78,6 @@ providers:
           weight: 1
     - name: google/gemini-2.5-flash-lite
       api_format: openai
-      reasoning_family: qwen3
       provider_model_id: google/gemini-2.5-flash-lite
       pricing:
         currency: USD
@@ -93,7 +92,6 @@ providers:
           weight: 1
     - name: google/gemini-3.1-pro
       api_format: openai
-      reasoning_family: qwen3
       provider_model_id: google/gemini-3.1-pro
       pricing:
         currency: USD
@@ -108,7 +106,6 @@ providers:
           weight: 1
     - name: openai/gpt5.4
       api_format: openai
-      reasoning_family: qwen3
       provider_model_id: openai/gpt5.4
       pricing:
         currency: USD
@@ -123,7 +120,6 @@ providers:
           weight: 1
     - name: anthropic/claude-opus-4.6
       api_format: openai
-      reasoning_family: qwen3
       provider_model_id: anthropic/claude-opus-4.6
       pricing:
         currency: USD

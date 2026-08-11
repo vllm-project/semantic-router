@@ -6,7 +6,7 @@ listeners:
   timeout: 1200s
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
   router:
@@ -123,7 +123,6 @@ routing:
   signals:
     keywords:
     - name: escalation_domain_override
-      description: Precise boundary terms for escalation domains that are easy to confuse in a compact semantic KB.
       operator: OR
       case_sensitive: false
       keywords:
@@ -134,7 +133,6 @@ routing:
       - amortized time complexity
       - reinforcement schedule
     - name: local_domain_override
-      description: Precise boundary terms for local domains that can be semantically adjacent to biology or philosophy.
       operator: OR
       case_sensitive: false
       keywords:

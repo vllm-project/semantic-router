@@ -22,6 +22,8 @@ export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
 export const loadSecurityPolicyPage = () => import('../pages/SecurityPolicyPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
+export const loadResponseCachePage = () => import('../pages/ResponseCachePage')
+export const loadContextCompressionPage = () => import('../pages/ContextCompressionPage')
 export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
 export const loadTopologyPage = () => import('../pages/TopologyPage')
 export const loadTracingPage = () => import('../pages/TracingPage')
@@ -59,6 +61,11 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/fleet-sim'), load: loadFleetSimOverviewPage },
   { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
+  { matches: (pathname) => pathname.startsWith('/response-cache'), load: loadResponseCachePage },
+  {
+    matches: (pathname) => pathname.startsWith('/context-compression'),
+    load: loadContextCompressionPage,
+  },
   { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },
   { matches: (pathname) => pathname.startsWith('/monitoring'), load: loadMonitoringPage },
   { matches: (pathname) => pathname.startsWith('/tracing'), load: loadTracingPage },

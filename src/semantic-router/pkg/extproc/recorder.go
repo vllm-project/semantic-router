@@ -240,6 +240,10 @@ func buildReplayRoutingRecord(
 		RAGContextLength:     len(ctx.RAGRetrievedContext),
 		RAGSimilarityScore:   ctx.RAGSimilarityScore,
 		CacheSimilarity:      ctx.VSRCacheSimilarity,
+		CacheHitKind:         ctx.VSRCacheHitKind,
+		CacheSource:          ctx.VSRCacheSource,
+		CacheEntryAgeSeconds: ctx.VSRCacheEntryAgeSeconds,
+		CacheTTLSeconds:      ctx.VSRCacheTTLSeconds,
 		ContextTokenCount:    ctx.VSRContextTokenCount,
 		HallucinationEnabled: hallucinationEnabled,
 	}

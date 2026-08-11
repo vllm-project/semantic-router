@@ -14,6 +14,7 @@ import ReactFlow, {
   ConnectionLineType,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { useSearchParams } from 'react-router-dom'
 
 import { useTopologyData, useCollapseState, useTestQuery } from './hooks'
 import { useTheme } from '../../hooks'
@@ -25,9 +26,21 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const { data, loading, error, refresh } = useTopologyData()
+  const {
+    data,
+    loading,
+    error,
+    refresh,
+    routingScopes,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useTopologyData()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
+  const selectedScope =
+    routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
+  const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
   const {
     testQuery,
     setTestQuery,
@@ -35,7 +48,7 @@ const TopologyFlow: React.FC = () => {
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data)
+  } = useTestQuery(data, selectedRoutingModel)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -50,6 +63,25 @@ const TopologyFlow: React.FC = () => {
     visibleDecisionCount: 0,
     totalDecisionCount: 0,
   })
+  const requestedScopeId = searchParams.get('scope')
+
+  useEffect(() => {
+    if (
+      requestedScopeId &&
+      requestedScopeId !== selectedScopeId &&
+      routingScopes.some((scope) => scope.id === requestedScopeId)
+    ) {
+      setSelectedScopeId(requestedScopeId)
+    }
+  }, [requestedScopeId, routingScopes, selectedScopeId, setSelectedScopeId])
+
+  const handleScopeChange = useCallback(
+    (scopeId: string) => {
+      setSelectedScopeId(scopeId)
+      setSearchParams({ scope: scopeId }, { replace: true })
+    },
+    [setSearchParams, setSelectedScopeId],
+  )
 
   const handleExpandHiddenDecisions = useCallback(() => {
     setExpandHiddenDecisions(true)
@@ -100,7 +132,12 @@ const TopologyFlow: React.FC = () => {
 
   useEffect(() => {
     setExpandHiddenDecisions(false)
-  }, [densityMode])
+  }, [densityMode, selectedScopeId])
+
+  useEffect(() => {
+    clearResult()
+    setFocusedDecisionName(null)
+  }, [clearResult, selectedScopeId])
 
   // Generate full topology layout
   useEffect(() => {
@@ -170,7 +207,29 @@ const TopologyFlow: React.FC = () => {
           <div className={styles.canvasTitle}>
             <span>System map</span>
             <strong>Routing Topology</strong>
-            <p>Signals → Projections → Decisions → Runtime → Models</p>
+            <p>
+              Signals → Projections → Decisions → Runtime → Models
+              {selectedScope ? ` · ${selectedScope.label}` : ''}
+            </p>
+            {routingScopes.length > 0 && (
+              <div className={styles.scopeControl}>
+                <label htmlFor="topology-routing-scope">Entrypoint / recipe</label>
+                <select
+                  id="topology-routing-scope"
+                  className={styles.scopeSelect}
+                  value={selectedScopeId}
+                  onChange={(event) => handleScopeChange(event.target.value)}
+                >
+                  {routingScopes.map((scope) => (
+                    <option key={scope.id} value={scope.id}>
+                      {scope.entrypointModelNames.length > 0
+                        ? `${scope.label} · ${scope.entrypointModelNames.join(', ')}`
+                        : scope.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className={styles.layoutToolbar}>
             <div className={`${styles.toolbarSection} ${styles.densitySection}`}>

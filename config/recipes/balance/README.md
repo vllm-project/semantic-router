@@ -21,6 +21,10 @@ All five model aliases currently route through the shared `vllm:8000` backend as
 - Route feedback-driven clarification cheaply and route evidence-sensitive corrections without over-escalating to the complex tier.
 - Keep routing policy-driven through signals, projections, and decisions rather than user preference.
 - Record every decision through `router_replay` on every maintained route.
+- Keep the current model stable across one conversation while still allowing a
+  bounded rescue switch.
+- Expose a policy-compatible secondary candidate on every lane so online
+  learning can be enabled without widening the candidate set globally.
 
 Routing behavior is expressed in `routing.signals`, `routing.projections`, and `routing.decisions`. The paired `recipe.dsl` is generated from and compiles back to the same routing surface; `config.yaml` is the canonical runtime representation consumed by the router.
 
@@ -36,9 +40,27 @@ Routing behavior is expressed in `routing.signals`, `routing.projections`, and `
 
 Replace `providers.models[].backend_refs[]` and alias names when binding this recipe to your own model pool. The dashboard preset metadata in `dashboard/backend/handlers/presets.go` lists the same five aliases as the maintained `balance` preset.
 
+Each provider model also declares a generated data-plane reliability policy:
+weighted least-request balancing, bounded connect/reset retries, circuit
+breakers, and passive 5xx outlier ejection. These settings become effective
+when a model has multiple physical backend refs.
+
+## Learning And Continuity
+
+The recipe enables conversation-scoped protection and keeps adaptation disabled
+by default. Every decision lists its stable primary model first and one
+policy-compatible secondary candidate second. Static selection therefore keeps
+the calibrated route unchanged, while operators can enable
+`routing_sampling` later without using `decision.tier` as a capability pool.
+
+`decision.tier` remains route precedence. The four difficulty bands are the
+projection outputs `balance_simple`, `balance_medium`, `balance_complex`, and
+`balance_reasoning`; they are not decision tiers.
+
 ## Route Order
 
-Higher priority wins. The probe suite calibrates the 13 non-fallback lanes below; `casual_chat` remains an absolute safety net rather than a first-class calibration target.
+Higher priority wins. The probe suite calibrates all 14 lanes below, including
+the absolute `casual_chat` fallback with a long unclassified boundary case.
 
 | Priority | Decision | Target model | Reasoning | Purpose |
 |---|---|---|---|---|
@@ -78,6 +100,16 @@ These values are example prices for routing economics and Insights demos, not ve
 ### Complexity and balance projections
 
 Complexity bands and `balance_*` projections (`balance_simple`, `balance_medium`, `balance_complex`, `balance_reasoning`) drive most escalation decisions. They combine domain classifiers, embedding similarity, structure signals, and context length.
+
+The probe manifest pins one representative decision to each band so threshold
+or weight changes cannot silently collapse the four-band calibration.
+
+Signal evaluation intentionally remains a single policy pass. A cheap terminal
+stage is not safe for this recipe because higher-priority legal, health,
+verification, and specialist overlays can override every cheap lane. The
+runtime still deduplicates referenced signals and evaluates independent signal
+families concurrently; a future staged mode must keep mandatory safety signals
+in the first stage and require an explicitly terminal cheap decision.
 
 ### Domain and specialty lanes
 
@@ -148,6 +180,7 @@ These samples come from `probes.yaml`. The full suite includes paraphrase and mu
 ### `complex_specialist`
 
 - `Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and validation after each phase.`
+- `In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.`
 
 ### `feedback_wrong_answer_verified`
 
@@ -184,6 +217,11 @@ These samples come from `probes.yaml`. The full suite includes paraphrase and mu
 ### `simple_general`
 
 - `In one short paragraph, explain how induction cooktops work for a home kitchen user.`
+
+### `casual_chat`
+
+- A long, unclassified placeholder request that falls outside every preceding
+  context and specialist guard.
 
 ## Validation Commands
 

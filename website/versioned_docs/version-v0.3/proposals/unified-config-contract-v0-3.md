@@ -123,9 +123,9 @@ The remaining in-process CRD reconciliation path now also re-enters the same can
 The repo no longer ships large full-example trees under `config/intelligent-routing/` and similar directories. Instead:
 
 - `config/config.yaml` is the exhaustive canonical reference config
-- `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
-- `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
-- `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
+- `config/fragments/signal/`, `config/fragments/decision/`, `config/fragments/algorithm/`, and `config/fragments/plugin/` hold reusable routing fragments
+- `config/fragments/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
+- `config/fragments/algorithm/` is organized by routing policy family (`looper`, `selection`)
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
 - runtime support examples such as `config/runtime/semantic-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`

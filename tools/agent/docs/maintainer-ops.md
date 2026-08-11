@@ -96,8 +96,9 @@ Do not mutate GitHub.
 
 ## Scheduled CI Workflow
 
-`.github/workflows/maintainer-board.yml` runs the read-only maintainer board on
-a daily schedule and via `workflow_dispatch`. It calls
+`.github/workflows/maintenance.yml` runs the read-only maintainer board on its
+daily cadence and can select it through `workflow_dispatch`. The lifecycle
+workflow invokes the reusable `.github/workflows/maintainer-board.yml`, which calls
 `tools/agent/scripts/run_maintainer_board_ci.sh`, which wraps
 `maintainer_board.py sync` and publishes:
 
@@ -111,7 +112,8 @@ requests. `proposed-actions.json` is informational only in CI; use the local
 
 ### Relationship to `stale.yml`
 
-- `.github/workflows/stale.yml` mutates GitHub directly: it marks inactive
+- `.github/workflows/stale.yml` is a reusable job invoked by
+  `.github/workflows/maintenance.yml`; it mutates GitHub directly by marking inactive
   issues and pull requests as stale and closes them after the grace period.
 - `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
   the current queue using `tools/agent/maintainer-policy.yaml` and gives
@@ -124,7 +126,7 @@ lifecycle.
 Manual trigger example:
 
 ```bash
-gh workflow run maintainer-board.yml -f milestone=v0.4 -f issue_limit=100 -f pr_limit=50
+gh workflow run maintenance.yml -f task=board -f milestone=v0.4
 ```
 
 ## Apply Policy

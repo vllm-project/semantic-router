@@ -121,6 +121,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 		Algorithm:          decision.Algorithm,
 		IsStreaming:        streaming,
 		DecisionName:       decision.Name,
+		RecipeName:         reqCtx.Routing.RecipeName(),
 		OutputContract:     decision.OutputContract,
 		OutputContractSpec: decision.OutputContractSpec,
 	}

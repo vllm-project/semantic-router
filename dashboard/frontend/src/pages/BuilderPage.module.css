@@ -537,6 +537,77 @@
   overflow: hidden;
 }
 
+.routingScopeBar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary) 76%, transparent);
+}
+
+.routingScopeLabel {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.routingScopeOptions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.routingScopeOptions::-webkit-scrollbar {
+  display: none;
+}
+
+.routingScopeOption,
+.routingScopeOptionActive {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 28px;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.routingScopeOption:hover {
+  border-color: var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.routingScopeOptionActive {
+  border-color: color-mix(in srgb, var(--color-success) 32%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-tertiary));
+  color: var(--color-text-primary);
+}
+
+.routingScopeEntrypointCount {
+  min-width: 16px;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: 0.625rem;
+}
+
 .visualRow {
   flex: 1;
   display: flex;
