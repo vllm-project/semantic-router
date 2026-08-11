@@ -49,6 +49,8 @@ on:
         value: ${{ jobs.classify.outputs.performance }}
       router_learning:
         value: ${{ jobs.classify.outputs.router_learning }}
+      recipe_conformance:
+        value: ${{ jobs.classify.outputs.recipe_conformance }}
       agent_text:
         value: ${{ jobs.classify.outputs.agent_text }}
       agent_exec:
@@ -63,8 +65,8 @@ on:
         value: ${{ jobs.classify.outputs.e2e_istio }}
       e2e_agentgateway:
         value: ${{ jobs.classify.outputs.e2e_agentgateway }}
-      e2e_kubernetes:
-        value: ${{ jobs.classify.outputs.e2e_kubernetes }}
+      e2e_envoy_ai_gateway:
+        value: ${{ jobs.classify.outputs.e2e_envoy_ai_gateway }}
       e2e_aibrix:
         value: ${{ jobs.classify.outputs.e2e_aibrix }}
       e2e_dashboard:
@@ -133,37 +135,37 @@ jobs:
       openvino: ${{ steps.matrix.outputs.openvino }}
       performance: ${{ steps.matrix.outputs.performance }}
       router_learning: ${{ steps.matrix.outputs.router_learning }}
+      recipe_conformance: ${{ steps.matrix.outputs.recipe_conformance }}
       agent_text: ${{ steps.matrix.outputs.agent_text }}
       agent_exec: ${{ steps.matrix.outputs.agent_exec }}
       docs_only: ${{ steps.matrix.outputs.docs_only }}
       security: ${{ steps.matrix.outputs.security }}
       full: ${{ steps.matrix.outputs.full }}
-
-      # Per-profile E2E change detection
-      e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_agentgateway: ${{ steps.changes.outputs.e2e_agentgateway }}
-      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
-      e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
-      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
-      e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing: ${{ steps.changes.outputs.e2e_multimodal_routing }}
-      e2e_remote_embedding: ${{ steps.changes.outputs.e2e_remote_embedding }}
-      e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
-      e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
-      e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
-      e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
-      e2e_response_api_redis: ${{ steps.changes.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
-      e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
-      e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
-      e2e_no_model: ${{ steps.changes.outputs.e2e_no_model }}
-      e2e_common: ${{ steps.changes.outputs.e2e_common }}
-      perf: ${{ steps.changes.outputs.perf }}
-      bindings: ${{ steps.changes.outputs.bindings }}
-      
+    # Per-profile E2E change detection
+      e2e_istio: ${{ steps.matrix.outputs.e2e_istio }}
+      e2e_agentgateway: ${{ steps.matrix.outputs.e2e_agentgateway }}
+      e2e_kubernetes: ${{ steps.matrix.outputs.e2e_kubernetes }}
+      e2e_envoy_ai_gateway: ${{ steps.matrix.outputs.e2e_envoy_ai_gateway }}
+      e2e_aibrix: ${{ steps.matrix.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.matrix.outputs.e2e_dashboard }}
+      e2e_dynamic_config: ${{ steps.matrix.outputs.e2e_dynamic_config }}
+      e2e_multimodal_routing: ${{ steps.matrix.outputs.e2e_multimodal_routing }}
+      e2e_remote_embedding: ${{ steps.matrix.outputs.e2e_remote_embedding }}
+      e2e_llm_d: ${{ steps.matrix.outputs.e2e_llm_d }}
+      e2e_routing_strategies: ${{ steps.matrix.outputs.e2e_routing_strategies }}
+      e2e_production_stack: ${{ steps.matrix.outputs.e2e_production_stack }}
+      e2e_response_api: ${{ steps.matrix.outputs.e2e_response_api }}
+      e2e_response_api_redis: ${{ steps.matrix.outputs.e2e_response_api_redis }}
+      e2e_response_api_redis_cluster: ${{ steps.matrix.outputs.e2e_response_api_redis_cluster }}
+      e2e_ml_model_selection: ${{ steps.matrix.outputs.e2e_ml_model_selection }}
+      e2e_multi_endpoint: ${{ steps.matrix.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac: ${{ steps.matrix.outputs.e2e_authz_rbac }}
+      e2e_streaming: ${{ steps.matrix.outputs.e2e_streaming }}
+      e2e_anthropic_shim: ${{ steps.matrix.outputs.e2e_anthropic_shim }}
+      e2e_no_model: ${{ steps.matrix.outputs.e2e_no_model }}
+      e2e_common: ${{ steps.matrix.outputs.e2e_common }}
+      perf: ${{ steps.matrix.outputs.perf }}
+      bindings: ${{ steps.matrix.outputs.bindings }}
     steps:
       - uses: actions/checkout@v4
         with:

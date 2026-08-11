@@ -1,3 +1,4 @@
+schema_version: v1
 name: knowledge
 description: >
   Eval API probes for KB-guided domain routing. Questions from domains with
@@ -12,9 +13,18 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 27.8
+  min_projection_assertion_percent: 50.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text]
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
 decisions:
   - id: escalate_72b
     expected_decision: escalate_72b
+    expected_algorithm: static
     expected_alias: cloud/frontier-72b
     variants:
       - id: biology
@@ -56,6 +66,7 @@ decisions:
 
   - id: keep_7b
     expected_decision: keep_7b
+    expected_algorithm: static
     expected_alias: local/small-7b
     variants:
       - id: engineering

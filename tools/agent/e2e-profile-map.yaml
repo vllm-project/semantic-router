@@ -1,10 +1,10 @@
 version: 2
 
 default_local_profiles:
-  - kubernetes
+  - envoy-ai-gateway
 
 full_ci_profiles:
-  - kubernetes
+  - envoy-ai-gateway
   - dashboard
   - no-model
   - remote-embedding
@@ -26,7 +26,7 @@ full_ci_triggers:
   - e2e/config/**
 
 profile_rules:
-  kubernetes:
+  envoy-ai-gateway:
     owner: e2e
     coverage_role: baseline-router-contract
     selection_mode: default-local,full-ci
@@ -97,9 +97,10 @@ profile_rules:
     owner: e2e
     coverage_role: istio-service-mesh-contracts
     selection_mode: full-ci
-    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router.
+    summary: Istio sidecar, mTLS, and tracing behavior around the router.
     paths:
       - e2e/profiles/istio/**
+      - e2e/testcases/istio_*.go
       - deploy/kubernetes/istio/**
   agentgateway:
     owner: e2e
@@ -158,11 +159,12 @@ profile_rules:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+manual_profile_rules:
   anthropic-shim:
     owner: e2e
     coverage_role: anthropic-shape-backend-translation-contracts
-    selection_mode: full-ci
-    summary: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle synthesis, stop-reason mapping, and request-side field preservation.
+    selection_mode: manual-only
+    summary: Manual diagnostic for the incomplete llama.cpp + Anthropic shim backend route; unit translation contracts remain blocking.
     paths:
       - e2e/profiles/anthropic-shim/**
       - e2e/testing/anthropic-shim/**
@@ -251,6 +253,28 @@ manual_profile_rules:
       - e2e/testcases/testdata/hallucination_detection_cases.json
 
 workflow_suite_rules:
+  recipe-conformance-live:
+    owner: router-core
+    kind: workflow-integration
+    summary: Auto-discovered maintained recipe probes against a live CPU router.
+    workflow: .github/workflows/recipe-conformance.yml
+    change_filter: recipe_conformance
+    local_command: make recipe-conformance-live-cpu-all
+    paths:
+      - config/recipes/**
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/decision/**
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/projection/**
+      - src/semantic-router/pkg/services/classification*
+      - src/semantic-router/pkg/apiserver/route_classify*
+      - tools/agent/scripts/recipe_conformance*
+      - tools/agent/scripts/router_calibration_*
+      - tools/agent/schemas/recipe-probes-v1.schema.json
+      - tools/make/recipe-conformance.mk
+      - e2e/testing/run_recipe_conformance.sh
+      - .github/workflows/recipe-conformance.yml
   vllm-sr-cli-integration:
     owner: vllm-sr-cli
     kind: workflow-integration

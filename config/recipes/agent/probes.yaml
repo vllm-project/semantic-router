@@ -1,3 +1,4 @@
+schema_version: v1
 name: agent
 description: >
   Eval API probes for agent-oriented routing across containment, privacy,
@@ -13,9 +14,32 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 1.7
+  min_projection_assertion_percent: 0.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages, tools]
+  min_tag_counts:
+    language: 2
+    negative: 2
+    collision: 1
+    fallback: 2
+    stress: 1
+    tools: 1
+    multi_turn: 1
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    collision: 100.0
+    fallback: 100.0
+    stress: 100.0
+    tools: 100.0
+    multi_turn: 100.0
 decisions:
   - id: local_security_containment
     expected_decision: local_security_containment
+    expected_algorithm: static
     expected_alias: qwen/qwen3.6-rocm
     expected_plugins: [router_replay]
     variants:
@@ -33,6 +57,7 @@ decisions:
 
   - id: local_privacy_policy
     expected_decision: local_privacy_policy
+    expected_algorithm: static
     expected_alias: qwen/qwen3.6-rocm
     expected_plugins: [router_replay]
     variants:
@@ -48,6 +73,8 @@ decisions:
 
   - id: simple_math_fast_path
     expected_decision: simple_math_fast_path
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.6-rocm
     variants:
       - id: arithmetic
@@ -59,6 +86,8 @@ decisions:
 
   - id: domain_legal_health
     expected_decision: domain_legal_health
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: anthropic/claude-opus-4.6
     variants:
       - id: indemnity
@@ -70,6 +99,8 @@ decisions:
 
   - id: domain_code_complex
     expected_decision: domain_code_complex
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     variants:
       - id: distributed_debugging
@@ -81,6 +112,8 @@ decisions:
 
   - id: domain_code
     expected_decision: domain_code
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-2.5-flash-lite
     variants:
       - id: python_bug
@@ -106,6 +139,8 @@ decisions:
 
   - id: domain_stem_research
     expected_decision: domain_stem_research
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     variants:
       - id: physics_evidence
@@ -117,6 +152,8 @@ decisions:
 
   - id: domain_business
     expected_decision: domain_business
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-2.5-flash-lite
     variants:
       - id: pricing
@@ -128,6 +165,8 @@ decisions:
 
   - id: complex_general
     expected_decision: complex_general
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     variants:
       - id: uncertainty
@@ -139,6 +178,7 @@ decisions:
 
   - id: medium_general
     expected_decision: medium_general
+    expected_algorithm: static
     expected_alias: google/gemini-2.5-flash-lite
     variants:
       - id: concept_explanation
@@ -151,6 +191,7 @@ decisions:
 
   - id: simple_general
     expected_decision: simple_general
+    expected_algorithm: static
     expected_alias: qwen/qwen3.6-rocm
     variants:
       - id: capital
