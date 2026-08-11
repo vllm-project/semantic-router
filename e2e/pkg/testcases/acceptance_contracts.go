@@ -49,7 +49,7 @@ type progressiveStressFloor struct {
 	minimum float64
 }
 
-const baselineRouterContractProfile = "kubernetes"
+const baselineRouterContractProfile = "envoy-ai-gateway"
 
 var baselineAcceptanceContracts = map[string]acceptanceContract{
 	"domain-classify": applyFlatRateContract(flatRateContract{

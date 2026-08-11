@@ -427,7 +427,15 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(
+		pendingRequestPrimaryKey(requestID),
+		requestID,
+		model,
+		query,
+		requestBody,
+		nil,
+		ttlSeconds,
+	)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -436,6 +444,10 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	return err
+}
+
+func pendingRequestPrimaryKey(requestID string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(requestID)))
 }
 
 // UpdateWithResponse completes a pending request by adding the response

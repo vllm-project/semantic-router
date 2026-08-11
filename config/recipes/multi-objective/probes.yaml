@@ -1,4 +1,5 @@
 ---
+schema_version: v1
 name: multi-objective
 description: >
   Backend-independent Eval API probes for every maintained decision in the
@@ -14,6 +15,26 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 84.5
+  min_projection_assertion_percent: 100.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages, tools]
+  min_tag_counts:
+    language: 120
+    negative: 29
+    collision: 8
+    stress: 20
+    tools: 4
+    multi_turn: 3
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    collision: 100.0
+    stress: 100.0
+    tools: 100.0
+    multi_turn: 100.0
 decisions:
   - id: balanced_standard
     model: vllm-sr/mom-balanced-v1

@@ -90,6 +90,7 @@ subsystems:
   - AGENTS.md
   - tools/agent/docs/**
   - tools/agent/skills/**
+  - tools/agent/schemas/**
   - tools/agent/*.yaml
   - tools/agent/scripts/**
   - .github/copilot-instructions.md
@@ -108,9 +109,9 @@ validation:
     router_health_path: http://localhost:8000/health
     envoy_ready_path: http://localhost:8801/ready
   e2e:
-    default_local_profile: kubernetes
+    default_local_profile: envoy-ai-gateway
     full_ci_profiles:
-    - kubernetes
+    - envoy-ai-gateway
     - dashboard
     - remote-embedding
 docs:
@@ -145,6 +146,7 @@ docs:
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
 - tools/agent/docs/plans/pl-0038-entrypoints-recipes.md
 - tools/agent/docs/plans/pl-0039-domain-ci-architecture.md
+- tools/agent/docs/plans/pl-0040-recipe-conformance-ci.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -304,6 +306,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0039-domain-ci-architecture.md
     steward: agent-contract
     freshness: update after each domain CI architecture implementation and validation loop
+  - path: tools/agent/docs/plans/pl-0040-recipe-conformance-ci.md
+    steward: router-core
+    freshness: update after each recipe conformance implementation and validation loop
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially

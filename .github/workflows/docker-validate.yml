@@ -21,14 +21,10 @@ jobs:
       matrix:
         image: ${{ fromJSON(inputs.images) }}
     steps:
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL
-          sudo apt-get clean
-          sudo docker system prune -af --volumes || true
-
       - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - uses: docker/setup-buildx-action@v3
         with:
