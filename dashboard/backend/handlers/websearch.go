@@ -175,7 +175,8 @@ func (rl *rateLimiter) allowClient(key string) bool {
 		return false
 	}
 
-	rl.requests[key] = append(recent, now)
+	recent = append(recent, now)
+	rl.requests[key] = recent
 	return true
 }
 
@@ -193,7 +194,8 @@ func (rl *rateLimiter) reserveUpstream() bool {
 		return false
 	}
 
-	rl.globalReqs = append(recent, now)
+	recent = append(recent, now)
+	rl.globalReqs = recent
 	return true
 }
 
