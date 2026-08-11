@@ -60,7 +60,7 @@ var endpoints = []endpointSpec{
 	{
 		Name: "embeddings-multimodal",
 		Path: "/api/v1/embeddings",
-		Body: `{"texts":["hello"],"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
+		Body: `{"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
 		Code: "EMBEDDING_NOT_READY",
 	},
 	{

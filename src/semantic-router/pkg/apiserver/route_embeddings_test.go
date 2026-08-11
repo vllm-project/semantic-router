@@ -588,3 +588,119 @@ func TestEmbeddingHandlerReturns503ForMixedRequestWhenTextModelsNotReady(t *test
 		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
 	}
 }
+
+// snapshotEmbeddingReadiness captures and restores every binding readiness flag
+// so per-family tests cannot leak state into the shared global flags.
+func snapshotEmbeddingReadiness() func() {
+	origEmbedding := candle_binding.IsEmbeddingReady()
+	origMultimodal := candle_binding.IsMultiModalReady()
+	origQwen3 := candle_binding.IsEmbeddingFamilyReady("qwen3")
+	origGemma := candle_binding.IsEmbeddingFamilyReady("gemma")
+	origMmbert := candle_binding.IsEmbeddingFamilyReady("mmbert")
+	return func() {
+		candle_binding.SetEmbeddingReady(origEmbedding)
+		candle_binding.SetMultiModalReady(origMultimodal)
+		candle_binding.SetEmbeddingFamilyReady("qwen3", origQwen3)
+		candle_binding.SetEmbeddingFamilyReady("gemma", origGemma)
+		candle_binding.SetEmbeddingFamilyReady("mmbert", origMmbert)
+	}
+}
+
+// A factory initialized with only one text family must not satisfy an explicit
+// request for a family that was never loaded: requesting "gemma" while only
+// qwen3 is ready must return typed 503 EMBEDDING_NOT_READY, not a 500.
+func TestEmbeddingHandlerReturns503ForExplicitModelNotLoaded(t *testing.T) {
+	defer snapshotEmbeddingReadiness()()
+	candle_binding.SetEmbeddingReady(true)
+	candle_binding.SetEmbeddingFamilyReady("qwen3", true)
+	candle_binding.SetEmbeddingFamilyReady("gemma", false)
+	candle_binding.SetEmbeddingFamilyReady("mmbert", false)
+
+	s := &ClassificationAPIServer{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
+		strings.NewReader(`{"texts":["hello"],"model":"gemma"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleEmbeddings(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for explicit gemma request when only qwen3 is loaded, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
+	}
+}
+
+// A factory with both families loaded must let an explicit request for a
+// loaded family past the readiness gate (it is not a 503; generation may still
+// fail without a live model).
+func TestEmbeddingHandlerProceedsWhenExplicitModelLoaded(t *testing.T) {
+	defer snapshotEmbeddingReadiness()()
+	candle_binding.SetEmbeddingReady(true)
+	candle_binding.SetEmbeddingFamilyReady("qwen3", true)
+	candle_binding.SetEmbeddingFamilyReady("gemma", true)
+
+	s := &ClassificationAPIServer{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
+		strings.NewReader(`{"texts":["hello"],"model":"gemma"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleEmbeddings(rr, req)
+
+	if rr.Code == http.StatusServiceUnavailable {
+		t.Fatalf("expected non-503 for explicit gemma request when gemma is loaded, got 503: %s", rr.Body.String())
+	}
+}
+
+// When no text family is loaded, an explicit model request must be a typed 503.
+func TestEmbeddingHandlerReturns503ForExplicitModelWhenNothingLoaded(t *testing.T) {
+	defer snapshotEmbeddingReadiness()()
+	candle_binding.SetEmbeddingReady(false)
+	candle_binding.SetEmbeddingFamilyReady("qwen3", false)
+	candle_binding.SetEmbeddingFamilyReady("gemma", false)
+	candle_binding.SetEmbeddingFamilyReady("mmbert", false)
+
+	s := &ClassificationAPIServer{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/embeddings",
+		strings.NewReader(`{"texts":["hello"],"model":"qwen3"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleEmbeddings(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for explicit qwen3 request when nothing is loaded, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
+	}
+}
+
+// checkEmbeddingReadiness must follow the requested model family: an auto
+// request passes when any text family is ready, while an explicit request for
+// an absent family is rejected even when another family is ready.
+func TestCheckEmbeddingReadinessFollowsRequestedFamily(t *testing.T) {
+	defer snapshotEmbeddingReadiness()()
+	candle_binding.SetEmbeddingReady(false)
+	candle_binding.SetEmbeddingFamilyReady("qwen3", true)
+	candle_binding.SetEmbeddingFamilyReady("gemma", false)
+
+	textReq := func(model string) EmbeddingRequest {
+		return EmbeddingRequest{Model: model, Texts: []string{"hello"}}
+	}
+
+	if err := checkEmbeddingReadiness(textReq("auto")); err != nil {
+		t.Fatalf("expected auto text request to be ready with one family loaded, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(textReq("qwen3")); err != nil {
+		t.Fatalf("expected explicit qwen3 request to be ready when qwen3 is loaded, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(textReq("gemma")); err == nil {
+		t.Fatalf("expected explicit gemma request to be rejected when gemma is not loaded")
+	}
+	if !errors.Is(checkEmbeddingReadiness(textReq("gemma")), candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady for an explicitly requested absent family")
+	}
+}

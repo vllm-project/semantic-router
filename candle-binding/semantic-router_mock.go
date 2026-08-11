@@ -2,7 +2,10 @@
 
 package candle_binding
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // This file is the compile-only stub for the Candle backend. It is selected on
 // Windows or whenever CGO is disabled, i.e. whenever the native Candle library
@@ -26,6 +29,9 @@ var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 var (
 	embeddingModelsReady bool
 	multiModalReady      bool
+	qwen3Ready           bool
+	gemmaReady           bool
+	mmBertReady          bool
 )
 
 // TokenizeResult represents the result of tokenization
@@ -304,6 +310,45 @@ func IsEmbeddingReady() bool {
 // SetEmbeddingReady sets the embedding readiness flag for tests.
 func SetEmbeddingReady(ready bool) {
 	embeddingModelsReady = ready
+}
+
+// normalizeFamily canonicalizes a model-family name for readiness lookups.
+func normalizeFamily(modelType string) string {
+	return strings.ToLower(strings.TrimSpace(modelType))
+}
+
+// IsEmbeddingFamilyReady reports the test-controlled readiness of a specific
+// embedding model family ("qwen3", "gemma", "mmbert", "multimodal", or "auto"
+// for any text embedding family).
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		return qwen3Ready
+	case "gemma":
+		return gemmaReady
+	case "mmbert":
+		return mmBertReady
+	case "multimodal":
+		return multiModalReady
+	default:
+		return embeddingModelsReady || qwen3Ready || gemmaReady || mmBertReady
+	}
+}
+
+// SetEmbeddingFamilyReady sets the per-family embedding readiness flag for tests.
+func SetEmbeddingFamilyReady(modelType string, ready bool) {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		qwen3Ready = ready
+	case "gemma":
+		gemmaReady = ready
+	case "mmbert":
+		mmBertReady = ready
+	case "multimodal":
+		multiModalReady = ready
+	default:
+		embeddingModelsReady = ready
+	}
 }
 
 // IsMultiModalReady reports the test-controlled multimodal readiness state.

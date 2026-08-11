@@ -41,12 +41,14 @@ func isEmbeddingModelNotReady(err error) bool {
 }
 
 // checkEmbeddingReadiness validates that the models required for the request
-// are initialized. Text inputs require text-model readiness; image inputs
-// require multimodal-model readiness. This prevents a text-ready-only
-// deployment from attempting image inference (which would 500) and a
-// multimodal-only deployment from being rejected for text-only requests.
+// are initialized. Text inputs require readiness of the requested model family
+// (an explicitly requested absent model is not ready, even when another text
+// family is loaded); image inputs require multimodal-model readiness. This
+// prevents a text-ready-only deployment from attempting image inference (which
+// would 500) and a multimodal-only deployment from being rejected for
+// text-only requests.
 func checkEmbeddingReadiness(req EmbeddingRequest) error {
-	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingReady() {
+	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingFamilyReady(req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
@@ -292,7 +294,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !candle_binding.IsEmbeddingReady() {
+	if !candle_binding.IsEmbeddingFamilyReady(req.Model) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			"Embedding models are not initialized — configure an embedding model in your router config")
 		return
@@ -363,7 +365,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	if !candle_binding.IsEmbeddingReady() {
+	if !candle_binding.IsEmbeddingFamilyReady(req.Model) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			"Embedding models are not initialized — configure an embedding model in your router config")
 		return

@@ -1753,6 +1753,40 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn is_embedding_family_ready(model_type_str: *const c_char) -> bool {
+    if model_type_str.is_null() {
+        return false;
+    }
+
+    let model_type_str = match unsafe { CStr::from_ptr(model_type_str) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    if model_type_str == "multimodal" {
+        return get_multimodal_refs().is_some();
+    }
+
+    let Some(factory) = GLOBAL_MODEL_FACTORY.get() else {
+        return false;
+    };
+
+    match model_type_str {
+        "qwen3" => factory.get_qwen3_model().is_some(),
+        "gemma" => factory.get_gemma_model().is_some(),
+        "mmbert" => factory.get_mmbert_model().is_some(),
+        "auto" | "" => {
+            factory.get_qwen3_model().is_some()
+                || factory.get_gemma_model().is_some()
+                || factory.get_mmbert_model().is_some()
+        }
+        _ => false,
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,

@@ -247,6 +247,7 @@ extern int calculate_similarity_batch(const char* query, const char** candidates
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern bool is_embedding_family_ready(const char* model_type);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
@@ -459,15 +460,26 @@ import "C"
 
 var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 
+// ensureEmbeddingModelReady validates that the embedding model family required
+// for an operation is loaded. Specific families ("qwen3", "gemma", "mmbert")
+// are checked against their own loaded state so an explicitly requested model
+// that was never initialized (or failed to load) is rejected instead of
+// falling through to a generic generation error. "multimodal" uses the
+// multimodal model flag, and ""/"auto" uses the aggregate text-model flag.
 func ensureEmbeddingModelReady(modelType string) error {
-	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
+	switch normalizeFamily(modelType) {
+	case "multimodal":
 		if !multiModalReady.Load() {
 			return ErrEmbeddingModelNotReady
 		}
-		return nil
-	}
-	if !embeddingModelsReady.Load() {
-		return ErrEmbeddingModelNotReady
+	case "qwen3", "gemma", "mmbert":
+		if !IsEmbeddingFamilyReady(modelType) {
+			return ErrEmbeddingModelNotReady
+		}
+	default:
+		if !embeddingModelsReady.Load() {
+			return ErrEmbeddingModelNotReady
+		}
 	}
 	return nil
 }
@@ -482,6 +494,9 @@ var (
 	genericClassifierInitialized          bool
 	embeddingModelsReady                  atomic.Bool
 	multiModalReady                       atomic.Bool
+	qwen3Ready                            atomic.Bool
+	gemmaReady                            atomic.Bool
+	mmBertReady                           atomic.Bool
 	classifierInitOnce                    sync.Once
 	classifierInitErr                     error
 	piiClassifierInitOnce                 sync.Once
@@ -940,6 +955,7 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string,
 	}
 
 	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Embedding models initialized successfully")
 
 	return nil
@@ -983,6 +999,7 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 		return fmt.Errorf("failed to initialize mmBERT embedding model")
 	}
 
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support")
 	return nil
 }
@@ -1028,6 +1045,7 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	}
 
 	multiModalReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Multi-modal embedding model initialized (text+image+audio, 384-dim)")
 	return nil
 }
@@ -1373,6 +1391,7 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 	}
 
 	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
 	return nil
 }
@@ -2002,6 +2021,70 @@ func IsEmbeddingReady() bool {
 // successfully initialized and is ready to serve image/audio requests.
 func IsMultiModalReady() bool {
 	return multiModalReady.Load()
+}
+
+// normalizeFamily canonicalizes a model-family name for readiness lookups.
+func normalizeFamily(modelType string) string {
+	return strings.ToLower(strings.TrimSpace(modelType))
+}
+
+// IsEmbeddingFamilyReady reports whether the specific embedding model family
+// requested by a caller is loaded. Family names are "qwen3", "gemma", "mmbert",
+// "multimodal", and "auto" (or "") for "any text embedding family". The
+// per-family state is populated from the Rust model factory after
+// initialization, so an explicitly requested model that was never loaded (or
+// failed to load non-fatally) is correctly reported as not ready.
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		return qwen3Ready.Load()
+	case "gemma":
+		return gemmaReady.Load()
+	case "mmbert":
+		return mmBertReady.Load()
+	case "multimodal":
+		return multiModalReady.Load()
+	default:
+		return embeddingModelsReady.Load() ||
+			qwen3Ready.Load() ||
+			gemmaReady.Load() ||
+			mmBertReady.Load()
+	}
+}
+
+// SetEmbeddingFamilyReady sets the per-family embedding readiness flag for testing.
+func SetEmbeddingFamilyReady(modelType string, ready bool) {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		qwen3Ready.Store(ready)
+	case "gemma":
+		gemmaReady.Store(ready)
+	case "mmbert":
+		mmBertReady.Store(ready)
+	case "multimodal":
+		multiModalReady.Store(ready)
+	default:
+		embeddingModelsReady.Store(ready)
+	}
+}
+
+// familyLoaded queries the Rust model factory for the loaded state of a model
+// family. It is used to derive the per-family readiness flags from actual
+// loaded state rather than from the aggregated init result.
+func familyLoaded(modelType string) bool {
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+	return bool(C.is_embedding_family_ready(cModelType))
+}
+
+// syncEmbeddingFamilyReadiness populates the per-family readiness flags from
+// the Rust model factory. It must be called only after a successful embedding
+// model initialization so the factory reflects the real loaded state.
+func syncEmbeddingFamilyReadiness() {
+	qwen3Ready.Store(familyLoaded("qwen3"))
+	gemmaReady.Store(familyLoaded("gemma"))
+	mmBertReady.Store(familyLoaded("mmbert"))
+	multiModalReady.Store(familyLoaded("multimodal"))
 }
 
 // SetEmbeddingReady sets the embedding model readiness flag for testing.
