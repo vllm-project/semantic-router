@@ -50,6 +50,11 @@ type Request struct {
 	// Used by extproc to lookup decision configuration and apply plugins
 	DecisionName string
 
+	// RecipeName is the routing namespace that owns DecisionName. It is
+	// propagated on router-generated model calls so internal requests retain
+	// the parent request's recipe scope.
+	RecipeName config.RecipeName
+
 	// OutputContract is the decision-scoped final response contract. The looper
 	// merges it with any output format already present in the original request.
 	OutputContract string

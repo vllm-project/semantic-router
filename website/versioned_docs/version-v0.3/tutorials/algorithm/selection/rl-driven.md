@@ -4,7 +4,7 @@
 
 `rl_driven` is a selection algorithm for online exploration and personalization. It supports multiple sub-modes: **Thompson Sampling**, **Router-R1 (LLM-as-router)**, and **Concurrent (arena mode)**.
 
-It aligns to `config/algorithm/selection/rl-driven.yaml`.
+It aligns to `config/fragments/algorithm/selection/rl-driven.yaml`.
 
 **Papers**:
 

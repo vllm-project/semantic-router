@@ -13,9 +13,21 @@ for every prompt.
   avoiding the latency and token multiplier of fan-out.
 - `accuracy_direct` is the single-worker default.
 
-Per-request fan-out is capped at three workers. Workflow steps and completion
-tokens are also bounded so accuracy improvements cannot grow work without a
-limit.
+Priority is intentional: explicit Workflow requests win over long context;
+long context wins over Deliberation; Deliberation wins over the direct
+fallback. The maintained probes include both priority collisions.
+
+Per-request fan-out is capped at three workers. The planner is capped at 2,048
+completion tokens, each Workflow request at four steps and 8,192 completion
+tokens. Workflow and Fusion require two of three successful workers and use
+`on_error: skip`, so one failed worker degrades the panel instead of failing
+the whole request. Fusion keeps reasoning enabled
+for panel workers but disables it for the coordinator's structured judge calls,
+preventing reasoning-only completions from producing an empty synthesis.
+
+The maintained OpenRouter worker IDs are
+`anthropic/claude-opus-4.8`, `google/gemini-3.1-pro-preview`, and
+`openai/gpt-5.5`. Contract tests pin those IDs and the orchestration bounds.
 
 ## Validate
 

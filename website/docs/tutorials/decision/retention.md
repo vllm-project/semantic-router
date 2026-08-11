@@ -32,9 +32,9 @@ structured and reviewable.
 
 The runtime now consumes every retention field, with one scoring bias deferred:
 
-- `drop: true` skips the response-side semantic-cache write for the matched
-  decision. It does not block semantic-cache reads for the current request.
-- `ttl_turns` (when `> 0`) overrides the decision/global semantic-cache TTL for
+- `drop: true` skips the response-side response-cache write for the matched
+  decision. It does not block response-cache reads for the current request.
+- `ttl_turns` (when `> 0`) overrides the decision response-cache TTL for
   this entry, scoping it to roughly that many future turns (turns are mapped to
   seconds at the cache-write seam; a configurable seconds-per-turn knob is
   follow-up work).
@@ -53,20 +53,20 @@ rejects setting both).
 
 ## Retention Target Inventory
 
-Besides the semantic-cache write, session-aware routing needs retention policy
+Besides the response-cache write, session-aware routing needs retention policy
 for these state signals or runtime hints:
 
 | Target | Why retention matters | Current status |
 |--------|-----------------------|----------------|
 | Semantic-cache response write | Prevents low-value, private, or unstable turns from becoming future cache hits. | Enforced by `drop: true`. |
-| Cache-write lifetime | Keeps a reusable response only for a bounded number of future turns instead of using a wall-clock-only TTL. | `ttl_turns` overrides the per-entry semantic-cache TTL (turns mapped to seconds); a configurable seconds-per-turn knob is follow-up. |
+| Cache-write lifetime | Keeps a reusable response only for a bounded number of future turns instead of using a wall-clock-only TTL. | `ttl_turns` overrides the per-entry response-cache TTL (turns mapped to seconds); a configurable seconds-per-turn knob is follow-up. |
 | Current model affinity | Avoids bouncing a multi-turn session away from the model that owns the conversation context. | `keep_current_model` forces a stay via the model-switch gate in any mode. |
 | Prefix or KV cache warmth | Protects expensive prompt prefixes or warm worker state when a follow-up turn is likely. | `prefer_prefix_retention` is emitted to the pool as a response header; scoring bias and provider/cache-manager eviction integration are follow-up work. |
 | Turn and transition telemetry | Records turn index, selected model, token/cost totals, retry/quality trends, and model transitions so stay-vs-switch policy can be audited. | Produced by session telemetry and transition logging surfaces, not by this directive alone. |
 | Conversation, tool, and replay history | Preserves the history needed for follow-up classification, tool retrieval, and offline lookup-table generation. | Owned by Response API, tool-history, and router-replay surfaces; retention directives should not duplicate those stores. |
 
 That inventory is why the directive is named `retention` instead of
-`semantic_cache`: semantic-cache write skipping is only the first runtime
+`semantic_cache`: response-cache write skipping is only the first runtime
 consumer of a broader session-retention contract.
 
 ## DSL Round-Trip Scope
@@ -132,8 +132,8 @@ routing:
 
 | Field | Type | Runtime behavior |
 |-------|------|------------------|
-| `drop` | boolean | When `true`, skips response-side semantic-cache writes for the matched decision. |
-| `ttl_turns` | integer >= 0 | When `> 0`, overrides the matched decision's semantic-cache entry TTL (turns mapped to seconds). Emitted as `x-vsr-retention-ttl-turns` whenever explicitly set, including an explicit `0`. |
+| `drop` | boolean | When `true`, skips response-side response-cache writes for the matched decision. |
+| `ttl_turns` | integer >= 0 | When `> 0`, overrides the matched decision's response-cache entry TTL (turns mapped to seconds). Emitted as `x-vsr-retention-ttl-turns` whenever explicitly set, including an explicit `0`. |
 | `keep_current_model` | boolean | When `true`, forces the model-switch gate to keep the current model regardless of gate mode. Also emitted as `x-vsr-retention-keep-current-model`. |
 | `prefer_prefix_retention` | boolean | Emitted to the pool as `x-vsr-retention-prefer-prefix`; session-aware scoring bias and KV-cache eviction integration are follow-up. |
 

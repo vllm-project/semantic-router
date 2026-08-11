@@ -32,6 +32,9 @@ if [[ "${image_name}" == "dashboard" ]]; then
         dashboard_version="v${project_version}-dev.${short_sha}"
       fi
       ;;
+    release)
+      dashboard_version="${RELEASE_TAG:?RELEASE_TAG is required for release dashboard version}"
+      ;;
     *)
       echo "::error::Unsupported DASHBOARD_VERSION_MODE '${dashboard_version_mode}'" >&2
       exit 1

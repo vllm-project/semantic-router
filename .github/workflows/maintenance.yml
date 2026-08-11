@@ -1,0 +1,79 @@
+name: Maintenance
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Maintenance task to run.
+        required: true
+        default: all
+        type: choice
+        options: [all, board, stale, translation, leaderboard]
+      milestone:
+        description: Optional maintainer-board milestone.
+        required: false
+        default: v0.4
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance-${{ github.event.schedule || inputs.task || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  board:
+    name: Maintainer board
+    if: >-
+      github.event.schedule == '0 8 * * *'
+      || (github.event_name == 'workflow_dispatch'
+        && (inputs.task == 'all' || inputs.task == 'board'))
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: ./.github/workflows/maintainer-board.yml
+    with:
+      milestone: ${{ inputs.milestone || 'v0.4' }}
+    secrets: inherit
+
+  stale:
+    name: Stale lifecycle
+    if: >-
+      github.event.schedule == '0 8 * * *'
+      || (github.event_name == 'workflow_dispatch'
+        && (inputs.task == 'all' || inputs.task == 'stale'))
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/stale.yml
+    secrets: inherit
+
+  translation:
+    name: Translation status
+    if: >-
+      github.event.schedule == '0 1 * * 1'
+      || (github.event_name == 'workflow_dispatch'
+        && (inputs.task == 'all' || inputs.task == 'translation'))
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/check-translation-staleness.yml
+    secrets: inherit
+
+  leaderboard:
+    name: Contributor leaderboard
+    if: >-
+      github.event.schedule == '0 1 * * 1'
+      || (github.event_name == 'workflow_dispatch'
+        && (inputs.task == 'all' || inputs.task == 'leaderboard'))
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/contributor-leaderboard.yml
+    secrets: inherit

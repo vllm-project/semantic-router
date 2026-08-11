@@ -103,7 +103,7 @@ def _execute_serve(
     validate_setup_mode_flags(setup_mode, minimal, readonly)
 
     env_vars: dict[str, str] = {}
-    append_passthrough_env_vars(env_vars)
+    append_passthrough_env_vars(env_vars, config_path)
     apply_runtime_mode_env_vars(
         env_vars,
         minimal,

@@ -24,7 +24,7 @@ export const SIGNAL_TYPES = [
 export type SignalType = (typeof SIGNAL_TYPES)[number]
 
 export const PLUGIN_TYPES = [
-  'semantic-cache',
+  'response_cache',
   'memory',
   'system_prompt',
   'header_mutation',
@@ -37,10 +37,11 @@ export const PLUGIN_TYPES = [
   'tool_selection',
   'request_params',
   'response_jailbreak',
+  'context_compression',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
-  'semantic-cache': 'Cache semantically similar queries to reduce latency and cost',
+  response_cache: 'Reuse exact or semantically compatible responses to reduce latency and cost',
   memory: 'Persistent conversation memory with vector retrieval',
   system_prompt: 'Inject or replace system prompts for the model',
   header_mutation: 'Add, update, or remove HTTP headers on requests/responses',
@@ -53,13 +54,14 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
   request_params: 'Mutate request parameters before forwarding to the model',
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
+  context_compression: 'Compress large tool outputs before provider dispatch',
 }
 
 export const BACKEND_TYPES = [
   'vllm_endpoint',
   'provider_profile',
   'embedding_model',
-  'semantic_cache',
+  'response_cache',
   'memory',
   'response_api',
   'vector_store',

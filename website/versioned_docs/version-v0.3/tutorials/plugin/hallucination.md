@@ -4,7 +4,7 @@
 
 `hallucination` is a route-local plugin for fact-checking and response-quality screening after the decision already matched.
 
-It aligns to `config/plugin/hallucination/fact-check.yaml`.
+It aligns to `config/fragments/plugin/hallucination/fact-check.yaml`.
 
 ## Key Advantages
 

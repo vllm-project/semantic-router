@@ -2,6 +2,8 @@ import type {
   ConfigData,
   DecisionCondition,
   NumericPredicate,
+  RecipeRoutingConfig,
+  RoutingConfig,
   SignalType,
   StructureFeature,
   StructureSource,
@@ -264,25 +266,50 @@ export function getSignalReferenceCount(
   signalName: string,
 ): number {
   if (!config) return 0
+  const defaultRouting: RoutingConfig = config.routing ?? {
+    signals: config.signals,
+    projections: config.projections,
+    decisions: config.decisions,
+  }
+  const legacyReferences = config.routing
+    ? 0
+    : countReferences(
+        config.complexity_rules?.map((signal) => signal.composer),
+        SIGNAL_CONFIG_TYPES[signalType],
+        signalName,
+      )
+  return (
+    getSignalReferenceCountInRoutingProfile(
+      defaultRouting,
+      signalType,
+      signalName,
+    ) +
+    (config.recipes ?? []).reduce(
+      (total, recipe) =>
+        total +
+        getSignalReferenceCountInRoutingProfile(
+          recipe.routing,
+          signalType,
+          signalName,
+        ),
+      0,
+    ) +
+    legacyReferences
+  )
+}
+
+export function getSignalReferenceCountInRoutingProfile(
+  routing: RecipeRoutingConfig | RoutingConfig | undefined,
+  signalType: SignalType,
+  signalName: string,
+): number {
+  if (!routing) return 0
   const type = SIGNAL_CONFIG_TYPES[signalType]
   return (
-    countReferences(config.decisions, type, signalName) +
-    countReferences(config.projections?.scores, type, signalName) +
+    countReferences(routing.decisions, type, signalName) +
+    countReferences(routing.projections?.scores, type, signalName) +
     countReferences(
-      config.signals?.complexity?.map((signal) => signal.composer),
-      type,
-      signalName,
-    ) +
-    countReferences(config.routing?.decisions, type, signalName) +
-    countReferences(config.routing?.projections?.scores, type, signalName) +
-    countReferences(config.recipes, type, signalName) +
-    countReferences(
-      config.routing?.signals?.complexity?.map((signal) => signal.composer),
-      type,
-      signalName,
-    ) +
-    countReferences(
-      config.complexity_rules?.map((signal) => signal.composer),
+      routing.signals?.complexity?.map((signal) => signal.composer),
       type,
       signalName,
     )

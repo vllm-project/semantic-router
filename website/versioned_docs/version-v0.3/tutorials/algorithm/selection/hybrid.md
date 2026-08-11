@@ -4,7 +4,7 @@
 
 `hybrid` is a composite selection algorithm that combines multiple ranking signals — Elo ratings, Router-DC embedding similarity, AutoMix POMDP values, and cost — into one weighted score.
 
-It aligns to `config/algorithm/selection/hybrid.yaml`.
+It aligns to `config/fragments/algorithm/selection/hybrid.yaml`.
 
 **Paper**: [Hybrid LLM: Cost-Efficient Quality-Aware Query Routing](https://arxiv.org/abs/2404.14618)
 

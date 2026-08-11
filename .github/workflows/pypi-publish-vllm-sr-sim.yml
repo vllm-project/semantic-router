@@ -2,11 +2,6 @@ name: Publish vLLM-SR-Sim Python Package
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "src/fleet-sim/**"
-      - ".github/workflows/pypi-publish-vllm-sr-sim.yml"
     tags:
       - "vllm-sr-sim-v*"
   workflow_dispatch:
@@ -20,13 +15,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
 
     defaults:
       run:
@@ -116,7 +113,7 @@ jobs:
           echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr-sim==${{ steps.extract_version.outputs.version }}"
 
       - name: Publish to PyPI
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/vllm-sr-sim-v')
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
@@ -125,7 +122,7 @@ jobs:
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.extract_version.outputs.tag }}
           name: vllm-sr-sim ${{ steps.extract_version.outputs.version }}

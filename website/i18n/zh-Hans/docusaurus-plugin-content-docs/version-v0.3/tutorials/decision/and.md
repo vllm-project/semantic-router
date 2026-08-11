@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-在多个信号**必须全部匹配**路由才成立时使用 `config/decision/and/`。
+在多个信号**必须全部匹配**路由才成立时使用 `config/fragments/decision/and/`。
 
 `AND` 是收窄、高置信路由的标准形态。
 
@@ -36,7 +36,7 @@ translation:
 
 ## 配置
 
-源片段：`config/decision/and/urgent-business.yaml`
+源片段：`config/fragments/decision/and/urgent-business.yaml`
 
 ```yaml
 routing:

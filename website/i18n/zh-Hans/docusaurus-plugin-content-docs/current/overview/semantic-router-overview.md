@@ -119,7 +119,7 @@ routing:
   decisions:
     - name: "guarded-route"
       plugins:
-        - type: "semantic-cache" # 先查缓存
+        - type: "response_cache" # 先查缓存
         - type: "response_jailbreak" # 响应侧风险筛查
         - type: "system_prompt" # 添加上下文
         - type: "hallucination" # 事实核验
@@ -174,7 +174,7 @@ if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_m
 
 **决策**：路由到 `qwen-math`（数学相关信号一致）
 
-**插件**：semantic-cache 未命中；response_jailbreak 持续监测输出风险；system_prompt 增加「给出严格数学证明」；hallucination 用于核验
+**插件**：response_cache 未命中；response_jailbreak 持续监测输出风险；system_prompt 增加「给出严格数学证明」；hallucination 用于核验
 
 **结果**：由专用数学模型给出高质量证明
 

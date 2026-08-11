@@ -1,6 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
 
 // ============== Signal Types ==============
 export type SignalType =
@@ -252,7 +253,7 @@ export interface GenericAlgorithmConfig {
 
 // ============== Plugin Types ==============
 export type PluginType =
-  | 'semantic-cache'
+  | 'response_cache'
   | 'memory'
   | 'system_prompt'
   | 'header_mutation'
@@ -265,6 +266,7 @@ export type PluginType =
   | 'response_jailbreak'
   | 'tools'
   | 'tool_selection'
+  | 'context_compression'
 
 export interface PluginConfig {
   type: PluginType
@@ -305,7 +307,7 @@ export interface PricingConfig {
 
 // ============== Global Plugin Types ==============
 export interface GlobalPluginConfig {
-  type: 'prompt_guard' | 'pii_detection' | 'semantic_cache'
+  type: 'prompt_guard' | 'pii_detection' | 'response_cache'
   enabled: boolean
   modelId?: string
   threshold?: number
@@ -437,12 +439,8 @@ export interface ConfigData {
       threshold?: number
     }
   }
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold?: number
-    ttl_seconds?: number
-  }
+  response_cache?: TopologyCacheConfig
+  semantic_cache?: TopologyCacheConfig
   // Signal definitions
   keyword_rules?: Array<{
     name: string
@@ -738,18 +736,29 @@ export interface ConfigData {
     signals?: ConfigData['signals']
     projections?: ConfigData['projections']
     decisions?: ConfigData['decisions']
+    strategy?: 'priority' | 'confidence'
   }
+  entrypoints?: Array<{
+    model_names: string[]
+    recipe: string
+  }>
+  recipes?: Array<{
+    name: string
+    description?: string
+    routing: {
+      signals?: ConfigData['signals']
+      projections?: ConfigData['projections']
+      decisions?: ConfigData['decisions']
+      strategy?: 'priority' | 'confidence'
+    }
+  }>
   global?: {
     router?: {
       strategy?: 'priority' | 'confidence'
     }
     stores?: {
-      semantic_cache?: {
-        enabled?: boolean
-        backend_type?: string
-        similarity_threshold?: number
-        ttl_seconds?: number
-      }
+      response_cache?: TopologyOptionalCacheConfig
+      semantic_cache?: TopologyOptionalCacheConfig
     }
     model_catalog?: {
       modules?: {

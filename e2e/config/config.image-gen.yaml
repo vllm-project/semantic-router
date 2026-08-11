@@ -44,7 +44,7 @@ routing:
             timeout_seconds: 120
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       embedding_model: mmbert
     memory:

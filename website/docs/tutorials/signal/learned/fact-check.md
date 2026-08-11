@@ -2,7 +2,7 @@
 
 ## Overview
 
-`fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. It maps to `config/signal/fact-check/` and is declared under `routing.signals.fact_check`.
+`fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. It maps to `config/fragments/signal/fact-check/` and is declared under `routing.signals.fact_check`.
 
 This family is learned: it relies on the fact-check classification path under `global.model_catalog.modules.hallucination_mitigation.fact_check`.
 
@@ -30,7 +30,7 @@ Use `fact-check` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/fact-check/`
+Source fragment family: `config/fragments/signal/fact-check/`
 
 ```yaml
 routing:

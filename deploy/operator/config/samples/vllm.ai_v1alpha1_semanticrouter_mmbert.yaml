@@ -64,7 +64,7 @@ spec:
         min_score_threshold: "0.5"
 
     # Semantic cache using mmBERT embeddings
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: "memory"
 

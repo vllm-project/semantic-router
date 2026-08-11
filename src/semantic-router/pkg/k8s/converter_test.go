@@ -9,11 +9,45 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
+	converter := &CRDConverter{}
+	decision, err := converter.convertDecision(v1alpha1.Decision{
+		Name: "compressed",
+		Plugins: []v1alpha1.DecisionPlugin{{
+			Type: config.DecisionPluginContextCompression,
+			Configuration: &runtime.RawExtension{Raw: []byte(`{
+				"enabled": true,
+				"mode": "auto",
+				"targets": {
+					"tool_outputs": {
+						"mode": "extractive",
+						"min_tokens": 2000,
+						"target_tokens": 1000
+					}
+				}
+			}`)},
+		}},
+	})
+	require.NoError(t, err)
+	require.Len(t, decision.Plugins, 1)
+	var pluginConfig config.ContextCompressionPluginConfig
+	require.NoError(
+		t,
+		config.UnmarshalPluginConfig(
+			decision.Plugins[0].Configuration,
+			&pluginConfig,
+		),
+	)
+	require.NotNil(t, pluginConfig.Targets)
+	assert.Equal(t, 1000, pluginConfig.Targets.ToolOutputs.TargetTokens)
+}
 
 // TestConverterWithTestData tests the converter with input/output test data
 // This test reads YAML files from testdata/input, converts them, and writes output to testdata/output

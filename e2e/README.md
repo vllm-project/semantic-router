@@ -16,26 +16,26 @@ The framework follows a **separation of concerns** design:
 
 Standard CI-backed profiles:
 
-- **kubernetes**: Baseline router contract for routing, safety, cache, and decision behavior
+- **envoy-ai-gateway**: Baseline router contract through Envoy AI Gateway
 - **aibrix**: AIBrix control-plane and gateway coverage plus a minimal router smoke path
+- **agentgateway**: agentgateway gateway controller routing and extproc policy enforcement behavior
 - **routing-strategies**: Keyword, entropy, and fallback routing behavior
 - **dynamic-config**: Kubernetes CRD-based routing and embedding-signal behavior
 - **multimodal-routing**: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model
 - **remote-embedding**: OpenAI-compatible remote embedding provider startup and deterministic text embedding-signal routing
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
-- **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
-- **agentgateway**: agentgateway gateway controller routing and extproc policy enforcement behavior
+- **istio**: Istio service mesh sidecar, mTLS, and tracing behavior
 - **production-stack**: HA, load-balancing, failover, and throughput behavior
 - **response-api**: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check
 - **ml-model-selection**: ML-based model-selection behavior
 - **multi-endpoint**: Environment-specific routing and safety policy behavior
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
 - **streaming**: Streamed request-body and streaming-cache behavior
-- **anthropic-shim**: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle, stop-reason mapping, and request-side field preservation
 - **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
 
 Manual-only profiles:
 
+- **anthropic-shim**: Diagnostic for the incomplete llama.cpp + shim backend route; pure translation contracts remain blocking unit tests
 - **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage for direct backend debugging
 - **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage for direct backend debugging
 - **router-replay**: Router Replay restart-recovery with Postgres backend, validating that replay records survive pod restarts
@@ -48,26 +48,34 @@ Manual-only profiles:
 
 | Profile | Shared baseline | Unique contract |
 |---------|------------------|-----------------|
-| `kubernetes` | Full router contract | Baseline ownership for generic router behavior |
+| `envoy-ai-gateway` | Full router contract | Baseline ownership through Envoy AI Gateway |
 | `aibrix` | `chat-completions-request` | AIBrix control-plane and gateway health |
 | `routing-strategies` | none | Routing-strategy-specific behavior |
 | `dynamic-config` | `chat-completions-request` | CRD and embedding-signal routing |
 | `multimodal-routing` | `chat-completions-request` | Image-modality embedding-signal routing |
 | `remote-embedding` | none | Remote provider health, authentication, dimension, and text embedding-signal routing |
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
-| `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
-| `agentgateway` | `chat-completions-request` | agentgateway gateway controller and extproc behavior |
+| `istio` | `chat-completions-request` | Sidecar, mTLS, and tracing |
+| `agentgateway` | `chat-completions-request` | External controller and extproc behavior |
 | `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |
 | `response-api` | none | Responses API behavior across memory, Redis, and Redis Cluster backends |
 | `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |
 | `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
 | `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
 | `streaming` | none | Streaming request-body and SSE cache behavior |
-| `anthropic-shim` | none | Outbound Anthropic translation cell — cache, stop-reason, and request-side field preservation |
+| `anthropic-shim` (manual) | none | Diagnostic for backend-route gaps; unit translation contracts stay blocking |
 | `dashboard` | none | Dashboard HTTP API contract |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 | `hallucination` | none | Pluggable endpoint hallucination detection backend coverage |
+
+`dynamic-config` and `multimodal-routing` intentionally remain separate jobs.
+They share the smoke request and gateway topology, but each owns the same CRD
+resource names and uses a different embedding runtime (text versus multimodal).
+Combining them would make one route overwrite the other or force the heavier
+multimodal model into every dynamic-config run. `routing-strategies` is also
+independent: it validates file-configured selection algorithms and metadata
+entrypoints rather than CRD reconciliation.
 
 ## Directory Structure
 
@@ -191,7 +199,7 @@ All test cases:
 make e2e-deps
 ```
 
-### Run all tests with default profile (kubernetes)
+### Run all tests with default profile (envoy-ai-gateway)
 
 ```bash
 make e2e-test
@@ -208,7 +216,7 @@ make e2e-test-response-api-suite
 ### Run specific profile
 
 ```bash
-make e2e-test E2E_PROFILE=kubernetes
+make e2e-test E2E_PROFILE=envoy-ai-gateway
 make e2e-test E2E_PROFILE=production-stack
 ```
 
@@ -222,10 +230,10 @@ make e2e-test-specific E2E_TESTS="chat-completions-progressive-stress"
 make e2e-test-specific E2E_TESTS="chat-completions-request,chat-completions-progressive-stress"
 
 # Or run directly with the binary
-./bin/e2e -profile kubernetes -tests chat-completions-progressive-stress -verbose
+./bin/e2e -profile envoy-ai-gateway -tests chat-completions-progressive-stress -verbose
 
 # Run multiple specific test cases with the binary
-./bin/e2e -profile kubernetes -tests "chat-completions-request,chat-completions-progressive-stress"
+./bin/e2e -profile envoy-ai-gateway -tests "chat-completions-request,chat-completions-progressive-stress"
 ```
 
 ### Run with custom options
@@ -244,7 +252,7 @@ make e2e-test E2E_VERBOSE=false
 make e2e-test E2E_PARALLEL=true
 
 # Combine multiple options
-make e2e-test E2E_PROFILE=kubernetes E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
+make e2e-test E2E_PROFILE=envoy-ai-gateway E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
 ```
 
 ### Debug mode
@@ -281,13 +289,13 @@ make e2e-cleanup
 
 ```bash
 # Setup only
-./bin/e2e -profile kubernetes -setup-only -keep-cluster -verbose
+./bin/e2e -profile envoy-ai-gateway -setup-only -keep-cluster -verbose
 
 # Run tests only (assumes environment is already deployed)
-./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -verbose
+./bin/e2e -profile envoy-ai-gateway -skip-setup -use-existing-cluster -verbose
 
 # Run specific tests only
-./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -tests "chat-completions-request"
+./bin/e2e -profile envoy-ai-gateway -skip-setup -use-existing-cluster -tests "chat-completions-request"
 ```
 
 ### Test Reports
@@ -306,7 +314,7 @@ The following environment variables can be used to customize test execution:
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
-| `E2E_PROFILE` | Test profile to run | `kubernetes` | `make e2e-test E2E_PROFILE=kubernetes` |
+| `E2E_PROFILE` | Test profile to run | `envoy-ai-gateway` | `make e2e-test E2E_PROFILE=envoy-ai-gateway` |
 | `E2E_CLUSTER_NAME` | Kind cluster name | `semantic-router-e2e` | `make e2e-test E2E_CLUSTER_NAME=my-cluster` |
 | `E2E_IMAGE_TAG` | Docker image tag | `e2e-test` | `make e2e-test E2E_IMAGE_TAG=v1.0.0` |
 | `E2E_KEEP_CLUSTER` | Keep cluster and deployed profile after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
@@ -337,7 +345,7 @@ The following environment variables can be used to customize test execution:
 Example:
 
 ```bash
-./bin/e2e -profile kubernetes -keep-cluster -verbose -tests "chat-completions-request"
+./bin/e2e -profile envoy-ai-gateway -keep-cluster -verbose -tests "chat-completions-request"
 ```
 
 ## Adding New Test Profiles
@@ -347,7 +355,7 @@ Example:
 3. Register test cases using the test case registry
 4. Add profile-specific deployment configurations
 
-See `profiles/ai-gateway/` for the kubernetes profile implementation example.
+See `profiles/ai-gateway/` for the Envoy AI Gateway profile implementation example.
 
 ## Key Concepts
 
@@ -493,7 +501,7 @@ The `embedding-signal-routing` test validates the `IntelligentRoute` CRD with `E
 **Profile Support:**
 
 - ✅ `dynamic-config` profile (uses CRDs)
-- ❌ `kubernetes` profile (uses static YAML config)
+- ❌ `envoy-ai-gateway` profile (uses static YAML config)
 - ❌ `aibrix` profile (uses static YAML config)
 
 **Requirements:**
@@ -680,13 +688,13 @@ func init() {
 }
 ```
 
-See `profiles/ai-gateway/` for the kubernetes profile implementation example.
+See `profiles/ai-gateway/` for the Envoy AI Gateway profile implementation example.
 
 ## Profile Details
 
 ### Istio Profile
 
-The Istio profile owns service-mesh-specific assertions plus a single shared router smoke request. The full generic router contract lives in `kubernetes`, so the Istio environment no longer replays the entire baseline suite.
+The Istio profile owns service-mesh-specific assertions plus a single shared router smoke request. The full generic router contract lives in `envoy-ai-gateway`, so the Istio environment no longer replays the entire baseline suite.
 
 **What it Tests:**
 
@@ -725,7 +733,6 @@ The Istio profile owns service-mesh-specific assertions plus a single shared rou
 | Test Case | Description | What it Validates |
 |-----------|-------------|-------------------|
 | `istio-sidecar-health-check` | Verify Envoy sidecar injection | - Istio-proxy container exists<br>- Sidecar is healthy and ready<br>- Namespace has `istio-injection=enabled` label |
-| `istio-traffic-routing` | Test routing through Istio gateway | - Gateway and VirtualService exist<br>- Requests route correctly to Semantic Router<br>- Istio/Envoy headers present in responses |
 | `istio-mtls-verification` | Verify mutual TLS configuration | - DestinationRule has `ISTIO_MUTUAL` mode<br>- mTLS certificates present in istio-proxy<br>- PeerAuthentication policy (if configured) |
 | `istio-tracing-observability` | Check distributed tracing and metrics | - Trace headers propagated<br>- Envoy metrics exposed<br>- Telemetry configuration<br>- Access logs enabled |
 
@@ -737,7 +744,7 @@ The Istio profile owns service-mesh-specific assertions plus a single shared rou
 
 **Coverage ownership:**
 
-- `kubernetes` owns the baseline router contract
+- `envoy-ai-gateway` owns the baseline router contract
 - `istio` keeps only mesh-specific assertions and the smoke request that proves traffic still flows through the mesh
 
 **Usage:**

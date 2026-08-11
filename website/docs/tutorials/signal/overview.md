@@ -8,7 +8,7 @@ Signals define named detectors under `routing.signals`. A decision then referenc
 Cross-signal coordination and derived routing bands now live under `routing.projections`. `routing.projections.partitions` is the runtime home for exclusive domain or embedding partitions, while decisions can reference `routing.projections.mappings` outputs with `type: projection`. In DSL authoring, the same concepts show up as `PROJECTION partition ...` plus `PROJECTION score ...` / `PROJECTION mapping ...` blocks.
 For the full projection workflow, canonical YAML contract, dashboard path, and DSL examples, see [Projections](../projection/overview).
 
-This tutorial group maps directly to the fragment tree under `config/signal/`, but the docs are organized by extraction style:
+This tutorial group maps directly to the fragment tree under `config/fragments/signal/`, but the docs are organized by extraction style:
 
 - `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
 - `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets or maintained detector modules
@@ -33,7 +33,7 @@ Use `signal/` when:
 - more than one route needs the same detector
 - you want to mix different detection methods in one decision tree
 - you need a clean boundary between detection, decision logic, algorithms, and plugins
-- you want config fragments that map cleanly to `config/signal/`
+- you want config fragments that map cleanly to `config/fragments/signal/`
 
 ## Configuration
 
@@ -77,7 +77,7 @@ routing:
             gte: 0.25
 ```
 
-The latest signal docs still cover every family under `config/signal/`, but they are grouped into two second-level categories so the runtime cost and dependency model stay clear.
+The latest signal docs still cover every family under `config/fragments/signal/`, but they are grouped into two second-level categories so the runtime cost and dependency model stay clear.
 
 ### Heuristic Signals
 
@@ -85,14 +85,14 @@ These signals route from explicit rules, request form, or lightweight detectors 
 
 | Signal family | Fragment directory         | Purpose                                                                      | Doc                                |
 | ------------- | -------------------------- | ---------------------------------------------------------------------------- | ---------------------------------- |
-| `authz`       | `config/signal/authz/`     | route from identity, role, or tenant policy                                  | [Authz](./heuristic/authz)         |
-| `conversation` | `config/signal/conversation/` | route from chat/request structure such as tool loops and multi-turn shape | [Conversation](./heuristic/conversation) |
-| `context`     | `config/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
-| `event`       | `config/signal/event/`     | route from structured event metadata, severity, action codes, and urgency    | [Event](./heuristic/event)         |
-| `keyword`     | `config/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
-| `language`    | `config/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
-| `metadata`    | `config/signal/metadata/`  | route from untrusted caller-provided application hints                       | [Metadata](./heuristic/metadata)   |
-| `structure`   | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
+| `authz`       | `config/fragments/signal/authz/`     | route from identity, role, or tenant policy                                  | [Authz](./heuristic/authz)         |
+| `conversation` | `config/fragments/signal/conversation/` | route from chat/request structure such as tool loops and multi-turn shape | [Conversation](./heuristic/conversation) |
+| `context`     | `config/fragments/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
+| `event`       | `config/fragments/signal/event/`     | route from structured event metadata, severity, action codes, and urgency    | [Event](./heuristic/event)         |
+| `keyword`     | `config/fragments/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
+| `language`    | `config/fragments/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
+| `metadata`    | `config/fragments/signal/metadata/`  | route from untrusted caller-provided application hints                       | [Metadata](./heuristic/metadata)   |
+| `structure`   | `config/fragments/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals
 
@@ -100,18 +100,18 @@ These signals use embeddings or classifier models and typically rely on `global.
 
 | Signal family | Fragment directory | Purpose | Doc |
 |---------------|--------------------|---------|-----|
-| `classifier` | `config/signal/classifier/` | expose reusable label scores from generic native or LLM classifiers | [Classifier](./learned/classifier) |
-| `complexity` | `config/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
-| `domain` | `config/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
-| `embedding` | `config/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |
-| `modality` | `config/signal/modality/` | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality) |
-| `fact-check` | `config/signal/fact-check/` | detect prompts that need evidence verification | [Fact Check](./learned/fact-check) |
-| `jailbreak` | `config/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
-| `pii` | `config/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
-| `preference` | `config/signal/preference/` | infer response-style preferences | [Preference](./learned/preference) |
-| `reask` | `config/signal/reask/` | detect repeated user questions as implicit dissatisfaction | [Reask](./learned/reask) |
-| `kb` | `config/signal/kb/` | bind knowledge base labels or groups into named routing signals | [Knowledge Base](./learned/kb) |
-| `user-feedback` | `config/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
+| `classifier` | `config/fragments/signal/classifier/` | expose reusable label scores from generic native or LLM classifiers | [Classifier](./learned/classifier) |
+| `complexity` | `config/fragments/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
+| `domain` | `config/fragments/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
+| `embedding` | `config/fragments/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |
+| `modality` | `config/fragments/signal/modality/` | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality) |
+| `fact-check` | `config/fragments/signal/fact-check/` | detect prompts that need evidence verification | [Fact Check](./learned/fact-check) |
+| `jailbreak` | `config/fragments/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
+| `pii` | `config/fragments/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
+| `preference` | `config/fragments/signal/preference/` | infer response-style preferences | [Preference](./learned/preference) |
+| `reask` | `config/fragments/signal/reask/` | detect repeated user questions as implicit dissatisfaction | [Reask](./learned/reask) |
+| `kb` | `config/fragments/signal/kb/` | bind knowledge base labels or groups into named routing signals | [Knowledge Base](./learned/kb) |
+| `user-feedback` | `config/fragments/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
 
 Keep these rules in mind:
 

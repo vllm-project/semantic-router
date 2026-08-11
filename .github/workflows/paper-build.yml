@@ -1,32 +1,10 @@
 name: Build Paper PDF
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
-    paths:
-      - 'paper/**/*.tex'
-      - 'paper/**/*.bib'
-      - 'paper/**/*.sty'
-      - 'paper/**/*.cls'
-      - 'paper/figures/**'
-      - 'paper/Makefile'
-  push:
-    branches:
-      - main
-    paths:
-      - 'paper/**/*.tex'
-      - 'paper/**/*.bib'
-      - 'paper/**/*.sty'
-      - 'paper/**/*.cls'
-      - 'paper/figures/**'
-      - 'paper/Makefile'
-  workflow_dispatch:
+  workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   build-paper:

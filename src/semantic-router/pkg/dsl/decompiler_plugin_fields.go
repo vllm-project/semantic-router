@@ -9,23 +9,24 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":      pluginFieldsSystemPrompt,
-	"semantic-cache":     pluginFieldsSemanticCache,
-	"router_replay":      pluginFieldsRouterReplay,
-	"memory":             pluginFieldsMemory,
-	"hallucination":      pluginFieldsHallucination,
-	"image_gen":          pluginFieldsImageGen,
-	"fast_response":      pluginFieldsFastResponse,
-	"request_params":     pluginFieldsRequestParams,
-	"tool_selection":     pluginFieldsToolSelection,
-	"tools":              pluginFieldsTools,
-	"rag":                pluginFieldsRAG,
-	"header_mutation":    pluginFieldsHeaderMutation,
-	"response_jailbreak": pluginFieldsResponseJailbreak,
+	"system_prompt":       pluginFieldsSystemPrompt,
+	"response_cache":      pluginFieldsResponseCache,
+	"context_compression": pluginFieldsStructuredConfiguration,
+	"router_replay":       pluginFieldsRouterReplay,
+	"memory":              pluginFieldsMemory,
+	"hallucination":       pluginFieldsHallucination,
+	"image_gen":           pluginFieldsImageGen,
+	"fast_response":       pluginFieldsFastResponse,
+	"request_params":      pluginFieldsRequestParams,
+	"tool_selection":      pluginFieldsToolSelection,
+	"tools":               pluginFieldsTools,
+	"rag":                 pluginFieldsRAG,
+	"header_mutation":     pluginFieldsHeaderMutation,
+	"response_jailbreak":  pluginFieldsResponseJailbreak,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
-	if fn, ok := pluginFieldsDecoders[p.Type]; ok {
+	if fn, ok := pluginFieldsDecoders[config.NormalizeDecisionPluginType(p.Type)]; ok {
 		return fn(p)
 	}
 	return map[string]Value{}
@@ -49,22 +50,16 @@ func pluginFieldsSystemPrompt(p *config.DecisionPlugin) map[string]Value {
 	return fields
 }
 
-func pluginFieldsSemanticCache(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+func pluginFieldsResponseCache(p *config.DecisionPlugin) map[string]Value {
+	return pluginFieldsStructuredConfiguration(p)
+}
+
+func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Value {
+	object, ok := structuredPayloadObjectValue(p.Configuration)
 	if !ok {
-		return fields
+		return map[string]Value{}
 	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.TTLSeconds != nil {
-		fields["ttl_seconds"] = IntValue{V: *cfg.TTLSeconds}
-	}
-	return fields
+	return object.Fields
 }
 
 func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
