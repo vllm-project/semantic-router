@@ -78,6 +78,22 @@ func hasFusionAnalysisModels(decision *config.Decision) bool {
 		len(decision.Algorithm.Fusion.AnalysisModels) > 0
 }
 
+func (r *OpenAIRouter) createLooper(
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) (looper.Looper, error) {
+	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
+			"request_id": reqCtx.RequestID,
+			"decision":   decision.Name,
+			"algorithm":  decision.Algorithm.Type,
+			"error":      err.Error(),
+		})
+	}
+	return l, err
+}
+
 // handleLooperExecution executes the looper for multi-model decisions
 // Returns an ImmediateResponse with the aggregated result
 func (r *OpenAIRouter) handleLooperExecution(
@@ -87,14 +103,8 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	l, err := r.createLooper(decision, reqCtx)
 	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"decision":   decision.Name,
-			"algorithm":  decision.Algorithm.Type,
-			"error":      err.Error(),
-		})
 		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
 	}
 
