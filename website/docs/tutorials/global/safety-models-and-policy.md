@@ -32,19 +32,21 @@ Use these blocks when:
 
 ### Prompt Guard Backend
 
-Jailbreak detection supports four backends via `prompt_guard.backend`:
+Jailbreak detection selects a backend via two mutually exclusive fields - set at most one:
 
-- `candle`: the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT).
-- `mmbert32k`: the in-process mmBERT-32K model (32K context, YaRN RoPE, multilingual).
-- `http_chat`: an external model with role `guardrail`, called through a generative chat-completion prompt (Qwen3Guard-style). Requires an `external_models` entry with `model_role: guardrail`.
-- `http_classify`: an external sequence-classifier endpoint with role `guardrail`, speaking the widely-used HuggingFace text-classification pipeline contract - `POST {endpoint}/classify` with `{"inputs": "<text>"}`, returning every label's score, not just the top prediction. This lets a self-hosted classifier (wrapped by an existing `transformers` pipeline, or a Text Embeddings Inference deployment) plug in without disguising it as a chat completion.
+- `prompt_guard.variant` picks a local Candle-backed model:
+  - `candle`: the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT).
+  - `mmbert32k`: the in-process mmBERT-32K model (32K context, YaRN RoPE, multilingual).
+- `prompt_guard.protocol` picks a remote HTTP backend, requiring an `external_models` entry with `model_role: guardrail`:
+  - `http_chat`: an external model called through a generative chat-completion prompt (Qwen3Guard-style).
+  - `http_classify`: an external sequence-classifier endpoint speaking the widely-used HuggingFace text-classification pipeline contract - `POST {endpoint}/classify` with `{"inputs": "<text>"}`, returning every label's score, not just the top prediction. This lets a self-hosted classifier (wrapped by an existing `transformers` pipeline, or a Text Embeddings Inference deployment) plug in without disguising it as a chat completion.
 
 ```yaml
 global:
   model_catalog:
     modules:
       prompt_guard:
-        backend: http_classify
+        protocol: http_classify
         jailbreak_mapping_path: models/custom-classifier/jailbreak_type_mapping.json
         positive_labels: [INJECTION]   # this model's positive class isn't named "jailbreak"
         threshold: 0.7
@@ -63,11 +65,12 @@ global:
 
 Notes:
 
+- Setting both `variant` and `protocol` fails config validation - `variant` selects a local model, `protocol` selects a remote one.
 - `positive_labels` (optional): the `jailbreak_mapping` label(s) that count as unsafe, for models whose positive class isn't literally `jailbreak` (e.g. `INJECTION`, `malicious`). Multiple labels are summed when computing `risk_score`. Unset defaults to the single label `jailbreak`. If configured, at least one entry must exist in the loaded `jailbreak_mapping`'s labels or the router fails to start - a misconfigured label can no longer silently mean "never detected."
-- `http_classify` response labels are matched against `jailbreak_mapping` by name, not by array position (the server is free to order them however it likes, e.g. sorted by score).
+- `http_classify` response labels are matched against `jailbreak_mapping` by name, not by array position (the server is free to order them however it likes, e.g. sorted by score). Its default timeout is 5s (lightweight forward pass); `http_chat`'s default stays at 30s (generative call). Both are overridable via the external model's `timeout_seconds`.
 - `http_chat` is restricted to this binary guardrail use case; it isn't offered for N-way classifiers (`classifier.domain`, `complexity`) since a generative model can't reliably produce a calibrated multi-class distribution.
-- Breaking change: the legacy `use_modernbert`, `use_mmbert_32k`, and `use_vllm` boolean flags are removed. Migrate `use_mmbert_32k: true` to `backend: mmbert32k`, and `use_vllm: true` (plus its `external_models` entry) to `backend: http_chat`.
-- **`backend`'s effective default is `mmbert32k`, not `candle`.** `backend` is unset only falls back to `candle` for a config built directly in code without going through canonical default resolution. Canonical resolution (the path the dashboard, canonical export, and any config that doesn't set every field explicitly all go through) starts from a baseline where `backend` is already set to `mmbert32k`, matching the bundled `mmbert32k-jailbreak-detector-merged` model it also defaults `model_id` to - so simply deleting `use_mmbert_32k: false` (or `use_modernbert: false`) without adding anything in its place does **not** get you `candle`. If you were relying on the plain Candle backend, set `backend: candle` explicitly.
+- Breaking change: the legacy `use_modernbert`, `use_mmbert_32k`, and `use_vllm` boolean flags are removed, and the single `backend` field from an earlier revision of this feature is split into `variant`/`protocol`. Migrate `use_mmbert_32k: true` to `variant: mmbert32k`, and `use_vllm: true` (plus its `external_models` entry) to `protocol: http_chat`.
+- **When both `variant` and `protocol` are unset, the effective default is `variant: mmbert32k`, not `candle`.** A config built directly in code without going through canonical default resolution falls back to `candle` when both are empty. Canonical resolution (the path the dashboard, canonical export, and any config that doesn't set every field explicitly all go through) starts from a baseline where `variant` is already set to `mmbert32k`, matching the bundled `mmbert32k-jailbreak-detector-merged` model it also defaults `model_id` to - so simply deleting `use_mmbert_32k: false` (or `use_modernbert: false`) without adding anything in its place does **not** get you `candle`. If you were relying on the plain Candle backend, set `variant: candle` explicitly.
 
 ### Hallucination Detector Backend
 
