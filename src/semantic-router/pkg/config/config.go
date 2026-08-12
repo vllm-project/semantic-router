@@ -20,29 +20,36 @@ const (
 	ModelRoleMemoryExtraction = "memory_extraction"
 )
 
-// PromptGuardConfig.Backend values, selecting which jailbreak classifier
-// backend to use. An empty/unset value passed directly to
-// createJailbreakInference falls back to PromptGuardBackendCandle. This is
+// PromptGuardConfig.Variant values, selecting which local Candle-backed
+// jailbreak classifier variant to use. Mutually exclusive with Protocol - see
+// PromptGuardConfig's doc comment. An empty/unset value passed directly to
+// createJailbreakInference falls back to PromptGuardVariantCandle. This is
 // NOT the same as the canonical-config default: canonical resolution starts
-// from defaultPromptGuardModule()'s baseline (PromptGuardBackendMmBERT32K,
+// from defaultPromptGuardModule()'s baseline (PromptGuardVariantMmBERT32K,
 // matching the bundled mmbert32k model it also defaults ModelID to) and
 // overlays user YAML, so a canonical-resolved config with no explicit
-// backend gets mmbert32k, not candle. A user who wants the plain candle
-// backend under canonical resolution must set backend: candle explicitly.
+// variant gets mmbert32k, not candle. A user who wants the plain candle
+// variant under canonical resolution must set variant: candle explicitly.
 const (
-	// PromptGuardBackendCandle runs the bundled Candle model locally
+	// PromptGuardVariantCandle runs the bundled Candle model locally
 	// (LoRA/BERT auto-detect, falling back to ModernBERT).
-	PromptGuardBackendCandle = "candle"
-	// PromptGuardBackendMmBERT32K runs the bundled mmBERT-32K model locally
+	PromptGuardVariantCandle = "candle"
+	// PromptGuardVariantMmBERT32K runs the bundled mmBERT-32K model locally
 	// (32K context, YaRN RoPE, multilingual).
-	PromptGuardBackendMmBERT32K = "mmbert32k"
-	// PromptGuardBackendHTTPChat calls an external model with role="guardrail"
-	// through a generative chat-completion prompt (e.g. Qwen3Guard-style).
-	PromptGuardBackendHTTPChat = "http_chat"
-	// PromptGuardBackendHTTPClassify calls an external model with
-	// role="guardrail" through a lightweight sequence-classifier HTTP
-	// contract (text in, full label/score distribution out).
-	PromptGuardBackendHTTPClassify = "http_classify"
+	PromptGuardVariantMmBERT32K = "mmbert32k"
+)
+
+// PromptGuardConfig.Protocol values, selecting which remote HTTP wire
+// contract to use for an external model with role="guardrail". Mutually
+// exclusive with Variant.
+const (
+	// PromptGuardProtocolHTTPChat calls an external model through a
+	// generative chat-completion prompt (e.g. Qwen3Guard-style).
+	PromptGuardProtocolHTTPChat = "http_chat"
+	// PromptGuardProtocolHTTPClassify calls an external model through a
+	// lightweight sequence-classifier HTTP contract (text in, full
+	// label/score distribution out).
+	PromptGuardProtocolHTTPClassify = "http_classify"
 )
 
 // Signal type constants for rule conditions.

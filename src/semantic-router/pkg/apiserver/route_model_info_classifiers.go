@@ -98,9 +98,12 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
-		backend := promptGuard.Backend
+		backend := promptGuard.Protocol
 		if backend == "" {
-			backend = routerconfig.PromptGuardBackendCandle
+			backend = promptGuard.Variant
+		}
+		if backend == "" {
+			backend = routerconfig.PromptGuardVariantCandle
 		}
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",

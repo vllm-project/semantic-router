@@ -33,20 +33,13 @@ func (c *Classifier) initializeCategoryClassifier() error {
 	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
 }
 
-// isExternalJailbreakBackend reports whether the configured prompt_guard
-// backend calls an external model (http_chat/http_classify) rather than
-// running a bundled Candle model locally.
-func isExternalJailbreakBackend(backend string) bool {
-	return backend == config.PromptGuardBackendHTTPChat || backend == config.PromptGuardBackendHTTPClassify
-}
-
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured.
 func (c *Classifier) IsJailbreakEnabled() bool {
 	if !c.Config.PromptGuard.Enabled || c.JailbreakMapping == nil {
 		return false
 	}
 
-	if isExternalJailbreakBackend(c.Config.PromptGuard.Backend) {
+	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		hasExternalConfig := externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&
@@ -68,10 +61,10 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return err
 	}
 
-	if isExternalJailbreakBackend(c.Config.PromptGuard.Backend) {
+	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      c.Config.PromptGuard.Backend,
+			"mode":      c.Config.PromptGuard.Protocol,
 			"model_ref": externalCfg.ModelName,
 		})
 		return nil

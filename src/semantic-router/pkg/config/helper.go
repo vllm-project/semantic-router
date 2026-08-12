@@ -315,8 +315,8 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 	}
 
 	// Check configuration based on the selected backend
-	if c.PromptGuard.Backend == PromptGuardBackendHTTPChat || c.PromptGuard.Backend == PromptGuardBackendHTTPClassify {
-		// For external backends: need external model with role="guardrail"
+	if c.PromptGuard.Protocol != "" {
+		// For remote backends: need external model with role="guardrail"
 		externalCfg := c.FindExternalModelByRole(ModelRoleGuardrail)
 		return externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&
