@@ -38,7 +38,7 @@
   margin-left: 0;
   border: 1px solid var(--site-border);
   border-radius: 1.35rem;
-  background: rgba(255, 253, 248, 0.9);
+  background: var(--site-sidebar-bg);
   backdrop-filter: blur(12px);
   box-shadow: var(--site-shadow);
 }
@@ -54,7 +54,7 @@
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--site-border);
   border-radius: 999px;
-  background: rgba(17, 17, 17, 0.055);
+  background: var(--site-badge-bg);
   color: var(--site-text);
   font-size: 0.75rem;
   font-weight: 600;
@@ -76,7 +76,7 @@
   border: 1px solid var(--site-border);
   border-radius: 1.6rem;
   background:
-    linear-gradient(180deg, rgba(17, 17, 17, 0.025), transparent 18%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 18%),
     var(--site-surface);
   box-shadow: var(--site-shadow);
 }
@@ -108,27 +108,27 @@
 }
 
 .theme-doc-markdown thead tr {
-  background: rgba(17, 17, 17, 0.04);
+  background: var(--site-table-header-bg);
 }
 
 .theme-doc-markdown tr:nth-child(2n) {
-  background: rgba(17, 17, 17, 0.02);
+  background: var(--site-table-stripe-bg);
 }
 
 .theme-doc-markdown pre,
 .theme-doc-markdown .prism-code {
-  background: #f6f2ea !important;
+  background: var(--site-code-bg) !important;
 }
 
 .theme-doc-markdown .theme-admonition {
   border: 1px solid var(--site-border);
   border-radius: 1.1rem;
-  background: rgba(17, 17, 17, 0.025);
+  background: var(--site-admonition-bg);
   box-shadow: none;
 }
 
 .theme-doc-markdown .theme-admonition-heading {
-  border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+  border-bottom: 1px solid var(--site-admonition-border);
 }
 
 .theme-doc-toc-desktop {
@@ -139,7 +139,7 @@
   padding: 1.2rem;
   border: 1px solid var(--site-border);
   border-radius: 1.2rem;
-  background: rgba(255, 253, 248, 0.92);
+  background: var(--site-toc-bg);
   box-shadow: var(--site-shadow);
 }
 
@@ -155,7 +155,7 @@
 .menu__link:hover,
 .menu__link--active {
   color: var(--site-text);
-  background: rgba(17, 17, 17, 0.06);
+  background: var(--site-menu-hover);
 }
 
 .menu__caret:before {
@@ -166,7 +166,7 @@
 .theme-doc-markdown [class*='zoomContainer'] {
   border: 1px solid var(--site-border);
   border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--site-mermaid-bg);
 }
 
 @media (min-width: 997px) {
