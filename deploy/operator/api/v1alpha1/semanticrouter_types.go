@@ -1361,9 +1361,14 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=false
+	// Backend selects the jailbreak classifier backend. candle and mmbert32k
+	// run a bundled model locally; http_chat and http_classify call an
+	// external model configured via a vllmEndpoints/externalModels entry with
+	// model_role="guardrail".
+	// +kubebuilder:validation:Enum=candle;mmbert32k;http_chat;http_classify
+	// +kubebuilder:default="mmbert32k"
 	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
+	Backend string `json:"backend,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1377,6 +1382,11 @@ type PromptGuardConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
+	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+	// for a custom backend whose positive class isn't named "jailbreak"
+	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+	// +optional
+	PositiveLabels []string `json:"positive_labels,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

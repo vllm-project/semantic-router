@@ -157,6 +157,9 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
+      # mom-jailbreak-classifier is a Candle BERT/LoRA model, not the bundled
+      # mmBERT-32K one the CRD's default backend expects.
+      backend: candle
       model_id: models/mom-jailbreak-classifier
       threshold: "0.7"
       use_cpu: true
