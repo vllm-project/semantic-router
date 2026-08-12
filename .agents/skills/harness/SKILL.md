@@ -9,6 +9,7 @@ This is a native-discovery bridge. The canonical source of truth remains:
 
 - [`AGENTS.md`](../../../AGENTS.md)
 - [`tools/agent/docs/README.md`](../../../tools/agent/docs/README.md)
+- [`tools/agent/test-domain-registry.yaml`](../../../tools/agent/test-domain-registry.yaml)
 - [`tools/agent/skill-registry.yaml`](../../../tools/agent/skill-registry.yaml)
 - [`tools/agent/maintainer-policy.yaml`](../../../tools/agent/maintainer-policy.yaml)
 - [`tools/make/agent.mk`](../../../tools/make/agent.mk)

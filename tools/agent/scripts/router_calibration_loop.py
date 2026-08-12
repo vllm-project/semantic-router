@@ -33,15 +33,16 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 def cmd_eval(args: argparse.Namespace) -> int:
     manifest, probes = load_probe_manifest(Path(args.probes))
+    evaluation = evaluate_probes(args.router_url, probes, manifest)
     report = {
         "manifest": manifest,
-        "evaluation": evaluate_probes(args.router_url, probes, manifest),
+        "evaluation": evaluation,
     }
     if args.output:
         write_json(Path(args.output), report)
     else:
         print(json.dumps(report, indent=2, ensure_ascii=False))
-    return 0
+    return 0 if evaluation.get("passed", False) else 1
 
 
 def cmd_deploy(args: argparse.Namespace) -> int:

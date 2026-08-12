@@ -10,8 +10,10 @@ import UsersPageUserDialog, {
 } from './UsersPageUserDialog'
 import {
   createLatestUsersRequest,
+  describeUserUpdateFailure,
   EMPTY_ROLE_PERMISSIONS,
   isUsersRequestAbortError,
+  validateUserPassword,
   type UsersPageRolePermissions,
   type UsersPageRolePermissionsPayload,
 } from './usersPageSupport'
@@ -261,8 +263,18 @@ const UsersPage: React.FC = () => {
       return
     }
 
+    // Reject before sending: a server-side rejection arrives after the role
+    // change has already committed.
+    const passwordError = validateUserPassword(values.password, dialogMode)
+    if (passwordError) {
+      setDialogError(passwordError)
+      return
+    }
+
     setDialogSubmitting(true)
     setDialogError(null)
+
+    let roleAndStatusSaved = false
 
     try {
       if (dialogMode === 'create') {
@@ -298,6 +310,8 @@ const UsersPage: React.FC = () => {
       if (!patchResponse.ok) {
         throw new Error(await getResponseError(patchResponse))
       }
+      // Role and status are committed on the server from here.
+      roleAndStatusSaved = true
 
       if (values.password.trim()) {
         const passwordResponse = await fetch('/api/admin/users/password', {
@@ -317,7 +331,11 @@ const UsersPage: React.FC = () => {
       })
       await fetchUsers()
     } catch (err) {
-      setDialogError((err as Error).message)
+      setDialogError(describeUserUpdateFailure(err, roleAndStatusSaved))
+      // A failed request does not prove nothing changed. Safe while the dialog
+      // is open: the dialog resets from initialValues, memoised on
+      // selectedUser, which is deliberately not re-synced here.
+      void fetchUsers()
     } finally {
       setDialogSubmitting(false)
     }

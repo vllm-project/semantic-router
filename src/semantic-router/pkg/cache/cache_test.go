@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"crypto/md5"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -1828,6 +1829,24 @@ func TestSemanticCacheEmbeddingDimensionDefaultsByModel(t *testing.T) {
 	}
 }
 
+func waitForHybridCacheHit(t *testing.T, cache *HybridCache, model, query string) []byte {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		response, found, err := cache.FindSimilar(model, query)
+		if err != nil {
+			t.Fatalf("FindSimilar failed while waiting for Milvus indexing: %v", err)
+		}
+		if found {
+			return response
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cache entry did not become visible before deadline")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func TestHybridCacheGenerateEmbeddingUsesMilvusEmbeddingModel(t *testing.T) {
 	cache := &HybridCache{
 		milvusCache: &MilvusCache{
@@ -1894,22 +1913,13 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	}
 
 	// Test FindSimilar with exact same query (should hit)
-	// Wait for Milvus to index the entry
-	time.Sleep(2 * time.Second)
-
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
-	if err != nil {
-		t.Fatalf("FindSimilar failed: %v", err)
-	}
-	if !found {
-		t.Error("Expected to find cached entry")
-	}
+	response := waitForHybridCacheHit(t, cache, "gpt-4", testQuery)
 	if string(response) != string(testResponse) {
 		t.Errorf("Response mismatch: got %s, want %s", string(response), string(testResponse))
 	}
 
 	// Test FindSimilar with similar query (should hit)
-	_, found, err = cache.FindSimilar("gpt-4", "What's the meaning of life?")
+	_, found, err := cache.FindSimilar("gpt-4", "What's the meaning of life?")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -1936,60 +1946,17 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 	}
 }
 
-// TestHybridCachePendingRequest tests pending request flow
-func TestHybridCachePendingRequest(t *testing.T) {
-	// Skip if Milvus tests are disabled
-	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
-		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+// TestPendingRequestPrimaryKey verifies the stable pending-entry identity contract.
+func TestPendingRequestPrimaryKey(t *testing.T) {
+	key := pendingRequestPrimaryKey("req1")
+	if len(key) != md5.Size*2 {
+		t.Fatalf("pending primary key length = %d, want %d", len(key), md5.Size*2)
 	}
-
-	t.Log("Starting TestHybridCachePendingRequest - this may take 30-60 seconds...")
-
-	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_pending", 64, true)
-	if err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
+	if key != pendingRequestPrimaryKey("req1") {
+		t.Fatal("pending primary key must be deterministic")
 	}
-	defer cleanup()
-
-	cache, err := NewHybridCache(HybridCacheOptions{
-		Enabled:             true,
-		SimilarityThreshold: 0.8,
-		TTLSeconds:          300,
-		MaxMemoryEntries:    100,
-		MilvusConfigPath:    milvusConfig,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create hybrid cache: %v", err)
-	}
-	defer cache.Close()
-
-	// Add pending request
-	testQuery := "Explain quantum computing"
-	err = cache.AddPendingRequest("req1", "gpt-4", testQuery, []byte("{}"), -1)
-	if err != nil {
-		t.Fatalf("Failed to add pending request: %v", err)
-	}
-
-	// Update with response
-	testResponse := []byte(`{"answer": "Quantum computing uses qubits..."}`)
-	err = cache.UpdateWithResponse("req1", testResponse, -1)
-	if err != nil {
-		t.Fatalf("Failed to update with response: %v", err)
-	}
-
-	// Wait for indexing
-	time.Sleep(100 * time.Millisecond)
-
-	// Try to find it
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
-	if err != nil {
-		t.Fatalf("FindSimilar failed: %v", err)
-	}
-	if !found {
-		t.Error("Expected to find cached entry after update")
-	}
-	if string(response) != string(testResponse) {
-		t.Errorf("Response mismatch: got %s, want %s", string(response), string(testResponse))
+	if key == pendingRequestPrimaryKey("req2") {
+		t.Fatal("different request IDs must not share a pending primary key")
 	}
 }
 

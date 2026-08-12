@@ -214,6 +214,9 @@ func (p *Profile) deployPrometheus(ctx context.Context, opts *framework.SetupOpt
 	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceDefault, prometheusDir+"/configmap.yaml"); err != nil {
 		return fmt.Errorf("failed to apply prometheus configmap: %w", err)
 	}
+	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceDefault, prometheusDir+"/rules.yaml"); err != nil {
+		return fmt.Errorf("failed to apply prometheus rules: %w", err)
+	}
 
 	updatedConfig, err := os.ReadFile(prometheusConfigFile)
 	if err != nil {
@@ -255,6 +258,7 @@ func (p *Profile) cleanupPrometheus(ctx context.Context, opts *framework.Teardow
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/service.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/deployment.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/pvc.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rules.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/configmap.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rbac.yaml", "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "serviceaccount", "prometheus", "-n", namespaceDefault, "--ignore-not-found=true")

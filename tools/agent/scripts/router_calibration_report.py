@@ -196,6 +196,30 @@ def _render_decision_failures(
         lines.append(f"Query: `{result['query']}`")
         if result.get("notes"):
             lines.append(f"Notes: {result['notes']}")
+        failed_checks = [
+            name
+            for name, passed in (
+                ("request model", result.get("model_matched", True)),
+                ("recipe", result.get("recipe_matched", True)),
+                ("algorithm", result.get("algorithm_matched", True)),
+                ("candidate alias", result.get("alias_matched", True)),
+                ("plugins", result.get("plugins_matched", True)),
+                ("signals", result.get("signals_matched", True)),
+                ("trace", result.get("trace_matched", True)),
+            )
+            if not passed
+        ]
+        if failed_checks:
+            lines.append(f"Failed checks: `{', '.join(failed_checks)}`")
+        if result.get("recommended_models"):
+            lines.append(
+                "Candidate pool: "
+                f"`{', '.join(str(model) for model in result['recommended_models'])}`"
+            )
+        if result.get("trace_errors"):
+            lines.append(f"Trace errors: `{'; '.join(result['trace_errors'])}`")
+        if result.get("error"):
+            lines.append(f"Error: `{result['error']}`")
         lines.append(
             f"Matched signals: `{flatten_signal_summary(result.get('matched_signals', {}))}`"
         )
