@@ -54,7 +54,7 @@ func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	cfg.PromptGuard.Enabled = true
 	cfg.PromptGuard.ModelID = modelPath
 	cfg.PromptGuard.JailbreakMappingPath = mappingPath
-	cfg.PromptGuard.Backend = config.PromptGuardBackendMmBERT32K
+	cfg.PromptGuard.Variant = config.PromptGuardVariantMmBERT32K
 	cfg.PromptGuard.Threshold = 0.7
 
 	classifier, err := newClassifierWithOptions(cfg,

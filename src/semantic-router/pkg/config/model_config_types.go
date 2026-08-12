@@ -144,9 +144,17 @@ type PromptGuardConfig struct {
 	ModelID              string   `yaml:"model_id"`
 	Threshold            float32  `yaml:"threshold"`
 	UseCPU               bool     `yaml:"use_cpu"`
-	Backend              string   `yaml:"backend,omitempty"`
 	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
 	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+
+	// Variant selects a local Candle-backed model variant. Mutually
+	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
+	// both are unset.
+	Variant string `yaml:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured with
+	// model_role="guardrail".
+	Protocol string `yaml:"protocol,omitempty"`
 }
 
 type FeedbackDetectorConfig struct {

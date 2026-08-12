@@ -40,11 +40,12 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
-	switch cfg.PromptGuard.Backend {
-	case config.PromptGuardBackendHTTPChat, config.PromptGuardBackendHTTPClassify:
-		// External backends have no local model to initialize.
+	if cfg.PromptGuard.Protocol != "" {
+		// Remote backends have no local model to initialize.
 		return nil, jailbreakInference, nil
-	case config.PromptGuardBackendMmBERT32K:
+	}
+	switch cfg.PromptGuard.Variant {
+	case config.PromptGuardVariantMmBERT32K:
 		return createMmBERT32KJailbreakInitializer(), jailbreakInference, nil
 	default:
 		return createJailbreakInitializer(), jailbreakInference, nil

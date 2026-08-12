@@ -164,7 +164,7 @@ global:
         enabled: true
       prompt_guard:
         enabled: true
-        backend: mmbert32k
+        variant: mmbert32k
         model_id: models/mmbert32k-jailbreak-detector-merged-onnx
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json
         use_cpu: true

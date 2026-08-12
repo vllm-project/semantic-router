@@ -188,58 +188,56 @@ func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
 }
 
 // createJailbreakInference creates the appropriate jailbreak inference based on
-// the configured prompt_guard.backend (candle, mmbert32k, http_chat, or
-// http_classify). An empty/unset backend value reaching this switch falls
-// back to candle - but a canonical-resolved config never actually reaches
-// here empty: canonical defaults set backend to mmbert32k explicitly (see
-// config.PromptGuardBackendCandle's doc comment). This fallback only fires
+// the configured prompt_guard.protocol (remote) or prompt_guard.variant
+// (local) - the two are mutually exclusive, validated at config load time.
+// An empty/unset variant reaching this switch falls back to candle - but a
+// canonical-resolved config never actually reaches here empty: canonical
+// defaults set variant to mmbert32k explicitly (see
+// config.PromptGuardVariantCandle's doc comment). This fallback only fires
 // for configs built without going through canonical resolution.
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (SequenceClassifierBackend, error) {
-	switch promptGuardCfg.Backend {
-	case config.PromptGuardBackendMmBERT32K:
+	if promptGuardCfg.Protocol != "" {
+		externalCfg, err := findGuardrailExternalModel(routerCfg)
+		if err != nil {
+			return nil, err
+		}
 		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend": config.PromptGuardBackendMmBERT32K,
+			"protocol": promptGuardCfg.Protocol,
+			"provider": externalCfg.Provider,
+		})
+		switch promptGuardCfg.Protocol {
+		case config.PromptGuardProtocolHTTPChat:
+			// Pass default threshold from PromptGuardConfig.
+			return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
+		case config.PromptGuardProtocolHTTPClassify:
+			return NewHTTPClassifierJailbreakInference(externalCfg, jailbreakMapping)
+		default:
+			return nil, fmt.Errorf("prompt_guard.protocol: unrecognized value %q", promptGuardCfg.Protocol)
+		}
+	}
+
+	switch promptGuardCfg.Variant {
+	case config.PromptGuardVariantMmBERT32K:
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"variant": config.PromptGuardVariantMmBERT32K,
 		})
 		return createMmBERT32KJailbreakInference(), nil
-
-	case config.PromptGuardBackendHTTPChat:
-		externalCfg, err := findGuardrailExternalModel(routerCfg)
-		if err != nil {
-			return nil, err
-		}
-		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend":  config.PromptGuardBackendHTTPChat,
-			"provider": externalCfg.Provider,
-		})
-		// Pass default threshold from PromptGuardConfig.
-		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
-
-	case config.PromptGuardBackendHTTPClassify:
-		externalCfg, err := findGuardrailExternalModel(routerCfg)
-		if err != nil {
-			return nil, err
-		}
-		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend":  config.PromptGuardBackendHTTPClassify,
-			"provider": externalCfg.Provider,
-		})
-		return NewHTTPClassifierJailbreakInference(externalCfg, jailbreakMapping)
 
 	default:
 		// Empty/unset or "candle": use Candle-based inference.
 		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"backend": config.PromptGuardBackendCandle,
+			"variant": config.PromptGuardVariantCandle,
 		})
 		return createJailbreakInferenceCandle(), nil
 	}
 }
 
 // findGuardrailExternalModel looks up and validates the external model
-// configuration required by the http_chat/http_classify jailbreak backends.
+// configuration required by prompt_guard.protocol (http_chat/http_classify).
 func findGuardrailExternalModel(routerCfg *config.RouterConfig) (*config.ExternalModelConfig, error) {
 	externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
 	if externalCfg == nil {
-		return nil, fmt.Errorf("external model with model_role='%s' is required for this prompt_guard.backend", config.ModelRoleGuardrail)
+		return nil, fmt.Errorf("external model with model_role='%s' is required for this prompt_guard.protocol", config.ModelRoleGuardrail)
 	}
 	if externalCfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("external guardrail model endpoint address is required")
