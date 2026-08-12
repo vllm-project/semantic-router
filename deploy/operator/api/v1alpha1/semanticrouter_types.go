@@ -1361,14 +1361,21 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// Backend selects the jailbreak classifier backend. candle and mmbert32k
-	// run a bundled model locally; http_chat and http_classify call an
-	// external model configured via a vllmEndpoints/externalModels entry with
-	// model_role="guardrail".
-	// +kubebuilder:validation:Enum=candle;mmbert32k;http_chat;http_classify
-	// +kubebuilder:default="mmbert32k"
+	// Variant selects a local Candle-backed model variant. Mutually
+	// exclusive with Protocol. Deliberately has no kubebuilder default: a
+	// per-field CRD default would be injected by the API server even when
+	// only Protocol is set, tripping mutual-exclusion validation - the
+	// mmbert32k default for "neither set" is applied by the canonical config
+	// builder instead (canonical_config_spec.go), after both fields are read.
+	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
-	Backend string `json:"backend,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured via a
+	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// +kubebuilder:validation:Enum=http_chat;http_classify
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
