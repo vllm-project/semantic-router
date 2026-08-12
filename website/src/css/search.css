@@ -4,16 +4,11 @@
  * Everything the search theme needs lives in this one file so it can be
  * deleted wholesale if the search theme is ever swapped out.
  *
- * Two things about this site drive the rules below:
- *
- * 1. The page renders with `html[data-theme="light"]` (colorMode.disableSwitch
- *    is on), so every `html[data-theme="dark"]` rule the plugin ships is dead
- *    code here and its *light* palette is what actually applies. We override
- *    the light rules; never flip colorMode to "dark".
- * 2. The shell is split: the navbar and footer are dark chrome (shell.css)
- *    while docs, blog and page routes are the light palette in tokens.css.
- *    So the input is styled as dark navbar chrome and the dropdown is styled
- *    as a light panel, exactly like the site's own `.dropdown__menu`.
+ * The shell is split: navbar/footer stay dark chrome (shell.css) in both
+ * color modes, while docs/blog/page content follow tokens.css. The search
+ * input is styled as dark navbar chrome; the dropdown follows content
+ * tokens via `--site-*` so it adapts to light and dark mode like
+ * `.dropdown__menu`.
  *
  * The plugin's class names are hashed CSS modules (`suggestion_fB`), so
  * selectors anchor on the stable Docusaurus classes (`.navbar__search`,
@@ -29,10 +24,10 @@
 
 .navbar {
   /*
-   * tokens.css is a light palette; the navbar's dark chrome is written as
+   * Content tokens adapt to color mode; the navbar's dark chrome is written as
    * literals in shell.css. These mirror the zinc values shell.css already
    * uses for `.navbar__toggle` / `.navbar__title` / `.footer__title` so the
-   * search input reads as the same control family. They duplicate no token.
+   * search input reads as the same control family in both themes.
    */
   --search-navbar-surface: #18181b;
   --search-navbar-surface-hover: #27272a;
@@ -326,22 +321,31 @@
 @media (max-width: 1099px) {
   .navbar__inner .navbar__items--right {
     display: flex;
+    align-items: center;
+    gap: 0.45rem;
   }
 
-  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']) {
+  /* Keep search + theme toggle reachable; hide the rest of the right group. */
+  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']):not(.navbar-color-mode-toggle) {
     display: none;
+  }
+
+  .navbar__inner .navbar-color-mode-toggle {
+    margin-left: 0;
   }
 }
 
 @media (max-width: 996px) {
   /*
-   * Below 996px the theme absolutely positions the search container. With no
-   * in-flow siblings left in the right group its static position lands on the
-   * navbar's centre line rather than on it, so pin it explicitly.
+   * Docusaurus absolutely pins search to the navbar edge below 996px. Keep
+   * search + theme toggle in normal flow instead so the toggle stays at the
+   * extreme right and nothing overlaps.
    */
   .navbar__inner [class*='navbarSearchContainer_'] {
-    top: 50%;
-    transform: translateY(-50%);
+    position: relative;
+    top: auto;
+    right: auto;
+    transform: none;
   }
 
   .navbar [class*='searchBarContainer_'] {
@@ -365,9 +369,9 @@
 /* ------------------------------------------------------------------ *
  * /search — the standalone results page
  *
- * A "page" route, so it uses the light content palette. The plugin puts no
- * stable class on the page wrapper, hence the :has() scope (shell.css
- * already relies on :has() elsewhere).
+ * A "page" route, so it follows the active content palette (light/dark).
+ * The plugin puts no stable class on the page wrapper, hence the :has()
+ * scope (shell.css already relies on :has() elsewhere).
  * ------------------------------------------------------------------ */
 
 .main-wrapper .container:has(input[class*='searchQueryInput_']) {

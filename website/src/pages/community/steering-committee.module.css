@@ -8,7 +8,7 @@
 
 .mandate > span,
 .trackTitle > span {
-  color: #087ac5;
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.67rem;
   font-weight: 650;
