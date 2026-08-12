@@ -27,6 +27,13 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 					ToolsDBPath:         "/config/tools.json",
 					FallbackToEmpty:     true,
 				},
+				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
+					Enabled:        true,
+					Backend:        "http_classify",
+					ModelID:        "guardrail-model",
+					Threshold:      "0.6",
+					PositiveLabels: []string{"jailbreak", "INJECTION"},
+				},
 				Classifier: &vllmv1alpha1.ClassifierConfig{
 					CategoryModel: &vllmv1alpha1.CategoryModelConfig{
 						ModelID:             "domain-classifier",
@@ -67,6 +74,7 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 	assertOperatorToolsConfig(t, canonical.Global.Integrations.Tools)
 	assertOperatorClassifierConfig(t, canonical.Global.ModelCatalog.Modules.Classifier)
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
+	assertOperatorPromptGuardConfig(t, canonical.Global.ModelCatalog.Modules.PromptGuard)
 }
 
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
@@ -333,6 +341,23 @@ func assertOperatorClassifierConfig(t *testing.T, classifier routerconfig.Canoni
 	}
 	if classifier.PII.ModelID != "pii-classifier" || classifier.PII.PIIMappingPath != "/config/pii.yaml" {
 		t.Fatalf("unexpected PII classifier: %#v", classifier.PII)
+	}
+}
+
+func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.CanonicalPromptGuardModule) {
+	t.Helper()
+
+	// Regression for the operator CRD gap where PromptGuardConfig had no way
+	// to express `backend`/`positive_labels`, so the pluggable jailbreak
+	// backend (#2759) was unreachable via the Kubernetes Operator path.
+	if promptGuard.Backend != "http_classify" {
+		t.Fatalf("unexpected prompt guard backend: %q", promptGuard.Backend)
+	}
+	if promptGuard.ModelID != "guardrail-model" {
+		t.Fatalf("unexpected prompt guard model_id: %q", promptGuard.ModelID)
+	}
+	if len(promptGuard.PositiveLabels) != 2 || promptGuard.PositiveLabels[0] != "jailbreak" || promptGuard.PositiveLabels[1] != "INJECTION" {
+		t.Fatalf("unexpected prompt guard positive_labels: %#v", promptGuard.PositiveLabels)
 	}
 }
 

@@ -1482,6 +1482,19 @@ spec:
                   prompt_guard:
                     description: Prompt guard configuration
                     properties:
+                      backend:
+                        default: mmbert32k
+                        description: |-
+                          Backend selects the jailbreak classifier backend. candle and mmbert32k
+                          run a bundled model locally; http_chat and http_classify call an
+                          external model configured via a vllmEndpoints/externalModels entry with
+                          model_role="guardrail".
+                        enum:
+                        - candle
+                        - mmbert32k
+                        - http_chat
+                        - http_classify
+                        type: string
                       enabled:
                         default: true
                         type: boolean
@@ -1490,6 +1503,14 @@ spec:
                       model_id:
                         default: models/mmbert32k-jailbreak-detector-merged
                         type: string
+                      positive_labels:
+                        description: |-
+                          PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+                          for a custom backend whose positive class isn't named "jailbreak"
+                          (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+                        items:
+                          type: string
+                        type: array
                       threshold:
                         default: "0.7"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1498,9 +1519,6 @@ spec:
                         type: string
                       use_cpu:
                         default: true
-                        type: boolean
-                      use_modernbert:
-                        default: false
                         type: boolean
                     type: object
                   reasoning_families:
