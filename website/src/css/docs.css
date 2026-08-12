@@ -2,6 +2,11 @@
   padding: 2rem 0 4rem;
 }
 
+.site-root--docs .main-wrapper {
+  width: var(--site-page-width);
+  margin-inline: auto;
+}
+
 .site-doc-masthead {
   margin-bottom: 1.5rem;
   padding: 1.8rem 0 0.5rem;
@@ -170,6 +175,20 @@
 }
 
 @media (min-width: 997px) {
+  .site-docs-shell > .row {
+    flex-wrap: nowrap;
+  }
+
+  .site-docs-shell > .row > .col:first-child {
+    flex: 1 1 0;
+    max-width: none !important;
+  }
+
+  .site-docs-shell > .row > .col.col--3 {
+    flex: 0 0 17rem;
+    max-width: 17rem;
+  }
+
   main[class*='docMainContainer'] > .container {
     width: auto;
     max-width: none;
