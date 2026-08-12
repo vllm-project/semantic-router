@@ -29,7 +29,7 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 				},
 				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
 					Enabled:        true,
-					Backend:        "http_classify",
+					Protocol:       "http_classify",
 					ModelID:        "guardrail-model",
 					Threshold:      "0.6",
 					PositiveLabels: []string{"jailbreak", "INJECTION"},
@@ -75,6 +75,40 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 	assertOperatorClassifierConfig(t, canonical.Global.ModelCatalog.Modules.Classifier)
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
 	assertOperatorPromptGuardConfig(t, canonical.Global.ModelCatalog.Modules.PromptGuard)
+}
+
+// TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset guards a
+// cross-field defaulting bug: PromptGuardConfig.Variant deliberately has no
+// kubebuilder default (the API server would inject it unconditionally, even
+// when a user sets Protocol instead, tripping mutual-exclusion validation).
+// The "neither set" default must come from applyOperatorModelCatalog after
+// both fields are read, not from a per-field CRD default.
+func TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
+					Enabled: true,
+					ModelID: "guardrail-model",
+				},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+
+	promptGuard := canonical.Global.ModelCatalog.Modules.PromptGuard
+	if promptGuard.Variant != routerconfig.PromptGuardVariantMmBERT32K {
+		t.Fatalf("expected variant to default to %q when both variant and protocol are unset, got %q",
+			routerconfig.PromptGuardVariantMmBERT32K, promptGuard.Variant)
+	}
+	if promptGuard.Protocol != "" {
+		t.Fatalf("expected protocol to stay unset, got %q", promptGuard.Protocol)
+	}
 }
 
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
@@ -350,8 +384,11 @@ func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.Cano
 	// Regression for the operator CRD gap where PromptGuardConfig had no way
 	// to express `backend`/`positive_labels`, so the pluggable jailbreak
 	// backend (#2759) was unreachable via the Kubernetes Operator path.
-	if promptGuard.Backend != "http_classify" {
-		t.Fatalf("unexpected prompt guard backend: %q", promptGuard.Backend)
+	if promptGuard.Protocol != "http_classify" {
+		t.Fatalf("unexpected prompt guard protocol: %q", promptGuard.Protocol)
+	}
+	if promptGuard.Variant != "" {
+		t.Fatalf("expected variant to stay unset when protocol is set, got %q", promptGuard.Variant)
 	}
 	if promptGuard.ModelID != "guardrail-model" {
 		t.Fatalf("unexpected prompt guard model_id: %q", promptGuard.ModelID)
