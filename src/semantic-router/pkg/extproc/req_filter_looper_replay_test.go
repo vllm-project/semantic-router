@@ -1,17 +1,100 @@
 package extproc
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
+
+func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-replay-model",
+			"object":  "chat.completion",
+			"created": 1,
+			"model":   "backend-model",
+			"choices": []map[string]interface{}{{
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "ok",
+				},
+				"finish_reason": "stop",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			Looper: config.LooperConfig{Endpoint: server.URL},
+		},
+		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
+	}
+	decision := &config.Decision{
+		Name: "ratings-route",
+		ModelRefs: []config.ModelRef{
+			{Model: "model-a"},
+			{Model: "model-b"},
+		},
+		Algorithm: &config.AlgorithmConfig{Type: "ratings"},
+	}
+	ctx := &RequestContext{
+		RequestID:                "replay-final-model",
+		Headers:                  map[string]string{},
+		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		RouterReplayPluginConfig: &replayConfig,
+		VSRSelectedDecision:      decision,
+	}
+	request := &openai.ChatCompletionNewParams{
+		Model:    "router-entrypoint",
+		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
+	}
+
+	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
+	if err != nil {
+		t.Fatalf("handleLooperExecution: %v", err)
+	}
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected looper immediate response")
+	}
+	if ctx.VSRSelectedModel != "model-b" {
+		t.Fatalf("context selected model = %q, want final model %q", ctx.VSRSelectedModel, "model-b")
+	}
+	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
+	if headerMap[headers.VSRSelectedModel] != "model-b" {
+		t.Fatalf("response selected model header = %q, want final model %q", headerMap[headers.VSRSelectedModel], "model-b")
+	}
+	if ctx.RouterReplayID == "" {
+		t.Fatal("expected looper execution to create a replay record")
+	}
+
+	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	if !found {
+		t.Fatalf("replay record %q not found", ctx.RouterReplayID)
+	}
+	if record.SelectedModel != "model-b" {
+		t.Fatalf("replay selected model = %q, want final model %q", record.SelectedModel, "model-b")
+	}
+	if record.RouteDiagnostics == nil || record.RouteDiagnostics.SelectedModel != "model-b" {
+		t.Fatalf("replay route diagnostics = %+v, want final model %q", record.RouteDiagnostics, "model-b")
+	}
+}
 
 func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
