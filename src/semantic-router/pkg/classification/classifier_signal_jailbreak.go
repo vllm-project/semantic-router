@@ -1,17 +1,17 @@
 package classification
 
 import (
+	"context"
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
 type cachedJailbreakResult struct {
-	result candle_binding.ClassResultWithProbs
+	result SequenceClassificationResult
 	err    error
 }
 
@@ -44,7 +44,10 @@ func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, no
 	return contents
 }
 
-func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mutex, jailbreakText string, nonUserMessages []string) {
+func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, jailbreakText string, nonUserMessages []string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	start := time.Now()
 
 	// Step 1: Collect unique content pieces needed by classifier (non-contrastive) rules.
@@ -56,7 +59,7 @@ func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mu
 		chunks := jailbreakSignalChunks(content)
 		cached := make([]cachedJailbreakResult, 0, len(chunks))
 		for _, chunk := range chunks {
-			result, err := c.jailbreakInference.Classify(chunk)
+			result, err := c.jailbreakInference.Classify(ctx, chunk)
 			cached = append(cached, cachedJailbreakResult{result, err})
 		}
 		jailbreakCache[content] = cached
@@ -186,9 +189,10 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
 				continue
 			}
-			jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(cached.result.Class)
+			class, _ := deriveArgmax(cached.result.Probabilities)
+			jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
 			if !ok {
-				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
+				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
 				continue
 			}
 			aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)

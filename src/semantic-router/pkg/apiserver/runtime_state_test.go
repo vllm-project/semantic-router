@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,7 +33,7 @@ func (s *fakeResolvedClassificationService) DetectPII(req services.PIIRequest) (
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error) {
+func (s *fakeResolvedClassificationService) CheckSecurity(_ context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 

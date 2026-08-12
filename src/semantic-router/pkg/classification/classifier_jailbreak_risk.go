@@ -1,9 +1,9 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -69,7 +69,7 @@ func validateJailbreakPositiveLabels(configured []string, mapping *JailbreakMapp
 //
 // This avoids the misleading case where a confident benign prediction reports a
 // high risk_score: the predicted-class confidence is P(benign), not P(jailbreak).
-func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, result candle_binding.ClassResultWithProbs) float32 {
+func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult) float32 {
 	labels := resolvePositiveLabels(positiveLabels)
 
 	if mapping != nil && len(result.Probabilities) > 0 {
@@ -87,14 +87,15 @@ func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, resu
 		}
 	}
 
+	class, confidence := deriveArgmax(result.Probabilities)
 	if mapping != nil {
-		if predicted, ok := mapping.GetJailbreakTypeFromIndex(result.Class); ok &&
+		if predicted, ok := mapping.GetJailbreakTypeFromIndex(class); ok &&
 			isPositiveJailbreakLabel(labels, predicted) {
-			return result.Confidence
+			return confidence
 		}
 	}
 
-	return 1 - result.Confidence
+	return 1 - confidence
 }
 
 // isJailbreakRiskAboveThreshold reports whether result's summed positive-label
@@ -103,7 +104,7 @@ func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, resu
 // path (findBestJailbreakMatch) so both always threshold the exact same
 // value - see jailbreakRiskScore's doc comment for why this must stay
 // independent of which class wins argmax.
-func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []string, result candle_binding.ClassResultWithProbs, threshold float32) (bool, float32) {
+func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult, threshold float32) (bool, float32) {
 	riskScore := jailbreakRiskScore(mapping, positiveLabels, result)
 	return riskScore >= threshold, riskScore
 }
@@ -112,8 +113,10 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // returns a risk score equal to P(jailbreak class), independent of which class the
 // model predicts. It mirrors CheckForJailbreak but is intended for callers (such as
 // the security detection API) that report a risk score, so that a confident benign
-// prediction produces a low risk score rather than a misleadingly high one.
-func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float32, float32, error) {
+// prediction produces a low risk score rather than a misleadingly high one. ctx is
+// forwarded to the configured backend so a remote (http_chat/http_classify) call
+// can be cancelled with the caller instead of always running to its own timeout.
+func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string) (bool, string, float32, float32, error) {
 	threshold := c.Config.PromptGuard.Threshold
 
 	if !c.IsJailbreakEnabled() {
@@ -124,22 +127,23 @@ func (c *Classifier) CheckForJailbreakWithRisk(text string) (bool, string, float
 		return false, "", 0.0, 0.0, nil
 	}
 
-	result, err := c.jailbreakInference.Classify(text)
+	result, err := c.jailbreakInference.Classify(ctx, text)
 	if err != nil {
 		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
 
-	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(result.Class)
+	class, confidence := deriveArgmax(result.Probabilities)
+	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
 	if !ok {
-		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
+		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", class)
 	}
 
 	isJailbreak, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result, threshold)
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, riskScore, threshold)
+			jailbreakType, confidence, riskScore, threshold)
 	}
 
-	return isJailbreak, jailbreakType, result.Confidence, riskScore, nil
+	return isJailbreak, jailbreakType, confidence, riskScore, nil
 }

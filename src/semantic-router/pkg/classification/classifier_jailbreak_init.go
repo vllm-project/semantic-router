@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -101,25 +102,68 @@ func createMmBERT32KJailbreakInitializer() JailbreakInitializer {
 	return &MmBERT32KJailbreakInitializerImpl{}
 }
 
+// SequenceClassificationResult is the classification-owned result contract
+// every SequenceClassifierBackend returns: the full class-probability
+// distribution, indexed the same way as JailbreakMapping. It deliberately
+// does not carry a pre-computed argmax class/confidence - deriveArgmax
+// derives that once in the policy layer (classifier_jailbreak_risk.go) from
+// Probabilities, so no backend implements its own argmax logic and every
+// backend (local Candle, mmBERT-32K, or a remote HTTP/generative model) is
+// scored identically. This type belongs to the classification package, not
+// candle_binding, so remote/generative backends never need to depend on a
+// Candle FFI DTO to satisfy the interface.
+type SequenceClassificationResult struct {
+	Probabilities []float32
+}
+
+// deriveArgmax returns the index and score of the highest-probability class
+// in a complete distribution. It is the single place argmax/confidence is
+// computed for jailbreak classification, so every SequenceClassifierBackend
+// only ever returns raw probabilities.
+func deriveArgmax(probabilities []float32) (int, float32) {
+	bestIdx := -1
+	var bestScore float32
+	for idx, p := range probabilities {
+		if bestIdx == -1 || p > bestScore {
+			bestIdx = idx
+			bestScore = p
+		}
+	}
+	return bestIdx, bestScore
+}
+
 // SequenceClassifierBackend is implemented by every jailbreak classification
 // backend (local Candle, mmBERT-32K, or a remote model). It always returns the
 // complete class-probability distribution, never an argmax-only result, so
 // callers can read the probability of a specific class (e.g. jailbreak)
-// directly instead of the confidence of whichever class wins argmax.
+// directly instead of the confidence of whichever class wins argmax. ctx
+// carries the caller's cancellation/deadline/tracing so a remote backend
+// (http_chat, http_classify) can be cancelled with the request instead of
+// always running to its own internal timeout.
 type SequenceClassifierBackend interface {
-	Classify(text string) (candle_binding.ClassResultWithProbs, error)
+	Classify(ctx context.Context, text string) (SequenceClassificationResult, error)
+}
+
+// candleResultToSequenceClassification drops the argmax fields Candle's FFI
+// layer computes and keeps only the probability distribution, so local
+// backends return the same classification-owned type as every other backend.
+func candleResultToSequenceClassification(result candle_binding.ClassResultWithProbs) SequenceClassificationResult {
+	return SequenceClassificationResult{Probabilities: result.Probabilities}
 }
 
 type JailbreakInferenceImpl struct{}
 
-func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResultWithProbs, error) {
+func (c *JailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
 	// Try jailbreak-specific classifier first, fall back to ModernBERT if it fails
 	result, err := candle_binding.ClassifyJailbreakTextWithProbs(text)
 	if err != nil {
 		// Jailbreak classifier not initialized or failed, try ModernBERT
-		return candle_binding.ClassifyModernBertJailbreakTextWithProbs(text)
+		result, err = candle_binding.ClassifyModernBertJailbreakTextWithProbs(text)
+		if err != nil {
+			return SequenceClassificationResult{}, err
+		}
 	}
-	return result, nil
+	return candleResultToSequenceClassification(result), nil
 }
 
 // createJailbreakInferenceCandle creates Candle-based jailbreak inference (auto-detecting).
@@ -130,8 +174,12 @@ func createJailbreakInferenceCandle() SequenceClassifierBackend {
 // MmBERT32KJailbreakInferenceImpl uses mmBERT-32K for jailbreak detection.
 type MmBERT32KJailbreakInferenceImpl struct{}
 
-func (c *MmBERT32KJailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResultWithProbs, error) {
-	return candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
+func (c *MmBERT32KJailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
+	result, err := candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
+	if err != nil {
+		return SequenceClassificationResult{}, err
+	}
+	return candleResultToSequenceClassification(result), nil
 }
 
 // createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference.

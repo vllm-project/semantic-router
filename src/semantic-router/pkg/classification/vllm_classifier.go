@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -98,9 +97,10 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 // actually assigns to the positive/negative labels (resolved once in the
 // constructor), not a hardcoded {0: safe, 1: jailbreak} layout - a mapping
 // that orders classes the other way around would otherwise silently invert
-// every verdict this backend reports.
-func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResultWithProbs, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), v.timeout)
+// every verdict this backend reports. ctx bounds the vLLM call so the caller's
+// cancellation/deadline propagates instead of always running to v.timeout.
+func (v *VLLMJailbreakInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
 	// Format prompt - flexible to support different models
@@ -114,11 +114,11 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 		Temperature: 0.0, // Deterministic for safety checks
 	})
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("vLLM API call failed: %w", err)
+		return SequenceClassificationResult{}, fmt.Errorf("vLLM API call failed: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("no choices in vLLM response")
+		return SequenceClassificationResult{}, fmt.Errorf("no choices in vLLM response")
 	}
 
 	// Parse model output - flexible to support multiple formats
@@ -128,23 +128,17 @@ func (v *VLLMJailbreakInference) Classify(text string) (candle_binding.ClassResu
 	logging.Debugf("Parsed result: isJailbreak=%v, confidence=%.3f, categories=%v",
 		isJailbreak, confidence, categories)
 
-	// Map to ClassResultWithProbs format, at whichever indices the
-	// configured jailbreak_mapping assigns to the positive/negative labels.
-	class := v.negativeIdx
+	// Write the distribution at whichever indices the configured
+	// jailbreak_mapping assigns to the positive/negative labels. The argmax
+	// class/confidence reported to callers is derived centrally from this
+	// distribution (deriveArgmax), not decided here from isJailbreak.
 	probabilities := make([]float32, 2)
 	probabilities[v.positiveIdx] = 1 - confidence
 	probabilities[v.negativeIdx] = confidence
 	if isJailbreak {
-		class = v.positiveIdx
 		probabilities[v.positiveIdx] = confidence
 		probabilities[v.negativeIdx] = 1 - confidence
 	}
 
-	result := candle_binding.ClassResultWithProbs{
-		Class:         class,
-		Confidence:    confidence,
-		Probabilities: probabilities,
-	}
-
-	return result, nil
+	return SequenceClassificationResult{Probabilities: probabilities}, nil
 }

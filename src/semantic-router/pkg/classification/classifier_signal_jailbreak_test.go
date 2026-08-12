@@ -4,7 +4,6 @@ import (
 	"math"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -38,9 +37,7 @@ func TestFindBestJailbreakMatch_MultiplePositiveLabels(t *testing.T) {
 	// combined risk, above the rule's threshold.
 	cache := map[string][]cachedJailbreakResult{
 		"some text": {
-			{result: candle_binding.ClassResultWithProbs{
-				Class:         0,
-				Confidence:    0.40,
+			{result: SequenceClassificationResult{
 				Probabilities: []float32{0.40, 0.35, 0.25},
 			}},
 		},
