@@ -96,18 +96,11 @@ func TestOpenAPISpecDocumentsModelNotReady503(t *testing.T) {
 	spec := apiServer.generateOpenAPISpec()
 
 	modelBacked := map[string][]string{
-		"/api/v1/embeddings":             {"POST"},
-		"/api/v1/similarity":             {"POST"},
-		"/api/v1/similarity/batch":       {"POST"},
-		"/api/v1/classify/intent":        {"POST"},
-		"/api/v1/classify/pii":           {"POST"},
-		"/api/v1/classify/security":      {"POST"},
-		"/api/v1/classify/fact-check":    {"POST"},
-		"/api/v1/classify/user-feedback": {"POST"},
-		"/api/v1/classify/combined":      {"POST"},
-		"/api/v1/classify/batch":         {"POST"},
-		"/api/v1/eval":                   {"POST"},
-		"/api/v1/nli":                    {"POST"},
+		"/api/v1/embeddings":        {"POST"},
+		"/api/v1/similarity":        {"POST"},
+		"/api/v1/similarity/batch":  {"POST"},
+		"/api/v1/classify/pii":      {"POST"},
+		"/api/v1/classify/security": {"POST"},
 	}
 
 	for path, methods := range modelBacked {
@@ -122,6 +115,13 @@ func TestOpenAPISpecDocumentsModelNotReady503(t *testing.T) {
 	// Non-model-backed operations must not claim a model-not-ready response.
 	for _, op := range []*OpenAPIOperation{
 		openAPIOperationForMethod(t, spec, "/health", "GET"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/intent", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/fact-check", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/user-feedback", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/combined", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/batch", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/eval", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/nli", "POST"),
 		openAPIOperationForMethod(t, spec, "/config/router", "PATCH"),
 		openAPIOperationForMethod(t, spec, "/v1/files", "POST"),
 	} {

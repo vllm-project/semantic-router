@@ -40,7 +40,7 @@ func apiHealthRoutes() []apiRoute {
 func apiClassifyRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleIntentClassification,
 			jsonBody(),
@@ -58,37 +58,37 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/fact-check", Method: "POST", Description: "Classify if text needs fact-checking", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/classify/fact-check", Method: "POST", Description: "Classify if text needs fact-checking"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleFactCheckClassification,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/user-feedback", Method: "POST", Description: "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/classify/user-feedback", Method: "POST", Description: "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleUserFeedbackClassification,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleCombinedClassification,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleBatchClassification,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/eval", Method: "POST", Description: "Evaluate all configured signals regardless of decision usage", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/eval", Method: "POST", Description: "Evaluate all configured signals regardless of decision usage"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEvalClassification,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs", ServiceUnavailable: true},
+			EndpointMetadata{Path: "/api/v1/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleNLIClassification,
 			jsonBody(),

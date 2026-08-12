@@ -2,7 +2,6 @@ package nomodel
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
@@ -20,7 +19,7 @@ var resourceManifests = []string{
 
 // Profile implements the no-model readiness test profile.
 // This profile deploys the router without any embedding or classifier models
-// so that all classification and embedding endpoints return 503.
+// so that readiness-checked classifier and embedding endpoints return 503.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -64,8 +63,4 @@ func (p *Profile) GetTestCases() []string {
 // GetServiceConfig returns the service configuration.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return p.stack.ServiceConfig()
-}
-
-func init() {
-	_ = fmt.Sprintf("no-model profile registered")
 }

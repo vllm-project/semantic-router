@@ -48,10 +48,19 @@ func isEmbeddingModelNotReady(err error) bool {
 // would 500) and a multimodal-only deployment from being rejected for
 // text-only requests.
 func checkEmbeddingReadiness(req EmbeddingRequest) error {
-	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingFamilyReady(req.Model) {
-		return candle_binding.ErrEmbeddingModelNotReady
+	if len(req.Texts) > 0 {
+		if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+			return err
+		}
 	}
 	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
+func checkEmbeddingFamilyReadiness(model string) error {
+	if !candle_binding.IsEmbeddingFamilyReady(model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	return nil
@@ -72,6 +81,15 @@ func classifyEmbeddingError(err error) (int, string, string) {
 	}
 	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
 		fmt.Sprintf("failed to generate embedding: %v", err)
+}
+
+func (s *ClassificationAPIServer) writeEmbeddingError(w http.ResponseWriter, err error, fallbackCode, fallbackMessage string) {
+	if isEmbeddingModelNotReady(err) {
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
+		return
+	}
+	s.writeErrorResponse(w, http.StatusInternalServerError, fallbackCode, fallbackMessage)
 }
 
 const (
@@ -103,8 +121,8 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	}
 
 	if err := checkEmbeddingReadiness(req); err != nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			fmt.Sprintf("failed to generate embedding: %v", err))
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
 		return
 	}
 
@@ -294,9 +312,9 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !candle_binding.IsEmbeddingFamilyReady(req.Model) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
+	if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+		s.writeEmbeddingError(w, err,
+			"SIMILARITY_CALCULATION_FAILED", "failed to calculate similarity")
 		return
 	}
 
@@ -307,12 +325,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		req.Dimension,
 	)
 	if err != nil {
-		if isEmbeddingModelNotReady(err) {
-			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-				fmt.Sprintf("failed to calculate similarity: %v", err))
-			return
-		}
-		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
+		s.writeEmbeddingError(w, err, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
 	}
@@ -365,9 +378,9 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	if !candle_binding.IsEmbeddingFamilyReady(req.Model) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-			"Embedding models are not initialized — configure an embedding model in your router config")
+	if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+		s.writeEmbeddingError(w, err,
+			"BATCH_SIMILARITY_FAILED", "failed to calculate batch similarity")
 		return
 	}
 
@@ -380,12 +393,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Dimension,
 	)
 	if err != nil {
-		if isEmbeddingModelNotReady(err) {
-			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
-				fmt.Sprintf("failed to calculate batch similarity: %v", err))
-			return
-		}
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
+		s.writeEmbeddingError(w, err, "BATCH_SIMILARITY_FAILED",
 			fmt.Sprintf("failed to calculate batch similarity: %v", err))
 		return
 	}
