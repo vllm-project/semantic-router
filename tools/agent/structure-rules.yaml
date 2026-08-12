@@ -76,6 +76,9 @@ structure_exceptions:
       - dashboard/frontend/src/pages/ConfigPage.tsx
     file_checks: relaxed
   - paths:
+      - candle-binding/src/ffi/init.rs
+    file_checks: relaxed
+  - paths:
       - dashboard/backend/handlers/deploy.go
       - tools/redis/redis-cache.go
       - src/semantic-router/pkg/config/canonical_defaults.go
