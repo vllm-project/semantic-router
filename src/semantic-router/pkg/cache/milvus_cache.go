@@ -68,6 +68,11 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	} else {
 		milvusConfig = options.Config
 	}
+	// Normalize once: the raw string feeds index creation, searches, and score conversion.
+	milvusConfig.Collection.VectorField.MetricType = normalizeMilvusMetricType(milvusConfig.Collection.VectorField.MetricType)
+	if m := milvusConfig.Collection.VectorField.MetricType; m != "IP" && m != "COSINE" && m != "L2" {
+		logging.Warnf("MilvusCache: unrecognized metric_type %q; scores will be compared as similarities without conversion", m)
+	}
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
 		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
@@ -422,7 +427,15 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(
+		pendingRequestPrimaryKey(requestID),
+		requestID,
+		model,
+		query,
+		requestBody,
+		nil,
+		ttlSeconds,
+	)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -431,6 +444,10 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	return err
+}
+
+func pendingRequestPrimaryKey(requestID string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(requestID)))
 }
 
 // UpdateWithResponse completes a pending request by adding the response

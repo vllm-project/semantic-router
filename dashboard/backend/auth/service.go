@@ -82,6 +82,9 @@ func (s *Service) BootstrapRegister(ctx context.Context, email, name, hash strin
 }
 
 func (s *Service) HashPassword(password string) (string, error) {
+	if err := ValidatePassword(password); err != nil {
+		return "", err
+	}
 	h, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return "", err

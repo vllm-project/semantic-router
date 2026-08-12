@@ -5,6 +5,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -13,6 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 router_calibration_support = importlib.import_module("router_calibration_support")
 router_calibration_manifest = importlib.import_module("router_calibration_manifest")
+router_calibration_loop = importlib.import_module("router_calibration_loop")
 
 
 class DeployConfigTest(unittest.TestCase):
@@ -117,6 +119,19 @@ class RecipeScopedProbeTest(unittest.TestCase):
             manifest_path = Path(tempdir) / "probes.yaml"
             manifest_path.write_text(
                 """
+schema_version: v1
+name: test
+routing_assets:
+  yaml: test.yaml
+  dsl: test.dsl
+coverage:
+  min_signal_assertion_percent: 0
+  min_projection_assertion_percent: 0
+  min_algorithm_assertion_percent: 0
+  min_plugin_assertion_percent: 0
+  required_request_shapes: []
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
 decisions:
   - id: balanced
     expected_decision: unified_balance_route
@@ -156,6 +171,19 @@ decisions:
             manifest_path = Path(tempdir) / "probes.yaml"
             manifest_path.write_text(
                 """
+schema_version: v1
+name: test
+routing_assets:
+  yaml: test.yaml
+  dsl: test.dsl
+coverage:
+  min_signal_assertion_percent: 0
+  min_projection_assertion_percent: 0
+  min_algorithm_assertion_percent: 0
+  min_plugin_assertion_percent: 0
+  required_request_shapes: []
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
 decisions:
   - id: privacy
     expected_decision: sensitive
@@ -183,6 +211,19 @@ decisions:
             manifest_path = Path(tempdir) / "probes.yaml"
             manifest_path.write_text(
                 """
+schema_version: v1
+name: test
+routing_assets:
+  yaml: test.yaml
+  dsl: test.dsl
+coverage:
+  min_signal_assertion_percent: 0
+  min_projection_assertion_percent: 0
+  min_algorithm_assertion_percent: 0
+  min_plugin_assertion_percent: 0
+  required_request_shapes: []
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
 decisions:
   - id: privacy
     variants:
@@ -214,6 +255,12 @@ decisions:
             "requested_model": probe.model,
             "recipe": probe.expected_recipe,
             "routing_decision": probe.expected_decision,
+            "eval_trace": [
+                {
+                    "decision_name": probe.expected_decision,
+                    "matched": True,
+                }
+            ],
             "decision_result": {
                 "algorithm": probe.expected_algorithm,
                 "plugins": ["semantic-cache"],
@@ -233,7 +280,7 @@ decisions:
         self.assertTrue(result["matched"])
         http_json.assert_called_once_with(
             "POST",
-            "http://router.example:8080/api/v1/eval",
+            "http://router.example:8080/api/v1/eval?trace=true",
             {"text": probe.query, "model": probe.model},
             timeout_seconds=60.0,
         )
@@ -255,6 +302,12 @@ decisions:
                 200,
                 {
                     "routing_decision": probe.expected_decision,
+                    "eval_trace": [
+                        {
+                            "decision_name": probe.expected_decision,
+                            "matched": True,
+                        }
+                    ],
                     "decision_result": {
                         "plugins": [],
                         "matched_signals": {"kb": ["privacy_policy"]},
@@ -283,7 +336,14 @@ decisions:
             for variant in ("timeout", "healthy")
         ]
         healthy_response = {
+            "recipe": "default",
             "routing_decision": "unified_balance_route",
+            "eval_trace": [
+                {
+                    "decision_name": "unified_balance_route",
+                    "matched": True,
+                }
+            ],
             "decision_result": {},
         }
         with mock.patch.object(
@@ -303,6 +363,49 @@ decisions:
         self.assertEqual(report["request_timeout_seconds"], 90)
         self.assertEqual(report["results"][0]["error"], "request timed out")
         self.assertTrue(report["results"][1]["matched"])
+
+    def test_evaluate_probes_scopes_trace_inventory_by_recipe(self) -> None:
+        probes = [
+            router_calibration_manifest.Probe(
+                decision_id=recipe,
+                variant_id="baseline",
+                probe_id=f"{recipe}:baseline",
+                expected_decision=f"{recipe}_route",
+                expected_recipe=recipe,
+                query=f"probe {recipe}",
+            )
+            for recipe in ("balanced", "privacy")
+        ]
+        responses = [
+            (
+                200,
+                {
+                    "recipe": recipe,
+                    "routing_decision": f"{recipe}_route",
+                    "eval_trace": [
+                        {
+                            "decision_name": f"{recipe}_route",
+                            "matched": True,
+                        }
+                    ],
+                    "decision_result": {},
+                },
+            )
+            for recipe in ("balanced", "privacy")
+        ]
+        with mock.patch.object(
+            router_calibration_support,
+            "http_json",
+            side_effect=responses,
+        ):
+            report = router_calibration_support.evaluate_probes(
+                "http://router.example:8080",
+                probes,
+                {"evaluation": {"concurrency": 1}},
+            )
+
+        self.assertTrue(report["passed"])
+        self.assertTrue(all(result["trace_matched"] for result in report["results"]))
 
     def test_eval_request_timeout_is_bounded(self) -> None:
         self.assertEqual(
@@ -344,7 +447,12 @@ decisions:
             time.sleep(0.02)
             with lock:
                 active -= 1
-            return 200, {"routing_decision": "direct", "decision_result": {}}
+            return 200, {
+                "recipe": "default",
+                "routing_decision": "direct",
+                "eval_trace": [{"decision_name": "direct", "matched": True}],
+                "decision_result": {},
+            }
 
         with mock.patch.object(
             router_calibration_support, "http_json", side_effect=fake_http_json
@@ -430,6 +538,63 @@ decisions:
 
         self.assertFalse(result["matched"])
         self.assertFalse(result["algorithm_matched"])
+
+    def test_evaluate_probe_enforces_alias_and_recipe_trace(self) -> None:
+        probe = router_calibration_manifest.Probe(
+            decision_id="private",
+            variant_id="baseline",
+            probe_id="private:baseline",
+            expected_decision="private_route",
+            expected_recipe="privacy",
+            expected_alias="local/private",
+            query="Keep this local.",
+        )
+        response = {
+            "recipe": probe.expected_recipe,
+            "routing_decision": probe.expected_decision,
+            "recommended_models": ["cloud/frontier"],
+            "eval_trace": [
+                {"decision_name": probe.expected_decision, "matched": True},
+                {"decision_name": "foreign_route", "matched": False},
+            ],
+            "decision_result": {},
+        }
+        with mock.patch.object(
+            router_calibration_support,
+            "http_json",
+            return_value=(200, response),
+        ):
+            result = router_calibration_support.evaluate_probe(
+                "http://router.example:8080",
+                probe,
+                allowed_decisions=frozenset({probe.expected_decision}),
+            )
+
+        self.assertFalse(result["matched"])
+        self.assertFalse(result["alias_matched"])
+        self.assertFalse(result["trace_matched"])
+        self.assertIn("foreign_route", result["trace_decisions"])
+
+    def test_eval_command_returns_nonzero_when_acceptance_fails(self) -> None:
+        args = SimpleNamespace(
+            probes="probes.yaml",
+            router_url="http://router.example:8080",
+            output=None,
+        )
+        with (
+            mock.patch.object(
+                router_calibration_loop,
+                "load_probe_manifest",
+                return_value=({"schema_version": "v1"}, []),
+            ),
+            mock.patch.object(
+                router_calibration_loop,
+                "evaluate_probes",
+                return_value={"passed": False},
+            ),
+            mock.patch("builtins.print"),
+        ):
+            self.assertEqual(router_calibration_loop.cmd_eval(args), 1)
 
     def test_tag_summary_groups_cross_cutting_robustness_axes(self) -> None:
         summaries = router_calibration_manifest.summarize_tag_results(

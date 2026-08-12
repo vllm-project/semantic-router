@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/recipe-probes-v1.schema.json",
+  "title": "Maintained recipe conformance probes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "routing_assets", "coverage", "decisions"],
+  "properties": {
+    "schema_version": {"const": "v1"},
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "routing_assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["yaml", "dsl"],
+      "properties": {
+        "yaml": {"type": "string", "minLength": 1},
+        "dsl": {"type": "string", "minLength": 1}
+      }
+    },
+    "router_eval_endpoint": {"type": "string", "minLength": 1},
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "request_timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "concurrency": {"type": "integer", "minimum": 1}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_probe_pass_rate": {"type": "number", "minimum": 0, "maximum": 100},
+        "min_decision_pass_rate": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "coverage": {"$ref": "#/$defs/coveragePolicy"},
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/decision"}
+    }
+  },
+  "$defs": {
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "signals": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/stringSet"}
+    },
+    "matchMode": {"enum": ["contains", "exact"]},
+    "coveragePercent": {"type": "number", "minimum": 0, "maximum": 100},
+    "tagCategoryCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": {"type": "integer", "minimum": 0},
+        "negative": {"type": "integer", "minimum": 0},
+        "collision": {"type": "integer", "minimum": 0},
+        "fallback": {"type": "integer", "minimum": 0},
+        "stress": {"type": "integer", "minimum": 0},
+        "tools": {"type": "integer", "minimum": 0},
+        "multi_turn": {"type": "integer", "minimum": 0}
+      }
+    },
+    "tagCategoryRates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "language": {"$ref": "#/$defs/coveragePercent"},
+        "negative": {"$ref": "#/$defs/coveragePercent"},
+        "collision": {"$ref": "#/$defs/coveragePercent"},
+        "fallback": {"$ref": "#/$defs/coveragePercent"},
+        "stress": {"$ref": "#/$defs/coveragePercent"},
+        "tools": {"$ref": "#/$defs/coveragePercent"},
+        "multi_turn": {"$ref": "#/$defs/coveragePercent"}
+      }
+    },
+    "coveragePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_signal_assertion_percent",
+        "min_projection_assertion_percent",
+        "min_algorithm_assertion_percent",
+        "min_plugin_assertion_percent",
+        "required_request_shapes",
+        "min_tag_counts",
+        "min_tag_pass_rate"
+      ],
+      "properties": {
+        "min_signal_assertion_percent": {"$ref": "#/$defs/coveragePercent"},
+        "min_projection_assertion_percent": {"$ref": "#/$defs/coveragePercent"},
+        "min_algorithm_assertion_percent": {"$ref": "#/$defs/coveragePercent"},
+        "min_plugin_assertion_percent": {"$ref": "#/$defs/coveragePercent"},
+        "required_request_shapes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["text", "messages", "tools"]}
+        },
+        "min_tag_counts": {"$ref": "#/$defs/tagCategoryCounts"},
+        "min_tag_pass_rate": {"$ref": "#/$defs/tagCategoryRates"}
+      }
+    },
+    "padding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "repeat": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "placement": {"enum": ["before", "after", "around"]}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "query": {"type": "string", "minLength": 1},
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "object"}
+        },
+        "tools": {"type": "array", "items": {"type": "object"}},
+        "repeat": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "padding": {"$ref": "#/$defs/padding"},
+        "tags": {"$ref": "#/$defs/stringSet"},
+        "notes": {"type": "string"},
+        "expected_signals": {"$ref": "#/$defs/signals"}
+      },
+      "oneOf": [
+        {"required": ["query"], "not": {"required": ["messages"]}},
+        {"required": ["messages"], "not": {"required": ["query"]}}
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "expected_decision", "variants"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "expected_decision": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "expected_recipe": {"type": "string", "minLength": 1},
+        "expected_algorithm": {"type": "string", "minLength": 1},
+        "expected_plugins": {"$ref": "#/$defs/stringSet"},
+        "forbidden_plugins": {"$ref": "#/$defs/stringSet"},
+        "plugin_match": {"$ref": "#/$defs/matchMode"},
+        "expected_alias": {"type": "string", "minLength": 1},
+        "expected_signals": {"$ref": "#/$defs/signals"},
+        "forbidden_signals": {"$ref": "#/$defs/signals"},
+        "signal_match": {"$ref": "#/$defs/matchMode"},
+        "robustness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_pass_rate": {"type": "number", "minimum": 0, "maximum": 100}
+          }
+        },
+        "objective": {"type": "string"},
+        "notes": {"type": "string"},
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/variant"}
+        }
+      }
+    }
+  }
+}

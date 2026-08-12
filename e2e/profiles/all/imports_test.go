@@ -22,3 +22,16 @@ func TestDashboardProfileBuildsLocalImage(t *testing.T) {
 		t.Fatalf("dashboard local images = %#v, want %#v", registration.Capabilities.LocalImages, want)
 	}
 }
+
+func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
+	if _, ok := framework.LookupProfileRegistration("envoy-ai-gateway"); !ok {
+		t.Fatal("envoy-ai-gateway profile is not registered")
+	}
+	profile, err := framework.NewProfileByName("kubernetes")
+	if err != nil {
+		t.Fatalf("legacy kubernetes profile alias failed: %v", err)
+	}
+	if profile.Name() != "envoy-ai-gateway" {
+		t.Fatalf("legacy alias resolved to %q, want envoy-ai-gateway", profile.Name())
+	}
+}

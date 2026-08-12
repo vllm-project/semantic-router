@@ -4,18 +4,122 @@
 from __future__ import annotations
 
 import re
+import sys
 
 import yaml
 from agent_support import REPO_ROOT
+
+TOOLS_CI_DIR = REPO_ROOT / "tools" / "ci"
+if str(TOOLS_CI_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_CI_DIR))
+
+from test_domain_registry import (  # noqa: E402
+    local_full_ci_paths,
+    profile_records,
+    registry_schema_errors,
+    suite_domains,
+)
 
 
 def validate_ci_changes_filters(
     repo_manifest: dict, task_matrix: dict, e2e_map: dict, errors: list[str]
 ) -> None:
-    del task_matrix
+    validate_test_domain_registry(task_matrix, e2e_map, errors)
     validate_e2e_profile_lists(repo_manifest, e2e_map, errors)
     validate_e2e_inventory(e2e_map, errors)
     validate_workflow_suite_rules(e2e_map, errors)
+
+
+def validate_test_domain_registry(
+    task_matrix: dict, e2e_map: dict, errors: list[str]
+) -> None:
+    errors.extend(registry_schema_errors())
+    registry_profiles = profile_records()
+    registry_full = [
+        name for name, data in registry_profiles.items() if data.get("full_ci")
+    ]
+    registry_default = [
+        name for name, data in registry_profiles.items() if data.get("default_local")
+    ]
+    if registry_full != e2e_map.get("full_ci_profiles", []):
+        errors.append(
+            "test-domain registry full CI profiles do not match e2e-profile-map"
+        )
+    if registry_default != e2e_map.get("default_local_profiles", []):
+        errors.append(
+            "test-domain registry default local profiles do not match e2e-profile-map"
+        )
+    if tuple(e2e_map.get("full_ci_triggers", [])) != local_full_ci_paths():
+        errors.append(
+            "test-domain registry local full-CI paths do not match e2e-profile-map"
+        )
+    sections = {"pr": "profile_rules", "manual": "manual_profile_rules"}
+    for selection, section in sections.items():
+        expected = {
+            name: tuple(data.get("paths", []))
+            for name, data in registry_profiles.items()
+            if data.get("selection") == selection
+        }
+        actual = {
+            name: tuple(data.get("paths", []))
+            for name, data in e2e_map.get(section, {}).items()
+        }
+        if expected != actual:
+            errors.append(
+                "tools/agent/test-domain-registry.yaml profile paths do not "
+                f"match tools/agent/e2e-profile-map.yaml {section}"
+            )
+    validate_registry_workflow_suites(e2e_map, errors)
+    validate_registry_task_rules(task_matrix, errors)
+
+
+def validate_registry_task_rules(task_matrix: dict, errors: list[str]) -> None:
+    rules = {rule["name"]: rule for rule in task_matrix.get("rules", [])}
+    for domain_name, domain in suite_domains().values():
+        task_rule = domain.get("task_rule")
+        if not task_rule:
+            continue
+        rule = rules.get(task_rule)
+        if rule is None or rule.get("domain") != domain_name:
+            errors.append(
+                f"task-matrix rule {task_rule!r} must reference registry domain "
+                f"{domain_name!r}"
+            )
+            continue
+        if rule.get("paths") or rule.get("fast_tests") or rule.get("feature_tests"):
+            errors.append(
+                f"task-matrix rule {task_rule!r} duplicates registry paths or commands"
+            )
+
+
+def validate_registry_workflow_suites(e2e_map: dict, errors: list[str]) -> None:
+    registry_suites = suite_domains()
+    map_suites = e2e_map.get("workflow_suite_rules", {})
+    if set(registry_suites) != set(map_suites):
+        errors.append(
+            "test-domain registry workflow suites do not match "
+            "e2e-profile-map workflow_suite_rules"
+        )
+        return
+    for suite_name, (_, domain) in registry_suites.items():
+        mapped = map_suites[suite_name]
+        expected = {
+            "workflow": domain["workflow"],
+            "change_filter": domain["selector"],
+            "local_command": domain["local"]["feature"][0],
+            "paths": frozenset(domain.get("paths", [])),
+        }
+        actual = {
+            "workflow": mapped.get("workflow"),
+            "change_filter": mapped.get("change_filter"),
+            "local_command": mapped.get("local_command"),
+            "paths": frozenset(mapped.get("paths", [])),
+        }
+        if expected != actual:
+            errors.append(
+                f"test-domain registry suite {suite_name!r} does not match "
+                "e2e-profile-map workflow suite metadata"
+            )
 
 
 def validate_e2e_profile_lists(

@@ -29,7 +29,7 @@ REPRESENTATIVE_FIXTURES = {
     "core router": (
         ["src/semantic-router/pkg/extproc/processor.go"],
         ("quality", "security", "core-tests", "e2e", "images"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         ("vllm-sr",),
     ),
     "dashboard": (
@@ -41,7 +41,7 @@ REPRESENTATIVE_FIXTURES = {
     "operator": (
         ["deploy/operator/controllers/semanticrouter_controller.go"],
         ("quality", "security", "operator", "e2e"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         (),
     ),
     "CLI": (
@@ -53,13 +53,13 @@ REPRESENTATIVE_FIXTURES = {
     "memory": (
         ["src/semantic-router/pkg/memory/inmemory_store.go"],
         ("quality", "security", "core-tests", "e2e", "memory"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         (),
     ),
     "native binding": (
         ["candle-binding/src/lib.rs"],
         ("quality", "security", "core-tests", "e2e", "images"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         ("vllm-sr",),
     ),
     "OpenVINO": (
@@ -71,19 +71,19 @@ REPRESENTATIVE_FIXTURES = {
     "workflow only": (
         [".github/workflows/performance-test.yml"],
         ("quality", "security", "e2e"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         (),
     ),
     "Docker validator only": (
         [".github/workflows/docker-validate.yml"],
         ("quality", "security", "e2e", "images"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         ("vllm-sr",),
     ),
     "Docker publisher only": (
         [".github/workflows/docker-publish.yml"],
         ("quality", "security", "e2e"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         (),
     ),
     "Docker product path": (
@@ -104,7 +104,7 @@ REPRESENTATIVE_FIXTURES = {
             "tools/ci/workflow_policy_validation.py",
         ],
         ("quality", "security", "core-tests", "e2e", "images"),
-        ("kubernetes",),
+        ("envoy-ai-gateway",),
         ("vllm-sr",),
     ),
 }
@@ -133,17 +133,32 @@ class PRChangeClassifierTests(unittest.TestCase):
             result.selected_jobs,
             ("quality", "security", "core-tests", "e2e"),
         )
-        self.assertEqual(result.profiles, ("kubernetes",))
+        self.assertEqual(result.profiles, ("envoy-ai-gateway",))
         self.assertEqual(result.pr_images, ())
 
     def test_ci_full_does_not_enable_performance(self) -> None:
         result = classify(["README.md"], full=True)
 
         self.assertNotIn("performance", result.selected_jobs)
+        self.assertIn("recipe-conformance", result.selected_jobs)
         self.assertEqual(
             result.profiles,
-            ("kubernetes", "dashboard", "remote-embedding"),
+            ("envoy-ai-gateway", "dashboard", "remote-embedding"),
         )
+
+    def test_recipe_changes_select_conformance_domain(self) -> None:
+        result = classify(["config/recipes/privacy/probes.yaml"])
+
+        self.assertTrue(result.signals["recipe_conformance"])
+        self.assertIn("recipe-conformance", result.selected_jobs)
+        self.assertIn("core-tests", result.selected_jobs)
+        self.assertEqual(result.pr_images, ())
+
+    def test_recipe_workflow_change_selects_conformance_domain(self) -> None:
+        result = classify([".github/workflows/recipe-conformance.yml"])
+
+        self.assertTrue(result.signals["recipe_conformance"])
+        self.assertIn("recipe-conformance", result.selected_jobs)
 
     def test_workflow_edits_do_not_select_product_domains(self) -> None:
         workflow_paths = (
@@ -162,8 +177,17 @@ class PRChangeClassifierTests(unittest.TestCase):
                     result.selected_jobs,
                     ("quality", "security", "e2e"),
                 )
-                self.assertEqual(result.profiles, ("kubernetes",))
+                self.assertEqual(result.profiles, ("envoy-ai-gateway",))
                 self.assertEqual(result.pr_images, ())
+
+    def test_composite_action_changes_select_ci_contracts(self) -> None:
+        result = classify([".github/actions/free-disk-space/action.yml"])
+
+        self.assertEqual(
+            result.selected_jobs,
+            ("quality", "security", "core-tests", "e2e"),
+        )
+        self.assertEqual(result.profiles, ("envoy-ai-gateway",))
 
     def test_agent_text_paths_remain_docs_light(self) -> None:
         paths = (
@@ -187,14 +211,15 @@ class PRChangeClassifierTests(unittest.TestCase):
         self.assertNotIn("vllm-sr-cuda", result.publish_images)
         self.assertNotIn("vllm-sr-rocm", result.publish_images)
 
-    def test_fixture_builds_are_owned_by_active_integration_receipts(self) -> None:
+    def test_fixture_builds_follow_active_integration_receipts(self) -> None:
         llm_katan = classify(["e2e/testing/llm-katan/llm_katan/server.py"])
         anthropic = classify(["e2e/testing/anthropic-shim/anthropic_shim/app.py"])
 
         self.assertIn("memory", llm_katan.selected_jobs)
         self.assertEqual(llm_katan.pr_images, ())
-        self.assertIn("anthropic-shim", anthropic.profiles)
-        self.assertEqual(anthropic.pr_images, ())
+        self.assertNotIn("anthropic-shim", anthropic.profiles)
+        self.assertIn("images", anthropic.selected_jobs)
+        self.assertEqual(anthropic.pr_images, ("anthropic-shim",))
         self.assertEqual(llm_katan.publish_images, ())
         self.assertEqual(anthropic.publish_images, ())
 

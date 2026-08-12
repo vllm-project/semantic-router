@@ -47,6 +47,8 @@ func milvusExtractDocumentRowContent(fields []entity.Column, rowIdx int) (string
 // If these parameters are empty/zero, the method uses the cache collection's configuration.
 // This allows RAG collections to use different configurations when needed.
 //
+// Returned scores are similarities (larger is more similar) for every metric type.
+//
 //nolint:gocognit,cyclop,funlen,nestif
 func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
 	if !c.enabled {
@@ -67,6 +69,7 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 	if actualMetricType == "" {
 		actualMetricType = c.config.Collection.VectorField.MetricType
 	}
+	actualMetricType = normalizeMilvusMetricType(actualMetricType)
 
 	actualEf := ef
 	if actualEf == 0 {
@@ -102,6 +105,10 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
 	}
 
+	// Err can coexist with ResultCount == 0, so check it first.
+	if len(searchResult) > 0 && searchResult[0].Err != nil {
+		return nil, nil, fmt.Errorf("milvus search result error: %w", searchResult[0].Err)
+	}
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		return nil, nil, nil // No results, but not an error
 	}
@@ -111,18 +118,18 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 	var scores []float32
 
 	for i := 0; i < searchResult[0].ResultCount; i++ {
-		score := searchResult[0].Scores[i]
-		if score < threshold {
+		similarity := milvusScoreToSimilarity(actualMetricType, searchResult[0].Scores[i])
+		if similarity < threshold {
 			continue
 		}
 
 		content, found := milvusExtractDocumentRowContent(searchResult[0].Fields, i)
 		if found && content != "" {
 			contents = append(contents, content)
-			scores = append(scores, score)
+			scores = append(scores, similarity)
 			continue
 		}
-		logging.Warnf("SearchDocuments: could not extract content for result %d (score=%.3f)", i, score)
+		logging.Warnf("SearchDocuments: could not extract content for result %d (similarity=%.3f)", i, similarity)
 	}
 
 	return contents, scores, nil

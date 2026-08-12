@@ -8,6 +8,10 @@ from typing import Any, Protocol
 
 import yaml
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
+from test_domain_registry import (
+    domain_records,
+    load_test_domain_registry,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
@@ -117,11 +121,20 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
             ".github/workflows/pr.yml: compatibility matrix does not preserve "
             "the required branch-protection and Mergify contexts"
         )
+    registry_contexts = set(
+        load_test_domain_registry().get("compatibility_contexts", [])
+    )
+    if registry_contexts != REQUIRED_COMPATIBILITY_CHECKS:
+        errors.append(
+            "tools/agent/test-domain-registry.yaml compatibility contexts "
+            "do not match workflow policy"
+        )
     gate = dispatcher.jobs.get("pr-gate", {})
     if not isinstance(gate, dict) or gate.get("name") != "PR Gate":
         errors.append(".github/workflows/pr.yml: missing stable 'PR Gate' aggregate")
 
     validate_pr_selection_contract(dispatcher, workflows, errors)
+    validate_registry_dispatch_contract(dispatcher, workflows, errors)
 
     classifier_callers = []
     for workflow in workflows.values():
@@ -143,6 +156,34 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append(
             ".github/workflows/community.yml: metadata checks must not run on synchronize"
         )
+
+
+def validate_registry_dispatch_contract(
+    dispatcher: WorkflowLike,
+    workflows: dict[str, WorkflowLike],
+    errors: list[str],
+) -> None:
+    for domain_name, domain in domain_records().items():
+        if "pr" not in domain.get("cadence", []):
+            continue
+        job_id = domain["pr_job"]
+        workflow_name = Path(domain["workflow"]).name
+        job = dispatcher.jobs.get(job_id)
+        if not isinstance(job, dict):
+            errors.append(
+                f".github/workflows/pr.yml: missing registry domain job {job_id!r}"
+            )
+            continue
+        if local_target(job) != workflow_name:
+            errors.append(
+                f".github/workflows/pr.yml: registry domain {domain_name!r} "
+                f"must call {workflow_name!r}"
+            )
+        workflow = workflows.get(workflow_name)
+        if workflow is None or "workflow_call" not in workflow.events:
+            errors.append(
+                f"{domain['workflow']}: registry domain workflow must be reusable"
+            )
 
 
 def validate_release_contract(

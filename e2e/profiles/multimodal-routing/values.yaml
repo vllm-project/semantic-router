@@ -29,6 +29,16 @@ config:
     modelCards:
       - name: base-model
     signals: {}
+    decisions:
+      - name: bootstrap-default
+        description: Valid startup route replaced by the multimodal CRD profile.
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
   global:
     model_catalog:
       kbs: []
