@@ -271,16 +271,20 @@ func TestFindExternalModelByRole(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := cfg.FindExternalModelByRole(tt.role)
-			if tt.shouldFind {
-				if result == nil {
-					t.Errorf("expected to find model with role %s, but got nil", tt.role)
-				} else if result.ModelName != tt.expectedModel {
-					t.Errorf("expected model name %s, got %s", tt.expectedModel, result.ModelName)
-				}
-			} else {
+
+			if !tt.shouldFind {
 				if result != nil {
 					t.Errorf("expected not to find model with role %s, but got %v", tt.role, result)
 				}
+				return
+			}
+
+			if result == nil {
+				t.Errorf("expected to find model with role %s, but got nil", tt.role)
+				return
+			}
+			if result.ModelName != tt.expectedModel {
+				t.Errorf("expected model name %s, got %s", tt.expectedModel, result.ModelName)
 			}
 		})
 	}
