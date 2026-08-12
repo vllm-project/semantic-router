@@ -59,7 +59,10 @@ func NewHTTPClassifierJailbreakInference(cfg *config.ExternalModelConfig, mappin
 	}
 	baseURL := fmt.Sprintf("%s://%s:%d", scheme, cfg.ModelEndpoint.Address, cfg.ModelEndpoint.Port)
 
-	timeout := 30 * time.Second
+	// http_classify is a single lightweight forward pass, not a generative
+	// call - it should fail fast rather than share http_chat's more
+	// generous default.
+	timeout := 5 * time.Second
 	if cfg.TimeoutSeconds > 0 {
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
