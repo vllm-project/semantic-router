@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"context"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -11,7 +13,7 @@ type intentClassificationService interface {
 	ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error)
 	ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error)
 	DetectPII(req services.PIIRequest) (*services.PIIResponse, error)
-	CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error)
+	CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error)
 }
 
 type batchClassificationService interface {
@@ -93,8 +95,8 @@ func (s *liveClassificationService) DetectPII(req services.PIIRequest) (*service
 	return s.current().DetectPII(req)
 }
 
-func (s *liveClassificationService) CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error) {
-	return s.current().CheckSecurity(req)
+func (s *liveClassificationService) CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
+	return s.current().CheckSecurity(ctx, req)
 }
 
 func (s *liveClassificationService) ClassifyBatchUnifiedWithOptions(

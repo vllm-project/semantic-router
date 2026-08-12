@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -103,7 +104,7 @@ func TestJailbreakRiskRealModelContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isJailbreak, jbType, confidence, risk, err := classifier.CheckForJailbreakWithRisk(tt.text)
+			isJailbreak, jbType, confidence, risk, err := classifier.CheckForJailbreakWithRisk(context.Background(), tt.text)
 			if err != nil {
 				t.Fatalf("CheckForJailbreakWithRisk: %v", err)
 			}

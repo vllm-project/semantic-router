@@ -1,9 +1,9 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -97,12 +97,12 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 }
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
-func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
-	return c.CheckForJailbreakWithThreshold(text, c.Config.PromptGuard.Threshold)
+func (c *Classifier) CheckForJailbreak(ctx context.Context, text string) (bool, string, float32, error) {
+	return c.CheckForJailbreakWithThreshold(ctx, text, c.Config.PromptGuard.Threshold)
 }
 
 // CheckForJailbreakWithThreshold analyzes the given text for jailbreak attempts with a custom threshold.
-func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float32) (bool, string, float32, error) {
+func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -111,36 +111,34 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 		return false, "", 0.0, nil
 	}
 
-	var result candle_binding.ClassResultWithProbs
-	var err error
-
-	result, err = c.jailbreakInference.Classify(text)
+	result, err := c.jailbreakInference.Classify(ctx, text)
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
 	logging.Debugf("Jailbreak classification result: %v", result)
 
-	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(result.Class)
+	class, confidence := deriveArgmax(result.Probabilities)
+	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
 	if !ok {
-		return false, "", 0.0, fmt.Errorf("unknown jailbreak class index: %d", result.Class)
+		return false, "", 0.0, fmt.Errorf("unknown jailbreak class index: %d", class)
 	}
 
-	isJailbreak := result.Confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
+	isJailbreak := confidence >= threshold && isPositiveJailbreakLabel(c.Config.PromptGuard.PositiveLabels, jailbreakType)
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, threshold)
+			jailbreakType, confidence, threshold)
 	}
 
-	return isJailbreak, jailbreakType, result.Confidence, nil
+	return isJailbreak, jailbreakType, confidence, nil
 }
 
 // AnalyzeContentForJailbreak analyzes multiple content pieces for jailbreak attempts.
-func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []JailbreakDetection, error) {
-	return c.AnalyzeContentForJailbreakWithThreshold(contentList, c.Config.PromptGuard.Threshold)
+func (c *Classifier) AnalyzeContentForJailbreak(ctx context.Context, contentList []string) (bool, []JailbreakDetection, error) {
+	return c.AnalyzeContentForJailbreakWithThreshold(ctx, contentList, c.Config.PromptGuard.Threshold)
 }
 
 // AnalyzeContentForJailbreakWithThreshold analyzes multiple content pieces for jailbreak attempts with a custom threshold.
-func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []string, threshold float32) (bool, []JailbreakDetection, error) {
+func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context, contentList []string, threshold float32) (bool, []JailbreakDetection, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, nil, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -155,7 +153,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 			continue
 		}
 
-		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(content, threshold)
+		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(ctx, content, threshold)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++
