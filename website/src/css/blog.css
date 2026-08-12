@@ -1,18 +1,15 @@
 /* ------------------------------------------------------------------ *
  * Blog palette
  *
- * The blog runs a slightly cooler, bluer neutral than the rest of the site,
- * which is why it keeps its own thin token layer instead of using `--site-*`
- * directly. Light values are literals; dark remaps onto the site tokens.
+ * The blog runs a cooler, bluer neutral than the rest of the site, hence its
+ * own thin token layer. Light values are literals; dark remaps onto `--site-*`.
  *
- * Two tiers only — `--blog-muted` for secondary text and `--blog-muted-strong`
- * for the one step above it — mirroring the site's own `--site-muted` /
- * `--site-muted-bright` pair. Every literal here clears WCAG AA (4.5:1) on the
- * lightest surface it is painted on, so add new ones the same way.
+ * Two muted tiers only, mirroring `--site-muted` / `--site-muted-bright`.
+ * Every literal clears WCAG AA (4.5:1) on the lightest surface it lands on —
+ * add new ones the same way.
  *
- * `--blog-accent` intentionally resolves through `--site-accent-strong`, so it
- * follows the color mode on its own and needs no entry in the dark block —
- * that also keeps blog links the same blue as links everywhere else.
+ * `--blog-accent` resolves through `--site-accent-strong`, so it follows the
+ * color mode by itself and needs no dark-block entry.
  * ------------------------------------------------------------------ */
 html[data-route-kind='blog'],
 .blog-wrapper,

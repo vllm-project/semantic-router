@@ -211,12 +211,10 @@ html[data-route-kind="blog"] .nav-docs-only {
 /*
  * Color mode toggle — extreme right of the navbar.
  *
- * The literals below are deliberate, not missed tokens: the navbar and footer
- * are dark chrome in *both* color modes (see `--ifm-navbar-background-color`
- * and `--ifm-footer-background-color`, which tokens.css defines only on
- * `:root` and never remaps per theme). These zinc values mirror the ones
- * shell.css already uses for `.navbar__toggle` / `.navbar__title`, so the
- * toggle reads as the same control family. Do not "fix" them to `--site-*`.
+ * The literals below are deliberate, not missed tokens: navbar and footer are
+ * dark chrome in *both* modes (tokens.css sets their backgrounds on `:root`
+ * only). They mirror the zinc values already used for `.navbar__toggle`, so
+ * don't "fix" them to `--site-*`.
  */
 .navbar .navbar-color-mode-toggle,
 .navbar-sidebar__brand .navbar-color-mode-toggle {
@@ -274,16 +272,14 @@ html[data-route-kind="blog"] .nav-docs-only {
 /*
  * Toggle icon: sun or moon only, never the "system" glyph.
  *
- * theme-classic picks the icon in CSS off `html[data-theme-choice]`, which is
- * `system` until the reader picks a mode (see the pre-paint script Docusaurus
- * injects, which sets `data-theme` from the OS and `data-theme-choice` to
- * `system`). Our toggle is two-state — see the swizzle in
- * `theme/Navbar/ColorModeToggle` — so the system glyph would be misleading.
+ * theme-classic picks the icon off `html[data-theme-choice]`, which stays
+ * `system` until the reader picks a mode — misleading on a two-state button
+ * (see the swizzle in `theme/Navbar/ColorModeToggle`). Fall back to the
+ * resolved `data-theme`; Docusaurus's pre-paint script sets both attributes,
+ * so this settles with no flash.
  *
- * Fall back to the resolved `data-theme` for that case. Both attributes are on
- * `<html>` before first paint, so this settles with no flash. The class names
- * are hashed CSS modules, hence the `[class*=]` anchors — the same approach
- * search.css already uses for the search plugin's classes.
+ * `[class*=]` because the class names are hashed CSS modules, same as the
+ * search plugin selectors below.
  */
 html[data-theme-choice='system'] [class*='systemToggleIcon_'] {
   display: none;
@@ -296,18 +292,15 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
 
 /*
  * The landing page is dark-only by design: `pages/index.module.css` redefines
- * the whole `--site-*` palette locally on `.page` and pins `color-scheme:
- * dark`, so `[data-theme]` can never reach inside it. Toggling there changes
- * nothing, and a control that moves no pixels reads as broken — so hide it on
- * `/` rather than ship a no-op button.
+ * the `--site-*` palette on `.page` and pins `color-scheme: dark`, so
+ * `[data-theme]` never reaches inside it. Toggling there moves no pixels,
+ * which reads as broken — so hide the button rather than ship a no-op.
  *
- * Scope on `.site-root--home` (Root.tsx renders it server-side as an ancestor
- * of the navbar) and NOT on `html[data-route-kind='home']`, which Root.tsx
- * only sets in an effect — that one is absent from the SSR'd HTML, so the
- * toggle would flash in and back out on every cold load of the landing page.
+ * Scope on `.site-root--home`, which Root.tsx renders server-side, and NOT on
+ * `html[data-route-kind='home']`, which it only sets in an effect — that one
+ * is missing from the SSR'd HTML, so the toggle would flash in and back out.
  *
- * This hides the control only. Docusaurus keeps the color mode in
- * localStorage, so a reader who picked dark in the docs still returns to dark.
+ * Hides the control only; the stored color mode is untouched.
  */
 .site-root--home .navbar .navbar-color-mode-toggle,
 .site-root--home .navbar-sidebar__brand .navbar-color-mode-toggle {

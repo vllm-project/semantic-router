@@ -1,19 +1,14 @@
 /*
- * `color-scheme` is owned by tokens.css, which declares it alongside each
- * palette (`:root` / `[data-theme='light']` / `[data-theme='dark']`). Setting
- * it here too would be dead code anyway: `:root` outranks a bare `html`
- * selector on specificity, so an `html { color-scheme: … }` rule never wins.
+ * `color-scheme` is declared in tokens.css alongside each palette. Repeating it
+ * here would be dead code: `:root` outranks a bare `html` selector.
+ *
+ * The color-mode cross-fade also belongs here, not on `body` — `body`'s
+ * background is a gradient, and `background-color` cannot animate one.
  */
 html {
   background: var(--site-bg);
   color: var(--site-text);
   scroll-behavior: smooth;
-  /*
-   * The color-mode cross-fade lives here, not on `body`: `body`'s background
-   * is `--site-body-wash`, a gradient, and `background-color` cannot animate a
-   * gradient — so the same transition on `body` would be a no-op. `html` is
-   * the element whose background is an actual color.
-   */
   transition:
     background-color var(--site-transition-medium),
     color var(--site-transition-fast);

@@ -361,14 +361,12 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
-      // `defaultMode` only applies when the OS states no preference, since
-      // `respectPrefersColorScheme` makes a first visit follow the OS.
+      // Only applies when the OS states no preference.
       defaultMode: 'light',
       disableSwitch: false,
-      // Controls the *default* only. Upstream also uses this flag to turn the
-      // navbar button into a three-way light -> dark -> system cycle; the
-      // swizzle in `src/theme/Navbar/ColorModeToggle` keeps the button at two
-      // states so nobody has to click past "system" to reach the other theme.
+      // Sets the default from the OS. Upstream also uses this flag to make the
+      // navbar button a three-way cycle; the swizzle in
+      // `src/theme/Navbar/ColorModeToggle` keeps it at two states.
       respectPrefersColorScheme: true,
     },
     mermaid: {
