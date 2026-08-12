@@ -230,8 +230,25 @@ func replayPendingSignature(state *StreamState, ext *ir.IRExtensions) []byte {
 // terminal Anthropic event sequence (close blocks, message_delta,
 // message_stop). OpenAI providers may surface finish_reason and usage
 // on the same chunk or on separate chunks; either signal terminates.
+//
+// Usage on a chunk that also carries choices is NOT an end-of-stream
+// signal. Some backends (observed: Baseten Model APIs) attach cumulative
+// usage to EVERY content delta, so treating any usage-bearing chunk as
+// terminal closes the stream after the first token and silently discards
+// the rest of the response. Only finish_reason terminates a content chunk.
+//
+// Genuine usage-only trailers (len(chunk.Choices) == 0) never reach here:
+// they are handled by the no-choices branch in emitChunkEvents, which also
+// guards the "preview usage chunk" case from issue #2215. The choices guard
+// below is therefore belt-and-braces against future callers.
 func isTerminalChunk(finishReason string, chunk openai.ChatCompletionChunk) bool {
-	return finishReason != "" || chunkHasUsage(chunk)
+	if finishReason != "" {
+		return true
+	}
+	if len(chunk.Choices) > 0 {
+		return false
+	}
+	return chunkHasUsage(chunk)
 }
 
 // emitTerminalEvents closes any open content blocks then emits the
