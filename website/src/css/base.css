@@ -1,20 +1,28 @@
+/*
+ * `color-scheme` is declared in tokens.css alongside each palette. Repeating it
+ * here would be dead code: `:root` outranks a bare `html` selector.
+ *
+ * The color-mode cross-fade also belongs here, not on `body` — `body`'s
+ * background is a gradient, and `background-color` cannot animate one.
+ */
 html {
   background: var(--site-bg);
   color: var(--site-text);
-  color-scheme: light;
   scroll-behavior: smooth;
+  transition:
+    background-color var(--site-transition-medium),
+    color var(--site-transition-fast);
 }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
+  background: var(--site-body-wash);
   color: var(--site-text);
   font-family: var(--ifm-font-family-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: color var(--site-transition-fast);
 }
 
 body,
@@ -67,6 +75,7 @@ kbd {
 pre {
   border: 1px solid var(--site-border);
   border-radius: 1.1rem;
+  background: var(--site-code-bg);
 }
 
 table {
@@ -85,5 +94,13 @@ img {
 @media (max-width: 768px) {
   .site-shell-container {
     width: min(100% - 1.4rem, var(--site-grid-max));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    transition: none;
+    scroll-behavior: auto;
   }
 }
