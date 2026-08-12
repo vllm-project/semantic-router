@@ -225,6 +225,7 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
+      style: 'dark',
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm-sr-logo.white.png',
@@ -360,9 +361,21 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
+      // `defaultMode` only applies when the OS states no preference, since
+      // `respectPrefersColorScheme` makes a first visit follow the OS.
       defaultMode: 'light',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      disableSwitch: false,
+      // Controls the *default* only. Upstream also uses this flag to turn the
+      // navbar button into a three-way light -> dark -> system cycle; the
+      // swizzle in `src/theme/Navbar/ColorModeToggle` keeps the button at two
+      // states so nobody has to click past "system" to reach the other theme.
+      respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
   headTags: [
