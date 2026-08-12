@@ -153,6 +153,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -243,8 +244,13 @@ type ModelInfo struct {
 // Initialization Functions
 // ============================================================================
 
+// ErrEmbeddingModelNotReady matches the Candle binding's readiness error so
+// callers can preserve their typed unavailable responses across backends.
+var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+
 var (
-	initMu sync.Mutex
+	initMu          sync.Mutex
+	multiModalReady atomic.Bool
 )
 
 // InitMmBertEmbeddingModel initializes the mmBERT embedding model
@@ -265,6 +271,18 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 // IsMmBertModelInitialized checks if the embedding model is loaded
 func IsMmBertModelInitialized() bool {
 	return bool(C.is_mmbert_model_initialized())
+}
+
+// IsEmbeddingFamilyReady reports whether ONNX can serve the requested embedding
+// family. ONNX uses mmBERT for its text embedding families, while multimodal
+// requests require the separately initialized multimodal model.
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		return IsMultiModalReady()
+	default:
+		return IsMmBertModelInitialized()
+	}
 }
 
 // InitEmbeddingModels initializes embedding models (candle_binding compatible API)
@@ -1081,7 +1099,14 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	if !C.init_multimodal_embedding_model(cPath, C.bool(useCPU)) {
 		return fmt.Errorf("failed to initialize multi-modal embedding model from %s", modelPath)
 	}
+	multiModalReady.Store(true)
 	return nil
+}
+
+// IsMultiModalReady reports whether the separately initialized multimodal ONNX
+// model is ready to serve image, text, or audio embedding requests.
+func IsMultiModalReady() bool {
+	return multiModalReady.Load()
 }
 
 // MultiModalEncodeText encodes text into a shared multi-modal embedding space.
