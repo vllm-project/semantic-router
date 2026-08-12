@@ -97,7 +97,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ],
 
   pluginTypes: [
-    'semantic_cache',
+    'response_cache',
     'memory',
     'system_prompt',
     'header_mutation',
@@ -164,7 +164,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
         'type.plugin',
       ],
 
@@ -331,7 +331,7 @@ const SIGNAL_TYPE_SUGGESTIONS = [
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [
-  { label: 'semantic_cache', detail: 'Semantic caching plugin' },
+  { label: 'response_cache', detail: 'Response caching plugin' },
   { label: 'memory', detail: 'Conversation memory plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },

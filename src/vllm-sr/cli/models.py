@@ -2,6 +2,7 @@
 
 import json
 import math
+import warnings
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -652,7 +653,7 @@ class Rules(BaseModel):
 class PluginType(str, Enum):
     """Supported plugin types."""
 
-    SEMANTIC_CACHE = "semantic-cache"
+    RESPONSE_CACHE = "response_cache"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
@@ -665,12 +666,46 @@ class PluginType(str, Enum):
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
+    CONTEXT_COMPRESSION = "context_compression"
 
 
-class SemanticCachePluginConfig(BaseModel):
-    """Configuration for semantic-cache plugin."""
+class ResponseCacheSemanticConfig(BaseModel):
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ResponseCacheRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["no-cache", "no-store", "bypass", "max-age", "ttl"]] = Field(
+        default_factory=list
+    )
+    max_ttl_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class ResponseCachePersonalizedConfig(BaseModel):
+    mode: Literal["disabled", "exact"] = "disabled"
+
+
+class ResponseCacheRevisionConfig(BaseModel):
+    cache_epoch: Optional[str] = None
+    model_revision: Optional[str] = None
+    prompt_revision: Optional[str] = None
+    policy_revision: Optional[str] = None
+
+
+class ResponseCachePluginConfig(BaseModel):
+    """Configuration for response_cache plugin."""
 
     enabled: bool
+    mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
+    scope: Literal["user", "team", "tenant", "global"] = "user"
+    semantic: Optional[ResponseCacheSemanticConfig] = None
+    request_controls: Optional[ResponseCacheRequestControlsConfig] = None
+    personalized: Optional[ResponseCachePersonalizedConfig] = None
+    revision: Optional[ResponseCacheRevisionConfig] = None
+    # Deprecated flat compatibility fields.
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
     similarity_threshold: Optional[float] = Field(
         default=None,
         ge=0.0,
@@ -680,6 +715,131 @@ class SemanticCachePluginConfig(BaseModel):
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
+
+    @model_validator(mode="after")
+    def validate_compatibility_fields(self):
+        if self.semantic is not None and self.similarity_threshold is not None:
+            raise ValueError(
+                "semantic.similarity_threshold conflicts with similarity_threshold"
+            )
+        if self.request_controls is not None and (
+            self.allow_request_controls or self.control_header is not None
+        ):
+            raise ValueError(
+                "request_controls conflicts with deprecated request-control fields"
+            )
+        return self
+
+
+SemanticCachePluginConfig = ResponseCachePluginConfig
+
+
+CompressionTokenLimit = Literal["auto"] | int
+
+
+class ContextCompressionBudgetConfig(BaseModel):
+    trigger_tokens: Optional[CompressionTokenLimit] = None
+    target_tokens: Optional[CompressionTokenLimit] = None
+    reserve_output_tokens: Optional[CompressionTokenLimit] = None
+
+    @model_validator(mode="after")
+    def validate_budget(self):
+        values = (
+            self.trigger_tokens,
+            self.target_tokens,
+            self.reserve_output_tokens,
+        )
+        if any(isinstance(value, int) and value < 0 for value in values):
+            raise ValueError("compression token limits cannot be negative")
+        if (
+            isinstance(self.trigger_tokens, int)
+            and isinstance(self.target_tokens, int)
+            and self.trigger_tokens > 0
+            and self.target_tokens >= self.trigger_tokens
+        ):
+            raise ValueError("budget.target_tokens must be less than trigger_tokens")
+        return self
+
+
+class ContextCompressionTargetConfig(BaseModel):
+    mode: Literal["preserve", "extractive", "recoverable"] = "preserve"
+    min_tokens: Optional[int] = Field(default=None, ge=0)
+    target_tokens: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_target_budget(self):
+        if (
+            self.min_tokens
+            and self.target_tokens
+            and self.target_tokens >= self.min_tokens
+        ):
+            raise ValueError("target_tokens must be less than min_tokens")
+        return self
+
+
+class ContextCompressionTargetsConfig(BaseModel):
+    tool_outputs: ContextCompressionTargetConfig = Field(
+        default_factory=lambda: ContextCompressionTargetConfig(
+            mode="extractive", min_tokens=2000, target_tokens=1000
+        )
+    )
+    history: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    rag: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    memory: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+
+
+class ContextCompressionScoringConfig(BaseModel):
+    method: Literal["bm25", "embedding", "hybrid"] = "bm25"
+    embedding_model_ref: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_embedding_model(self):
+        if self.method != "bm25" and not self.embedding_model_ref:
+            raise ValueError("embedding_model_ref is required for embedding scoring")
+        return self
+
+
+class ContextCompressionRecoveryConfig(BaseModel):
+    enabled: bool = False
+    store: Optional[Literal["redis", "valkey", "response_cache"]] = None
+    ttl_seconds: int = Field(default=900, ge=0)
+    max_bytes_per_request: int = Field(default=10 * 1024 * 1024, ge=0)
+    max_total_bytes: int = Field(default=256 * 1024 * 1024, ge=0)
+    max_retrievals: int = Field(default=8, ge=0)
+
+    @model_validator(mode="after")
+    def validate_store(self):
+        if self.enabled and self.store is None:
+            raise ValueError("recovery.store is required when recovery is enabled")
+        return self
+
+
+class ContextCompressionRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["bypass", "target"]] = Field(default_factory=list)
+    max_target_tokens: int = Field(default=16000, ge=0)
+
+
+class ContextCompressionPluginConfig(BaseModel):
+    """Configuration for context_compression plugin."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    mode: Literal["auto", "always"] = "auto"
+    budget: Optional[ContextCompressionBudgetConfig] = None
+    targets: Optional[ContextCompressionTargetsConfig] = None
+    scoring: Optional[ContextCompressionScoringConfig] = None
+    recovery: Optional[ContextCompressionRecoveryConfig] = None
+    request_controls: Optional[ContextCompressionRequestControlsConfig] = None
+    failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
 
 
 class FastResponsePluginConfig(BaseModel):
@@ -992,6 +1152,23 @@ class PluginConfig(BaseModel):
     type: PluginType
     configuration: Dict[str, Any]
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_response_cache_aliases(cls, value):
+        if isinstance(value, dict) and value.get("type") in {
+            "semantic-cache",
+            "semantic_cache",
+            "response-cache",
+        }:
+            warnings.warn(
+                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            value = dict(value)
+            value["type"] = PluginType.RESPONSE_CACHE.value
+        return value
+
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
         # Use mode='python' to get Python native types, then convert enum
@@ -1116,6 +1293,36 @@ class RouterLearningProtectionConfig(BaseModel):
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
 
 
+class RouterLearningRedisStateStoreConfig(BaseModel):
+    """Redis connectivity for shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str
+    password: Optional[str] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[str] = None
+
+
+class RouterLearningStateStoreConfig(BaseModel):
+    """Optional shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: int = Field(default=86400, ge=0)
+    timeout_ms: int = Field(default=50, ge=0)
+    redis: Optional[RouterLearningRedisStateStoreConfig] = None
+
+    @model_validator(mode="after")
+    def validate_redis(self):
+        if self.backend == "redis" and self.redis is None:
+            raise ValueError(
+                "redis config is required when state_store.backend is redis"
+            )
+        return self
+
+
 class RouterLearningConfig(BaseModel):
     """Global Router Learning controls."""
 
@@ -1124,6 +1331,7 @@ class RouterLearningConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     adaptation: Optional[RouterLearningAdaptationConfig] = None
     protection: Optional[RouterLearningProtectionConfig] = None
+    state_store: Optional[RouterLearningStateStoreConfig] = None
 
 
 class OutputContractChoiceSetSpec(BaseModel):
@@ -1221,6 +1429,7 @@ class Decision(BaseModel):
     name: str
     description: str
     priority: int
+    tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
@@ -1285,6 +1494,22 @@ class ModelPricing(BaseModel):
     completion_per_1m: Optional[float] = 0.0
 
 
+class ProviderReliability(BaseModel):
+    """Generated Envoy reliability policy for one provider model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    retry_count: int = Field(default=0, ge=0, le=5)
+    retry_on: str = "connect-failure,refused-stream"
+    consecutive_5xx: int = Field(default=0, ge=0)
+    base_ejection_time: str = "30s"
+    max_ejection_percent: int = Field(default=50, ge=0, le=100)
+    health_check_path: Optional[str] = None
+    health_check_interval: str = "10s"
+    health_check_timeout: str = "2s"
+
+
 class Model(BaseModel):
     """Provider model binding for canonical providers.models entries."""
 
@@ -1293,6 +1518,7 @@ class Model(BaseModel):
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
+    reliability: Optional[ProviderReliability] = None
     api_format: Optional[str] = None
     external_model_ids: Optional[Dict[str, str]] = None
 

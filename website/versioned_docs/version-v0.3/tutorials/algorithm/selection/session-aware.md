@@ -6,7 +6,7 @@
 
 Use it when clients send a stable `x-session-id` header and you want long-running agent sessions to avoid unnecessary model churn. Provider-managed continuation state, such as a Response API `previous_response_id`, is treated as non-portable state and hard-locks the session to the previous physical model. Router memory stores routing facts only, so model selection can reason about continuity without becoming application memory.
 
-It aligns to `config/algorithm/selection/session-aware.yaml`.
+It aligns to `config/fragments/algorithm/selection/session-aware.yaml`.
 
 ## Scope Boundary
 

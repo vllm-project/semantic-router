@@ -1,29 +1,13 @@
 name: Integration Test [Dashboard]
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-  push:
-    branches:
-      - main
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  # Use changes filter to detect dashboard changes
-  changes:
-    uses: ./.github/workflows/ci-changes.yml
-
   dashboard-test:
-    needs: changes
-    if: >-
-      ${{ !github.event.pull_request.draft
-          && needs.changes.outputs.dashboard == 'true' }}
     runs-on: ubuntu-latest
     name: Dashboard Lint and Type Check
 

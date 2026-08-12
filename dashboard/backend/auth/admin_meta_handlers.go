@@ -105,7 +105,7 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 
 		hash, err := svc.HashPassword(req.Password)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writePasswordHashError(w, err)
 			return
 		}
 		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {

@@ -179,7 +179,7 @@ spec:
 
     global:
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: memory
           max_entries: 1000
@@ -271,7 +271,7 @@ spec:
               top_k: 1
               min_score_threshold: "0.5"
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: "memory"
           embedding_model: "mmbert"
@@ -294,7 +294,7 @@ spec:
             qwen3_model_path: "models/qwen3-embedding"
             use_cpu: true
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: "redis"
           embedding_model: "qwen3"
@@ -916,7 +916,7 @@ spec:
   config:
     global:
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: memory
           similarity_threshold: "0.8"
@@ -959,7 +959,7 @@ spec:
   config:
     global:
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: redis
           similarity_threshold: "0.85"
@@ -1031,7 +1031,7 @@ spec:
   config:
     global:
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: milvus
           similarity_threshold: "0.90"
@@ -1108,7 +1108,7 @@ spec:
   config:
     global:
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: hybrid
           similarity_threshold: "0.85"
@@ -1321,7 +1321,7 @@ spec:
   config:
     global:
       stores:
-        semantic_cache:
+        response_cache:
           embedding_model: mmbert  # 或通过显式覆盖 model_catalog 使用 qwen3、gemma
 ```
 
@@ -1344,13 +1344,13 @@ spec:
 
 ```bash
 # Redis 缓存配置
-kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.redis
+kubectl explain semanticrouter.spec.config.global.stores.response_cache.redis
 
 # Milvus 缓存配置
-kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.milvus
+kubectl explain semanticrouter.spec.config.global.stores.response_cache.milvus
 
 # HNSW 配置
-kubectl explain semanticrouter.spec.config.global.stores.semantic_cache.hnsw
+kubectl explain semanticrouter.spec.config.global.stores.response_cache.hnsw
 ```
 
 ### Semantic Router 配置
@@ -1412,7 +1412,7 @@ spec:
               use_mmbert_32k: true
 
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: "memory"  # 或 redis、milvus、hybrid
           similarity_threshold: 0.8

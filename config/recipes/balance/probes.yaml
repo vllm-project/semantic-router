@@ -1,3 +1,4 @@
+schema_version: v1
 name: balance
 description: >
   Executable eval probes for the simplified maintained balance routing profile.
@@ -17,9 +18,31 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 3.8
+  min_projection_assertion_percent: 0.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages]
+  min_tag_counts:
+    language: 9
+    negative: 1
+    collision: 1
+    fallback: 1
+    stress: 1
+    multi_turn: 3
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    collision: 100.0
+    fallback: 100.0
+    stress: 100.0
+    multi_turn: 100.0
 decisions:
   - id: premium_legal
     expected_decision: premium_legal
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: anthropic/claude-opus-4.6
     objective: High-stakes legal analysis that should avoid generic business routing.
     variants:
@@ -32,6 +55,8 @@ decisions:
 
   - id: formal_math_proof
     expected_decision: formal_math_proof
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: openai/gpt5.4
     objective: Narrow formal-math overlay for rigorous proofs and derivations that justify the expensive reasoning tier.
     variants:
@@ -47,6 +72,8 @@ decisions:
 
   - id: reasoning_deep
     expected_decision: reasoning_deep
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     objective: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
     variants:
@@ -62,11 +89,15 @@ decisions:
 
   - id: complex_specialist
     expected_decision: complex_specialist
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     objective: Multi-step execution planning, systems design, and specialist STEM synthesis on the complex tier.
     variants:
       - id: migration_runbook
         query: Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and validation after each phase.
+        expected_signals:
+          projection: [balance_complex]
         tags: [baseline, orchestration]
       - id: platform_cutover_plan
         query: Create a phased runbook for consolidating two internal platforms, with owners, dependencies, rollback criteria, and verification gates for every phase.
@@ -84,11 +115,13 @@ decisions:
         query: In electrochemistry terms, compare SEI growth, lithium plating, and cathode cracking as causes of lithium-ion battery degradation, then propose experiments to isolate the dominant mechanism.
         tags: [baseline, stem]
       - id: qubit_decoherence
-        query: Compare modeling approaches for turbulent fluid simulation.
+        query: In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.
         tags: [paraphrase, stem]
 
   - id: feedback_wrong_answer_verified
     expected_decision: feedback_wrong_answer_verified
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-2.5-flash-lite
     objective: Wrong-answer correction requests that need verified, sourced answers without escalating to the complex tier.
     variants:
@@ -110,9 +143,16 @@ decisions:
           - role: user
             content: That answer is wrong. Please correct it and cite reliable historical sources.
         tags: [feedback, messages, history, verified]
+      - id: health_error_correction_priority
+        query: This is wrong. Please correct the chest-pain guidance and cite reliable medical sources.
+        expected_signals:
+          keywords: [correction_feedback_markers, verification_markers]
+        tags: [feedback, health, collision, priority, verified]
 
   - id: medium_code_general
     expected_decision: medium_code_general
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
     objective: Mid-tier coding help without architecture-heavy or agentic workflow cues, including short urgent bug triage.
     variants:
@@ -131,6 +171,8 @@ decisions:
 
   - id: verified_health
     expected_decision: verified_health
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-3.1-pro
     objective: Health-domain answers with explicit reliable-source requirements.
     variants:
@@ -143,6 +185,8 @@ decisions:
 
   - id: verified_explainer
     expected_decision: verified_explainer
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: google/gemini-2.5-flash-lite
     objective: Evidence-sensitive business, history, or psychology explanations that should stay on the conservative mid-tier lane.
     variants:
@@ -161,11 +205,15 @@ decisions:
 
   - id: medium_explainer
     expected_decision: medium_explainer
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
     objective: Business, history, and psychology explanation without explicit verification overlays.
     variants:
       - id: plg_vs_slg
         query: Explain when a mid-market SaaS company should prefer product-led growth over sales-led growth, and outline the trade-offs.
+        expected_signals:
+          projection: [balance_medium]
         tags: [baseline, business]
       - id: roman_republic_plain
         query: In plain language, explain why the Roman Republic collapsed.
@@ -179,6 +227,8 @@ decisions:
 
   - id: medium_creative
     expected_decision: medium_creative
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
     objective: Creative ideation and interpersonal drafting that should stay on the cheapest general-purpose lane.
     variants:
@@ -197,6 +247,8 @@ decisions:
 
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
     objective: Clarification follow-ups that ask for a simpler restatement or repeat the same ask once.
     variants:
@@ -221,6 +273,8 @@ decisions:
 
   - id: fast_qa
     expected_decision: fast_qa
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
     objective: Short English or Chinese factual questions that should stay on the cheap lane, with or without explicit verification asks.
     variants:
@@ -251,7 +305,11 @@ decisions:
 
   - id: simple_general
     expected_decision: simple_general
+    expected_algorithm: static
+    expected_plugins: [router_replay]
     expected_alias: qwen/qwen3.5-rocm
+    expected_signals:
+      projection: [balance_simple]
     objective: Short general explanations and lightweight everyday drafting that should avoid fast-QA and specialist routes.
     variants:
       - id: casual_greeting
@@ -274,3 +332,17 @@ decisions:
       - id: celebratory_reply_zh
         query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
         tags: [zh, drafting]
+
+  - id: casual_chat
+    expected_decision: casual_chat
+    expected_algorithm: static
+    expected_plugins: [router_replay]
+    expected_alias: qwen/qwen3.5-rocm
+    objective: Inputs outside every classified context and specialist band reach the absolute fallback.
+    variants:
+      - id: long_unclassified_fallback
+        query: zxqv nplm ordinary neutral placeholder
+        repeat: 3000
+        expected_signals:
+          context: [long_context]
+        tags: [fallback, boundary, stress:long-input, negative]

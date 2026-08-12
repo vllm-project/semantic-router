@@ -665,6 +665,7 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 	assert.Equal(t, "Bearer secret", headerMap["Authorization"])
 	assert.Equal(t, "1", headerMap["x-extra"])
 	assert.Contains(t, removeHeaders, "content-length")
+	assert.Contains(t, removeHeaders, headers.VSRSelectedRecipe)
 	assert.Contains(t, removeHeaders, "x-remove-me")
 }
 
@@ -770,7 +771,7 @@ func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *tes
 	}
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	ctx := &RequestContext{
-		LooperRequest: true,
+		LooperRequest: true, VSRSelectedDecision: &router.Config.Decisions[0],
 		Headers: map[string]string{
 			headers.VSRLooperDecision: "fusion_alias",
 		},

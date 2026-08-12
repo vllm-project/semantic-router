@@ -1,5 +1,6 @@
 PyYAML==6.0.3
 codespell==2.4.1
+jsonschema==4.26.0
 pre-commit==4.3.0
 ruff==0.15.5
 tree-sitter==0.25.2

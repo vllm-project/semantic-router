@@ -146,7 +146,7 @@ PROJECTION score security_risk_score {
 
 PROJECTION score privacy_risk_score {
   method: "weighted_sum"
-  inputs: [{ type: "pii", weight: 0.92, name: "pii_strict" }, { type: "keyword", weight: 0.15, name: "local_only_markers", value_source: "confidence" }, { type: "keyword", weight: 0.5, name: "private_code_markers", value_source: "confidence" }, { type: "keyword", weight: 0.2, name: "internal_doc_markers", value_source: "confidence" }, { type: "embedding", weight: 0.32, name: "private_code_request", value_source: "confidence" }, { type: "embedding", weight: 0.4, name: "pii_request", value_source: "confidence" }, { type: "embedding", weight: 0.4, name: "internal_document_request", value_source: "confidence" }, { type: "context", weight: 0.06, name: "long_context" }]
+  inputs: [{ type: "pii", weight: 0.92, name: "pii_strict" }, { type: "keyword", weight: 0.15, name: "local_only_markers", value_source: "confidence" }, { type: "keyword", weight: 0.5, name: "private_code_markers", value_source: "confidence" }, { type: "keyword", weight: 0.2, name: "internal_doc_markers", value_source: "confidence" }, { type: "embedding", weight: 0.32, name: "private_code_request", value_source: "confidence" }, { type: "embedding", weight: 0.4, name: "pii_request", value_source: "confidence" }, { type: "embedding", weight: 0.4, name: "internal_document_request", value_source: "confidence" }, { type: "kb", weight: 0.25, name: "privacy_policy", value_source: "confidence" }, { type: "context", weight: 0.06, name: "long_context" }]
 }
 
 PROJECTION score reasoning_pressure {
@@ -170,7 +170,7 @@ PROJECTION mapping privacy_policy_band {
   source: "privacy_risk_score"
   method: "threshold_bands"
   calibration: { method: "sigmoid_distance", slope: 10 }
-  outputs: [{ name: "policy_privacy_cloud_allowed", lt: 0.32 }, { name: "policy_privacy_local_only", gte: 0.32 }]
+  outputs: [{ name: "policy_privacy_cloud_allowed", lt: 0.35 }, { name: "policy_privacy_local_only", gte: 0.35 }]
 }
 
 PROJECTION mapping reasoning_policy_band {

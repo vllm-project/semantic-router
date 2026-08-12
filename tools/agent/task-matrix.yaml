@@ -48,29 +48,23 @@ rules:
     paths:
       - tools/agent/*.yaml
       - tools/agent/scripts/**
+      - tools/ci/**
       - tools/make/agent.mk
-      - .github/workflows/ci-changes.yml
-      - .github/workflows/integration-test-k8s.yml
-      - .github/workflows/integration-test-memory.yml
-      - .github/workflows/integration-test-vllm-sr-cli.yml
-      - .github/workflows/pre-commit.yml
+      - .github/actions/**
+      - .github/workflows/**
+      - .mergify.yml
     fast_tests:
       - make agent-validate
     feature_tests: []
     requires_local_smoke: false
   - name: vllm-sr-cli
+    domain: cli
     doc_only: false
     loop_mode: completion
     execution_plan_policy: long_horizon
-    paths:
-      - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
-      - tools/make/docker.mk
-      - e2e/testing/vllm-sr-cli/**
-    fast_tests:
-      - make vllm-sr-test
-    feature_tests:
-      - make vllm-sr-test-integration
+    paths: []
+    fast_tests: []
+    feature_tests: []
     requires_local_smoke: true
   - name: fleet-sim
     doc_only: false
@@ -83,19 +77,13 @@ rules:
     feature_tests: []
     requires_local_smoke: false
   - name: memory-integration
+    domain: memory
     doc_only: false
     loop_mode: completion
     execution_plan_policy: long_horizon
-    paths:
-      - e2e/testing/09-memory-features-test.py
-      - e2e/testing/run_memory_integration.sh
-      - e2e/testing/llm-katan/**
-      - e2e/config/config.memory*.yaml
-      - .github/workflows/integration-test-memory.yml
-      - tools/make/milvus.mk
+    paths: []
     fast_tests: []
-    feature_tests:
-      - make memory-test-integration
+    feature_tests: []
     requires_local_smoke: false
   - name: helm-chart
     doc_only: false
@@ -108,6 +96,15 @@ rules:
     feature_tests:
       - make helm-ci-validate HELM_REPO_UPDATE=false
       - make helm-safety-validate HELM_REPO_UPDATE=false
+    requires_local_smoke: false
+  - name: maintained-recipes
+    domain: recipe-conformance
+    doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
+    paths: []
+    fast_tests: []
+    feature_tests: []
     requires_local_smoke: false
   - name: router-core
     doc_only: false
@@ -127,6 +124,7 @@ rules:
       - candle-binding/**
       - ml-binding/**
       - nlp-binding/**
+      - onnx-binding/**
     fast_tests:
       - make test-binding-minimal
     feature_tests:
@@ -196,6 +194,7 @@ rules:
     loop_mode: completion
     execution_plan_policy: long_horizon
     paths:
+      - .github/actions/**
       - .github/workflows/**
     fast_tests:
       - make agent-validate

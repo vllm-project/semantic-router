@@ -4,75 +4,121 @@
 from __future__ import annotations
 
 import re
+import sys
 
 import yaml
 from agent_support import REPO_ROOT
+
+TOOLS_CI_DIR = REPO_ROOT / "tools" / "ci"
+if str(TOOLS_CI_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_CI_DIR))
+
+from test_domain_registry import (  # noqa: E402
+    local_full_ci_paths,
+    profile_records,
+    registry_schema_errors,
+    suite_domains,
+)
 
 
 def validate_ci_changes_filters(
     repo_manifest: dict, task_matrix: dict, e2e_map: dict, errors: list[str]
 ) -> None:
-    filters = load_ci_changes_filters(errors)
-    if filters is None:
-        return
-
-    validate_ci_filter_against_task_rule("agent_text", task_matrix, filters, errors)
-    validate_ci_filter_against_task_rule("agent_exec", task_matrix, filters, errors)
-    validate_ci_profile_filters(e2e_map, filters, errors)
+    validate_test_domain_registry(task_matrix, e2e_map, errors)
     validate_e2e_profile_lists(repo_manifest, e2e_map, errors)
     validate_e2e_inventory(e2e_map, errors)
     validate_workflow_suite_rules(e2e_map, errors)
 
 
-def load_ci_changes_filters(errors: list[str]) -> dict | None:
-    ci_changes_path = REPO_ROOT / ".github" / "workflows" / "ci-changes.yml"
-    workflow = yaml.safe_load(ci_changes_path.read_text(encoding="utf-8"))
-    steps = workflow.get("jobs", {}).get("filter", {}).get("steps", [])
-    changes_step = next((step for step in steps if step.get("id") == "changes"), None)
-    if changes_step is None:
-        errors.append(".github/workflows/ci-changes.yml is missing the 'changes' step")
-        return None
-
-    filters_text = changes_step.get("with", {}).get("filters")
-    if not filters_text:
-        errors.append(".github/workflows/ci-changes.yml is missing with.filters")
-        return None
-    return yaml.safe_load(filters_text)
-
-
-def validate_ci_filter_against_task_rule(
-    rule_name: str, task_matrix: dict, filters: dict, errors: list[str]
+def validate_test_domain_registry(
+    task_matrix: dict, e2e_map: dict, errors: list[str]
 ) -> None:
-    rule = next(
-        (
-            candidate
-            for candidate in task_matrix["rules"]
-            if candidate["name"] == rule_name
-        ),
-        None,
-    )
-    if rule is None:
-        errors.append(f"task-matrix is missing rule '{rule_name}'")
-        return
-
-    workflow_paths = set(filters.get(rule_name, []))
-    task_paths = set(rule.get("paths", []))
-    if workflow_paths != task_paths:
+    errors.extend(registry_schema_errors())
+    registry_profiles = profile_records()
+    registry_full = [
+        name for name, data in registry_profiles.items() if data.get("full_ci")
+    ]
+    registry_default = [
+        name for name, data in registry_profiles.items() if data.get("default_local")
+    ]
+    if registry_full != e2e_map.get("full_ci_profiles", []):
         errors.append(
-            f"ci-changes filter '{rule_name}' does not match task-matrix rule '{rule_name}'"
+            "test-domain registry full CI profiles do not match e2e-profile-map"
         )
-
-
-def validate_ci_profile_filters(
-    e2e_map: dict, filters: dict, errors: list[str]
-) -> None:
-    for profile, data in e2e_map.get("profile_rules", {}).items():
-        filter_name = f"e2e_{profile.replace('-', '_')}"
-        workflow_paths = set(filters.get(filter_name, []))
-        profile_paths = set(data.get("paths", []))
-        if workflow_paths != profile_paths:
+    if registry_default != e2e_map.get("default_local_profiles", []):
+        errors.append(
+            "test-domain registry default local profiles do not match e2e-profile-map"
+        )
+    if tuple(e2e_map.get("full_ci_triggers", [])) != local_full_ci_paths():
+        errors.append(
+            "test-domain registry local full-CI paths do not match e2e-profile-map"
+        )
+    sections = {"pr": "profile_rules", "manual": "manual_profile_rules"}
+    for selection, section in sections.items():
+        expected = {
+            name: tuple(data.get("paths", []))
+            for name, data in registry_profiles.items()
+            if data.get("selection") == selection
+        }
+        actual = {
+            name: tuple(data.get("paths", []))
+            for name, data in e2e_map.get(section, {}).items()
+        }
+        if expected != actual:
             errors.append(
-                f"ci-changes filter '{filter_name}' does not match e2e-profile-map rule '{profile}'"
+                "tools/agent/test-domain-registry.yaml profile paths do not "
+                f"match tools/agent/e2e-profile-map.yaml {section}"
+            )
+    validate_registry_workflow_suites(e2e_map, errors)
+    validate_registry_task_rules(task_matrix, errors)
+
+
+def validate_registry_task_rules(task_matrix: dict, errors: list[str]) -> None:
+    rules = {rule["name"]: rule for rule in task_matrix.get("rules", [])}
+    for domain_name, domain in suite_domains().values():
+        task_rule = domain.get("task_rule")
+        if not task_rule:
+            continue
+        rule = rules.get(task_rule)
+        if rule is None or rule.get("domain") != domain_name:
+            errors.append(
+                f"task-matrix rule {task_rule!r} must reference registry domain "
+                f"{domain_name!r}"
+            )
+            continue
+        if rule.get("paths") or rule.get("fast_tests") or rule.get("feature_tests"):
+            errors.append(
+                f"task-matrix rule {task_rule!r} duplicates registry paths or commands"
+            )
+
+
+def validate_registry_workflow_suites(e2e_map: dict, errors: list[str]) -> None:
+    registry_suites = suite_domains()
+    map_suites = e2e_map.get("workflow_suite_rules", {})
+    if set(registry_suites) != set(map_suites):
+        errors.append(
+            "test-domain registry workflow suites do not match "
+            "e2e-profile-map workflow_suite_rules"
+        )
+        return
+    for suite_name, (_, domain) in registry_suites.items():
+        mapped = map_suites[suite_name]
+        expected = {
+            "workflow": domain["workflow"],
+            "change_filter": domain["selector"],
+            "local_command": domain["local"]["feature"][0],
+            "paths": frozenset(domain.get("paths", [])),
+        }
+        actual = {
+            "workflow": mapped.get("workflow"),
+            "change_filter": mapped.get("change_filter"),
+            "local_command": mapped.get("local_command"),
+            "paths": frozenset(mapped.get("paths", [])),
+        }
+        if expected != actual:
+            errors.append(
+                f"test-domain registry suite {suite_name!r} does not match "
+                "e2e-profile-map workflow suite metadata"
             )
 
 
@@ -188,7 +234,14 @@ def format_inventory_diff(expected: set[str], actual: set[str]) -> str:
 
 def validate_workflow_suite_rules(e2e_map: dict, errors: list[str]) -> None:
     for suite_name, data in e2e_map.get("workflow_suite_rules", {}).items():
-        for field in ("owner", "kind", "summary", "workflow", "local_command"):
+        for field in (
+            "owner",
+            "kind",
+            "summary",
+            "workflow",
+            "change_filter",
+            "local_command",
+        ):
             if not data.get(field):
                 errors.append(
                     f"tools/agent/e2e-profile-map.yaml workflow suite '{suite_name}' is missing '{field}'"
@@ -196,31 +249,17 @@ def validate_workflow_suite_rules(e2e_map: dict, errors: list[str]) -> None:
         workflow_path = data.get("workflow")
         if not workflow_path:
             continue
-        workflow_paths = load_workflow_trigger_paths(workflow_path, errors)
-        if workflow_paths is None:
-            continue
-        suite_paths = set(data.get("paths", []))
-        if workflow_paths != suite_paths:
-            errors.append(
-                f"workflow suite '{suite_name}' paths do not match {workflow_path}"
-            )
+        validate_reusable_workflow(workflow_path, errors)
 
 
-def load_workflow_trigger_paths(
-    workflow_path: str, errors: list[str]
-) -> set[str] | None:
+def validate_reusable_workflow(workflow_path: str, errors: list[str]) -> bool:
     path = REPO_ROOT / workflow_path
     if not path.exists():
         errors.append(f"Missing workflow '{workflow_path}'")
-        return None
+        return False
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     workflow_on = workflow.get("on", workflow.get(True, {}))
-    pull_request = workflow_on.get("pull_request", {})
-    if not isinstance(pull_request, dict):
-        errors.append(f"Workflow '{workflow_path}' is missing pull_request.paths")
-        return None
-    paths = pull_request.get("paths")
-    if not paths:
-        errors.append(f"Workflow '{workflow_path}' is missing pull_request.paths")
-        return None
-    return set(paths)
+    if "workflow_call" not in workflow_on:
+        errors.append(f"Workflow '{workflow_path}' is missing workflow_call")
+        return False
+    return True

@@ -63,7 +63,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type is the plugin type (fast_response, hallucination, header_mutation, image_gen, memory, rag, request_params, response_jailbreak, router_replay, semantic-cache, system_prompt, tools) |  | Enum: [fast_response hallucination header_mutation image_gen memory rag request_params response_jailbreak router_replay semantic-cache system_prompt tools] <br />Required: \{\} <br /> |
+| `type` _string_ | Type is the plugin type. `response_cache` is canonical; `semantic-cache`, `semantic_cache`, and `response-cache` are deprecated aliases. |  | Enum: [fast_response hallucination header_mutation image_gen memory rag request_params response_jailbreak router_replay response_cache response-cache semantic_cache semantic-cache system_prompt tools] <br />Required: \{\} <br /> |
 | `configuration` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#rawextension-runtime-pkg)_ | Configuration is the plugin-specific configuration as a raw JSON object |  | Schemaless: \{\} <br /> |
 
 #### DomainSignal

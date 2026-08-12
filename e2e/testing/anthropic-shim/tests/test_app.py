@@ -82,6 +82,56 @@ async def test_messages_joins_system_array_before_forwarding(
 
 
 @pytest.mark.asyncio
+async def test_messages_translates_for_openai_upstream() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-1",
+                "model": "qwen-test",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "ok"},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 1},
+            },
+        )
+
+    app = create_app(
+        upstream_url="http://upstream.invalid",
+        openai_upstream=True,
+    )
+    app.state.client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://upstream.invalid",
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://shim",
+    )
+
+    response = await client.post(
+        "/v1/messages",
+        json={
+            "model": "qwen-test",
+            "system": "Be concise.",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 8,
+        },
+    )
+    await client.aclose()
+
+    assert seen[0].url.path == "/v1/chat/completions"
+    assert response.json()["content"] == [{"type": "text", "text": "ok"}]
+    assert response.json()["usage"] == {"input_tokens": 8, "output_tokens": 1}
+
+
+@pytest.mark.asyncio
 async def test_messages_joins_tool_result_array_before_forwarding(
     client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
 ) -> None:

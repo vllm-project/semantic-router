@@ -12,7 +12,7 @@ import (
 // newInMemoryBench builds a local in-memory HNSW cache for benchmarking. Unlike
 // the remote stores it needs no server, so it never fails closed; it only needs
 // the BERT model, which it shares with the other backends.
-func newInMemoryBench(b *testing.B, size int) CacheBackend {
+func newInMemoryBench(b *testing.B, size int) LegacyCacheBackend {
 	b.Helper()
 	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
 		b.Fatalf("failed to initialize BERT model: %v", err)
@@ -37,7 +37,7 @@ func newInMemoryBench(b *testing.B, size int) CacheBackend {
 // runCacheFindSimilarBench pre-populates a backend with size entries, then times
 // the FindSimilar hot path. The timer is reset after populate so the reported
 // ns/op reflects only lookups, and the hit rate is reported for context.
-func runCacheFindSimilarBench(b *testing.B, cache CacheBackend, model string, size int) {
+func runCacheFindSimilarBench(b *testing.B, cache LegacyCacheBackend, model string, size int) {
 	b.Helper()
 	for i := 0; i < size; i++ {
 		q := fmt.Sprintf("benchmark query number %d about topic %d", i, i%97)
@@ -86,11 +86,11 @@ func BenchmarkCacheComparison(b *testing.B) {
 
 	backends := []struct {
 		name string
-		make func(b *testing.B, size int) CacheBackend
+		make func(b *testing.B, size int) LegacyCacheBackend
 	}{
 		{"InMemory", newInMemoryBench},
-		{"Redis", func(b *testing.B, _ int) CacheBackend { return setupRedisCacheBench(b) }},
-		{"Valkey", func(b *testing.B, _ int) CacheBackend { return setupValkeyCacheBench(b) }},
+		{"Redis", func(b *testing.B, _ int) LegacyCacheBackend { return setupRedisCacheBench(b) }},
+		{"Valkey", func(b *testing.B, _ int) LegacyCacheBackend { return setupValkeyCacheBench(b) }},
 	}
 
 	for _, be := range backends {

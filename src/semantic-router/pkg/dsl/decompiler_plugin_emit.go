@@ -10,19 +10,20 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":      emitSystemPromptPluginConfig,
-	"semantic-cache":     emitSemanticCachePluginConfig,
-	"router_replay":      emitRouterReplayPluginConfig,
-	"memory":             emitMemoryPluginConfig,
-	"hallucination":      emitHallucinationPluginConfig,
-	"image_gen":          emitImageGenPluginConfig,
-	"fast_response":      emitFastResponsePluginConfig,
-	"request_params":     emitRequestParamsPluginConfig,
-	"tool_selection":     emitToolSelectionPluginConfig,
-	"tools":              emitToolsPluginConfig,
-	"rag":                emitRAGPluginConfig,
-	"header_mutation":    emitHeaderMutationPluginConfig,
-	"response_jailbreak": emitResponseJailbreakPluginConfig,
+	"system_prompt":       emitSystemPromptPluginConfig,
+	"response_cache":      emitResponseCachePluginConfig,
+	"context_compression": emitStructuredPluginConfig,
+	"router_replay":       emitRouterReplayPluginConfig,
+	"memory":              emitMemoryPluginConfig,
+	"hallucination":       emitHallucinationPluginConfig,
+	"image_gen":           emitImageGenPluginConfig,
+	"fast_response":       emitFastResponsePluginConfig,
+	"request_params":      emitRequestParamsPluginConfig,
+	"tool_selection":      emitToolSelectionPluginConfig,
+	"tools":               emitToolsPluginConfig,
+	"rag":                 emitRAGPluginConfig,
+	"header_mutation":     emitHeaderMutationPluginConfig,
+	"response_jailbreak":  emitResponseJailbreakPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -38,7 +39,7 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 }
 
 func emitTypedPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	if fn, ok := typedPluginConfigEmitters[p.Type]; ok {
+	if fn, ok := typedPluginConfigEmitters[config.NormalizeDecisionPluginType(p.Type)]; ok {
 		fn(sb, p)
 	}
 }
@@ -59,20 +60,16 @@ func emitSystemPromptPluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	}
 }
 
-func emitSemanticCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+func emitResponseCachePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	emitStructuredPluginConfig(sb, p)
+}
+
+func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
+	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return
 	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.TTLSeconds != nil {
-		fmt.Fprintf(sb, "    ttl_seconds: %d\n", *cfg.TTLSeconds)
-	}
+	writePluginConfigMap(sb, raw, "    ")
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {

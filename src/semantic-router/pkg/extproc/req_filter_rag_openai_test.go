@@ -84,7 +84,7 @@ func TestAddFileSearchToolToRequest(t *testing.T) {
 
 	// Parse the modified request
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
+	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
 		t.Fatalf("Failed to parse modified request: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestAddFileSearchToolToRequest_ExistingTools(t *testing.T) {
 	}
 
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
+	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
 		t.Fatalf("Failed to parse modified request: %v", err)
 	}
 

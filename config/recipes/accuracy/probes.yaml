@@ -1,3 +1,4 @@
+schema_version: v1
 name: accuracy
 description: >
   Backend-independent Eval API probes for accuracy-oriented orchestration.
@@ -13,6 +14,24 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 75.0
+  min_projection_assertion_percent: 100.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, tools]
+  min_tag_counts:
+    language: 10
+    negative: 2
+    collision: 2
+    stress: 4
+    tools: 1
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    collision: 100.0
+    stress: 100.0
+    tools: 100.0
 decisions:
   - id: accuracy_workflow
     expected_decision: accuracy_workflow
@@ -29,7 +48,23 @@ decisions:
         tags: [language:zh, orchestration, accuracy]
       - id: tool_evidence
         query: Use tools to gather evidence, investigate the incident, and produce an implementation plan.
-        tags: [language:en, tools, accuracy]
+        tools:
+          - type: function
+            function:
+              name: search_web
+              description: Search public evidence.
+          - type: function
+            function:
+              name: read_document
+              description: Read one evidence document.
+        tags: [language:en, tools, shape:tools, accuracy]
+      - id: workflow_priority_over_long_context
+        query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
+        repeat: 2600
+        expected_signals:
+          keywords: [accuracy_workflow_request]
+          context: [accuracy_long_context]
+        tags: [collision, priority, stress:long-input, orchestration]
 
   - id: accuracy_long_context_direct
     expected_decision: accuracy_long_context_direct
@@ -46,6 +81,13 @@ decisions:
         query: Contexte technique détaillé à résumer directement sans orchestration parallèle.
         repeat: 2600
         tags: [stress:long-input, language:fr, performance]
+      - id: long_context_priority_over_deliberation
+        query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
+        repeat: 2600
+        expected_signals:
+          keywords: [accuracy_deliberation_request]
+          context: [accuracy_long_context]
+        tags: [collision, priority, stress:long-input, deliberation]
 
   - id: accuracy_deliberation
     expected_decision: accuracy_deliberation

@@ -23,11 +23,13 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .translate import (
+    anthropic_to_openai,
     apply_cache_usage,
     cache_prefix_hash,
     has_cache_control,
     join_system_array,
     join_tool_result_content,
+    openai_to_anthropic,
 )
 
 LOGGER = logging.getLogger("anthropic_shim")
@@ -125,11 +127,12 @@ def create_app(
     upstream_url: str | None = None,
     session_header: str | None = None,
     request_timeout: float | None = None,
+    openai_upstream: bool | None = None,
 ) -> FastAPI:
     upstream = (
         upstream_url
         or os.environ.get("ANTHROPIC_SHIM_UPSTREAM_URL")
-        or "http://127.0.0.1:8080"
+        or "http://127.0.0.1:8081"
     ).rstrip("/")
     session_header_name = (
         session_header
@@ -140,6 +143,12 @@ def create_app(
         request_timeout
         if request_timeout is not None
         else os.environ.get("ANTHROPIC_SHIM_REQUEST_TIMEOUT", "300")
+    )
+    use_openai_upstream = (
+        openai_upstream
+        if openai_upstream is not None
+        else os.environ.get("ANTHROPIC_SHIM_OPENAI_UPSTREAM", "").lower()
+        in {"1", "true", "yes"}
     )
 
     client = httpx.AsyncClient(base_url=upstream, timeout=timeout)
@@ -156,6 +165,7 @@ def create_app(
     app.state.tracker = SessionCacheTracker()
     app.state.request_store = RequestStore()
     app.state.session_header = session_header_name
+    app.state.openai_upstream = use_openai_upstream
     app.state.client = client
 
     @app.get("/healthz")
@@ -230,9 +240,13 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
     # return the translated body + inbound headers for test assertions.
     app.state.request_store.record(session_id, body, dict(request.headers))
 
+    upstream_path = (
+        "/v1/chat/completions" if app.state.openai_upstream else "/v1/messages"
+    )
+    upstream_body = anthropic_to_openai(body) if app.state.openai_upstream else body
     upstream_response = await app.state.client.post(
-        "/v1/messages",
-        json=body,
+        upstream_path,
+        json=upstream_body,
         headers=headers,
     )
 
@@ -246,6 +260,8 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             headers=response_headers,
             media_type=upstream_response.headers.get("content-type"),
         )
+    if app.state.openai_upstream and isinstance(response_payload, dict):
+        response_payload = openai_to_anthropic(response_payload, body)
 
     if request_had_cache_control and isinstance(response_payload, dict):
         prefix_seen = app.state.tracker.mark(session_id, prefix_hash)

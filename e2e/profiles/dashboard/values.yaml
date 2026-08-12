@@ -51,7 +51,7 @@ config:
   prompt_guard:
     enabled: false
 
-  semantic_cache:
+  response_cache:
     enabled: false
 
   global:

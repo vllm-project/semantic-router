@@ -194,6 +194,72 @@ func (c *RouterConfig) RecipeForRoutingModel(modelName string) (*RoutingRecipe, 
 	return c.RecipeForRequestModel(modelName)
 }
 
+// ReachableRoutingRecipes returns the profiles that a request-facing routing
+// model can select. The default profile is reachable through configured auto or
+// direct-looper aliases; named profiles are reachable only through entrypoints.
+// Startup resource discovery should use this view instead of treating every
+// declared recipe as request reachable.
+func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
+	if c == nil {
+		return nil
+	}
+
+	reachable := make(map[RecipeName]struct{}, len(c.Entrypoints)+1)
+	if c.defaultRecipeHasRoutingEntrypoint() {
+		reachable[DefaultRecipeName] = struct{}{}
+	}
+	for _, entrypoint := range c.Entrypoints {
+		if len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
+			reachable[entrypoint.Recipe] = struct{}{}
+		}
+	}
+
+	if len(c.Recipes) == 0 {
+		if _, ok := reachable[DefaultRecipeName]; !ok {
+			return nil
+		}
+		return []*RoutingRecipe{c.DefaultRecipe()}
+	}
+
+	recipes := make([]*RoutingRecipe, 0, len(reachable))
+	for i := range c.Recipes {
+		recipe := &c.Recipes[i]
+		if _, ok := reachable[recipe.Name]; ok {
+			recipes = append(recipes, recipe)
+		}
+	}
+	return recipes
+}
+
+// IsRecipeReachableForRouting reports whether a normalized recipe can be
+// selected by a request-facing model name.
+func (c *RouterConfig) IsRecipeReachableForRouting(name RecipeName) bool {
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if recipe != nil && recipe.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *RouterConfig) defaultRecipeHasRoutingEntrypoint() bool {
+	if len(c.EffectiveAutoModelNames()) > 0 {
+		return true
+	}
+	if len(c.ExposedReMoMModelNames()) > 0 ||
+		len(c.ExposedFusionModelNames()) > 0 ||
+		len(c.ExposedFlowModelNames()) > 0 {
+		return true
+	}
+	for _, entrypoint := range c.Entrypoints {
+		if entrypoint.Recipe == DefaultRecipeName &&
+			len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // ConfigForRecipe returns an immutable routing view over the shared router
 // configuration. The returned value owns recipe-local routing fields while
 // reusing read-only provider, model, and service configuration. Callers must

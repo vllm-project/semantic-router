@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`user-feedback` 从对话中检测纠正、不满或升级反馈。映射到 `config/signal/user-feedback/`，在 `routing.signals.user_feedbacks` 中声明。
+`user-feedback` 从对话中检测纠正、不满或升级反馈。映射到 `config/fragments/signal/user-feedback/`，在 `routing.signals.user_feedbacks` 中声明。
 
 该族为学习型：依赖 `global.model_catalog.modules.feedback_detector` 配置的反馈检测器。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/user-feedback/`
+源片段族：`config/fragments/signal/user-feedback/`
 
 ```yaml
 routing:

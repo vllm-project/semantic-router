@@ -50,7 +50,7 @@ spec:
       use_cpu: true
 
     # Semantic cache with Valkey backend
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: valkey
       similarity_threshold: "0.85"

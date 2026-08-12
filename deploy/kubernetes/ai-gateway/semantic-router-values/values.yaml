@@ -76,7 +76,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -147,7 +147,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -290,7 +290,7 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -412,7 +412,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8
