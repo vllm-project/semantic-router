@@ -32,11 +32,11 @@ use crate::model_architectures::traditional::modernbert::{
 use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use crate::ffi::init::{
-    FEEDBACK_DETECTOR_CLASSIFIER, LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER,
-    PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
+    BERT_CLASSIFIER, BERT_JAILBREAK_CLASSIFIER, BERT_PII_CLASSIFIER, FEEDBACK_DETECTOR_CLASSIFIER,
+    LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
 };
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
@@ -54,10 +54,6 @@ const SECURITY_THREAT_CLASS_STR: &str = "1";
 
 /// Keywords used to identify security threats in category names
 const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
-
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
