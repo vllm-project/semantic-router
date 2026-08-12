@@ -58,7 +58,7 @@
 
 .pillMuted {
   border-color: var(--site-border);
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--site-surface-glass);
   color: var(--site-muted-bright);
 }
 
