@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -58,6 +59,37 @@ func TestNewHTTPClassifierJailbreakInference(t *testing.T) {
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+// TestNewHTTPClassifierJailbreakInference_DefaultTimeout guards the shorter
+// default for http_classify (a single lightweight forward pass) relative to
+// http_chat (a generative call that can legitimately take a few seconds) -
+// see adaamko's review of #2759. TimeoutSeconds still overrides it.
+func TestNewHTTPClassifierJailbreakInference_DefaultTimeout(t *testing.T) {
+	tests := []struct {
+		name            string
+		timeoutSeconds  int
+		expectedTimeout time.Duration
+	}{
+		{name: "unset uses the http_classify default", timeoutSeconds: 0, expectedTimeout: 5 * time.Second},
+		{name: "explicit override wins", timeoutSeconds: 60, expectedTimeout: 60 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inf, err := NewHTTPClassifierJailbreakInference(&config.ExternalModelConfig{
+				ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+				ModelName:      "custom-classifier",
+				TimeoutSeconds: tt.timeoutSeconds,
+			}, testJailbreakMapping())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if inf.timeout != tt.expectedTimeout {
+				t.Errorf("timeout = %v, want %v", inf.timeout, tt.expectedTimeout)
 			}
 		})
 	}
