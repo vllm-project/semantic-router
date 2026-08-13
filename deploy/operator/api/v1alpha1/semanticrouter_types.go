@@ -1361,9 +1361,21 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=false
+	// Variant selects a local Candle-backed model variant. Mutually
+	// exclusive with Protocol. Deliberately has no kubebuilder default: a
+	// per-field CRD default would be injected by the API server even when
+	// only Protocol is set, tripping mutual-exclusion validation - the
+	// mmbert32k default for "neither set" is applied by the canonical config
+	// builder instead (canonical_config_spec.go), after both fields are read.
+	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured via a
+	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// +kubebuilder:validation:Enum=http_chat;http_classify
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1377,6 +1389,11 @@ type PromptGuardConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
+	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+	// for a custom backend whose positive class isn't named "jailbreak"
+	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+	// +optional
+	PositiveLabels []string `json:"positive_labels,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

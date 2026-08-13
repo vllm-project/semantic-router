@@ -804,9 +804,41 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
+// ClassifyModernBertJailbreakTextWithProbs classifies for jailbreak and returns
+// the full probability distribution. The ONNX backend does not yet extract
+// per-class probabilities, so Probabilities is empty and callers fall back to
+// a confidence-based estimate.
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("jailbreak", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
 // ClassifyJailbreakText classifies for jailbreak (legacy)
 func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
+}
+
+// ClassifyJailbreakTextWithProbs classifies for jailbreak (legacy) and returns
+// the full probability distribution. The ONNX backend does not yet extract
+// per-class probabilities, so Probabilities is empty and callers fall back to
+// a confidence-based estimate.
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("jailbreak", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
 }
 
 // ClassifyCandleBertTokens classifies tokens
