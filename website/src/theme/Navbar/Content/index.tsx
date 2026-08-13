@@ -89,12 +89,14 @@ export default function NavbarContent(): ReactNode {
       right={(
         <>
           <NavbarItems items={rightItems} />
-          <NavbarColorModeToggle className={styles.colorModeToggle} />
           {!searchBarItem && (
             <NavbarSearch>
               <SearchBar />
             </NavbarSearch>
           )}
+          <NavbarColorModeToggle
+            className={clsx(styles.colorModeToggle, 'navbar-color-mode-toggle')}
+          />
         </>
       )}
     />

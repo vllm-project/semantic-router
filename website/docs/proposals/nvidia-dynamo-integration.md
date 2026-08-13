@@ -492,7 +492,7 @@ global:
     modules:
       prompt_guard:
         enabled: true
-        use_modernbert: true
+        variant: candle
         threshold: 0.7
         use_cpu: true
         # model_id and jailbreak_mapping_path are auto-discovered
@@ -1383,7 +1383,7 @@ global:
         #         models/lora_jailbreak_classifier_modernbert_model
         threshold: 0.5
         use_cpu: false
-        use_modernbert: true
+        variant: candle
         # jailbreak_mapping_path is auto-discovered from model directory
 ```
 
