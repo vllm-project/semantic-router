@@ -1,7 +1,9 @@
 package ratelimit
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -132,6 +134,26 @@ func (r *RateLimitResolver) Report(ctx Context, usage TokenUsage) {
 			logging.Warnf("Rate limit provider %q report error: %v", p.Name(), err)
 		}
 	}
+}
+
+// Close best-effort closes every provider that implements io.Closer, such as
+// EnvoyRLSProvider's gRPC connection. The Provider interface has no Close method
+// because most providers hold nothing closeable.
+func (r *RateLimitResolver) Close() error {
+	if r == nil {
+		return nil
+	}
+	var errs []error
+	for _, p := range r.providers {
+		closer, ok := p.(io.Closer)
+		if !ok {
+			continue
+		}
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ProviderNames returns the names of all registered providers (for logging).

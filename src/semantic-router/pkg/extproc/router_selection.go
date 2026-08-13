@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -13,6 +15,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
+// createModelSelectorRegistries builds one selection registry per routing
+// recipe. None of them is published to selection.SetGlobalRegistry here: they
+// belong to a candidate build that a later step or a failed warmup can still
+// discard and Close, which would leave the process-wide pointer at a closed
+// registry silently dropping rating writes while the previous router serves on.
+// publishRouterState does it once the build commits.
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	embed := resolveSelectionEmbeddingFunc(cfg)
@@ -21,7 +29,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 	if len(cfg.Recipes) == 0 {
 		registry := createModelSelectorRegistry(cfg, lt, embed)
 		registries[config.DefaultRecipeName] = registry
-		selection.GlobalRegistry = registry
 		return registries, registry, lt, cancel
 	}
 
@@ -31,7 +38,6 @@ func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.
 		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
-	selection.GlobalRegistry = defaultRegistry
 	return registries, defaultRegistry, lt, cancel
 }
 
@@ -51,6 +57,8 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
+	// Not published to selection.SetGlobalRegistry here; see
+	// createModelSelectorRegistries.
 	registry := selectionFactory.CreateAll()
 
 	// Collect algorithm methods actually configured in decisions
@@ -670,4 +678,25 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 		"interval": interval.String(),
 	})
 	return cancel
+}
+
+// closeRecipeModelSelectors closes every recipe's selection registry. Each owns
+// Elo storage and the native ML handles behind the KNN/KMeans/SVM/MLP selectors,
+// so closing only the default one leaks the rest on every reload.
+//
+// De-duplicated by pointer, because the default entry aliases a map entry and
+// Elo storage does not necessarily tolerate a second Close.
+func closeRecipeModelSelectors(registries map[config.RecipeName]*selection.Registry) error {
+	var errs []error
+	closed := make(map[*selection.Registry]bool, len(registries))
+	for recipeName, registry := range registries {
+		if registry == nil || closed[registry] {
+			continue
+		}
+		closed[registry] = true
+		if err := registry.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing selection registry for routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }

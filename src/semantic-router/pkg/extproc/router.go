@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -77,21 +78,103 @@ type OpenAIRouter struct {
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	lookupTableCancel     func()
+
+	// generation owns every closeable resource buildRouterComponents produced,
+	// registered in construction order so Close tears them down in reverse. Nil
+	// for routers assembled by hand, which Close falls back to closing field by
+	// field.
+	generation *routerruntime.Generation
+	closeOnce  sync.Once
+	closeErr   error
 }
 
-// Close releases background resources held by the router (e.g. lookup table
-// auto-save and periodic re-population goroutines).
+// Close releases every resource this router owns. Only the first call runs the
+// teardown and every caller observes the same error, because a router is
+// reachable from more than one shutdown path — a reload retiring the lease it
+// replaced, and process shutdown retiring the current one — and not all of the
+// underlying resources tolerate a second close.
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
+	r.closeOnce.Do(func() {
+		r.closeErr = r.closeResources()
+	})
+	return r.closeErr
+}
+
+func (r *OpenAIRouter) closeResources() error {
+	if r.generation != nil {
+		// Covers lookupTableCancel too, so there is nothing else to drive here.
+		return r.generation.Close()
+	}
+	return r.closeOwnedFields()
+}
+
+// closeOwnedFields is the fallback for routers assembled by hand rather than by
+// buildRouterComponents, which registers the same resources on a Generation.
+// Keep the two in step: a resource added to one and not the other leaks on
+// exactly one construction path.
+//
+// Pointer-typed fields rely on the nil-receiver guard inside their own Close.
+// Interface-typed fields are nil-checked here, because taking a method value off
+// a nil interface panics.
+func (r *OpenAIRouter) closeOwnedFields() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
 	}
-	if r.CompressionRecovery != nil {
-		return r.CompressionRecovery.Close()
+
+	var errs []error
+	collect := func(err error) {
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return nil
+
+	if r.Cache != nil {
+		collect(r.Cache.Close())
+	}
+	collect(r.ToolsDatabase.Close())
+	collect(r.Classifier.Close())
+	collect(closeReplayRecorders(r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared))
+	collect(r.ModelSelector.Close())
+	if r.MemoryStore != nil {
+		collect(r.MemoryStore.Close())
+	}
+	collect(r.RateLimiter.Close())
+	if r.CompressionRecovery != nil {
+		collect(r.CompressionRecovery.Close())
+	}
+	collect(r.ResponseAPIFilter.Close())
+	collect(r.closeToolSelectionDatabases())
+
+	return errors.Join(errs...)
+}
+
+// closeReplayRecorders mirrors the shared-vs-isolated storage distinction the
+// read paths already use (see collectRouterReplayRecords): a shared backend has
+// every recorder wrapping the same store.Storage, so only replayRecorder is
+// closed, while an isolated backend gives each decision its own store and needs
+// every recorder closed. An empty map falls back to replayRecorder.
+func closeReplayRecorders(
+	replayRecorder *routerreplay.Recorder,
+	replayRecorders map[string]*routerreplay.Recorder,
+	replayStoreShared bool,
+) error {
+	if replayStoreShared || len(replayRecorders) == 0 {
+		if replayRecorder == nil {
+			return nil
+		}
+		return replayRecorder.Close()
+	}
+
+	var errs []error
+	for _, recorder := range replayRecorders {
+		if err := recorder.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

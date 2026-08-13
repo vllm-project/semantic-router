@@ -48,6 +48,7 @@ type InMemoryCache struct {
 	// Background cleanup
 	cleanupTicker *time.Ticker
 	stopCleanup   chan struct{}
+	cleanupDone   chan struct{}
 	closeOnce     sync.Once
 }
 
@@ -113,6 +114,7 @@ func startInMemoryTTLCleanup(cache *InMemoryCache, options InMemoryCacheOptions)
 		return
 	}
 	cache.stopCleanup = make(chan struct{})
+	cache.cleanupDone = make(chan struct{})
 	cleanupInterval := time.Duration(options.TTLSeconds/2) * time.Second
 	if cleanupInterval < 10*time.Second {
 		cleanupInterval = 10 * time.Second // Minimum 10 seconds

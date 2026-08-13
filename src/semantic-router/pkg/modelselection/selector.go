@@ -569,6 +569,32 @@ func NewKNNSelector(k int) *KNNSelector {
 	}
 }
 
+// setMLKNN installs a new Linfa-backed handle and frees the one it displaces.
+// Every load path allocates a fresh handle in Rust (Box::into_raw), so a plain
+// field assignment strands the previous allocation — which, with a pretrained
+// model loaded, holds the entire training set — for the life of the process.
+func (s *KNNSelector) setMLKNN(next *ml_binding.KNNSelector) {
+	s.mu.Lock()
+	previous := s.mlKNN
+	s.mlKNN = next
+	s.mu.Unlock()
+
+	// Free outside our lock: the binding guards the handle with its own mutex
+	// and never reaches back into this selector.
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+// Close releases the Linfa-backed handle this selector owns. Idempotent. The
+// error return exists only so the selector satisfies io.Closer, which is how
+// selection.Registry discovers who holds native state; the binding itself has no
+// failure to report.
+func (s *KNNSelector) Close() error {
+	s.setMLKNN(nil)
+	return nil
+}
+
 func (s *KNNSelector) Name() string { return "knn" }
 
 // LoadFromJSON loads a pre-trained KNN model from JSON data
@@ -589,7 +615,7 @@ func (s *KNNSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlKNN = knn
+	s.setMLKNN(knn)
 	return nil
 }
 
@@ -690,6 +716,25 @@ func NewKMeansSelectorWithEfficiency(numClusters int, efficiencyWeight float64) 
 	return s
 }
 
+// setMLKMeans installs a new Linfa-backed handle and frees the one it
+// displaces. See setMLKNN for why assignment alone leaks.
+func (s *KMeansSelector) setMLKMeans(next *ml_binding.KMeansSelector) {
+	s.mu.Lock()
+	previous := s.mlKMeans
+	s.mlKMeans = next
+	s.mu.Unlock()
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+// Close releases the Linfa-backed handle this selector owns. Idempotent.
+func (s *KMeansSelector) Close() error {
+	s.setMLKMeans(nil)
+	return nil
+}
+
 func (s *KMeansSelector) Name() string { return "kmeans" }
 
 // LoadFromJSON loads a pre-trained KMeans model from JSON data
@@ -713,7 +758,7 @@ func (s *KMeansSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlKMeans = kmeans
+	s.setMLKMeans(kmeans)
 	return nil
 }
 
@@ -814,6 +859,25 @@ func NewSVMSelector(kernel string) *SVMSelector {
 	}
 }
 
+// setMLSVM installs a new Linfa-backed handle and frees the one it displaces.
+// See setMLKNN for why assignment alone leaks.
+func (s *SVMSelector) setMLSVM(next *ml_binding.SVMSelector) {
+	s.mu.Lock()
+	previous := s.mlSVM
+	s.mlSVM = next
+	s.mu.Unlock()
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+// Close releases the Linfa-backed handle this selector owns. Idempotent.
+func (s *SVMSelector) Close() error {
+	s.setMLSVM(nil)
+	return nil
+}
+
 func (s *SVMSelector) Name() string { return "svm" }
 
 // LoadFromJSON loads a pre-trained SVM model from JSON data
@@ -834,7 +898,7 @@ func (s *SVMSelector) LoadFromJSON(data []byte) error {
 		s.trainMLBinding()
 		return nil
 	}
-	s.mlSVM = svm
+	s.setMLSVM(svm)
 	return nil
 }
 
@@ -935,6 +999,26 @@ func NewMLPSelectorWithDevice(deviceType candle_binding.MLPDeviceType) *MLPSelec
 	}
 }
 
+// setMLMLP installs a new Candle-backed handle and frees the one it displaces.
+// See setMLKNN for why assignment alone leaks; the MLP handle additionally
+// pins device memory when the selector runs on a GPU.
+func (s *MLPSelector) setMLMLP(next *candle_binding.MLPSelector) {
+	s.mu.Lock()
+	previous := s.mlMLP
+	s.mlMLP = next
+	s.mu.Unlock()
+
+	if previous != nil && previous != next {
+		previous.Close()
+	}
+}
+
+// Close releases the Candle-backed handle this selector owns. Idempotent.
+func (s *MLPSelector) Close() error {
+	s.setMLMLP(nil)
+	return nil
+}
+
 func (s *MLPSelector) Name() string { return "mlp" }
 
 // LoadFromJSON loads a pre-trained MLP model from JSON data
@@ -951,7 +1035,7 @@ func (s *MLPSelector) LoadFromJSON(data []byte) error {
 		logging.Warnf("MLP: Failed to load model: %v", err)
 		return nil
 	}
-	s.mlMLP = mlp
+	s.setMLMLP(mlp)
 	return nil
 }
 

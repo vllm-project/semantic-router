@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
+	"sync"
 	"syscall"
 	"time"
 
@@ -234,6 +236,94 @@ func shutdownTracing() {
 	}
 }
 
+// shutdownRegistry collects the cleanup that must run before the process exits.
+// Hooks run in reverse registration order, so a hook may depend on anything
+// registered before it and never on anything registered after.
+//
+// Everything is guarded because the main goroutine appends as startup
+// progresses while the signal goroutine may read at any moment, including long
+// before startup finishes.
+type shutdownRegistry struct {
+	mu    sync.Mutex
+	hooks []func()
+	// started/finished let main block instead of returning — and so ending the
+	// process — while the signal goroutine is still running hooks.
+	started  bool
+	finished chan struct{}
+}
+
+func newShutdownRegistry() *shutdownRegistry {
+	return &shutdownRegistry{finished: make(chan struct{})}
+}
+
+// register adds a hook to run at shutdown, after everything already registered.
+func (r *shutdownRegistry) register(hook func()) {
+	if hook == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.hooks = append(r.hooks, hook)
+}
+
+// runInReverse runs every hook registered so far, newest first.
+func (r *shutdownRegistry) runInReverse() {
+	r.mu.Lock()
+	r.started = true
+	hooks := slices.Clone(r.hooks)
+	r.mu.Unlock()
+
+	for i := len(hooks) - 1; i >= 0; i-- {
+		hooks[i]()
+	}
+}
+
+// awaitShutdownExit blocks until a signal-triggered shutdown has finished, or
+// returns immediately if none is running.
+func (r *shutdownRegistry) awaitShutdownExit() {
+	r.mu.Lock()
+	started := r.started
+	r.mu.Unlock()
+	if !started {
+		return
+	}
+	<-r.finished
+}
+
+// markShutdownFinished releases anyone waiting in awaitShutdownExit. Only the
+// signal goroutine calls it, exactly once, so a plain close is safe.
+func (r *shutdownRegistry) markShutdownFinished() {
+	if r.finished != nil {
+		close(r.finished)
+	}
+}
+
+// shutdownTracingHook is a seam so tests can observe the signal path's tracing
+// flush without a live exporter.
+var shutdownTracingHook = shutdownTracing
+
+// registerSignalHandler installs the process's sole SIGINT/SIGTERM handler. It
+// must run before any heavy initialization: model download, runtime init and
+// warmup take minutes, and a SIGTERM arriving in that window must release
+// whatever has been built so far rather than hard-kill the process.
+func registerSignalHandler(registry *shutdownRegistry) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
+			"signal": sig.String(),
+		})
+		registry.runInReverse()
+		// Flushed after the hooks so no request is still producing spans.
+		// Idempotent, so main's deferred flush running too is harmless.
+		shutdownTracingHook()
+		registry.markShutdownFinished()
+		os.Exit(0)
+	}()
+}
+
 func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	if !cfg.Observability.Metrics.WindowedMetrics.Enabled {
 		return
@@ -248,23 +338,6 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	logging.ComponentEvent("router", "windowed_metrics_initialized", map[string]interface{}{
 		"mode": "load_balancing",
 	})
-}
-
-func registerSignalHandler(shutdownHooks *[]func()) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		sig := <-sigChan
-		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
-			"signal": sig.String(),
-		})
-		for _, hook := range *shutdownHooks {
-			hook()
-		}
-		shutdownTracing()
-		os.Exit(0)
-	}()
 }
 
 func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
@@ -300,7 +373,7 @@ func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
 func initializeRuntimeDependencies(
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
-	shutdownHooks *[]func(),
+	shutdownHooks *shutdownRegistry,
 	runtimeRegistry *routerruntime.Registry,
 ) modelruntime.EmbeddingRuntimeState {
 	writeStartupState(writer, startupstatus.State{
@@ -379,7 +452,7 @@ func logRuntimeLifecycleEvent(event modelruntime.Event) {
 
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
-	shutdownHooks *[]func(),
+	shutdownHooks *shutdownRegistry,
 	runtimeRegistry *routerruntime.Registry,
 ) {
 	if cfg.VectorStore == nil || !cfg.VectorStore.Enabled {
@@ -410,10 +483,10 @@ func initializeVectorStoreIfEnabled(
 }
 
 func registerVectorStoreShutdownHook(
-	shutdownHooks *[]func(),
+	shutdownHooks *shutdownRegistry,
 	vectorStoreRuntime *routerruntime.VectorStoreRuntime,
 ) {
-	*shutdownHooks = append(*shutdownHooks, func() {
+	shutdownHooks.register(func() {
 		logging.ComponentEvent("router", "vector_store_shutdown_started", map[string]interface{}{})
 		if err := vectorStoreRuntime.Shutdown(); err != nil {
 			logging.ComponentErrorEvent("router", "vector_store_shutdown_failed", map[string]interface{}{

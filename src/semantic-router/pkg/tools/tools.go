@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -301,6 +302,20 @@ func (db *ToolsDatabase) embedText(text string) ([]float32, error) {
 		return nil, err
 	}
 	return output.Embedding, nil
+}
+
+// Close best-effort closes the database's embedding provider, if it holds
+// anything closeable such as a remote backend's HTTP/gRPC client.
+// embedding.Provider has no Close method because most providers do not.
+func (db *ToolsDatabase) Close() error {
+	if db == nil {
+		return nil
+	}
+	closer, ok := db.provider.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return closer.Close()
 }
 
 // GetAllTools returns all tools in the database

@@ -56,6 +56,12 @@ func NewClassifier(
 // construction. Required and best-effort initializers are explicit task units so
 // router assembly can reason about lifecycle instead of relying on constructor
 // side effects.
+//
+// On failure it releases whatever the successful tasks acquired, leaving the
+// classifier uninitialized rather than half-connected. That belongs here and not
+// in the callers: the tasks run in parallel, so a failure does not imply nothing
+// was acquired, and every caller discards the classifier on error — putting it
+// beyond reach of any Close.
 func (c *Classifier) InitializeRuntime() error {
 	if c == nil {
 		return fmt.Errorf("classifier is nil")
@@ -88,6 +94,11 @@ func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 		OnEvent:        logRuntimeInitializationEvent,
 	})
 	if err != nil {
+		if closeErr := c.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("classifier", "runtime_initialization_rollback_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return err
 	}
 
@@ -119,6 +130,16 @@ func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
 	appendTask("classifier.hallucination", c.Config.NeedsHallucinationDetectorForDefaultRuntime(), c.initializeHallucinationDetector)
 	appendTask("classifier.feedback", c.Config.NeedsFeedbackModelForAPI(), c.initializeFeedbackDetector)
 	return tasks
+}
+
+// Close releases classifier-owned runtime resources acquired during
+// InitializeRuntime, such as an MCP category classifier's connection. It is
+// safe to call on a Classifier that was never initialized.
+func (c *Classifier) Close() error {
+	if c == nil || c.mcpCategoryInitializer == nil {
+		return nil
+	}
+	return c.mcpCategoryInitializer.Close()
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
