@@ -227,6 +227,17 @@ Recommended upstream settings for embedding:
 - The current SQLite auth/session store is single-replica local state. Run one dashboard replica unless you add a shared production auth/session store.
 - Future: OIDC login on dashboard and signed proxy sessions to embedded services.
 
+## Setup mode contract
+
+Setup mode is the dashboard's first-run state. While it is active the UI forces the setup wizard and the **unauthenticated** first-admin bootstrap endpoint (`/api/auth/bootstrap/register`) is open, so what turns it on and off is a security boundary, not a cosmetic flag.
+
+- **`setup.mode` in the router config file declares setup mode, and nothing else does.** It is read live from disk, behind an mtime+size cache, by one resolver (`dashboard/backend/setupmode`). Every surface derives from that single value: the bootstrap gate, `/api/setup/state`, `/api/settings`, and the setup write endpoints (`validate`, `activate`, `import-remote`).
+- **What it enables:** the setup wizard, and creation of the first admin without logging in. Both end together.
+- **It ends automatically when activation rewrites the config, with no restart.** Activation strips the `setup` block and the resolver's cache is invalidated in the same request, so the bootstrap endpoint closes at the moment setup finishes. Activation restarts the router and Envoy but deliberately not the dashboard, which is why the state must be read live rather than captured at startup.
+- **`--setup-mode` / `DASHBOARD_SETUP_MODE` is deprecated and ignored.** It is still read, but only so that a value disagreeing with the config file can be reported: `/api/setup/state` returns a `reason`, and the backend logs one `WARNING` per change (not per request — the endpoint is unauthenticated). A stale environment value can no longer open bootstrap on its own.
+- **An unreadable or unparseable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
+- **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
+
 ## Runtime status and version reporting
 
 - `/api/status` is the dashboard's live runtime summary endpoint. It is protected by dashboard auth and requires the logs/observability read permission.
