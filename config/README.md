@@ -72,6 +72,12 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 The ReMoM looper fragment includes `max_completion_tokens` as an optional
 per-subrequest completion budget.
 
+Any looper algorithm (`confidence`, `ratings`, `remom`, `fusion`, `workflows`)
+can also declare `algorithm.budget`, an optional per-request token/cost/wall-time
+ceiling separate from the per-subrequest knobs above. It defaults to unlimited
+and stops further escalation deterministically once exhausted; config
+validation rejects it on algorithm types that don't execute through Looper.
+
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 
 `config/fragments/plugin/` is organized by route-local plugin or reusable plugin bundle:

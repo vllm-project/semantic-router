@@ -596,6 +596,12 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	iteration := 0
 
 	for _, modelRef := range sortedRefs {
+		if stop, reason := CheckBudget(req); stop {
+			logging.ComponentDebugEvent("looper", "budget_exhausted", map[string]interface{}{
+				"looper": "confidence", "decision": req.DecisionName, "reason": string(reason), "iteration": iteration,
+			})
+			break
+		}
 		iteration++
 		modelName := modelRef.Model
 		if modelRef.LoRAName != "" {
@@ -642,6 +648,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 
 		// Apply token filter before confidence evaluation (e.g., exclude JSON boilerplate)
 		ApplyTokenFilter(resp, evaluator.TokenFilter)
+		RecordBudgetUsage(req, resp.Usage, modelName)
 
 		lastResponse = resp
 		allResponses = append(allResponses, resp)
@@ -797,6 +804,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 		logging.Warnf("[SelfVerify] Self-verification call failed: %v, using fallback", err)
 		return 0.5, false
 	}
+	RecordBudgetUsage(req, verifyResp.Usage, modelName)
 
 	// Parse the self-verification result
 	result, err := parseSelfVerification(verifyResp.Content)

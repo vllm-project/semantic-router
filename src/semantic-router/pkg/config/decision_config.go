@@ -83,6 +83,11 @@ type AlgorithmConfig struct {
 	Prompt       *PromptSelectionConfig       `yaml:"prompt,omitempty"`
 	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
+	// Budget declares this decision's token/cost/wall-time ceiling for
+	// Looper execution (issue #2861). Applies uniformly regardless of Type,
+	// like OnError, but is only enforced for algorithm types that route
+	// through Looper execution - see ValidateBudgetConfig.
+	Budget *BudgetConfig `yaml:"budget,omitempty"`
 }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection

@@ -153,10 +153,15 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		"streaming":    req.IsStreaming,
 	})
 
+	if stop, reason := CheckBudget(req); stop {
+		return nil, fmt.Errorf("workflows: budget exhausted before any model call (%s)", reason)
+	}
+
 	plan, plannerResp, err := l.buildWorkflowPlan(ctx, req, cfg, original, workerModels)
 	if err != nil {
 		return nil, err
 	}
+	RecordBudgetUsageForResponse(req, plannerResp)
 
 	stepResults, interrupt, err := l.executeWorkflowSteps(ctx, req, cfg, plan, plannerResp, workerModels)
 	if err != nil {
@@ -256,13 +261,21 @@ func (l *WorkflowsLooper) executeWorkflowSteps(
 	results := make([]workflowStepResult, 0, len(plan.Steps))
 	var previous []workflowStepResult
 	for idx, step := range plan.Steps {
+		if stop, reason := CheckBudget(req); stop {
+			logging.ComponentDebugEvent("looper", "budget_exhausted", map[string]interface{}{
+				"looper": "workflows", "decision": req.DecisionName, "reason": string(reason), "step": step.ID,
+			})
+			break
+		}
 		prompt := buildWorkflowStepPrompt(req.OriginalRequest, step, previous)
 		stepReq := appendFusionStageMessage(req.OriginalRequest, prompt)
 		responses, failed, interrupt, err := l.executeWorkflowStep(ctx, req, cfg, plan, step, stepReq, idx, 0, idx+2)
 		if err != nil {
 			return nil, nil, err
 		}
+		RecordBudgetUsageForResponses(req, responses)
 		if interrupt != nil {
+			RecordBudgetUsageForResponse(req, interrupt.resp)
 			interrupt.state.Plan = plan
 			interrupt.state.PlannerResp = plannerResp
 			interrupt.state.WorkerModels = append([]string(nil), workerModels...)
@@ -489,6 +502,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow final synthesis failed for model %q: %w", modelName, err)
 	}
+	RecordBudgetUsageForResponse(req, resp)
 	if resp.HasToolCalls {
 		return nil, &workflowToolCallInterrupt{
 			resp: resp,

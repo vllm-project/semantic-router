@@ -134,7 +134,10 @@ func (r *OpenAIRouter) handleLooperExecution(
 		RecipeName:         reqCtx.Routing.RecipeName(),
 		OutputContract:     decision.OutputContract,
 		OutputContractSpec: decision.OutputContractSpec,
+		RoutingEvidence:    buildRoutingEvidence(decision, reqCtx),
 	}
+	looperReq.Budget = buildComputeBudget(decision.Algorithm)
+	looperReq.Ledger = looper.NewBudgetLedger(looperReq.Budget)
 	if decision.Algorithm.Type == config.DecisionAlgorithmFusion {
 		fusionOverride, parseErr := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
 		if parseErr != nil {

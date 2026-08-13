@@ -71,6 +71,22 @@ type Request struct {
 	// every arm must synthesize from a byte-identical panel (see
 	// bench/grounded_fusion). Nil in production; only the fusioneval driver sets it.
 	CachedPanel []*ModelResponse
+
+	// RoutingEvidence carries the decision confidence and matched signal
+	// identifiers that led to this execution (issue #2861). Nil when the
+	// caller did not attach one; never carries prompt content.
+	RoutingEvidence *RoutingEvidence
+
+	// Budget declares this execution's token/cost/wall-time ceiling, or nil
+	// for unlimited (issue #2861). Set once at construction; algorithms must
+	// not mutate it.
+	Budget *ComputeBudget
+
+	// Ledger tracks live consumption against Budget and is shared by every
+	// goroutine this execution spawns. Nil whenever Budget is nil. Use
+	// CheckBudget/RecordBudgetUsage rather than calling Ledger's methods
+	// directly from algorithm code.
+	Ledger *BudgetLedger
 }
 
 // Response contains the output from looper execution

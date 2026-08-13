@@ -752,6 +752,17 @@ routing:
       algorithm:
         type: confidence
         on_error: fallback
+        # Optional per-decision resource ceiling for Looper execution (issue
+        # #2861). Zero/omitted fields are unlimited. Exhausting any dimension
+        # stops further escalation deterministically and returns the best
+        # response obtained so far; it never overrides the hard upstream-call
+        # cap (issue #1456).
+        budget:
+          max_prompt_tokens: 8000
+          max_completion_tokens: 2000
+          max_total_tokens: 9000
+          max_estimated_cost: 0.50
+          max_wall_time_ms: 15000
         confidence:
           confidence_method: hybrid
           threshold: 0.72

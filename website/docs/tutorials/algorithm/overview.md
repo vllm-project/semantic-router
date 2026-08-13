@@ -79,6 +79,37 @@ The repo now keeps one tutorial page per algorithm.
 | **[Ratings](./looper/ratings)** | Bounded concurrent execution | Concurrency cap + rating aggregation |
 | **[ReMoM](./looper/remom)** | Multi-round parallel reasoning | Breadth schedule + intelligent synthesis |
 
+#### Optional per-decision budget
+
+Any Looper algorithm above (Confidence, Ratings, ReMoM, Fusion, Router Flow)
+can declare `algorithm.budget` alongside its algorithm-specific block:
+
+```yaml
+algorithm:
+  type: confidence
+  budget:
+    max_prompt_tokens: 8000
+    max_completion_tokens: 2000
+    max_total_tokens: 9000
+    max_estimated_cost: 0.50
+    max_wall_time_ms: 15000
+  confidence:
+    confidence_method: hybrid
+    threshold: 0.72
+```
+
+Every field is optional and defaults to unlimited. Exhausting any one
+dimension stops further escalation deterministically (rounds, panel
+members, or workflow steps) and returns the best response already
+obtained, the same way the algorithm would degrade if it simply ran out of
+candidate models. Cost is estimated from actual token usage against the
+decision's model pricing, so it is a running total rather than a
+pre-call prediction. `algorithm.budget` is a resource policy, not a
+call-count limit: it never raises or overrides the router's separate,
+non-configurable hard cap on total upstream calls per request, and config
+validation rejects `algorithm.budget` on algorithm types that don't
+execute through Looper (e.g. `router_dc`, `rl_driven`).
+
 ## Algorithm Decision Guide
 
 ```mermaid
