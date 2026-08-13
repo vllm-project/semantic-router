@@ -13,6 +13,7 @@ package setupmode
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -95,6 +96,15 @@ type Resolver struct {
 	// generation it started from and refuses to publish its result if the count
 	// moved while it was reading. See Invalidate.
 	generation uint64
+
+	// lastActive/lastConflict/haveLast record the most recently *observed*
+	// (Active, Conflict) pair, across every fresh read - successful or failed -
+	// not just the ones that got cached. logTransition uses them to decide
+	// whether a resolution is new enough to be worth a log line. See
+	// logTransition.
+	lastActive   bool
+	lastConflict bool
+	haveLast     bool
 }
 
 // New returns a Resolver over the router config at configPath. legacyFlag is the
@@ -159,6 +169,7 @@ func (r *Resolver) Resolve() Resolution {
 	}
 
 	resolution := r.resolve(block.Setup != nil && block.Setup.Mode)
+	r.logTransition(resolution)
 
 	r.mu.Lock()
 	// Drop the result rather than cache it if Invalidate ran while we were
@@ -224,11 +235,36 @@ func (r *Resolver) failClosed(problem string) Resolution {
 	if r.legacyFlag {
 		reason += " DASHBOARD_SETUP_MODE / --setup-mode is set to true but is not consulted: the config file is the only source."
 	}
-	return Resolution{
+	resolution := Resolution{
 		Active:     false,
 		Source:     SourceNone,
 		LegacyFlag: r.legacyFlag,
 		Conflict:   r.legacyFlag,
 		Reason:     reason,
+	}
+	r.logTransition(resolution)
+	return resolution
+}
+
+// logTransition emits at most one WARNING per distinct (Active, Conflict)
+// pair, so a conflicting deployment is reported when it first appears and
+// again if the resolution later changes, but an unauthenticated caller cannot
+// drive log volume by polling can-register: repeated calls that keep
+// resolving the same way log nothing after the first.
+//
+// This is a security property, not tidiness. It is only reached from the
+// paths that just did real work - a fresh parse or a stat/read/parse failure -
+// never from the mtime-cache hit in Resolve, so a stable config costs one log
+// check total, not one per request.
+func (r *Resolver) logTransition(resolution Resolution) {
+	r.mu.Lock()
+	changed := !r.haveLast || r.lastActive != resolution.Active || r.lastConflict != resolution.Conflict
+	r.lastActive = resolution.Active
+	r.lastConflict = resolution.Conflict
+	r.haveLast = true
+	r.mu.Unlock()
+
+	if changed && resolution.Conflict {
+		log.Printf("WARNING: %s", resolution.Reason)
 	}
 }

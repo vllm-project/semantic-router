@@ -1,6 +1,8 @@
 package setupmode
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -512,4 +514,123 @@ func TestResolve_ConcurrentAccessIsRaceFree(t *testing.T) {
 	readerGroup.Wait()
 	close(stop)
 	writer.Wait()
+}
+
+// --- Conflict warning logging (#2795 Phase 4) --------------------------------
+//
+// The bootstrap gate and every setup surface call Resolve() on every request,
+// including from the unauthenticated /api/auth/bootstrap/can-register. A
+// conflict warning must fire when a stale legacy flag first becomes visible,
+// but calling Resolve() again with no change must not print it again - that
+// would turn an unauthenticated endpoint into a log-amplification vector.
+
+// captureLog redirects the standard logger into a buffer for the duration of
+// the test and restores it on cleanup. No test in this package uses
+// t.Parallel(), so mutating the shared *log.Logger state here is safe.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	origOutput := log.Writer()
+	origFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(origOutput)
+		log.SetFlags(origFlags)
+	})
+	return &buf
+}
+
+// countWarnings counts the WARNING lines the resolver logged.
+func countWarnings(buf *bytes.Buffer) int {
+	count := 0
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.HasPrefix(line, "WARNING:") {
+			count++
+		}
+	}
+	return count
+}
+
+// The baseline the next two tests build on: a conflicting resolution logs
+// exactly one WARNING line naming the stale input.
+func TestResolve_LogsConflictWarningOnFirstResolve(t *testing.T) {
+	buf := captureLog(t)
+	path := newConfigFile(t, configActivated)
+
+	got := New(path, true).Resolve()
+
+	if !got.Conflict {
+		t.Fatalf("Conflict = false, want true")
+	}
+	if n := countWarnings(buf); n != 1 {
+		t.Fatalf("logged %d WARNING lines, want 1; log:\n%s", n, buf.String())
+	}
+	if !strings.Contains(buf.String(), "DASHBOARD_SETUP_MODE") {
+		t.Fatalf("log does not name the stale input: %s", buf.String())
+	}
+}
+
+// Mirrors the plan's manual anti-spam check: hammering an unauthenticated
+// endpoint backed by a stable, conflicting config must not multiply the log
+// line. This is the security property, not tidiness.
+func TestResolve_ConflictWarningLogsOnceForRepeatedUnchangedConflict(t *testing.T) {
+	buf := captureLog(t)
+	path := newConfigFile(t, configActivated)
+	resolver := New(path, true)
+
+	const requests = 20
+	for i := 0; i < requests; i++ {
+		resolver.Resolve()
+	}
+
+	if n := countWarnings(buf); n != 1 {
+		t.Fatalf("logged %d WARNING lines across %d identical resolves, want 1; log:\n%s", n, requests, buf.String())
+	}
+}
+
+// The dedup key is the most recently *observed* (Active, Conflict) pair, not
+// full history: a conflicting config that turns clean and later returns to
+// the same conflicting shape must warn again, so an operator who only sees
+// silence cannot mistake "already reported once, long ago" for "still fine
+// right now." A transition that changes but stays clean logs nothing - only
+// transitions that disagree with the legacy flag are worth surfacing.
+func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
+	buf := captureLog(t)
+	path := newConfigFile(t, configActivated)
+	// legacyFlag stays true throughout, exactly as it would across activation
+	// in a real deployment: the CLI sets it once at launch and nothing clears
+	// it mid-process.
+	resolver := New(path, true)
+
+	// Step 1: config off, flag on -> conflict. First WARNING.
+	if got := resolver.Resolve(); !got.Conflict {
+		t.Fatalf("step 1: Conflict = false, want true")
+	}
+	if n := countWarnings(buf); n != 1 {
+		t.Fatalf("step 1: logged %d WARNING lines, want 1; log:\n%s", n, buf.String())
+	}
+
+	// Step 2: config on, flag on -> agree. No new WARNING: the resolver is
+	// quiet about resolutions that do not disagree with the legacy flag.
+	writeConfig(t, path, configSetupModeOn)
+	resolver.Invalidate()
+	if got := resolver.Resolve(); got.Conflict {
+		t.Fatalf("step 2: Conflict = true, want false (config and flag agree)")
+	}
+	if n := countWarnings(buf); n != 1 {
+		t.Fatalf("step 2: logged %d WARNING lines, want still 1 (nothing to report); log:\n%s", n, buf.String())
+	}
+
+	// Step 3: config off again, flag still on -> the same conflicting shape as
+	// step 1. Must warn again: step 2 changed the last-observed pair, so this
+	// is a new transition even though its values repeat step 1's.
+	writeConfig(t, path, configActivated)
+	resolver.Invalidate()
+	if got := resolver.Resolve(); !got.Conflict {
+		t.Fatalf("step 3: Conflict = false, want true")
+	}
+	if n := countWarnings(buf); n != 2 {
+		t.Fatalf("step 3: logged %d WARNING lines, want 2 (a second, distinct conflict transition); log:\n%s", n, buf.String())
+	}
 }

@@ -18,16 +18,18 @@ type Server struct {
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
-func Setup(cfg *config.Config) *Server {
+//
+// setupResolver is constructed by the caller (main), not here: main also logs
+// the resolved setup state at startup, and constructing in one place keeps
+// there being exactly one resolver instance instead of two independent caches
+// over the same config file.
+func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	mux := http.NewServeMux()
 
-	// One canonical setup-mode source, shared by the auth gate and (from here
-	// on) every setup surface. It must be constructed before setupAuthRoutes:
+	// setupResolver must reach setupAuthRoutes before any request can arrive:
 	// the bootstrap gate consults it on every unauthenticated can-register /
-	// register call, and passing it in later would compile fine and then panic
+	// register call, and wiring it in later would compile fine and then panic
 	// at request time rather than failing at build.
-	setupResolver := setupmode.New(cfg.AbsConfigPath, cfg.SetupMode)
-
 	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{

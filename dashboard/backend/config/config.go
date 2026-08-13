@@ -33,7 +33,13 @@ type Config struct {
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
-	SetupMode    bool
+
+	// SetupMode is the legacy --setup-mode / DASHBOARD_SETUP_MODE input. It no
+	// longer decides anything: setup mode resolves from the router config's
+	// setup.mode block (see dashboard/backend/setupmode). Retained so a stale
+	// value can be detected and reported. The vllm-sr CLI still sets it; remove
+	// this field once it does not.
+	SetupMode bool
 
 	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated
 	// web-form bootstrap endpoint. Off by default; production should provision the
@@ -236,7 +242,9 @@ func LoadConfig() (*Config, error) {
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
-	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
+	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true",
+		"DEPRECATED: setup mode is resolved from the setup.mode block in the router config. "+
+			"This flag is ignored except to warn when it disagrees with the config.")
 	allowOpenBootstrap := flag.Bool("allow-open-bootstrap", env("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false") == "true", "allow first-admin creation via the public web-form bootstrap endpoint (off by default; production should provision the admin via DASHBOARD_ADMIN_*)")
 
 	// Platform branding

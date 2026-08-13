@@ -14,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 type loginResponse struct {
@@ -215,7 +216,7 @@ func startDashboardServer(t *testing.T) string {
 		MLPipelineEnabled:      false,
 	}
 
-	dashboard := Setup(cfg)
+	dashboard := Setup(cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 	server := &http.Server{
 		Handler:           dashboard.Handler,
 		ReadHeaderTimeout: 5 * time.Second,
