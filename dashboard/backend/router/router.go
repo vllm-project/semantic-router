@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -19,7 +20,15 @@ type Server struct {
 // Setup configures all routes and returns the dashboard server bundle.
 func Setup(cfg *config.Config) *Server {
 	mux := http.NewServeMux()
-	authSvc := setupAuthRoutes(mux, cfg)
+
+	// One canonical setup-mode source, shared by the auth gate and (from here
+	// on) every setup surface. It must be constructed before setupAuthRoutes:
+	// the bootstrap gate consults it on every unauthenticated can-register /
+	// register call, and passing it in later would compile fine and then panic
+	// at request time rather than failing at build.
+	setupResolver := setupmode.New(cfg.AbsConfigPath, cfg.SetupMode)
+
+	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
 		LegacyOpenClawDir: cfg.OpenClawDataDir,

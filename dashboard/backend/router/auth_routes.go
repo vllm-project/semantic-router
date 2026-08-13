@@ -7,6 +7,7 @@ import (
 
 	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 type authRouteSpec struct {
@@ -24,7 +25,7 @@ var dashboardAuthRouteSpecs = []authRouteSpec{
 
 const authUnavailableResponse = `{"error":"Service not available","message":"Authentication service is not configured"}`
 
-func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
+func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) *auth.Service {
 	store, err := auth.NewStore(cfg.AuthDBPath)
 	if err != nil {
 		log.Printf("failed to init auth store: %v", err)
@@ -34,7 +35,17 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
 
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
-	authSvc.SetSetupMode(cfg.SetupMode)
+	// The bootstrap gate reads the resolver on every unauthenticated
+	// can-register / register call, so setup mode tracks the config file
+	// instead of a value captured at process start.
+	if setupResolver != nil {
+		authSvc.SetSetupModeFunc(setupResolver.Active)
+	} else {
+		// Fail closed. Leaving setupModeFn unset keeps the unauthenticated
+		// bootstrap endpoint shut; installing a method value on a nil resolver
+		// would instead panic on the first request that reaches the gate.
+		log.Printf("WARNING: setup-mode resolver unavailable; the open bootstrap endpoint is failing closed")
+	}
 	if err := authSvc.EnsureBootstrapAdmin(
 		context.Background(),
 		cfg.BootstrapAdminEmail,
