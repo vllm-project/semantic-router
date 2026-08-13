@@ -1514,6 +1514,32 @@ entrypoints:
     recipe: default
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
+  # Conditional entrypoint: the recipe depends on trusted caller headers and
+  # the inference path instead of being fixed. tenant-a-user-b is strictly
+  # more specific than tenant-a-default (superset of header constraints,
+  # narrower path), so it wins for that caller without any declaration-order
+  # dependence; any other tenant gets a claimed-but-denied 404, never a
+  # silent fallback to the default recipe.
+  - model_names: ["vllm-sr/exhaustive-tenant-auto"]
+    rules:
+      - name: tenant-a-user-b
+        matches:
+          - path:
+              type: exact
+              value: /v1/chat/completions
+            headers:
+              - name: x-authz-tenant-id
+                type: exact
+                value: "A"
+              - name: x-authz-user-id
+                value: "B"
+        recipe: privacy-first
+      - name: tenant-a-default
+        matches:
+          - headers:
+              - name: x-authz-tenant-id
+                value: "A"
+        recipe: default
 
 recipes:
   - name: privacy-first
