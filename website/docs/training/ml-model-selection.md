@@ -62,6 +62,7 @@ config:
         enabled: true
         ml:
           models_path: /data/ml-pipeline/ml-train
+          model_type: qwen3
           embedding_dim: 1024
           knn:
             k: 5
@@ -95,6 +96,9 @@ global:
       enabled: true
       ml:
         models_path: ".cache/ml-models"  # Path to trained model files
+        # Must match the embedding model used to train the selector artifacts.
+        model_type: qwen3
+        embedding_dim: 1024
   stores:
     semantic_cache:
       embedding_model: mmbert  # uses models/mom-embedding-ultra by default
@@ -103,6 +107,11 @@ global:
 ### Per-Decision Algorithm Selection
 
 Use `routing.decisions[].algorithm.type` to choose which trained ML selector a decision should use. Shared selector tuning belongs under `global.router.model_selection.ml`, not under the decision itself.
+
+`model_type` and `embedding_dim` select the embedding feature space used by the
+ML selectors. Other selection algorithms and embedding consumers continue to
+use the default semantic embedding configuration. If `model_type` is omitted,
+ML selectors also use the default embedding provider for backward compatibility.
 
 ```yaml
 global:
