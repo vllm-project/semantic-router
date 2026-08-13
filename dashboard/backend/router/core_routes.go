@@ -12,11 +12,12 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
-	registerHealthAndSetupRoutes(mux, cfg)
+func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
+	registerHealthAndSetupRoutes(mux, cfg, setupResolver)
 	registerConfigRoutes(mux, cfg)
 	registerToolRoutes(mux, cfg)
 	registerStatusRoutes(mux, cfg)
@@ -51,13 +52,13 @@ func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
 }
 
-func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
-	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
-	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg, setupResolver))
+	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir, setupResolver))
 	mux.HandleFunc("/api/setup/presets", handlers.PresetsHandler())
 	mux.HandleFunc("/api/setup/presets/delta", handlers.PresetDeltaHandler())
 }

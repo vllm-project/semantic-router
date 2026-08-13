@@ -54,7 +54,7 @@ func Setup(cfg *config.Config) *Server {
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
 
-	registerCoreRoutes(mux, cfg)
+	registerCoreRoutes(mux, cfg, setupResolver)
 	registerEvaluationRoutes(mux, cfg)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
