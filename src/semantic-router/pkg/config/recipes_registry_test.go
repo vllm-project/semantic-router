@@ -150,6 +150,46 @@ func TestReachableRoutingRecipesIncludesAutoDefaultAndEntrypointRecipes(t *testi
 	}
 }
 
+// TestReachableRoutingRecipesIncludesRulesOnlyRecipes is a regression test:
+// a recipe reachable ONLY through a conditional entrypoint's rules[].recipe
+// (never a legacy entrypoint.Recipe) must still be counted reachable, or
+// startup resource discovery (backend model downloads, classifier
+// provisioning — see modeldownload/config_parser.go and
+// routing_signal_usage.go, both of which call this function) would silently
+// skip a recipe a real caller's rule can select at request time.
+func TestReachableRoutingRecipesIncludesRulesOnlyRecipes(t *testing.T) {
+	cfg := &RouterConfig{
+		Recipes: []RoutingRecipe{
+			{Name: DefaultRecipeName},
+			{Name: "recipe-a"},
+			{Name: "recipe-b"},
+			{Name: "unreferenced"},
+		},
+		Entrypoints: []EntrypointMapping{{
+			ModelNames: []string{"vllm-sr/auto"},
+			Rules: []EntrypointRule{
+				{Name: "r1", Recipe: "recipe-a", Matches: []EntrypointMatch{{Headers: []HeaderMatcher{header("x-authz-tenant-id", "A")}}}},
+				{Name: "r2", Recipe: "recipe-b", Matches: nil},
+			},
+		}},
+	}
+
+	reachable := cfg.ReachableRoutingRecipes()
+	names := make(map[RecipeName]bool, len(reachable))
+	for _, r := range reachable {
+		names[r.Name] = true
+	}
+	if !names["recipe-a"] || !names["recipe-b"] {
+		t.Fatalf("reachable recipes = %+v, want recipe-a and recipe-b (both only reachable via rules)", reachable)
+	}
+	if names["unreferenced"] {
+		t.Fatalf("reachable recipes = %+v, unreferenced should not be reachable", reachable)
+	}
+	if !cfg.IsRecipeReachableForRouting("recipe-a") || !cfg.IsRecipeReachableForRouting("recipe-b") {
+		t.Fatal("IsRecipeReachableForRouting should agree with ReachableRoutingRecipes for rules-only recipes")
+	}
+}
+
 func TestReachableRoutingRecipesHonorsExplicitlyDisabledAutoAliases(t *testing.T) {
 	cfg := &RouterConfig{
 		RouterOptions: RouterOptions{AutoModelNames: []string{}},

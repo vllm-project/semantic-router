@@ -55,9 +55,17 @@ type RoutingRecipe struct {
 // EntrypointMapping binds request-facing virtual model names to a named
 // recipe. The virtual names never reach a backend; they only select which
 // routing profile evaluates the request.
+//
+// Exactly one of Recipe or Rules is set. Recipe is the legacy, unconditional
+// form: every caller resolves to the same recipe. Rules is the conditional
+// form: the recipe depends on request headers and path, evaluated by
+// ResolveEntrypoint (entrypoint_resolver.go). A conditional entrypoint has
+// no implicit fallback — an unmatched caller is denied, never routed to the
+// default recipe or passthrough.
 type EntrypointMapping struct {
 	ModelNames []string
 	Recipe     RecipeName
+	Rules      []EntrypointRule
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The
@@ -159,10 +167,13 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	}
 }
 
-// RecipeForRequestModel resolves a request model name through the entrypoint
-// table. It returns false when the name matches no entrypoint; callers fall
-// back to auto-model or specified-model handling.
-func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, bool) {
+// EntrypointByModelName returns the entrypoint claiming a request-facing
+// virtual model name, if any. This is a pure alias-membership test: it
+// returns ok=true for a conditional entrypoint's name even when no caller
+// has been evaluated yet, so callers can distinguish "not an entrypoint at
+// all" (ok=false) from "an entrypoint alias whose recipe depends on the
+// caller" (ok=true, len(Rules) > 0).
+func (c *RouterConfig) EntrypointByModelName(modelName string) (*EntrypointMapping, bool) {
 	if c == nil {
 		return nil, false
 	}
@@ -170,12 +181,26 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 	if trimmed == "" {
 		return nil, false
 	}
-	for _, entrypoint := range c.Entrypoints {
-		if slices.Contains(entrypoint.ModelNames, trimmed) {
-			return c.RecipeByName(entrypoint.Recipe)
+	for i := range c.Entrypoints {
+		if slices.Contains(c.Entrypoints[i].ModelNames, trimmed) {
+			return &c.Entrypoints[i], true
 		}
 	}
 	return nil, false
+}
+
+// RecipeForRequestModel resolves a request model name through the entrypoint
+// table. It returns false when the name matches no entrypoint, or when the
+// entrypoint is conditional (its recipe depends on request headers/path that
+// this context-free signature has no way to receive — callers needing that
+// must use ResolveEntrypoint instead). Callers fall back to auto-model or
+// specified-model handling.
+func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, bool) {
+	entrypoint, ok := c.EntrypointByModelName(modelName)
+	if !ok || len(entrypoint.Rules) > 0 {
+		return nil, false
+	}
+	return c.RecipeByName(entrypoint.Recipe)
 }
 
 // RecipeForRoutingModel resolves every request-facing routing model. Built-in
@@ -209,8 +234,11 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 		reachable[DefaultRecipeName] = struct{}{}
 	}
 	for _, entrypoint := range c.Entrypoints {
-		if len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
-			reachable[entrypoint.Recipe] = struct{}{}
+		if len(normalizeAutoModelNames(entrypoint.ModelNames)) == 0 {
+			continue
+		}
+		for _, name := range entrypointRecipeNames(entrypoint) {
+			reachable[name] = struct{}{}
 		}
 	}
 
@@ -252,9 +280,13 @@ func (c *RouterConfig) defaultRecipeHasRoutingEntrypoint() bool {
 		return true
 	}
 	for _, entrypoint := range c.Entrypoints {
-		if entrypoint.Recipe == DefaultRecipeName &&
-			len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
-			return true
+		if len(normalizeAutoModelNames(entrypoint.ModelNames)) == 0 {
+			continue
+		}
+		for _, name := range entrypointRecipeNames(entrypoint) {
+			if name == DefaultRecipeName {
+				return true
+			}
 		}
 	}
 	return false
@@ -316,9 +348,13 @@ func knowledgeBasesForRoutingProfile(catalog []KnowledgeBaseConfig, profile Rout
 
 // IsEntrypointModelName reports whether the name is a request-facing virtual
 // model name from the entrypoint table. Such names never reach a backend; the
-// router resolves them like auto-model aliases.
+// router resolves them like auto-model aliases. This is a pure alias-
+// membership test — it returns true for a conditional entrypoint's name even
+// when no rule has been evaluated yet, so a name that is merely claimed but
+// currently unmatched for a given caller is still never treated as a
+// concrete backend model.
 func (c *RouterConfig) IsEntrypointModelName(modelName string) bool {
-	_, ok := c.RecipeForRequestModel(modelName)
+	_, ok := c.EntrypointByModelName(modelName)
 	return ok
 }
 
