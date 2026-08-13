@@ -15,8 +15,33 @@ config:
           - name: test-endpoint
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      - name: openai/workflow-planner
+        backend_refs:
+          - name: test-endpoint
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
   routing:
     decisions:
+      - name: workflow_decision
+        description: Workflow decision for testing pause and resume
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: workflow_keyword
+        algorithm:
+          type: workflows
+          workflows:
+            mode: dynamic
+            planner:
+              model: openai/workflow-planner
+            max_steps: 2
+            on_error: skip
+            final:
+              model: openai/gpt-oss-20b
+        modelRefs:
+          - model: openai/gpt-oss-20b
       - name: default_decision
         description: Default catch-all decision
         priority: 1
@@ -29,6 +54,14 @@ config:
           - model: openai/gpt-oss-20b
             use_reasoning: false
     signals:
+      keywords:
+        - name: workflow_keyword
+          operator: OR
+          keywords:
+            - "workflow"
+            - "workflows"
+            - "workflow_pause_resume"
+          case_sensitive: false
       domains:
         - name: other
           description: General knowledge and miscellaneous topics
@@ -36,6 +69,7 @@ config:
             - other
     modelCards:
       - name: openai/gpt-oss-20b
+      - name: openai/workflow-planner
   global:
     router:
       strategy: priority
@@ -76,7 +110,20 @@ config:
         embedding_model: mmbert
       vector_store:
         embedding_model: mmbert
-    integrations: {}
+    integrations:
+      looper:
+        endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1/chat/completions
+        flow:
+          model_names:
+            - openai/gpt-oss-20b
+          state:
+            store_backend: redis
+            ttl_seconds: 1800
+            redis:
+              address: redis.default.svc.cluster.local:6379
+              db: 0
+              password: ""
+              key_prefix: "vllm-sr:flow:state:"
     model_catalog:
       kbs: []
       modules:

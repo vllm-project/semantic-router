@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -45,6 +46,7 @@ type routerComponents struct {
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
+	workflowStateService *looper.WorkflowStateService
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -218,6 +220,18 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		})
 	}
 
+	var workflowsEnabled bool
+	for _, decision := range cfg.Decisions {
+		if decision.Algorithm != nil && decision.Algorithm.Type == "workflows" {
+			workflowsEnabled = true
+			break
+		}
+	}
+	var workflowStateService *looper.WorkflowStateService
+	if workflowsEnabled {
+		workflowStateService = looper.NewWorkflowStateService(&cfg.Looper)
+	}
+
 	return &routerComponents{
 		cfg:                  cfg,
 		categoryDescriptions: categoryDescriptions,
@@ -238,6 +252,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
 		lookupTableCancel:    lookupTableCancel,
+		workflowStateService: workflowStateService,
 	}, nil
 }
 
@@ -262,5 +277,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		CredentialResolver:    components.credentialResolver,
 		RateLimiter:           components.rateLimiter,
 		lookupTableCancel:     components.lookupTableCancel,
+		WorkflowStateService:  components.workflowStateService,
 	}
 }

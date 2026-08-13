@@ -21,6 +21,7 @@ package looper
 
 import (
 	"context"
+	"sync"
 
 	"github.com/openai/openai-go"
 
@@ -119,9 +120,87 @@ type Looper interface {
 	Execute(ctx context.Context, req *Request) (*Response, error)
 }
 
+// WorkflowStateService is an opaque handle to a shared workflow tool-state
+// store. Create one at startup with NewWorkflowStateService and pass it to
+// FactoryWithSelectionRegistry so that all workflow loopers share a single
+// store instance across requests. Safe for concurrent use.
+type WorkflowStateService struct {
+	store  workflowToolStateStore
+	wg     sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
+}
+
+// Acquire tries to get a read lease on the service. Returns false if closed.
+//
+// Safety invariant: wg.Add(1) is called while holding RLock. This is safe
+// because Close() sets s.closed = true under a write lock *before* calling
+// wg.Wait(). Once closed is true, no new Add(1) can happen, so Wait() will
+// observe a stable counter. Do not add a second Close() codepath without
+// preserving this ordering.
+func (s *WorkflowStateService) Acquire() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	return true
+}
+
+// Release releases a read lease on the service.
+func (s *WorkflowStateService) Release() {
+	if s != nil {
+		s.wg.Done()
+	}
+}
+
+// Store returns the underlying state store. Safe to use only while holding a lease.
+func (s *WorkflowStateService) Store() workflowToolStateStore {
+	if s == nil {
+		return nil
+	}
+	return s.store
+}
+
+// NewWorkflowStateService creates a shared workflow state store from the
+// looper configuration. The returned service should be stored on the router
+// and passed into every FactoryWithSelectionRegistry call.
+func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
+	if cfg == nil {
+		return nil
+	}
+	return &WorkflowStateService{
+		store: newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg)),
+	}
+}
+
+// Close releases resources held by the state service (e.g. Redis connections).
+func (s *WorkflowStateService) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	s.wg.Wait() // Drain all in-flight read leases
+	if s.store != nil {
+		return s.store.Close()
+	}
+	return nil
+}
+
 // Factory creates a Looper instance based on the algorithm type
 func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
-	return FactoryWithSelectionRegistry(cfg, algorithmType, nil)
+	return FactoryWithSelectionRegistry(cfg, algorithmType, nil, nil)
 }
 
 // FactoryWithSelectionRegistry creates a Looper using runtime-owned model
@@ -130,6 +209,7 @@ func FactoryWithSelectionRegistry(
 	cfg *config.LooperConfig,
 	algorithmType string,
 	selectorRegistry *selection.Registry,
+	stateService *WorkflowStateService,
 ) Looper {
 	switch algorithmType {
 	case "confidence":
@@ -141,7 +221,7 @@ func FactoryWithSelectionRegistry(
 	case "fusion":
 		return NewFusionLooper(cfg)
 	case "workflows":
-		return NewWorkflowsLooper(cfg)
+		return newWorkflowsLooperWithService(cfg, stateService)
 	case "rl_driven":
 		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:

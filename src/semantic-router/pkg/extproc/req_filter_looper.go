@@ -96,7 +96,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	// Create looper based on algorithm type
-	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.modelSelectorForRequest(reqCtx))
+	l := looper.FactoryWithSelectionRegistry(&r.Config.Looper, decision.Algorithm.Type, r.modelSelectorForRequest(reqCtx), r.WorkflowStateService)
 
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
