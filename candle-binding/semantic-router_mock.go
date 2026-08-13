@@ -2,6 +2,11 @@
 
 package candle_binding
 
+import (
+	"errors"
+	"strings"
+)
+
 // This file is the compile-only stub for the Candle backend. It is selected on
 // Windows or whenever CGO is disabled, i.e. whenever the native Candle library
 // cannot be linked. It deliberately does NOT emulate the native backend.
@@ -15,6 +20,19 @@ package candle_binding
 
 // ErrBackendUnavailable, the sentinel returned by every API below, is declared
 // in errors.go so that it is also referenceable from CGO builds.
+
+// ErrEmbeddingModelNotReady is retained for API compatibility with the native
+// binding. The non-CGO stub returns ErrBackendUnavailable for all operations
+// because it has no backend that can become ready.
+var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+
+var (
+	embeddingModelsReady bool
+	multiModalReady      bool
+	qwen3Ready           bool
+	gemmaReady           bool
+	mmBertReady          bool
+)
 
 // TokenizeResult represents the result of tokenization
 type TokenizeResult struct {
@@ -191,6 +209,12 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath 
 	return ErrBackendUnavailable
 }
 
+// InitEmbeddingModelsWithMmBert initializes all embedding models including
+// mmBERT. Without the native backend, initialization cannot succeed.
+func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	return ErrBackendUnavailable
+}
+
 // GetEmbeddingWithDim generates an embedding with intelligent model selection
 func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
 	return nil, ErrBackendUnavailable
@@ -275,6 +299,67 @@ func CalculateSimilarityBatch(query string, candidates []string, topK int, model
 // GetEmbeddingModelsInfo retrieves information about all loaded embedding models
 func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 	return nil, ErrBackendUnavailable
+}
+
+// IsEmbeddingReady reports the test-controlled embedding readiness state.
+// It does not imply that the native backend is available.
+func IsEmbeddingReady() bool {
+	return embeddingModelsReady
+}
+
+// SetEmbeddingReady sets the embedding readiness flag for tests.
+func SetEmbeddingReady(ready bool) {
+	embeddingModelsReady = ready
+}
+
+// normalizeFamily canonicalizes a model-family name for readiness lookups.
+func normalizeFamily(modelType string) string {
+	return strings.ToLower(strings.TrimSpace(modelType))
+}
+
+// IsEmbeddingFamilyReady reports the test-controlled readiness of a specific
+// embedding model family ("qwen3", "gemma", "mmbert", "multimodal", or "auto"
+// for any text embedding family).
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		return qwen3Ready
+	case "gemma":
+		return gemmaReady
+	case "mmbert":
+		return mmBertReady
+	case "multimodal":
+		return multiModalReady
+	default:
+		return embeddingModelsReady || qwen3Ready || gemmaReady || mmBertReady
+	}
+}
+
+// SetEmbeddingFamilyReady sets the per-family embedding readiness flag for tests.
+func SetEmbeddingFamilyReady(modelType string, ready bool) {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		qwen3Ready = ready
+	case "gemma":
+		gemmaReady = ready
+	case "mmbert":
+		mmBertReady = ready
+	case "multimodal":
+		multiModalReady = ready
+	default:
+		embeddingModelsReady = ready
+	}
+}
+
+// IsMultiModalReady reports the test-controlled multimodal readiness state.
+// It does not imply that the native backend is available.
+func IsMultiModalReady() bool {
+	return multiModalReady
+}
+
+// SetMultiModalReady sets the multimodal readiness flag for tests.
+func SetMultiModalReady(ready bool) {
+	multiModalReady = ready
 }
 
 // FindMostSimilar finds the most similar text. Without the native backend it

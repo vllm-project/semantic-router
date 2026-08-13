@@ -18,6 +18,12 @@ var ErrUnknownRoutingModel = errors.New("unknown routing model")
 // exceed the bounded classification API contract.
 var ErrInvalidRequestFacts = errors.New("invalid request facts")
 
+// ErrModelNotReady is returned by classification services when the underlying
+// model has not been loaded (init failed or was skipped). Handlers map it to
+// HTTP 503 (service unavailable) so callers can distinguish a not-ready condition
+// from a genuine runtime/inference failure (500).
+var ErrModelNotReady = errors.New("model not ready")
+
 // blankText reports whether s is empty or whitespace-only.
 func blankText(s string) bool {
 	return strings.TrimSpace(s) == ""

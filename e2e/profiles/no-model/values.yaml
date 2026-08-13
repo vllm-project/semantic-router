@@ -1,0 +1,54 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: stub-model
+    models:
+      - name: stub-model
+        backend_refs:
+          - name: stub
+            endpoint: stub.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: stub-route
+        description: Catch-all stub route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: stub-model
+            use_reasoning: false
+    signals: {}
+    modelCards:
+      - name: stub-model
+  global:
+    stores:
+      semantic_cache:
+        # This profile verifies the API behavior when no embedding model is loaded.
+        # Disable the cache so it cannot initialize its default embedding model.
+        enabled: false
+      memory:
+        enabled: false
+      vector_store:
+        enabled: false
+    integrations:
+      tools:
+        # Tool-database indexing also embeds its entries during startup.
+        enabled: false
+    model_catalog:
+      embeddings:
+        semantic:
+          # Clear every local embedding path. Otherwise the default catalog
+          # injects models/mmbert-embed-32k-2d-matryoshka, which makes the
+          # embedding runtime report ready and triggers model download plus
+          # tools-database warmup even though this profile intends no models.
+          qwen3_model_path: ""
+          gemma_model_path: ""
+          mmbert_model_path: ""
+          multimodal_model_path: ""
+          bert_model_path: ""
+persistence:
+  enabled: false

@@ -7,6 +7,7 @@ package candle_binding
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -245,6 +247,7 @@ extern int calculate_similarity_batch(const char* query, const char** candidates
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern bool is_embedding_family_ready(const char* model_type);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
@@ -455,6 +458,32 @@ extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
+var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+
+// ensureEmbeddingModelReady validates that the embedding model family required
+// for an operation is loaded. Specific families ("qwen3", "gemma", "mmbert")
+// are checked against their own loaded state so an explicitly requested model
+// that was never initialized (or failed to load) is rejected instead of
+// falling through to a generic generation error. "multimodal" uses the
+// multimodal model flag, and ""/"auto" uses the aggregate text-model flag.
+func ensureEmbeddingModelReady(modelType string) error {
+	switch normalizeFamily(modelType) {
+	case "multimodal":
+		if !multiModalReady.Load() {
+			return ErrEmbeddingModelNotReady
+		}
+	case "qwen3", "gemma", "mmbert":
+		if !IsEmbeddingFamilyReady(modelType) {
+			return ErrEmbeddingModelNotReady
+		}
+	default:
+		if !embeddingModelsReady.Load() {
+			return ErrEmbeddingModelNotReady
+		}
+	}
+	return nil
+}
+
 var (
 	initOnce                              sync.Once
 	initErr                               error
@@ -463,6 +492,13 @@ var (
 	classifierInitialized                 bool
 	genericClassifierInitMu               sync.Mutex
 	genericClassifierInitialized          bool
+	embeddingModelsReady                  atomic.Bool
+	multiModalReady                       atomic.Bool
+	qwen3Ready                            atomic.Bool
+	gemmaReady                            atomic.Bool
+	mmBertReady                           atomic.Bool
+	classifierInitOnce                    sync.Once
+	classifierInitErr                     error
 	piiClassifierInitOnce                 sync.Once
 	piiClassifierInitErr                  error
 	jailbreakClassifierInitOnce           sync.Once
@@ -776,6 +812,7 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 //	    false, // use GPU
 //	)
 func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
+	embeddingModelsReady.Store(false)
 	if qwen3ModelPath == "" {
 		return fmt.Errorf("qwen3ModelPath cannot be empty for batched initialization")
 	}
@@ -794,6 +831,8 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 		return fmt.Errorf("failed to initialize batched embedding models")
 	}
 
+	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	return nil
 }
 
@@ -811,6 +850,10 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 //   - *EmbeddingOutput: Embedding output with metadata
 //   - error: Non-nil if embedding generation fails
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(""); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -912,6 +955,8 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string,
 		return fmt.Errorf("failed to initialize embedding models")
 	}
 
+	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Embedding models initialized successfully")
 
 	return nil
@@ -955,6 +1000,7 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 		return fmt.Errorf("failed to initialize mmBERT embedding model")
 	}
 
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support")
 	return nil
 }
@@ -999,7 +1045,16 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 		return fmt.Errorf("failed to initialize multi-modal embedding model")
 	}
 
+	multiModalReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Multi-modal embedding model initialized (text+image+audio, 384-dim)")
+	return nil
+}
+
+func ensureMultiModalModelReady() error {
+	if !multiModalReady.Load() {
+		return ErrEmbeddingModelNotReady
+	}
 	return nil
 }
 
@@ -1013,6 +1068,9 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	if text == "" {
 		return nil, fmt.Errorf("text cannot be empty")
 	}
@@ -1056,6 +1114,9 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	if len(pixelData) == 0 {
 		return nil, fmt.Errorf("pixelData cannot be empty")
 	}
@@ -1106,6 +1167,9 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	if len(melData) == 0 {
 		return nil, fmt.Errorf("melData cannot be empty")
 	}
@@ -1157,6 +1221,9 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if err := ensureMultiModalModelReady(); err != nil {
+		return nil, err
+	}
 	if len(imageBytes) == 0 {
 		return nil, fmt.Errorf("imageBytes cannot be empty")
 	}
@@ -1324,6 +1391,8 @@ func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPa
 		return fmt.Errorf("failed to initialize embedding models with mmBERT")
 	}
 
+	embeddingModelsReady.Store(true)
+	syncEmbeddingFamilyReadiness()
 	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
 	return nil
 }
@@ -1414,6 +1483,10 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 //	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
 //	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
 func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(""); err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
@@ -1517,6 +1590,10 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 //
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	if err := ensureEmbeddingModelReady(modelType); err != nil {
+		return nil, err
+	}
+
 	// Validate model type
 	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
@@ -1658,6 +1735,9 @@ func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
 //	// Use Gemma with 512-dim Matryoshka
 //	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
 func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(""); err != nil {
+		return nil, err
+	}
 	// Validate model type
 	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
@@ -1738,6 +1818,9 @@ type BatchSimilarityOutput struct {
 //   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
 //   - error: Error message if operation failed
 func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	if err := ensureEmbeddingModelReady(""); err != nil {
+		return nil, err
+	}
 	// Validate model type
 	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
 		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
@@ -1927,6 +2010,92 @@ func IsModelInitialized() (rustState bool, goState bool) {
 		modelInitialized = true
 	}
 	return rustInitialized, modelInitialized
+}
+
+// IsEmbeddingReady returns whether the embedding models (Qwen3/Gemma/mmBERT) have been
+// successfully initialized and are ready to serve embedding requests.
+func IsEmbeddingReady() bool {
+	return embeddingModelsReady.Load()
+}
+
+// IsMultiModalReady returns whether the multi-modal embedding model has been
+// successfully initialized and is ready to serve image/audio requests.
+func IsMultiModalReady() bool {
+	return multiModalReady.Load()
+}
+
+// normalizeFamily canonicalizes a model-family name for readiness lookups.
+func normalizeFamily(modelType string) string {
+	return strings.ToLower(strings.TrimSpace(modelType))
+}
+
+// IsEmbeddingFamilyReady reports whether the specific embedding model family
+// requested by a caller is loaded. Family names are "qwen3", "gemma", "mmbert",
+// "multimodal", and "auto" (or "") for "any text embedding family". The
+// per-family state is populated from the Rust model factory after
+// initialization, so an explicitly requested model that was never loaded (or
+// failed to load non-fatally) is correctly reported as not ready.
+func IsEmbeddingFamilyReady(modelType string) bool {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		return qwen3Ready.Load()
+	case "gemma":
+		return gemmaReady.Load()
+	case "mmbert":
+		return mmBertReady.Load()
+	case "multimodal":
+		return multiModalReady.Load()
+	default:
+		return embeddingModelsReady.Load() ||
+			qwen3Ready.Load() ||
+			gemmaReady.Load() ||
+			mmBertReady.Load()
+	}
+}
+
+// SetEmbeddingFamilyReady sets the per-family embedding readiness flag for testing.
+func SetEmbeddingFamilyReady(modelType string, ready bool) {
+	switch normalizeFamily(modelType) {
+	case "qwen3":
+		qwen3Ready.Store(ready)
+	case "gemma":
+		gemmaReady.Store(ready)
+	case "mmbert":
+		mmBertReady.Store(ready)
+	case "multimodal":
+		multiModalReady.Store(ready)
+	default:
+		embeddingModelsReady.Store(ready)
+	}
+}
+
+// familyLoaded queries the Rust model factory for the loaded state of a model
+// family. It is used to derive the per-family readiness flags from actual
+// loaded state rather than from the aggregated init result.
+func familyLoaded(modelType string) bool {
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+	return bool(C.is_embedding_family_ready(cModelType))
+}
+
+// syncEmbeddingFamilyReadiness populates the per-family readiness flags from
+// the Rust model factory. It must be called only after a successful embedding
+// model initialization so the factory reflects the real loaded state.
+func syncEmbeddingFamilyReadiness() {
+	qwen3Ready.Store(familyLoaded("qwen3"))
+	gemmaReady.Store(familyLoaded("gemma"))
+	mmBertReady.Store(familyLoaded("mmbert"))
+	multiModalReady.Store(familyLoaded("multimodal"))
+}
+
+// SetEmbeddingReady sets the embedding model readiness flag for testing.
+func SetEmbeddingReady(ready bool) {
+	embeddingModelsReady.Store(ready)
+}
+
+// SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
+func SetMultiModalReady(ready bool) {
+	multiModalReady.Store(ready)
 }
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes

@@ -91,6 +91,71 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 	})
 }
 
+func TestOpenAPISpecDocumentsModelNotReady503(t *testing.T) {
+	apiServer := &ClassificationAPIServer{}
+	spec := apiServer.generateOpenAPISpec()
+
+	modelBacked := map[string][]string{
+		"/api/v1/embeddings":        {"POST"},
+		"/api/v1/similarity":        {"POST"},
+		"/api/v1/similarity/batch":  {"POST"},
+		"/api/v1/classify/pii":      {"POST"},
+		"/api/v1/classify/security": {"POST"},
+	}
+
+	for path, methods := range modelBacked {
+		for _, method := range methods {
+			operation := openAPIOperationForMethod(t, spec, path, method)
+			if _, ok := operation.Responses["503"]; !ok {
+				t.Fatalf("expected %s %s to document a 503 model-not-ready response", method, path)
+			}
+		}
+	}
+
+	// Non-model-backed operations must not claim a model-not-ready response.
+	for _, op := range []*OpenAPIOperation{
+		openAPIOperationForMethod(t, spec, "/health", "GET"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/intent", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/fact-check", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/user-feedback", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/combined", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/classify/batch", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/eval", "POST"),
+		openAPIOperationForMethod(t, spec, "/api/v1/nli", "POST"),
+		openAPIOperationForMethod(t, spec, "/config/router", "PATCH"),
+		openAPIOperationForMethod(t, spec, "/v1/files", "POST"),
+	} {
+		if _, ok := op.Responses["503"]; ok {
+			t.Fatalf("did not expect a 503 model-not-ready response on %s %s", op.OperationID, "")
+		}
+	}
+}
+
+func openAPIOperationForMethod(t *testing.T, spec OpenAPISpec, path, method string) *OpenAPIOperation {
+	t.Helper()
+	p, ok := spec.Paths[path]
+	if !ok {
+		t.Fatalf("expected path %q in OpenAPI spec", path)
+	}
+	var op *OpenAPIOperation
+	switch method {
+	case "GET":
+		op = p.Get
+	case "POST":
+		op = p.Post
+	case "PATCH":
+		op = p.Patch
+	case "PUT":
+		op = p.Put
+	case "DELETE":
+		op = p.Delete
+	}
+	if op == nil {
+		t.Fatalf("expected %s operation at %q", method, path)
+	}
+	return op
+}
+
 func assertRecipeConfigOpenAPIPaths(t *testing.T, spec OpenAPISpec) {
 	t.Helper()
 

@@ -194,9 +194,10 @@ type BatchSimilarityResponse struct {
 
 // EndpointInfo represents information about an API endpoint
 type EndpointInfo struct {
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	Description string `json:"description"`
+	Path               string `json:"path"`
+	Method             string `json:"method"`
+	Description        string `json:"description"`
+	ServiceUnavailable bool   `json:"service_unavailable"`
 }
 
 // TaskTypeInfo represents information about a task type
@@ -210,4 +211,8 @@ type EndpointMetadata struct {
 	Path        string
 	Method      string
 	Description string
+	// ServiceUnavailable marks model-backed endpoints that respond 503
+	// (EMBEDDING_NOT_READY / CLASSIFIER_NOT_READY / NLI_MODEL_NOT_READY)
+	// when the backing models are not initialized.
+	ServiceUnavailable bool
 }

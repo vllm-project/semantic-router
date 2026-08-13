@@ -32,6 +32,7 @@ Standard CI-backed profiles:
 - **authz-rbac**: Authz-driven routing and per-user rate limiting
 - **streaming**: Streamed request-body and streaming-cache behavior
 - **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
+- **no-model**: Readiness 503 responses when no embedding or classifier models are loaded, including per-modality and partial-initialization behavior
 
 Manual-only profiles:
 
@@ -65,6 +66,7 @@ Manual-only profiles:
 | `streaming` | none | Streaming request-body and SSE cache behavior |
 | `anthropic-shim` (manual) | none | Diagnostic for backend-route gaps; unit translation contracts stay blocking |
 | `dashboard` | none | Dashboard HTTP API contract |
+| `no-model` | none | Readiness 503 contract when no models loaded |
 | `dynamo` | none | GPU and batching behavior |
 | `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
 | `hallucination` | none | Pluggable endpoint hallucination detection backend coverage |

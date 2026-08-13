@@ -1753,6 +1753,49 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn is_embedding_family_ready(model_type_str: *const c_char) -> bool {
+    if model_type_str.is_null() {
+        return false;
+    }
+
+    let model_type_str = match unsafe { CStr::from_ptr(model_type_str) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    // Each family is self-contained: no factory pre-guard, so a batched-only
+    // init (which never populates GLOBAL_MODEL_FACTORY) still reports the
+    // qwen3 family as ready.
+    match model_type_str {
+        // A successfully initialized batched model IS a loaded Qwen3 model, so
+        // it satisfies qwen3 readiness even though it lives outside the factory.
+        "qwen3" => {
+            GLOBAL_BATCHED_MODEL.get().is_some()
+                || GLOBAL_MODEL_FACTORY
+                    .get()
+                    .is_some_and(|f| f.get_qwen3_model().is_some())
+        }
+        "gemma" => GLOBAL_MODEL_FACTORY
+            .get()
+            .is_some_and(|f| f.get_gemma_model().is_some()),
+        "mmbert" => GLOBAL_MODEL_FACTORY
+            .get()
+            .is_some_and(|f| f.get_mmbert_model().is_some()),
+        "multimodal" => get_multimodal_refs().is_some(),
+        "auto" | "" => {
+            GLOBAL_BATCHED_MODEL.get().is_some()
+                || GLOBAL_MODEL_FACTORY.get().is_some_and(|f| {
+                    f.get_qwen3_model().is_some()
+                        || f.get_gemma_model().is_some()
+                        || f.get_mmbert_model().is_some()
+                })
+        }
+        _ => false,
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,

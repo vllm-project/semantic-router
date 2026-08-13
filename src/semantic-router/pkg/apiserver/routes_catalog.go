@@ -46,13 +46,13 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text"},
+			EndpointMetadata{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text", ServiceUnavailable: true},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handlePIIDetection,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
+			EndpointMetadata{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats", ServiceUnavailable: true},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSecurityDetection,
 			jsonBody(),
@@ -94,19 +94,19 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text and image embeddings"},
+			EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text and image embeddings", ServiceUnavailable: true},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/similarity", Method: "POST", Description: "Calculate pairwise text similarity"},
+			EndpointMetadata{Path: "/api/v1/similarity", Method: "POST", Description: "Calculate pairwise text similarity", ServiceUnavailable: true},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSimilarity,
 			jsonBody(),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"},
+			EndpointMetadata{Path: "/api/v1/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches", ServiceUnavailable: true},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleBatchSimilarity,
 			jsonBody(),

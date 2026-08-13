@@ -12,6 +12,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -34,6 +35,37 @@ func (e *imageEncodeError) Error() string {
 
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
+func isEmbeddingModelNotReady(err error) bool {
+	return errors.Is(err, services.ErrModelNotReady) ||
+		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady)
+}
+
+// checkEmbeddingReadiness validates that the models required for the request
+// are initialized. Text inputs require readiness of the requested model family
+// (an explicitly requested absent model is not ready, even when another text
+// family is loaded); image inputs require multimodal-model readiness. This
+// prevents a text-ready-only deployment from attempting image inference (which
+// would 500) and a multimodal-only deployment from being rejected for
+// text-only requests.
+func checkEmbeddingReadiness(req EmbeddingRequest) error {
+	if len(req.Texts) > 0 {
+		if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+			return err
+		}
+	}
+	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
+func checkEmbeddingFamilyReadiness(model string) error {
+	if !candle_binding.IsEmbeddingFamilyReady(model) {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
 // error code, and client message. Input-caused image-encode failures are 400
 // INVALID_IMAGE; every other failure is a genuine 500.
@@ -43,8 +75,21 @@ func classifyEmbeddingError(err error) (int, string, string) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
 			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
 	}
+	if isEmbeddingModelNotReady(err) {
+		return http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err)
+	}
 	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
 		fmt.Sprintf("failed to generate embedding: %v", err)
+}
+
+func (s *ClassificationAPIServer) writeEmbeddingError(w http.ResponseWriter, err error, fallbackCode, fallbackMessage string) {
+	if isEmbeddingModelNotReady(err) {
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
+		return
+	}
+	s.writeErrorResponse(w, http.StatusInternalServerError, fallbackCode, fallbackMessage)
 }
 
 const (
@@ -72,6 +117,12 @@ func validatePriority(name string, value float32) (string, string, bool) {
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.parseEmbeddingRequest(w, r)
 	if !ok {
+		return
+	}
+
+	if err := checkEmbeddingReadiness(req); err != nil {
+		status, code, message := classifyEmbeddingError(err)
+		s.writeErrorResponse(w, status, code, message)
 		return
 	}
 
@@ -237,21 +288,36 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 	}
 }
 
-// handleSimilarity handles text similarity calculation requests
-func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+// parseSimilarityRequest parses, validates, and defaults a SimilarityRequest.
+func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, r *http.Request) (SimilarityRequest, bool) {
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
-		return
+		return SimilarityRequest{}, false
 	}
 
 	applySimilarityDefaults(&req)
 	if code, message, ok := validateSimilarityRequest(req); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return SimilarityRequest{}, false
+	}
+
+	return req, true
+}
+
+// handleSimilarity handles text similarity calculation requests
+func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.parseSimilarityRequest(w, r)
+	if !ok {
 		return
 	}
 
-	// Calculate similarity
+	if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+		s.writeEmbeddingError(w, err,
+			"SIMILARITY_CALCULATION_FAILED", "failed to calculate similarity")
+		return
+	}
+
 	result, err := candle_binding.CalculateEmbeddingSimilarity(
 		req.Text1,
 		req.Text2,
@@ -259,7 +325,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		req.Dimension,
 	)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
+		s.writeEmbeddingError(w, err, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))
 		return
 	}
@@ -312,6 +378,12 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
+	if err := checkEmbeddingFamilyReadiness(req.Model); err != nil {
+		s.writeEmbeddingError(w, err,
+			"BATCH_SIMILARITY_FAILED", "failed to calculate batch similarity")
+		return
+	}
+
 	// Calculate batch similarity
 	result, err := candle_binding.CalculateSimilarityBatch(
 		req.Query,
@@ -321,7 +393,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Dimension,
 	)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
+		s.writeEmbeddingError(w, err, "BATCH_SIMILARITY_FAILED",
 			fmt.Sprintf("failed to calculate batch similarity: %v", err))
 		return
 	}

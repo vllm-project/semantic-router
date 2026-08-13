@@ -54,6 +54,10 @@ func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 		operation.RequestBody = buildOpenAPIRequestBody(route.RequestBody)
 	}
 
+	if route.ServiceUnavailable {
+		operation.Responses["503"] = openAPIErrorResponse("Service unavailable (backing models not initialized)")
+	}
+
 	return operation
 }
 
