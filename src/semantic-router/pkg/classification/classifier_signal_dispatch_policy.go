@@ -34,6 +34,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			config.SignalTypeJailbreak, "Jailbreak",
 			func() {
 				c.evaluateJailbreakSignal(
+					requestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypeJailbreak),

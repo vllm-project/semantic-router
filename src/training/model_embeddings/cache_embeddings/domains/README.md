@@ -1,38 +1,20 @@
 # Domain Configurations
 
-This directory contains configuration files for training domain-specific cache embedding adapters.
-
-## Quick Start
-
-### Train a Domain Model
-
-```bash
-# From src/training/model_embeddings/cache_embeddings/
-./train-domain.sh medical
-```
-
-That's it! The script will:
-
-1. Provision AWS GPU instance (g5.12xlarge with 4x A10G)
-2. Upload your data and code
-3. Run vLLM data generation (~2 hours)
-4. Train LoRA adapter (~5 minutes)
-5. Download trained model
-6. Cleanup AWS instance
-
-### Push to HuggingFace
-
-```bash
-./train-domain.sh medical --push-hf
-```
+This directory holds domain-specific prompts for training cache embedding
+adapters. The live config is [`prompts.yaml`](prompts.yaml) — there are no
+per-domain YAML files and no AWS helper script in this tree.
 
 ## Available Domains
 
-Current configurations:
+Canonical domains currently defined in `prompts.yaml`:
 
-- **medical** - Medical and healthcare queries (44K queries)
+- **computer_science** (alias: `programming`)
+- **health** (alias: `medical`)
+- **law**
+- **psychology**
 
-To add more domains, copy `TEMPLATE.yaml` and fill in the details.
+`generate_training_data.py --domain` accepts either the canonical name or the
+alias (`medical` → `health`, `programming` → `computer_science`).
 
 ## Domain Selection Guide
 
@@ -74,73 +56,12 @@ Create unlabeled queries file:
 
 Save to: `data/cache_embeddings/<domain>/unlabeled_queries.jsonl`
 
-### 2. Create Domain Config
+### 2. Add prompts and train
 
-```bash
-cd domains/
-cp TEMPLATE.yaml <domain>.yaml
-```
-
-Edit the file:
-
-```yaml
-domain: "<domain-name>"
-description: "<Brief description>"
-data_file: "data/cache_embeddings/<domain>/unlabeled_queries.jsonl"
-queries_count: <number>
-output_dir: "models/<domain>-cache-lora"
-hf_repo: "your-org/semantic-router-<domain>-cache"  # optional
-```
-
-### 3. Train
-
-```bash
-cd ..
-./train-domain.sh <domain>
-```
-
-## Advanced Usage
-
-### Keep AWS Instance Running
-
-Useful for debugging or multiple training runs:
-
-```bash
-./train-domain.sh medical --skip-cleanup
-# Do your work...
-./train-domain.sh medical --skip-aws --skip-upload  # Reuse instance
-# When done:
-cd aws/ && ./deploy-vllm.sh cleanup
-```
-
-### Dry Run
-
-See what would happen without actually running:
-
-```bash
-./train-domain.sh medical --dry-run
-```
-
-## Domain Config Reference
-
-| Field | Required | Description | Example |
-|-------|----------|-------------|---------|
-| `domain` | | Domain identifier | `medical` |
-| `description` | | Brief description | `"Medical queries"` |
-| `data_file` | | Path to queries (from repo root) | `data/cache_embeddings/medical/...` |
-| `queries_count` | | Approximate query count | `44603` |
-| `output_dir` | | Where to save model | `models/medical-cache-lora` |
-| `hf_repo` | ❌ | HuggingFace repo for upload | `org/model-name` |
-| `vllm_model` | ❌ | LLM for generation | `Qwen/Qwen2.5-1.5B-Instruct` |
-| `base_model` | ❌ | Base embedding model | `sentence-transformers/all-MiniLM-L12-v2` |
-
-## Cost Estimation
-
-| Queries | GPU Time | Cost (g5.12xlarge @ $5/hr) |
-|---------|----------|----------------------------|
-| 10K | ~30 min | ~$2.50 |
-| 50K | ~2.5 hrs | ~$12.50 |
-| 100K | ~5 hrs | ~$25 |
+Add a new top-level block under `domains:` in [`prompts.yaml`](prompts.yaml)
+(do **not** create a separate per-domain YAML file). Then follow the python
+commands in the [Main README](../README.md) (`generate_training_data.py` and
+`lora_trainer.py`).
 
 ## Planned Domains
 
@@ -164,30 +85,16 @@ Total: 13 domains planned
 
 ## Troubleshooting
 
-### "Domain config not found"
+### "No prompts defined for domain"
+
+`generate_training_data.py` prints this, followed by `Available domains: ...`,
+when `--domain` is neither a key under `domains:` in `prompts.yaml` nor a
+supported alias (`medical` → `health`, `programming` → `computer_science`).
+List the configured domains with:
 
 ```bash
-ls -la domains/  # Check available configs
-```
-
-### "AWS credentials not configured"
-
-```bash
-aws configure  # Set up AWS credentials
-```
-
-### "Instance IP not found"
-
-Check `aws/vllm-instance-*.txt` for instance details
-
-### Training failed
-
-SSH to instance and check logs:
-
-```bash
-# Get SSH command from aws/vllm-instance-*.txt
-ssh -i ~/.ssh/your-key.pem ubuntu@<instance-ip>
-# Check what went wrong
+# From the repository root
+python3 -c "import yaml; print(sorted(yaml.safe_load(open('src/training/model_embeddings/cache_embeddings/domains/prompts.yaml'))['domains']))"
 ```
 
 ## See Also
