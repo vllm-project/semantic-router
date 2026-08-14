@@ -7,12 +7,15 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // ========================
@@ -56,10 +59,10 @@ const (
 	maxRetries         = 3 // Retry attempts for transient failures
 	retryBaseDelay     = 1 * time.Second
 	rateLimitWindow    = time.Minute // Rate limit window
-	rateLimitMaxReqs   = 5           // Max requests per window per IP (strict for public service)
+	rateLimitMaxReqs   = 5           // Max requests per window per client (strict for public service)
 	globalRateLimit    = 30          // Global max requests per window (0.5 req/sec to avoid ban)
 	maxConcurrent      = 2           // Max concurrent outgoing requests (very conservative)
-	maxTrackedIPs      = 10000       // Max IPs to track (memory protection)
+	maxTrackedClients  = 10000       // Max clients to track (memory protection)
 	minRequestInterval = 1 * time.Second
 	maxRequestInterval = 3 * time.Second
 )
@@ -152,8 +155,8 @@ var globalRateLimiter = &rateLimiter{
 // Semaphore for concurrent request limiting
 var concurrentSem = make(chan struct{}, maxConcurrent)
 
-// isAllowed checks if a request from the given IP is allowed
-func (rl *rateLimiter) isAllowed(ip string) (bool, SearchErrorCode) {
+// isAllowed checks if a request from the given client is allowed
+func (rl *rateLimiter) isAllowed(client string) (bool, SearchErrorCode) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -172,28 +175,28 @@ func (rl *rateLimiter) isAllowed(ip string) (bool, SearchErrorCode) {
 		return false, ErrCodeRateLimited
 	}
 
-	// Memory protection: limit tracked IPs
-	if len(rl.requests) >= maxTrackedIPs {
-		if _, exists := rl.requests[ip]; !exists {
+	// Memory protection: limit tracked clients
+	if len(rl.requests) >= maxTrackedClients {
+		if _, exists := rl.requests[client]; !exists {
 			return false, ErrCodeRateLimited
 		}
 	}
 
-	// Check per-IP rate limit
+	// Check per-client rate limit
 	var recentReqs []time.Time
-	for _, t := range rl.requests[ip] {
+	for _, t := range rl.requests[client] {
 		if t.After(windowStart) {
 			recentReqs = append(recentReqs, t)
 		}
 	}
 
 	if len(recentReqs) >= rateLimitMaxReqs {
-		rl.requests[ip] = recentReqs
+		rl.requests[client] = recentReqs
 		return false, ErrCodeRateLimited
 	}
 
 	// Record the request
-	rl.requests[ip] = append(recentReqs, now)
+	rl.requests[client] = append(recentReqs, now)
 	recentGlobal = append(recentGlobal, now)
 	rl.globalReqs = recentGlobal
 	return true, ""
@@ -595,23 +598,31 @@ func cleanExtraWhitespace(s string) string {
 // HTTP Handler
 // ========================
 
-// getClientIP extracts client IP from request
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (for proxied requests)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+// clientKey returns the identity used for the per-client rate limit.
+//
+// The per-client budget exists to stop one person from hogging the shared
+// search budget, so the authenticated user is the right key: the id comes from
+// a validated session token and cannot be forged the way client-supplied proxy
+// headers can. The immediate peer address is the fallback for requests that
+// reach the handler without a session.
+func clientKey(r *http.Request) string {
+	if ac, ok := auth.AuthFromContext(r); ok && ac.UserID != "" {
+		return "user:" + ac.UserID
 	}
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+	return "peer:" + peerIP(r.RemoteAddr)
+}
+
+// peerIP returns the immediate TCP peer without its port. Proxy headers such
+// as X-Forwarded-For are intentionally ignored here: they are caller-controlled
+// and would let a client mint a fresh identity for every request.
+func peerIP(remoteAddr string) string {
+	if remoteAddr == "" {
+		return "unknown"
 	}
-	// Fall back to RemoteAddr
-	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		return host
 	}
-	return ip
+	return remoteAddr
 }
 
 // sendErrorResponse sends a JSON error response with code
@@ -645,11 +656,11 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		// Rate limiting check (per-IP + global)
-		clientIP := getClientIP(r)
-		allowed, errCode := globalRateLimiter.isAllowed(clientIP)
+		// Rate limiting check (per-client + global)
+		client := clientKey(r)
+		allowed, errCode := globalRateLimiter.isAllowed(client)
 		if !allowed {
-			log.Printf("Rate limit exceeded for IP: %s (code: %s)", clientIP, errCode)
+			log.Printf("Rate limit exceeded for client: %s (code: %s)", client, errCode)
 			sendErrorResponse(w, "", errCode, http.StatusTooManyRequests)
 			return
 		}
@@ -668,7 +679,7 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Web search request: query=%q, num_results=%d, ip=%s", req.Query, req.NumResults, clientIP)
+		log.Printf("Web search request: query=%q, num_results=%d, client=%s", req.Query, req.NumResults, client)
 
 		// Perform search with retry
 		results, err := searchDuckDuckGo(req.Query, req.NumResults)
