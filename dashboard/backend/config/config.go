@@ -35,10 +35,10 @@ type Config struct {
 	ReadonlyMode bool
 
 	// SetupMode is the legacy --setup-mode / DASHBOARD_SETUP_MODE input. It no
-	// longer decides anything: setup mode resolves from the router config's
-	// setup.mode block (see dashboard/backend/setupmode). Retained so a stale
-	// value can be detected and reported. The vllm-sr CLI still sets it; remove
-	// this field once it does not.
+	// longer decides anything; setup mode resolves from the router config's
+	// setup.mode block (see dashboard/backend/setupmode). Kept so a stale value
+	// can be reported. The vllm-sr CLI still sets it; remove this field once it
+	// does not.
 	SetupMode bool
 
 	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated

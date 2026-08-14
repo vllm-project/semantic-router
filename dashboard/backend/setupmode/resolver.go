@@ -1,14 +1,12 @@
-// Package setupmode owns the single canonical answer to "is the dashboard in
-// first-run setup mode?".
+// Package setupmode answers "is the dashboard in first-run setup mode?".
 //
-// Two inputs used to answer this independently: the `setup.mode` block in the
-// router config file, and the --setup-mode / DASHBOARD_SETUP_MODE process flag.
-// They could disagree, because the config block is re-read from disk while the
-// flag is frozen at process start, and activation rewrites the config without
-// restarting the dashboard. See #2795.
+// Setup mode used to have two independent sources: the setup.mode block in the
+// router config, and the --setup-mode / DASHBOARD_SETUP_MODE flag. They drifted,
+// because the config is re-read per request while the flag is frozen at startup,
+// and activation rewrites the config without restarting the dashboard. See #2795.
 //
-// The config file is canonical. The legacy flag is read only so a disagreement
-// can be reported; it never decides.
+// The config file decides. The legacy flag is read only so a disagreement can be
+// reported.
 package setupmode
 
 import (
@@ -27,55 +25,46 @@ import (
 type Source string
 
 const (
-	// SourceConfig means an active setup.mode block in the router config file
-	// produced the answer. It is the only source that can produce Active.
+	// SourceConfig means the config file's setup.mode block is active.
 	SourceConfig Source = "config"
 
-	// SourceNone means setup mode is not active.
+	// SourceNone means setup mode is off.
 	SourceNone Source = "none"
 )
 
-// Resolution is the resolved setup state plus enough context to explain it.
+// Resolution is the resolved setup state plus context to explain it.
 type Resolution struct {
-	// Active reports whether first-run setup mode is in effect. Every setup
-	// decision in the dashboard must derive from this field.
+	// Active reports whether setup mode is in effect. Every setup decision in
+	// the dashboard must derive from this field.
 	Active bool
 
-	// Source names the input that produced Active. SourceNone when inactive.
+	// Source names the input that produced Active.
 	Source Source
 
 	// LegacyFlag records the --setup-mode / DASHBOARD_SETUP_MODE value. It is
-	// informational: it is reported and warned about, never merged into Active.
+	// reported and warned about, never merged into Active.
 	LegacyFlag bool
 
 	// Conflict is true when the legacy flag disagrees with the config file.
-	// Callers surface this; it is the signal that a deployment carries a stale
-	// environment value.
 	Conflict bool
 
-	// Reason explains a non-obvious resolution: an unreadable or unparseable
-	// config, or a conflict. Empty when the answer was clean.
-	//
-	// Safe to serve from a public endpoint: it names the config file but never
-	// its contents, and never the absolute path it was read from. Operators get
-	// the full path from the startup log instead.
+	// Reason explains an unreadable config or a conflict. Empty when the answer
+	// was clean. It is served from a public endpoint, so it never carries config
+	// contents or the absolute config path.
 	Reason string
 }
 
-// setupBlock is the only part of the router config this package cares about.
-// Decoding into a minimal struct keeps setupmode independent of the canonical
-// config schema, so a schema change cannot break the bootstrap gate.
+// setupBlock is the only part of the router config this package decodes.
+// Staying independent of the full config schema means a schema change cannot
+// break the bootstrap gate.
 type setupBlock struct {
 	Setup *struct {
 		Mode bool `yaml:"mode"`
 	} `yaml:"setup"`
 }
 
-// cacheKey is the file identity we trust to detect a change without re-reading.
-//
-// The modification time is held as Unix nanoseconds rather than a time.Time so
-// the struct stays comparable with ==; time.Time carries a location pointer and
-// an optional monotonic reading, neither of which belongs in an equality test.
+// cacheKey identifies the config file well enough to skip a re-read. Unix nanos
+// rather than a time.Time so the struct stays comparable with ==.
 type cacheKey struct {
 	modTimeUnixNano int64
 	size            int64
@@ -86,16 +75,12 @@ func statKey(info os.FileInfo) cacheKey {
 }
 
 // Resolver answers setup-mode questions from the config file on disk.
-//
-// Safe for concurrent use: net/http serves each request in its own goroutine and
-// the auth middleware consults this on every request.
+// Safe for concurrent use: the auth middleware consults it on every request.
 type Resolver struct {
 	configPath string
-	// configName is configPath's base name. Reason strings use it instead of
-	// the full path because they are served from an unauthenticated endpoint,
-	// where an absolute path discloses the deployment's directory layout (and,
-	// outside a container, the account name). The full path is already in the
-	// startup log for anyone who can read logs.
+	// configName is the base name, used in Reason. The full path would leak the
+	// deployment's directory layout through an unauthenticated endpoint. It is
+	// in the startup log instead.
 	configName string
 	legacyFlag bool
 
@@ -104,24 +89,18 @@ type Resolver struct {
 	cachedAt cacheKey
 	valid    bool
 
-	// generation counts invalidations. A resolve that reads the file records the
-	// generation it started from and refuses to publish its result if the count
-	// moved while it was reading. See Invalidate.
+	// generation counts invalidations. A read that started before an Invalidate
+	// must not publish its result. See Resolve.
 	generation uint64
 
-	// lastActive/lastConflict/haveLast record the most recently *observed*
-	// (Active, Conflict) pair, across every fresh read - successful or failed -
-	// not just the ones that got cached. logTransition uses them to decide
-	// whether a resolution is new enough to be worth a log line. See
-	// logTransition.
+	// Last observed state, used by logTransition to log only on a change.
 	lastActive   bool
 	lastConflict bool
 	haveLast     bool
 }
 
 // New returns a Resolver over the router config at configPath. legacyFlag is the
-// --setup-mode / DASHBOARD_SETUP_MODE value, recorded for conflict reporting
-// only.
+// --setup-mode / DASHBOARD_SETUP_MODE value, recorded for reporting only.
 func New(configPath string, legacyFlag bool) *Resolver {
 	return &Resolver{
 		configPath: configPath,
@@ -130,17 +109,14 @@ func New(configPath string, legacyFlag bool) *Resolver {
 	}
 }
 
-// errDetail returns the cause of a filesystem error without the path it
-// happened on. os.Stat and os.ReadFile wrap their cause in *fs.PathError, whose
-// Error() embeds the absolute path; only the cause ("no such file or
-// directory", "permission denied") belongs in a Reason served publicly.
+// errDetail returns the cause of a filesystem error without the path. os.Stat
+// and os.ReadFile return *fs.PathError, whose Error() embeds the absolute path,
+// and Reason is served publicly.
 func errDetail(err error) string {
 	var pathErr *fs.PathError
 	if errors.As(err, &pathErr) {
 		if pathErr.Err == nil {
-			// (*fs.PathError).Error() dereferences Err, so falling through to
-			// err.Error() here would panic. Such an error carries nothing to
-			// report anyway beyond the path we are deliberately withholding.
+			// PathError.Error() dereferences Err, so falling through would panic.
 			return "unknown filesystem error"
 		}
 		return pathErr.Err.Error()
@@ -148,12 +124,11 @@ func errDetail(err error) string {
 	return err.Error()
 }
 
-// Active is the hot path: the boolean every gate needs.
+// Active reports whether setup mode is on. This is what the gates call.
 func (r *Resolver) Active() bool { return r.Resolve().Active }
 
-// Invalidate drops the cache. Call it immediately after writing the config file
-// so a resolve in the same second cannot serve a stale answer through the
-// mtime cache.
+// Invalidate drops the cache. Call it after writing the config file, so a
+// resolve in the same second cannot serve a stale answer through the mtime cache.
 func (r *Resolver) Invalidate() {
 	r.mu.Lock()
 	r.valid = false
@@ -161,18 +136,16 @@ func (r *Resolver) Invalidate() {
 	r.mu.Unlock()
 }
 
-// Resolve reports the current setup state, reading the config file only when its
-// identity on disk has changed since the last successful read.
+// Resolve reports the current setup state, re-reading the config file only when
+// its identity on disk has changed.
 //
-// The stat is what makes this safe to call from an unauthenticated endpoint: an
-// uncached implementation would let anyone who can reach the port force a YAML
-// parse per request.
+// The cache matters because this is reached from an unauthenticated endpoint:
+// without it, anyone could force a YAML parse per request.
 func (r *Resolver) Resolve() Resolution {
-	// Stat before reading, never after. If the file changes in between, the
-	// parsed content gets stored under the previous identity, which costs one
-	// extra read on the next call and nothing else. The reverse order could
-	// store pre-write content under the post-write identity and keep serving it
-	// until the file changed again.
+	// Stat before reading. If the file changes in between, we cache fresh
+	// content under the old identity and pay one extra read next call. The
+	// reverse order could cache stale content under the new identity and keep
+	// serving it.
 	info, err := os.Stat(r.configPath)
 	if err != nil {
 		return r.failClosed(fmt.Sprintf("config file %s is unreadable (%s)", r.configName, errDetail(err)))
@@ -195,10 +168,8 @@ func (r *Resolver) Resolve() Resolution {
 
 	var block setupBlock
 	if err := yaml.Unmarshal(data, &block); err != nil {
-		// The parser error is deliberately dropped. gopkg.in/yaml.v3 quotes the
-		// offending value in its messages ("cannot unmarshal !!str `notabool`
-		// into bool"), and Reason is served from an unauthenticated endpoint, so
-		// echoing it would leak config contents to anyone who can reach the port.
+		// The parser error is dropped on purpose: yaml.v3 quotes the offending
+		// value in its messages, and Reason is served publicly.
 		return r.failClosed(fmt.Sprintf("config file %s is not valid YAML", r.configName))
 	}
 
@@ -206,11 +177,9 @@ func (r *Resolver) Resolve() Resolution {
 	r.logTransition(resolution)
 
 	r.mu.Lock()
-	// Drop the result rather than cache it if Invalidate ran while we were
-	// reading: the bytes we parsed may pre-date the write that prompted it, and
-	// on a filesystem with coarse mtime granularity the identity check above
-	// cannot tell. Returning it is still correct -- it was true of some state of
-	// the file -- but caching it would make the next caller see it too.
+	// Skip the store if Invalidate ran while we were reading. The bytes may
+	// pre-date the write that triggered it, and the identity check above cannot
+	// tell when mtime granularity is coarse.
 	if r.generation == generation {
 		r.cached = resolution
 		r.cachedAt = key
@@ -238,8 +207,8 @@ func (r *Resolver) resolve(active bool) Resolution {
 	return resolution
 }
 
-// conflictReason names both inputs and states which one won, because this
-// message is the entire operator-facing value of detecting the conflict.
+// conflictReason names both inputs and says which one won. This message is the
+// whole operator-facing value of detecting the conflict.
 func (r *Resolver) conflictReason(active bool) string {
 	if active {
 		return fmt.Sprintf(
@@ -255,15 +224,11 @@ func (r *Resolver) conflictReason(active bool) string {
 		r.configName)
 }
 
-// failClosed is the answer whenever the config cannot be read or parsed: never
-// active, and never derived from the legacy flag.
+// failClosed is the answer when the config cannot be read or parsed: never
+// active, never derived from the legacy flag.
 //
 // Falling back to the flag here would reintroduce #2795 through the error path.
-// "I could not read the config, so I will assume this is the trusted first-run
-// window" is the wrong way for a gate on unauthenticated admin creation to fail.
-//
-// Error results are never cached: the file may become readable a moment later,
-// and a cached error would hold the dashboard out of its own first run.
+// The result is not cached, because the file may become readable a moment later.
 func (r *Resolver) failClosed(problem string) Resolution {
 	reason := problem + "; setup mode is OFF and the open bootstrap endpoint stays closed."
 	if r.legacyFlag {
@@ -280,16 +245,11 @@ func (r *Resolver) failClosed(problem string) Resolution {
 	return resolution
 }
 
-// logTransition emits at most one WARNING per distinct (Active, Conflict)
-// pair, so a conflicting deployment is reported when it first appears and
-// again if the resolution later changes, but an unauthenticated caller cannot
-// drive log volume by polling can-register: repeated calls that keep
-// resolving the same way log nothing after the first.
+// logTransition logs at most one WARNING per distinct (Active, Conflict) pair.
 //
-// This is a security property, not tidiness. It is only reached from the
-// paths that just did real work - a fresh parse or a stat/read/parse failure -
-// never from the mtime-cache hit in Resolve, so a stable config costs one log
-// check total, not one per request.
+// Rate limiting is a security property, not tidiness: can-register is
+// unauthenticated, so warning on every resolve would turn it into a
+// log-amplification endpoint. Never called from the cache-hit path.
 func (r *Resolver) logTransition(resolution Resolution) {
 	r.mu.Lock()
 	changed := !r.haveLast || r.lastActive != resolution.Active || r.lastConflict != resolution.Conflict

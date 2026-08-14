@@ -206,10 +206,9 @@ func TestBootstrapRegister_OpenWindowStillHashesAndCreates(t *testing.T) {
 
 // --- Live setup-mode gate (#2795) ------------------------------------------
 //
-// The cases above pin setup mode to a fixed bool via SetSetupMode. The cases
-// below back the gate with a real setupmode.Resolver over a config file on
-// disk, which is how setupAuthRoutes wires it in production, and cover what a
-// frozen bool could not express: the config changing under a running process.
+// The cases above pin setup mode to a fixed bool. The ones below back the gate
+// with a real resolver over a config file, the way production wires it, and
+// cover what a frozen bool could not: the config changing under a live process.
 
 const (
 	setupModeConfigYAML = `version: v0.3
@@ -251,10 +250,8 @@ func newRouterConfig(t *testing.T, content string) string {
 	return path
 }
 
-// newResolverBackedService builds a bootstrap service whose setup-mode gate
-// reads a real config file through the canonical resolver, mirroring
-// setupAuthRoutes. legacyFlag is the --setup-mode / DASHBOARD_SETUP_MODE value,
-// which is recorded but must never decide the gate.
+// newResolverBackedService builds a bootstrap service whose gate reads a real
+// config file, mirroring setupAuthRoutes. legacyFlag must never decide the gate.
 func newResolverBackedService(t *testing.T, configPath string, legacyFlag bool) (*Service, *setupmode.Resolver) {
 	t.Helper()
 	svc := newTestAuthService(t)
@@ -264,16 +261,13 @@ func newResolverBackedService(t *testing.T, configPath string, legacyFlag bool) 
 	return svc, resolver
 }
 
-// TestBootstrapGate_ClosesWhenActivationClearsSetupMode_WithoutRestart is the
-// test that proves #2795 is fixed.
+// This is the test that proves #2795 is fixed.
 //
-// Activation rewrites the router config without the setup block and does not
-// restart the dashboard (it restarts only router and envoy). With setup mode
-// stored as a bool captured at startup, the unauthenticated bootstrap endpoint
-// stayed armed until someone restarted the container. Reading the config at
-// call time closes it the moment the file stops declaring setup mode, in the
-// same process, with no restart. The legacy flag stays true throughout, exactly
-// as it does in a real deployment launched by the CLI.
+// Activation strips the setup block and restarts only router and envoy, not the
+// dashboard. With setup mode stored as a startup bool, the unauthenticated
+// bootstrap endpoint stayed armed until the next restart. Reading the config at
+// call time closes it in the same process. The legacy flag stays true
+// throughout, as it does in a real CLI-launched deployment.
 func TestBootstrapGate_ClosesWhenActivationClearsSetupMode_WithoutRestart(t *testing.T) {
 	configPath := newRouterConfig(t, setupModeConfigYAML)
 	svc, resolver := newResolverBackedService(t, configPath, true)
@@ -285,7 +279,7 @@ func TestBootstrapGate_ClosesWhenActivationClearsSetupMode_WithoutRestart(t *tes
 		t.Fatal("canRegister = false during first run with no users; want true")
 	}
 
-	// What SetupActivateHandler does to disk: the setup block is stripped.
+	// What SetupActivateHandler writes: the setup block is stripped.
 	writeRouterConfig(t, configPath, activatedConfigYAML)
 	resolver.Invalidate()
 
@@ -303,10 +297,9 @@ func TestBootstrapGate_ClosesWhenActivationClearsSetupMode_WithoutRestart(t *tes
 	}
 }
 
-// Scenario 2 from the issue, and the headline security case: a stale
-// DASHBOARD_SETUP_MODE=true against a fully activated config. The UI shows
-// nothing because /api/setup/state reads the file, so this door was invisible.
-// The config file is canonical, so the flag alone must not open it.
+// Scenario 2, the headline security case: a stale DASHBOARD_SETUP_MODE=true
+// against an activated config. The UI showed nothing because /api/setup/state
+// reads the file, so the open door was invisible. The flag alone must not open it.
 func TestBootstrapGate_StaleLegacyFlagCannotOpenAgainstActivatedConfig(t *testing.T) {
 	configPath := newRouterConfig(t, activatedConfigYAML)
 	svc, _ := newResolverBackedService(t, configPath, true)
@@ -322,9 +315,9 @@ func TestBootstrapGate_StaleLegacyFlagCannotOpenAgainstActivatedConfig(t *testin
 	}
 }
 
-// Scenario 3 from the issue: a config in setup mode with no environment value,
-// which previously left first run locked out - the UI pinned you to /setup and
-// the backend refused the registration it demanded.
+// Scenario 3: a config in setup mode with no environment value. This used to
+// lock you out of first run: the UI pinned you to /setup and the backend
+// refused the registration it demanded.
 func TestBootstrapGate_ConfigInSetupModeOpensWithoutLegacyFlag(t *testing.T) {
 	configPath := newRouterConfig(t, setupModeConfigYAML)
 	svc, _ := newResolverBackedService(t, configPath, false)
@@ -340,9 +333,8 @@ func TestBootstrapGate_ConfigInSetupModeOpensWithoutLegacyFlag(t *testing.T) {
 	}
 }
 
-// allowOpenBootstrap is a deliberate operator escape hatch with no config-file
-// counterpart. It must keep working on its own, independently of what the
-// resolver says.
+// allowOpenBootstrap is an operator escape hatch with no config-file
+// counterpart. It must keep working regardless of what the resolver says.
 func TestBootstrapGate_AllowOpenBootstrapUnaffectedByResolver(t *testing.T) {
 	configPath := newRouterConfig(t, activatedConfigYAML)
 	svc, _ := newResolverBackedService(t, configPath, false)
@@ -356,9 +348,8 @@ func TestBootstrapGate_AllowOpenBootstrapUnaffectedByResolver(t *testing.T) {
 	}
 }
 
-// A Service with no setup-mode source installed must keep the endpoint shut.
-// NewService does not install one, so this is the state of any Service built
-// without wiring - including one built when the resolver was unavailable.
+// A Service with no setup-mode source must keep the endpoint shut. NewService
+// installs none, so this is the state of any Service built without wiring.
 func TestBootstrapGate_NilSetupModeSourceFailsClosed(t *testing.T) {
 	svc := newTestAuthService(t)
 
@@ -370,9 +361,8 @@ func TestBootstrapGate_NilSetupModeSourceFailsClosed(t *testing.T) {
 	}
 }
 
-// The error path must not reopen the door. An unreadable or unparseable config
-// resolves to "not in setup mode" even with the legacy flag set; falling back
-// to the flag here would reintroduce the bug through the error path.
+// The error path must not reopen the door. An unreadable config resolves to
+// "not in setup mode" even with the legacy flag set.
 func TestBootstrapGate_MalformedConfigFailsClosedDespiteLegacyFlag(t *testing.T) {
 	t.Run("malformed config", func(t *testing.T) {
 		configPath := newRouterConfig(t, malformedConfigYAML)
@@ -399,11 +389,9 @@ func TestBootstrapGate_MalformedConfigFailsClosedDespiteLegacyFlag(t *testing.T)
 	})
 }
 
-// The gate is consulted from an unauthenticated endpoint, so every request
-// reads it concurrently while the activate handler may be rewriting the config.
-// This asserts race-freedom under -race, not a particular value: os.WriteFile
-// truncates before writing, so a reader may legitimately observe the file
-// mid-write.
+// The gate is read on every unauthenticated request while activation may be
+// rewriting the config. This asserts race-freedom, not a particular value:
+// os.WriteFile truncates first, so a reader can observe the file mid-write.
 func TestBootstrapGate_ConcurrentGateReadsDuringConfigRewrite(t *testing.T) {
 	configPath := newRouterConfig(t, setupModeConfigYAML)
 	svc, resolver := newResolverBackedService(t, configPath, true)

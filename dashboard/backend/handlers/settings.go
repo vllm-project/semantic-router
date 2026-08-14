@@ -21,9 +21,8 @@ type SettingsResponse struct {
 
 // SettingsHandler returns dashboard settings for frontend consumption.
 //
-// SetupMode is resolved through setupResolver rather than read from cfg: the
-// config field is the legacy --setup-mode / DASHBOARD_SETUP_MODE value frozen at
-// process start, and this endpoint must agree with /api/setup/state and the
+// SetupMode comes from setupResolver, not cfg. cfg.SetupMode is the legacy flag
+// frozen at startup, and this endpoint must agree with /api/setup/state and the
 // bootstrap gate.
 func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

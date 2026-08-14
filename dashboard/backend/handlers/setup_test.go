@@ -46,8 +46,8 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
-// createActivatedSetupConfig writes the same config without the setup block -
-// the shape the file has once activation has stripped it.
+// createActivatedSetupConfig writes the same config without the setup block,
+// the shape the file has after activation.
 func createActivatedSetupConfig(t *testing.T, dir string) string {
 	t.Helper()
 
@@ -74,15 +74,12 @@ func createActivatedSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
-// createCanonicallyInvalidSetupConfig writes a config whose setup block is
-// perfectly readable but whose listeners field has a type error.
+// createCanonicallyInvalidSetupConfig writes a config with a readable setup
+// block and a type error in listeners.
 //
-// This is the wedge between the two decoders: setupmode decodes only the setup
-// block, so it resolves this file cleanly, while readSetupConfigFile decodes
-// the whole canonical schema and fails on it. That divergence is deliberate -
-// it is what keeps a schema change from breaking the bootstrap gate - and it
-// is the only way to reach SetupStateHandler's read-error branch with a
-// resolution that succeeded.
+// setupmode decodes only the setup block, so it resolves this file cleanly,
+// while readSetupConfigFile decodes the full schema and fails. That is the only
+// way to reach SetupStateHandler's read-error branch with a good resolution.
 func createCanonicallyInvalidSetupConfig(t *testing.T, dir string, setupMode bool) string {
 	t.Helper()
 
@@ -97,8 +94,8 @@ func createCanonicallyInvalidSetupConfig(t *testing.T, dir string, setupMode boo
 	return configPath
 }
 
-// decodeSetupState decodes a setup-state response and also returns the raw body,
-// because `reason` is `omitempty` and only the raw body can prove it is absent.
+// decodeSetupState also returns the raw body, because reason is omitempty and
+// only the raw body can prove it is absent.
 func decodeSetupState(t *testing.T, w *httptest.ResponseRecorder) (SetupStateResponse, string) {
 	t.Helper()
 
@@ -745,9 +742,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 // --- Resolved setup state on /api/setup/state (#2795) ----------------------
 
 // The happy path must not carry a reason. Asserted on the raw body, because a
-// decoded struct cannot distinguish `"reason":""` from an omitted key, and the
-// whole point of `omitempty` is that nothing downstream starts depending on the
-// field being present.
+// decoded struct cannot tell an empty string from an omitted key.
 func TestSetupStateHandlerOmitsReasonOnCleanResolution(t *testing.T) {
 	configPath := createBootstrapSetupConfig(t, t.TempDir())
 
@@ -765,8 +760,7 @@ func TestSetupStateHandlerOmitsReasonOnCleanResolution(t *testing.T) {
 }
 
 // A stale DASHBOARD_SETUP_MODE against an activated config is the invisible
-// case from the issue. The state stays false - the config file is canonical -
-// and the reason is what makes it visible instead of silent.
+// case from the issue. The state stays false and the reason makes it visible.
 func TestSetupStateHandlerExplainsStaleLegacyFlag(t *testing.T) {
 	configPath := createActivatedSetupConfig(t, t.TempDir())
 
@@ -786,10 +780,8 @@ func TestSetupStateHandlerExplainsStaleLegacyFlag(t *testing.T) {
 	}
 }
 
-// A config that cannot be read used to produce a 500, which SetupContext
-// swallowed into setupState = null and every consumer coerced to false - a
-// corrupt config dropped you at /dashboard with no explanation. Answer 200 with
-// the reason instead, so the same outcome is explainable.
+// An unreadable config used to produce a 500, which the frontend swallowed into
+// "not in setup mode" with no explanation. Answer 200 with the reason instead.
 func TestSetupStateHandlerAnswers200WithReasonWhenConfigUnreadable(t *testing.T) {
 	missingPath := filepath.Join(t.TempDir(), "does-not-exist.yaml")
 
@@ -810,8 +802,8 @@ func TestSetupStateHandlerAnswers200WithReasonWhenConfigUnreadable(t *testing.T)
 	}
 }
 
-// The write endpoints share the gate. On an activated config the resolver says
-// inactive, so validate must refuse before doing any work.
+// The write endpoints share the gate, so on an activated config they must all
+// refuse.
 func TestSetupWriteEndpointsGateOnResolvedState(t *testing.T) {
 	configPath := createActivatedSetupConfig(t, t.TempDir())
 	resolver := setupmode.New(configPath, true)
@@ -861,19 +853,17 @@ func TestSetupWriteEndpointsGateOnResolvedState(t *testing.T) {
 	})
 }
 
-// TestSetupActivateHandlerFlipsSetupStateWithinOneRequest is the test that
-// proves the Invalidate call works.
+// Proves the Invalidate call works.
 //
-// Activation writes the config and then answers the request; on a filesystem
-// with one-second mtime granularity the resolver's identity check cannot see
-// the change on its own. The same resolver instance is reused throughout and
-// nothing is restarted, so a stale cached resolution would show up here as
-// /api/setup/state still reporting true after a successful activation.
+// Activation writes the config then answers the request, and on coarse mtime
+// granularity the identity check cannot see the change on its own. The same
+// resolver is reused and nothing restarts, so a stale cached resolution would
+// show up as /api/setup/state still reporting true after activation.
 func TestSetupActivateHandlerFlipsSetupStateWithinOneRequest(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
-	// The legacy flag stays true across activation, exactly as it does in a
-	// real deployment: the CLI set it at launch and nothing clears it.
+	// The legacy flag stays true across activation, as it does in a real
+	// deployment: the CLI sets it at launch and nothing clears it.
 	resolver := setupmode.New(configPath, true)
 
 	before, rawBefore := getSetupState(t, configPath, resolver)
@@ -900,8 +890,8 @@ func TestSetupActivateHandlerFlipsSetupStateWithinOneRequest(t *testing.T) {
 	if after.SetupMode {
 		t.Fatalf("setupMode = true after activation; the cached resolution was not invalidated; body=%s", rawAfter)
 	}
-	// The legacy flag now disagrees with the config, so the same response that
-	// reports the new state also explains why the environment value lost.
+	// The flag now disagrees with the config, so the response also explains
+	// why the environment value lost.
 	if !strings.Contains(after.Reason, "DASHBOARD_SETUP_MODE") {
 		t.Fatalf("reason = %q after activation, want it to name the now-stale legacy flag", after.Reason)
 	}
@@ -915,21 +905,17 @@ func TestSetupActivateHandlerFlipsSetupStateWithinOneRequest(t *testing.T) {
 	}
 }
 
-// TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails covers the
-// one branch where the two decoders disagree: the resolver answers cleanly from
-// the setup block while this handler cannot decode the full canonical schema.
+// Covers the branch where the two decoders disagree: the resolver answers
+// cleanly from the setup block while this handler cannot decode the full schema.
 //
-// The response must carry the *resolved* value rather than a hardcoded false.
-// Reporting false while the bootstrap gate reads true is exactly the
-// invisible-open-door split this change exists to remove - the UI would look
-// normal while unauthenticated first-admin creation was open. Because the
-// resolution itself is clean, its Reason is empty, so the handler supplies its
-// own explanation for the otherwise-empty payload.
+// The response must carry the resolved value, not a hardcoded false. Reporting
+// false while the bootstrap gate reads true is the invisible-open-door split
+// this change removes. The resolution is clean, so its Reason is empty and the
+// handler supplies its own.
 func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testing.T) {
 	t.Run("setup mode active: state must agree with the bootstrap gate", func(t *testing.T) {
 		configPath := createCanonicallyInvalidSetupConfig(t, t.TempDir(), true)
-		// legacyFlag=true matches the config, so the resolution is clean and
-		// carries no Reason of its own.
+		// legacyFlag=true matches the config, so the resolution is clean.
 		resolver := setupmode.New(configPath, true)
 
 		if !resolver.Active() {
@@ -950,8 +936,7 @@ func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testin
 		if !strings.Contains(raw, `"reason"`) {
 			t.Fatalf("raw body is missing the reason key: %s", raw)
 		}
-		// The rest of the payload is unavailable because the config could not be
-		// decoded; it must be empty rather than stale or invented.
+		// The rest of the payload is unavailable, so it must be empty.
 		if resp.ListenerPort != 0 || resp.Models != 0 || resp.Decisions != 0 || resp.CanActivate {
 			t.Fatalf("expected an empty payload alongside the reason, got %+v", resp)
 		}
@@ -971,8 +956,8 @@ func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testin
 		}
 	})
 
-	// The reason is served unauthenticated, so it must not disclose where the
-	// config lives or what is in it.
+	// The reason is served unauthenticated, so it must disclose neither the
+	// config location nor its contents.
 	t.Run("reason discloses neither path nor contents", func(t *testing.T) {
 		dir := t.TempDir()
 		configPath := createCanonicallyInvalidSetupConfig(t, dir, true)
@@ -987,10 +972,9 @@ func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testin
 	})
 }
 
-// The write endpoints gate on the resolver first, then read the file. When the
-// gate passes but the read fails they must surface the read failure rather than
-// claiming setup mode is inactive, which would send an operator looking in the
-// wrong place.
+// The write endpoints gate first, then read. When the gate passes but the read
+// fails they must report the read failure, not an inactive gate, which would
+// send an operator looking in the wrong place.
 func TestSetupWriteEndpointsReportUnreadableConfigWhileSetupModeIsActive(t *testing.T) {
 	configPath := createCanonicallyInvalidSetupConfig(t, t.TempDir(), true)
 	resolver := setupmode.New(configPath, true)

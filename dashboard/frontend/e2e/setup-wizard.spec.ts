@@ -431,15 +431,13 @@ test.describe("Setup wizard routing import", () => {
 
   // The frontend half of the #2795 contract.
   //
-  // Activation rewrites the router config, which is what ends setup mode; the
-  // dashboard is deliberately not restarted at that point. This drives the
-  // wizard to activation against a backend whose /api/setup/state flips from
-  // true to false at exactly that moment, and asserts the shell leaves /setup
-  // and stays off it - AuthenticatedShell's redirect behaviour.
+  // Activation ends setup mode by rewriting the router config, and the
+  // dashboard is not restarted. This drives the wizard to activation against a
+  // backend whose /api/setup/state flips at that moment, and checks the shell
+  // leaves /setup and stays off it.
   //
-  // Scope note: the API is mocked here, so this covers the frontend contract
-  // only. That the real backend actually flips within one request is proved by
-  // the Go tests (setupmode and handlers), not by this case.
+  // The API is mocked, so this covers the frontend only. That the real backend
+  // flips within one request is proved by the Go tests.
   test("leaves the setup wizard once activation clears setup mode", async ({
     page,
   }) => {
@@ -449,9 +447,8 @@ test.describe("Setup wizard routing import", () => {
 
     await mockFirstRunSetup(page);
 
-    // mockFirstRunSetup already registered a fixed /api/setup/state. Drop it
-    // explicitly rather than relying on later-registration-wins, so this
-    // dynamic handler is unambiguously the one that answers.
+    // mockFirstRunSetup registered a fixed /api/setup/state. Drop it rather
+    // than rely on later-registration-wins, so this handler is the one used.
     await page.unroute("**/api/setup/state");
     await page.route("**/api/setup/state", async (route) => {
       setupStateRequestCount += 1;
@@ -490,9 +487,8 @@ test.describe("Setup wizard routing import", () => {
 
     await page.route("**/api/setup/activate", async (route) => {
       activateRequestCount += 1;
-      // What the backend fix guarantees: the write that strips setup.mode from
-      // the config takes effect immediately, so the next read of
-      // /api/setup/state reports false with no restart in between.
+      // What the fix guarantees: stripping setup.mode takes effect at once, so
+      // the next read reports false with no restart in between.
       setupMode = false;
       await route.fulfill({
         status: 200,
@@ -527,14 +523,13 @@ test.describe("Setup wizard routing import", () => {
 
     await expect.poll(() => activateRequestCount).toBe(1);
     // The wizard re-reads setup state after activating, so the shell decides
-    // from the new value rather than the one it loaded on first render.
+    // from the new value, not the one loaded on first render.
     await expect.poll(() => setupStateRequestCount).toBeGreaterThanOrEqual(2);
 
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
 
-    // Before the fix the reread still reported setupMode: true, so the shell
-    // bounced straight back to /setup. Give that bounce a chance to happen and
-    // assert it does not.
+    // Before the fix the reread still said true and the shell bounced back to
+    // /setup. Give that bounce a chance to happen and assert it does not.
     await page.waitForTimeout(300);
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(

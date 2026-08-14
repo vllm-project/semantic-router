@@ -36,14 +36,12 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setu
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
 	// The bootstrap gate reads the resolver on every unauthenticated
-	// can-register / register call, so setup mode tracks the config file
-	// instead of a value captured at process start.
+	// can-register / register call, so setup mode tracks the config file.
 	if setupResolver != nil {
 		authSvc.SetSetupModeFunc(setupResolver.Active)
 	} else {
-		// Fail closed. Leaving setupModeFn unset keeps the unauthenticated
-		// bootstrap endpoint shut; installing a method value on a nil resolver
-		// would instead panic on the first request that reaches the gate.
+		// Fail closed. Leaving setupModeFn unset keeps the endpoint shut.
+		// Installing a method value on a nil resolver would panic instead.
 		log.Printf("WARNING: setup-mode resolver unavailable; the open bootstrap endpoint is failing closed")
 	}
 	if err := authSvc.EnsureBootstrapAdmin(

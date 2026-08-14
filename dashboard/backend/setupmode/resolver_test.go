@@ -44,10 +44,9 @@ setup:
 	configMalformed = "::: not yaml :::\n"
 )
 
-// These three fixtures are deliberately the same length, so that writing one
-// over another and restoring the modification time produces a file the
-// mtime+size cache cannot distinguish from the original. That is how the tests
-// below prove the cache is real, and that Invalidate defeats it, without
+// These three fixtures are the same length on purpose. Writing one over another
+// and restoring the mtime produces a file the cache cannot tell from the
+// original, which is how the tests below prove the cache is real without
 // depending on filesystem timestamp granularity. TestFixtures_SameSize keeps
 // them honest.
 const (
@@ -71,8 +70,8 @@ func newConfigFile(t *testing.T, content string) string {
 	return path
 }
 
-// freezeMTime rewrites path with content while preserving the file's previous
-// modification time, so the file's identity (mtime + size) is unchanged.
+// freezeMTime rewrites the file but restores its previous mtime, leaving the
+// cache key unchanged.
 func freezeMTime(t *testing.T, path, content string) {
 	t.Helper()
 	before, err := os.Stat(path)
@@ -92,11 +91,9 @@ func freezeMTime(t *testing.T, path, content string) {
 	}
 }
 
-// TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag is the most important
-// test in this package. It is the one that proves the error path cannot reopen
-// the unauthenticated bootstrap door: a config that cannot be parsed resolves to
-// "not in setup mode" even when the legacy flag says true. Falling back to the
-// flag here would reintroduce #2795 through the error path (D3).
+// The most important test here: it proves the error path cannot reopen the
+// unauthenticated bootstrap door. An unparseable config resolves to "not in
+// setup mode" even when the legacy flag says true.
 func TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag(t *testing.T) {
 	path := newConfigFile(t, configMalformed)
 	resolver := New(path, true)
@@ -106,8 +103,7 @@ func TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag(t *testing.T) {
 	if got.Active {
 		t.Fatalf("Active = true for a malformed config with the legacy flag set; the error path must fail closed")
 	}
-	// Active() is the method the bootstrap gate actually calls, so assert it
-	// directly rather than trusting that it agrees with Resolve().
+	// Active() is what the bootstrap gate calls, so assert it directly.
 	if resolver.Active() {
 		t.Fatalf("Active() = true, want false")
 	}
@@ -125,9 +121,9 @@ func TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag(t *testing.T) {
 	}
 }
 
-// Reason is returned from a public, unauthenticated endpoint in Phase 3, so it
-// must never echo config contents. gopkg.in/yaml.v3 quotes the offending value
-// in its unmarshal errors, which is why the parser message is dropped.
+// Reason is served from a public endpoint, so it must never echo config
+// contents. yaml.v3 quotes the offending value in its errors, which is why the
+// parser message is dropped.
 func TestResolve_ReasonNeverContainsConfigContents(t *testing.T) {
 	const secret = "sekret"
 	path := newConfigFile(t, "setup:\n  mode: "+secret+"\n")
@@ -241,7 +237,7 @@ func TestResolve(t *testing.T) {
 }
 
 // A conflict message has to be actionable, so it names both inputs and says
-// which one won. Assert the load-bearing parts rather than the whole string.
+// which won. Assert the key parts, not the whole string.
 func TestResolve_ConflictReasonNamesBothInputs(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -283,9 +279,9 @@ func TestResolve_ConflictReasonNamesBothInputs(t *testing.T) {
 	}
 }
 
-// Activation strips the setup block from the config and does not restart the
-// dashboard. The resolver must see that on the next call. The legacy flag stays
-// true throughout, exactly as it does in a real deployment.
+// Activation strips the setup block and does not restart the dashboard, so the
+// resolver must see it on the next call. The legacy flag stays true throughout,
+// as it does in a real deployment.
 func TestResolve_ActivationTurnsSetupModeOffWithoutRestart(t *testing.T) {
 	path := newConfigFile(t, configSetupModeOn)
 	resolver := New(path, true)
@@ -362,9 +358,8 @@ func TestResolve_RepeatedResolveIsStable(t *testing.T) {
 	}
 }
 
-// Proves the mtime+size cache is actually consulted: the file's contents change
-// underneath the resolver while its identity does not, and the previous answer
-// is served. Without a cache this test would fail, which is the point.
+// Proves the cache is really consulted: the contents change while the identity
+// does not, and the previous answer is served.
 func TestResolve_CacheServesUnchangedFileIdentity(t *testing.T) {
 	path := newConfigFile(t, configModeOnSameSize)
 	resolver := New(path, false)
@@ -380,9 +375,8 @@ func TestResolve_CacheServesUnchangedFileIdentity(t *testing.T) {
 	}
 }
 
-// The case mtime cannot cover (D2): activation writes the config and answers the
-// request within the same filesystem timestamp tick. Invalidate is what makes
-// that safe.
+// The case mtime cannot cover: activation writes the config and answers the
+// request within the same timestamp tick. Invalidate is what makes that safe.
 func TestResolve_InvalidateForcesReread(t *testing.T) {
 	path := newConfigFile(t, configModeOnSameSize)
 	resolver := New(path, false)
@@ -399,15 +393,14 @@ func TestResolve_InvalidateForcesReread(t *testing.T) {
 	}
 }
 
-// Errors are never cached (D2): a missing file may appear a moment later, and a
-// cached error would hold the dashboard out of its own first run. The second
-// half checks the parse-error path with an unchanged file identity, so a cached
-// error could not be hidden by the cache key changing.
+// Errors are never cached: a missing file may appear a moment later, and a
+// cached error would lock the dashboard out of its own first run. The second
+// case keeps the file identity unchanged, so a cached error could not hide
+// behind a changed cache key.
 func TestResolve_ErrorResultsAreNeverCached(t *testing.T) {
 	t.Run("missing file that appears later", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
-		// The legacy flag is true so that the config, once it appears, agrees
-		// with it and the resolution is clean end to end.
+		// legacyFlag=true so the config agrees with it once it appears.
 		resolver := New(path, true)
 
 		if got := resolver.Resolve(); got.Active || got.Reason == "" {
@@ -441,8 +434,7 @@ func TestResolve_ErrorResultsAreNeverCached(t *testing.T) {
 	})
 }
 
-// The fixtures used by the cache tests only prove anything while they are the
-// same length. Fail loudly if an edit breaks that.
+// The cache tests only prove anything while these stay the same length.
 func TestFixtures_SameSize(t *testing.T) {
 	sizes := map[string]int{
 		"configModeOnSameSize":    len(configModeOnSameSize),
@@ -456,11 +448,9 @@ func TestFixtures_SameSize(t *testing.T) {
 	}
 }
 
-// The resolver is read from the auth middleware on every request while the
-// activate handler rewrites the config, so it is exercised concurrently by
-// construction (D8). This asserts race-freedom and self-consistency, not a
-// particular value: os.WriteFile truncates before writing, so a reader may
-// legitimately observe an empty or partial file mid-write.
+// The resolver is read on every request while activation may be rewriting the
+// config. This asserts race-freedom and self-consistency, not a particular
+// value: os.WriteFile truncates first, so a reader can observe a partial file.
 func TestResolve_ConcurrentAccessIsRaceFree(t *testing.T) {
 	path := newConfigFile(t, configSetupModeOn)
 	resolver := New(path, true)
@@ -519,17 +509,15 @@ func TestResolve_ConcurrentAccessIsRaceFree(t *testing.T) {
 	writer.Wait()
 }
 
-// --- Conflict warning logging (#2795 Phase 4) --------------------------------
+// --- Conflict warning logging (#2795) ---------------------------------------
 //
-// The bootstrap gate and every setup surface call Resolve() on every request,
-// including from the unauthenticated /api/auth/bootstrap/can-register. A
-// conflict warning must fire when a stale legacy flag first becomes visible,
-// but calling Resolve() again with no change must not print it again - that
-// would turn an unauthenticated endpoint into a log-amplification vector.
+// Resolve() runs on every request, including from the unauthenticated
+// can-register. A conflict must warn when it first appears, but repeating an
+// unchanged resolution must not warn again, or the endpoint becomes a
+// log-amplification vector.
 
-// captureLog redirects the standard logger into a buffer for the duration of
-// the test and restores it on cleanup. No test in this package uses
-// t.Parallel(), so mutating the shared *log.Logger state here is safe.
+// captureLog redirects the standard logger into a buffer and restores it on
+// cleanup. No test here uses t.Parallel(), so touching shared logger state is safe.
 func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -555,8 +543,7 @@ func countWarnings(buf *bytes.Buffer) int {
 	return count
 }
 
-// The baseline the next two tests build on: a conflicting resolution logs
-// exactly one WARNING line naming the stale input.
+// Baseline for the next two tests: one WARNING naming the stale input.
 func TestResolve_LogsConflictWarningOnFirstResolve(t *testing.T) {
 	buf := captureLog(t)
 	path := newConfigFile(t, configActivated)
@@ -574,9 +561,8 @@ func TestResolve_LogsConflictWarningOnFirstResolve(t *testing.T) {
 	}
 }
 
-// Mirrors the plan's manual anti-spam check: hammering an unauthenticated
-// endpoint backed by a stable, conflicting config must not multiply the log
-// line. This is the security property, not tidiness.
+// Hammering an unauthenticated endpoint against a stable conflicting config
+// must not multiply the log line. This is the security property.
 func TestResolve_ConflictWarningLogsOnceForRepeatedUnchangedConflict(t *testing.T) {
 	buf := captureLog(t)
 	path := newConfigFile(t, configActivated)
@@ -592,18 +578,13 @@ func TestResolve_ConflictWarningLogsOnceForRepeatedUnchangedConflict(t *testing.
 	}
 }
 
-// The dedup key is the most recently *observed* (Active, Conflict) pair, not
-// full history: a conflicting config that turns clean and later returns to
-// the same conflicting shape must warn again, so an operator who only sees
-// silence cannot mistake "already reported once, long ago" for "still fine
-// right now." A transition that changes but stays clean logs nothing - only
-// transitions that disagree with the legacy flag are worth surfacing.
+// The dedup key is the last observed (Active, Conflict) pair, not full history.
+// A conflict that clears and later returns must warn again, so silence cannot
+// be misread as "still fine". Transitions that stay clean log nothing.
 func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
 	buf := captureLog(t)
 	path := newConfigFile(t, configActivated)
-	// legacyFlag stays true throughout, exactly as it would across activation
-	// in a real deployment: the CLI sets it once at launch and nothing clears
-	// it mid-process.
+	// legacyFlag stays true throughout, as it does across a real activation.
 	resolver := New(path, true)
 
 	// Step 1: config off, flag on -> conflict. First WARNING.
@@ -614,8 +595,7 @@ func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
 		t.Fatalf("step 1: logged %d WARNING lines, want 1; log:\n%s", n, buf.String())
 	}
 
-	// Step 2: config on, flag on -> agree. No new WARNING: the resolver is
-	// quiet about resolutions that do not disagree with the legacy flag.
+	// Step 2: config on, flag on. They agree, so no new WARNING.
 	writeConfig(t, path, configSetupModeOn)
 	resolver.Invalidate()
 	if got := resolver.Resolve(); got.Conflict {
@@ -625,9 +605,8 @@ func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
 		t.Fatalf("step 2: logged %d WARNING lines, want still 1 (nothing to report); log:\n%s", n, buf.String())
 	}
 
-	// Step 3: config off again, flag still on -> the same conflicting shape as
-	// step 1. Must warn again: step 2 changed the last-observed pair, so this
-	// is a new transition even though its values repeat step 1's.
+	// Step 3: back to step 1's conflicting shape. Step 2 changed the last
+	// observed pair, so this is a new transition and must warn again.
 	writeConfig(t, path, configActivated)
 	resolver.Invalidate()
 	if got := resolver.Resolve(); !got.Conflict {
@@ -638,15 +617,12 @@ func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
 	}
 }
 
-// Reason is served from /api/setup/state, which is unauthenticated. It names
-// the config file so an operator can act on it, but must never carry the
-// absolute path: outside a container that discloses the account name and the
-// deployment's directory layout to anyone who can reach the port. The full
-// path is logged at startup instead, where it is already privileged.
+// Reason is served from the unauthenticated /api/setup/state. It names the
+// config file so an operator can act on it, but must never carry the absolute
+// path, which would disclose the directory layout and the account name.
 //
-// The filesystem error is the easy one to get wrong: os.Stat and os.ReadFile
-// return *fs.PathError, whose Error() embeds the path, so the cause has to be
-// unwrapped rather than formatted with %v.
+// The filesystem error is the easy one to get wrong: *fs.PathError embeds the
+// path in Error(), so the cause has to be unwrapped rather than formatted.
 func TestResolve_ReasonNeverContainsTheAbsoluteConfigPath(t *testing.T) {
 	tests := []struct {
 		name string
@@ -698,9 +674,8 @@ func TestResolve_ReasonNeverContainsTheAbsoluteConfigPath(t *testing.T) {
 	}
 }
 
-// The unreadable-config Reason must keep the cause of the failure, which is
-// what tells an operator whether the file is missing or unreadable, while
-// dropping the path that *fs.PathError.Error() would have embedded.
+// The Reason keeps the cause, which tells an operator whether the file is
+// missing or unreadable, while dropping the path.
 func TestResolve_UnreadableReasonKeepsCauseWithoutPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 
@@ -715,8 +690,7 @@ func TestResolve_UnreadableReasonKeepsCauseWithoutPath(t *testing.T) {
 }
 
 // errDetail unwraps *fs.PathError so the path never reaches a Reason. The
-// fallback matters as much as the unwrap: an error that is not a *fs.PathError
-// must still explain itself rather than vanish.
+// fallback matters too: a non-PathError must still explain itself.
 func TestErrDetail(t *testing.T) {
 	tests := []struct {
 		name string
@@ -739,7 +713,7 @@ func TestErrDetail(t *testing.T) {
 			want: "some other failure",
 		},
 		{
-			// (*fs.PathError).Error() dereferences Err, so this input panics if
+			// PathError.Error() dereferences Err, so this input panics if
 			// errDetail falls through to it. The stdlib never builds one, but a
 			// guard that still panics is worse than no guard.
 			name: "path error with no cause is reported without panicking",

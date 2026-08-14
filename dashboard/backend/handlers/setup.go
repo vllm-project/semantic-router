@@ -18,11 +18,9 @@ import (
 
 type SetupStateResponse struct {
 	SetupMode bool `json:"setupMode"`
-	// Reason explains a non-obvious setup state: a config that could not be
-	// read, or a legacy --setup-mode value that disagrees with the config file.
-	// Empty and omitted when the state resolved cleanly, so the happy-path
-	// response shape is unchanged and nothing downstream can start depending on
-	// the field being present.
+	// Reason explains a config that could not be read, or a legacy --setup-mode
+	// value that disagrees with the config file. Omitted when the state resolved
+	// cleanly, so the happy-path response shape is unchanged.
 	Reason       string `json:"reason,omitempty"`
 	ListenerPort int    `json:"listenerPort"`
 	Models       int    `json:"models"`
@@ -32,11 +30,11 @@ type SetupStateResponse struct {
 	CanActivate  bool   `json:"canActivate"`
 }
 
-// unreadableConfigReason is returned when the setup handler cannot decode the
-// router config but the resolver answered cleanly from the setup block alone.
+// unreadableConfigReason is used when this handler cannot decode the router
+// config but the resolver answered cleanly from the setup block alone.
 //
-// It never embeds the decoder error: YAML errors quote the offending value and
-// this response is served from an unauthenticated endpoint.
+// It never embeds the decoder error, which would quote config values into a
+// response served from an unauthenticated endpoint.
 const unreadableConfigReason = "the router config could not be read as a canonical config; " +
 	"setup state was resolved from its setup.mode block alone"
 
@@ -89,16 +87,14 @@ func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) htt
 
 		configFile, err := readSetupConfigFile(configPath)
 		if err != nil {
-			// The setup state itself resolved, so answer the question rather
-			// than 500ing. A 500 reads to the frontend as "unknown", which every
-			// consumer already coerces to "not in setup mode" silently; carrying
-			// the reason instead makes the same outcome explainable.
+			// The setup state resolved, so answer rather than 500. The frontend
+			// already coerces a failed fetch to "not in setup mode" silently;
+			// returning the reason makes the same outcome explainable.
 			//
 			// SetupMode carries the resolved value, not a hardcoded false. The
-			// resolver decodes only the setup block, so it can answer correctly
-			// for a config this handler cannot fully decode. Reporting false
-			// while the bootstrap gate reads true would recreate exactly the
-			// invisible-open-door split this change exists to remove.
+			// resolver decodes only the setup block, so it can answer for a
+			// config this handler cannot. Reporting false while the bootstrap
+			// gate reads true is the split this change exists to remove.
 			reason := resolution.Reason
 			if reason == "" {
 				reason = unreadableConfigReason
@@ -241,11 +237,10 @@ func SetupActivateHandler(
 			}
 		}
 
-		// The config on disk no longer declares setup mode. Drop the cached
-		// resolution here, immediately after the write and before any later step
-		// can fail and return early, so the bootstrap gate and every setup
-		// surface see the new state at once - even when the write lands inside
-		// the same filesystem mtime tick as the previous read.
+		// The config no longer declares setup mode. Drop the cached resolution
+		// here, right after the write and before any later step can return
+		// early, so every setup surface sees the new state at once. Needed
+		// because the write can land in the same mtime tick as the last read.
 		setupResolver.Invalidate()
 
 		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
@@ -401,13 +396,11 @@ func buildSetupCandidateConfig(
 	return &merged, nil
 }
 
-// loadBootstrapConfig gates the setup write endpoints on the canonical resolver
-// and returns the current config for them to build on.
+// loadBootstrapConfig gates the setup write endpoints on the resolver and
+// returns the current config for them to build on.
 //
-// The gate runs before the read: a request that must not be served does not
-// need a file read, and routing it through the resolver means all four setup
-// surfaces share one rule, including fail-closed-on-unreadable and the
-// treatment of a stale legacy flag.
+// The gate runs before the read, so a request that must not be served costs no
+// file read, and all four setup surfaces share one rule.
 func loadBootstrapConfig(configPath string, setupResolver *setupmode.Resolver) (*setupConfigFile, error) {
 	if !setupResolver.Active() {
 		return nil, fmt.Errorf("setup mode is not active for this workspace")

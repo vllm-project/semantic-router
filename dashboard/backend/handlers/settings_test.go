@@ -12,7 +12,7 @@ import (
 )
 
 // activatedResolver resolves to "not in setup mode", which is what these
-// read-only cases previously got from config.Config.SetupMode.
+// read-only cases previously got from cfg.SetupMode.
 func activatedResolver(t *testing.T) *setupmode.Resolver {
 	t.Helper()
 	return setupmode.New(createActivatedSetupConfig(t, t.TempDir()), false)
@@ -101,10 +101,9 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	})
 }
 
-// D5 keeps SettingsResponse.SetupMode and repoints it at the resolver. cfg.SetupMode
-// is the legacy --setup-mode / DASHBOARD_SETUP_MODE value frozen at process start;
-// /api/settings must report what the config file says instead, so these cases set the
-// two to opposite values in both directions and prove the file wins.
+// SettingsResponse.SetupMode is kept but now reads the resolver. cfg.SetupMode is
+// the legacy flag frozen at startup, so these cases set the two to opposite
+// values in both directions and prove the config file wins.
 func TestSettingsHandlerReportsResolvedSetupModeNotTheLegacyFlag(t *testing.T) {
 	t.Parallel()
 

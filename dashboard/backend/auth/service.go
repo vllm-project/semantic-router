@@ -23,18 +23,15 @@ type Service struct {
 
 	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
 	allowOpenBootstrap bool
-	// setupModeFn reports whether first-run setup mode is currently active,
-	// enabling bootstrap during dashboard-first local install (trusted phase).
+	// setupModeFn reports whether first-run setup mode is currently active.
 	//
-	// This is a function rather than a bool because setup mode ends when the
-	// dashboard rewrites the router config during activation, and the dashboard
-	// does not restart itself at that point. A stored bool would keep the
-	// unauthenticated bootstrap endpoint armed until the next restart, and a
-	// stale DASHBOARD_SETUP_MODE could arm it invisibly against a fully
-	// configured deployment. See #2795.
+	// A function rather than a bool because setup mode ends when activation
+	// rewrites the router config, and the dashboard does not restart itself at
+	// that point. A stored bool would keep the unauthenticated bootstrap
+	// endpoint armed until the next restart. See #2795.
 	//
-	// Installed once during route setup, before the server starts serving, so it
-	// needs no lock of its own. The resolver behind it is goroutine-safe.
+	// Installed once during route setup, before the server serves, so it needs
+	// no lock. The resolver behind it is goroutine-safe.
 	setupModeFn func() bool
 	// bootstrapMu serializes the check-then-create in BootstrapRegister so that two
 	// concurrent requests cannot both pass the "no users yet" check and each create an
@@ -69,26 +66,23 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 // SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
 func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
 
-// SetSetupModeFunc installs the live setup-mode source. Pass the canonical
-// resolver's Active method; the auth service must not read the config itself.
+// SetSetupModeFunc installs the live setup-mode source. Pass the resolver's
+// Active method; the auth service must not read the config itself.
 func (s *Service) SetSetupModeFunc(fn func() bool) { s.setupModeFn = fn }
 
-// SetSetupMode pins dashboard-first setup mode to a fixed value. Retained for
-// tests and for callers with no resolver; production wiring uses
-// SetSetupModeFunc so the gate tracks the config file rather than a value
-// captured at startup.
+// SetSetupMode pins setup mode to a fixed value. Retained for tests and for
+// callers with no resolver. Production wiring uses SetSetupModeFunc.
 func (s *Service) SetSetupMode(v bool) { s.setupModeFn = func() bool { return v } }
 
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
 //
-// allowOpenBootstrap is checked first so that an operator who deliberately
-// enabled it does not pay a config stat on every unauthenticated request.
+// allowOpenBootstrap is checked first so an operator who enabled it does not pay
+// a config stat on every unauthenticated request.
 func (s *Service) OpenBootstrapEnabled() bool {
 	if s.allowOpenBootstrap {
 		return true
 	}
-	// Fail closed: no source means no trusted first-run window. NewService does
-	// not install one, so an unwired Service keeps the endpoint shut.
+	// Fail closed. NewService installs no source, so an unwired Service stays shut.
 	return s.setupModeFn != nil && s.setupModeFn()
 }
 
