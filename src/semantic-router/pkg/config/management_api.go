@@ -78,6 +78,8 @@ func DefaultManagementAPIRoles() map[string][]string {
 			"classify.invoke",
 			"config.read",
 			"data.read",
+			"cache.read",
+			"compression.read",
 		},
 		"operator": {
 			"health.read",
@@ -90,6 +92,10 @@ func DefaultManagementAPIRoles() map[string][]string {
 			"learning.ingest",
 			"data.read",
 			"data.write",
+			"cache.read",
+			"cache.invalidate",
+			"compression.read",
+			"compression.preview",
 		},
 		// Wildcard includes secret_view so admin can read plaintext secrets.
 		"admin": {ManagementPermWildcard},

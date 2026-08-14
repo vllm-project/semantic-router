@@ -240,7 +240,10 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 		return requestBody
 	}
 
-	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
+	injectedBody, messageIndex, err := injectMemoryMessagesWithIndex(
+		requestBody,
+		ctx.MemoryContext,
+	)
 	if err != nil {
 		logging.Warnf("Memory: Failed to inject memory context: %v", err)
 		recordMemoryOutcome(ctx, "unavailable", "injection_error", true)
@@ -249,6 +252,10 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	}
 
 	ctx.MemoryResultCount = len(memories)
+	if ctx.MemoryMessageIndexes == nil {
+		ctx.MemoryMessageIndexes = make(map[int]struct{})
+	}
+	ctx.MemoryMessageIndexes[messageIndex] = struct{}{}
 	recordMemoryOutcome(ctx, "used", "injected", false)
 	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))

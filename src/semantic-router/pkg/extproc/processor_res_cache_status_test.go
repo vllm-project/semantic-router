@@ -55,7 +55,7 @@ func TestUpdateResponseCacheSkipsNon2xx(t *testing.T) {
 		UpstreamStatusCode: 400,
 	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"error":{"message":"bad model"}}`))
-	if mockCache.updateCalled {
+	if mockCache.addEntryCalled {
 		t.Fatal("a non-2xx upstream response must not be cached (cache poisoning)")
 	}
 }
@@ -65,9 +65,14 @@ func TestUpdateResponseCacheWritesOn2xx(t *testing.T) {
 	ctx := withSelectedDecision(&RequestContext{
 		RequestID:          "req-status-200",
 		UpstreamStatusCode: 200,
+		RequestModel:       "test",
+		RequestQuery:       "hello",
+		OriginalRequestBody: []byte(
+			`{"model":"test","messages":[{"role":"user","content":"hello"}]}`,
+		),
 	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
-	if !mockCache.updateCalled {
+	if !mockCache.addEntryCalled {
 		t.Fatal("a 2xx upstream response must still be cached")
 	}
 }
@@ -75,11 +80,14 @@ func TestUpdateResponseCacheWritesOn2xx(t *testing.T) {
 func TestUpdateResponseCacheWritesWhenStatusUnknown(t *testing.T) {
 	mockCache, router, decision := statusCacheRouter()
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID: "req-status-unknown",
+		RequestID:           "req-status-unknown",
+		RequestModel:        "test",
+		RequestQuery:        "hello",
+		OriginalRequestBody: []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`),
 		// UpstreamStatusCode left 0: never observed (e.g. headers not processed).
 	}, decision)
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
-	if !mockCache.updateCalled {
+	if !mockCache.addEntryCalled {
 		t.Fatal("unknown upstream status must not block caching (backward compatible)")
 	}
 }

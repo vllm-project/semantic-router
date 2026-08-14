@@ -150,6 +150,81 @@ func apiInfoRoutes() []apiRoute {
 	}
 }
 
+func apiResponseCacheRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/capabilities", Method: "GET", Description: "Get response-cache backend capabilities"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/health", Method: "GET", Description: "Check response-cache backend health"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/stats", Method: "GET", Description: "Get redacted response-cache statistics"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/audit", Method: "GET", Description: "Get redacted response-cache mutation audit entries"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheAudit,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/test", Method: "POST", Description: "Validate and probe a response-cache candidate configuration"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheTest,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/invalidate", Method: "POST", Description: "Dry-run or invalidate a scoped response-cache partition"},
+			routePolicy{Permission: PermCacheInvalidate, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheInvalidate},
+			(*ClassificationAPIServer).handleResponseCacheInvalidate,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/flush", Method: "POST", Description: "Advance a scoped or global response-cache epoch"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheFlush},
+			(*ClassificationAPIServer).handleResponseCacheFlush,
+			jsonBody(),
+		),
+	}
+}
+
+func apiContextCompressionRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/capabilities", Method: "GET", Description: "Get context-compression capabilities"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/health", Method: "GET", Description: "Check context-compression runtime health"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/stats", Method: "GET", Description: "Get redacted context-compression statistics"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/preview", Method: "POST", Description: "Preview context compression without persistence"},
+			routePolicy{Permission: PermCompressionPreview, Sensitivity: SensitivityOperational, AuditAction: AuditActionCompressionPreview},
+			(*ClassificationAPIServer).handleContextCompressionPreview,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/recovery/invalidate", Method: "POST", Description: "Invalidate a trusted context-recovery request scope"},
+			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
+			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
+			jsonBody(),
+		),
+	}
+}
+
 func apiConfigRoutes() []apiRoute {
 	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
 }

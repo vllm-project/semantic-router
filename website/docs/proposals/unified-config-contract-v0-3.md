@@ -91,7 +91,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - `routing.decisions[].output_contract` is the decision-scoped, model-visible final response format contract. Loop algorithms merge it with any format already present in the client request instead of hard-coding benchmark- or task-specific prompts inside algorithms.
 - `routing.decisions[].output_contract_spec` is the typed router-executable output contract. Use it for machine-checked post-processing such as `type: choice`, `type: structured_json` with `json_schema.schema_ref: terminal_action_v1`, or `type: reference_selection` with `postprocess: [{type: dereference_selected_reference}]`; extraction defaults to exact `content` matching and must be widened explicitly with `extract.sources`. Do not encode these runtime behaviors as prompt-text heuristics.
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
-- `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
+- `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side response-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
 
 ### Entrypoints and multi-recipe routing
 
@@ -133,9 +133,13 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations, including looper-owned ReMoM direct model slug registration for `vllm-sr/remom`, Fusion direct model slug registration for `vllm-sr/fusion`, and Router Flow direct model slug registration for `vllm-sr/flow`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.*.model_names`; breadth, judge, panel, workflow planning, worker policy, and output contracts remain on `routing.decisions[]`.
+- `routing.decisions[].algorithm.remom.max_completion_tokens` optionally bounds every internal ReMoM completion while leaving request-facing model aliases separate from backend capability metadata.
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
+- `providers.models[].reliability` owns generated data-plane load balancing, bounded transport retry, circuit-breaker, and passive outlier-ejection settings for that model's backend cluster.
+- `response_cache` keeps response reuse route-local and supports exact, semantic, or exact-then-semantic lookup. Compatibility and tenant partitioning remain runtime-owned.
+- `context_compression` is a post-decision plugin that applies selected-model request budgets and target policies to a separate provider-bound working body without changing cache or signal input. JSON and multimodal structure are preserved, and RAG evidence requires explicit `targets.rag.mode: extractive`.
 - `global.model_catalog.modules.hallucination_mitigation.detector.backend` is a validated enum selecting the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` delegates to a generative span detector behind an OpenAI-compatible server and requires an absolute `http(s)` `detector.endpoint` plus a `detector.model_id`. An unknown backend fails config validation instead of silently falling back to `candle`.
 - omitted fields keep the built-in default
 
@@ -164,11 +168,11 @@ The remaining in-process CRD reconciliation path now also re-enters the same can
 The repo no longer ships large full-example trees under `config/intelligent-routing/` and similar directories. Instead:
 
 - `config/config.yaml` is the exhaustive canonical reference config
-- `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
-- `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
-- `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
+- `config/fragments/signal/`, `config/fragments/decision/`, `config/fragments/algorithm/`, and `config/fragments/plugin/` hold reusable routing fragments
+- `config/fragments/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
+- `config/fragments/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
-- runtime support examples such as `config/runtime/semantic-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
+- runtime support examples such as `config/runtime/response-cache/`, `config/runtime/response-api/`, and `config/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`
 - `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
 

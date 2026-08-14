@@ -226,7 +226,7 @@ ROUTE feedback_need_clarification (description = "Keep explicit clarification fo
     system_prompt: "The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps."
     mode: "insert"
   }
-  PLUGIN semantic_cache {
+  PLUGIN response_cache {
     enabled: true
     similarity_threshold: 0.86
     ttl_seconds: 1800

@@ -1,9 +1,11 @@
 package helm
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,18 +75,88 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "helm", args...)
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install/upgrade chart: %w", err)
+	if err := d.runHelmInstallWithRetry(ctx, chart, args); err != nil {
+		return err
 	}
 
 	d.log("Chart %s installed/upgraded successfully", opts.ReleaseName)
 	return nil
+}
+
+func (d *Deployer) runHelmInstallWithRetry(
+	ctx context.Context,
+	chart string,
+	args []string,
+) error {
+	attempts := 1
+	if strings.Contains(chart, "://") {
+		attempts = helmNetworkAttempts
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		output, err := d.runHelmCommand(ctx, args)
+		if err == nil {
+			return nil
+		}
+		lastErr = fmt.Errorf(
+			"failed to install/upgrade chart: %w: %s",
+			err,
+			strings.TrimSpace(output),
+		)
+		if attempt == attempts || !isTransientHelmInstallFailure(output) {
+			return lastErr
+		}
+		d.log("Transient Helm fetch failure; retrying install (%d/%d)", attempt, attempts)
+		timer := time.NewTimer(helmRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(ctx.Err(), lastErr)
+		case <-timer.C:
+		}
+	}
+	return lastErr
+}
+
+func (d *Deployer) runHelmCommand(
+	ctx context.Context,
+	args []string,
+) (string, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "helm", args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if d.Verbose {
+		cmd.Stdout = io.MultiWriter(os.Stdout, &stdout)
+		cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
+	}
+	err := cmd.Run()
+	return stdout.String() + "\n" + stderr.String(), err
+}
+
+func isTransientHelmInstallFailure(output string) bool {
+	lower := strings.ToLower(output)
+	for _, marker := range []string{
+		`failed to perform "fetch"`,
+		"response status code 429",
+		"response status code 500",
+		"response status code 502",
+		"response status code 503",
+		"response status code 504",
+		"tls handshake timeout",
+		"connection reset",
+		"unexpected eof",
+		"i/o timeout",
+		"temporary failure",
+		"dial tcp",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef string) (string, func(), error) {

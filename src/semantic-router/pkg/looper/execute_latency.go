@@ -31,6 +31,9 @@ import (
 // current implementation returns (nil, nil), but Execute's contract does not
 // forbid it, so this avoids a nil-pointer panic if one ever does.
 func ExecuteWithLatency(ctx context.Context, l Looper, req *Request) (*Response, error) {
+	if req != nil {
+		ctx = contextWithRoutingRecipe(ctx, req.RecipeName)
+	}
 	start := time.Now()
 	resp, err := l.Execute(ctx, req)
 	if err != nil || resp == nil {

@@ -176,14 +176,8 @@ global:
     startup_status:
       store_backend: ""
   stores:
-    semantic_cache:
-      backend_type: memory
-      enabled: true
-      similarity_threshold: 0.8
-      max_entries: 1000
-      ttl_seconds: 3600
-      eviction_policy: fifo
-      embedding_model: mmbert
+    response_cache:
+      enabled: false
     memory: {}
   integrations:
     tools:
@@ -223,9 +217,8 @@ global:
         model_id: ""
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        variant: mmbert32k
         model_ref: prompt_guard
       classifier:
         domain:

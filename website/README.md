@@ -74,7 +74,18 @@ Treat the current website redesign as the default design contract for all public
 - **Mermaid and code block styling** integrated into the docs theme
 - **Custom landing, publications, community, and white-paper routes**
 - **Theme overrides** for docs and blog shells
-- **Search-ready Docusaurus foundation**
+- **Local docs search** in the navbar, with no external search service (see below)
+
+### Search
+
+Search is provided by [`@easyops-cn/docusaurus-search-local`](https://github.com/easyops-cn/docusaurus-search-local), registered in the `themes` array of `docusaurus.config.ts`.
+
+- **Local and offline.** The Lunr index is compiled during the build and served as a static asset from our own domain. There is no account, no API key, no crawler, no quota, and no network call at search time.
+- **Keyboard shortcut.** `Ctrl+K` (Linux/Windows) or `Cmd+K` (macOS) opens and focuses the search box. `Escape` closes it. `/search` renders the standalone results page.
+- **What is indexed.** The current documentation version (`docs/`) and the blog. Archived versions (`v0.1`-`v0.3`) are excluded through `ignoreFiles`, and `src/pages` marketing routes are excluded through `indexPages: false`. Searching from an archived-version page therefore returns current-docs results. To make archived versions searchable, drop `ignoreFiles` and add `searchContextByPaths` — there is a comment in the config explaining how.
+- **The index is a build-time artefact.** Only `npm run build` (or `make docs-build`) regenerates it, so `npm run start` will not reflect fresh content in search results. Use a production build plus `npm run serve` when verifying search changes.
+- **Both locales are searchable.** `language: ['en', 'zh']` enables the Chinese tokenizer, which is needed because Chinese is written without spaces; it is backed by `@node-rs/jieba` (a native module shipping prebuilt binaries, so nothing is compiled at install time). The Chinese search UI strings live in `i18n/zh-Hans/code.json` under `theme.SearchBar.*` and `theme.SearchPage.*`.
+- **Styling.** All search overrides live in `src/css/search.css` so they can be removed cleanly if the search theme is ever swapped out. Note that the plugin's own `[data-theme="dark"]` rules never apply here — the site renders as `html[data-theme="light"]` and is dark through its own tokens — so the overrides target the vendor's light-mode rules.
 
 ### UX Goals
 

@@ -1394,7 +1394,7 @@ spec:
             model_id: "models/mmbert32k-jailbreak-detector-merged"
             threshold: 0.7
             use_cpu: true
-            use_mmbert_32k: true
+            variant: mmbert32k
           classifier:
             domain:
               model_id: "models/mmbert32k-intent-classifier-merged"

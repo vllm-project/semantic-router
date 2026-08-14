@@ -1,0 +1,115 @@
+name: Images Validation
+
+on:
+  workflow_call:
+    inputs:
+      images:
+        description: JSON array of affected image names.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.images) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Resolve image definition
+        id: definition
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          case "$IMAGE" in
+            anthropic-shim)
+              CONTEXT="./e2e/testing/anthropic-shim"
+              DOCKERFILE="./e2e/testing/anthropic-shim/Dockerfile"
+              ;;
+            dashboard)
+              CONTEXT="."
+              DOCKERFILE="./dashboard/backend/Dockerfile"
+              ;;
+            extproc)
+              CONTEXT="."
+              DOCKERFILE="./tools/docker/Dockerfile.extproc"
+              ;;
+            extproc-rocm)
+              CONTEXT="."
+              DOCKERFILE="./tools/docker/Dockerfile.extproc-rocm"
+              ;;
+            llm-katan)
+              CONTEXT="./e2e/testing/llm-katan"
+              DOCKERFILE="./e2e/testing/llm-katan/Dockerfile"
+              ;;
+            operator)
+              CONTEXT="."
+              DOCKERFILE="./deploy/operator/Dockerfile"
+              ;;
+            operator-bundle)
+              CONTEXT="./deploy/operator"
+              DOCKERFILE="./deploy/operator/bundle/Dockerfile"
+              ;;
+            vllm-sr)
+              CONTEXT="."
+              DOCKERFILE="./src/vllm-sr/Dockerfile"
+              ;;
+            vllm-sr-cuda)
+              CONTEXT="."
+              DOCKERFILE="./src/vllm-sr/Dockerfile.cuda"
+              ;;
+            vllm-sr-rocm)
+              CONTEXT="."
+              DOCKERFILE="./src/vllm-sr/Dockerfile.rocm"
+              ;;
+            vllm-sr-sim)
+              CONTEXT="."
+              DOCKERFILE="./src/fleet-sim/Dockerfile"
+              ;;
+            *)
+              echo "::error::Unknown image '$IMAGE'"
+              exit 1
+              ;;
+          esac
+          {
+            echo "context=$CONTEXT"
+            echo "dockerfile=$DOCKERFILE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve build arguments
+        id: build-args
+        env:
+          MATRIX_IMAGE: ${{ matrix.image }}
+          CARGO_BUILD_JOBS: "8"
+          DASHBOARD_VERSION_MODE: pr
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash tools/ci/docker-build-args.sh
+
+      - name: Build affected image without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.definition.outputs.context }}
+          file: ${{ steps.definition.outputs.dockerfile }}
+          platforms: linux/amd64
+          push: false
+          load: false
+          tags: semantic-router/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha,scope=${{ matrix.image }}-linux-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-linux-amd64,ignore-error=true
+          build-args: ${{ steps.build-args.outputs.args }}

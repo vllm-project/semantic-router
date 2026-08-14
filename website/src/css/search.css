@@ -1,0 +1,494 @@
+/*
+ * Search overrides for @easyops-cn/docusaurus-search-local.
+ *
+ * Everything the search theme needs lives in this one file so it can be
+ * deleted wholesale if the search theme is ever swapped out.
+ *
+ * The shell is split: navbar/footer stay dark chrome (shell.css) in both
+ * color modes, while docs/blog/page content follow tokens.css. The search
+ * input is styled as dark navbar chrome; the dropdown follows content
+ * tokens via `--site-*` so it adapts to light and dark mode like
+ * `.dropdown__menu`.
+ *
+ * The plugin's class names are hashed CSS modules (`suggestion_fB`), so
+ * selectors anchor on the stable Docusaurus classes (`.navbar__search`,
+ * `.navbar__search-input`) and fall back to `[class*="name_"]` substring
+ * matches. The plugin's own rules sort *after* this file in the emitted
+ * bundle, so each override carries one extra level of specificity rather
+ * than relying on source order. No `!important` is needed anywhere.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Tokens
+ * ------------------------------------------------------------------ */
+
+.navbar {
+  /*
+   * Content tokens adapt to color mode; the navbar's dark chrome is written as
+   * literals in shell.css. These mirror the zinc values shell.css already
+   * uses for `.navbar__toggle` / `.navbar__title` / `.footer__title` so the
+   * search input reads as the same control family in both themes.
+   */
+  --search-navbar-surface: #18181b;
+  --search-navbar-surface-hover: #27272a;
+  --search-navbar-border: #3f3f46;
+  --search-navbar-text: #fafafa;
+  --search-navbar-muted: #a1a1aa;
+
+  /* Infima drives the input and the loading ring off these. Scoped to
+     .navbar so the /search page keeps the light values from :root. */
+  --ifm-navbar-search-input-background-color: var(--search-navbar-surface);
+  --ifm-navbar-search-input-color: var(--search-navbar-text);
+  --ifm-navbar-search-input-placeholder-color: var(--search-navbar-muted);
+}
+
+.navbar__search {
+  /*
+   * The plugin exposes these for theming, which is cheaper and far more
+   * upgrade-proof than fighting its hashed selectors.
+   */
+  --search-local-modal-width: 30rem;
+  --search-local-modal-width-sm: min(92vw, 22rem);
+  --search-local-modal-background: var(--site-surface-raised);
+  /*
+   * Deliberately opaque with no backdrop-filter: `.navbar` already sets
+   * backdrop-filter, which establishes a backdrop root, so a translucent
+   * panel here would blur nothing and could read as a hole over the page.
+   * --site-hover-shadow is the only token strong enough to lift a panel off
+   * both the light docs background and the black homepage.
+   */
+  --search-local-modal-shadow: var(--site-hover-shadow);
+  --search-local-spacing: 0.5rem;
+  --search-local-hit-height: 3.25rem;
+  --search-local-hit-background: transparent;
+  --search-local-hit-shadow: none;
+  --search-local-hit-color: var(--site-text);
+  --search-local-hit-active-color: var(--site-text-strong);
+  --search-local-highlight-color: var(--site-accent-strong);
+  --search-local-muted-color: var(--site-muted);
+  --search-local-input-active-border-color: var(--site-accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Navbar control
+ * ------------------------------------------------------------------ */
+
+.navbar [class*='searchBarContainer_'] {
+  /* The plugin ships margin-left: 16px; the navbar rhythm is tighter. */
+  margin-left: 0.5rem;
+}
+
+.navbar .navbar__search:not([hidden]) {
+  /* autocomplete.js wraps the input in an inline-block span, which leaves a
+     baseline gap under it inside a block container. */
+  display: flex;
+  align-items: center;
+}
+
+.navbar .navbar__search-input {
+  width: 14.5rem;
+  height: 2.3rem;
+  /* Right padding clears the ✕ button, which replaces the shortcut hint as
+     soon as the field has a value. */
+  padding: 0 2.4rem 0 2.3rem;
+  border: 1px solid var(--search-navbar-border);
+  border-radius: 4px;
+  background: var(--search-navbar-surface);
+  color: var(--search-navbar-text);
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.82rem;
+  font-weight: var(--site-font-weight-normal);
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast);
+}
+
+.navbar .navbar__search-input::placeholder {
+  /* Matches the uppercase micro-type of the navbar links. Typed text stays
+     sentence case; only the resting label picks up the navbar voice. */
+  color: var(--search-navbar-muted);
+  font-size: 0.73rem;
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+.navbar .navbar__search-input:hover {
+  border-color: var(--site-hover-border);
+  background: var(--search-navbar-surface-hover);
+}
+
+.navbar .navbar__search-input:focus {
+  border-color: var(--site-accent);
+  background: var(--search-navbar-surface-hover);
+  /* The plugin already draws an outline off
+     --search-local-input-active-border-color; this only spaces it off the
+     border. Never remove it. */
+  outline-offset: 2px;
+}
+
+.navbar .navbar__search [class*='searchIcon_'] {
+  left: 0.75rem;
+  color: var(--search-navbar-muted);
+}
+
+.navbar .navbar__search:hover [class*='searchIcon_'],
+.navbar .navbar__search:focus-within [class*='searchIcon_'] {
+  color: var(--search-navbar-text);
+}
+
+.navbar [class*='searchBarContainer_'] [class*='searchBarLoadingRing_'] {
+  /* The plugin hard-codes top: 6px against a 2rem-tall input. */
+  top: 50%;
+  left: 0.72rem;
+  transform: translateY(-50%);
+}
+
+/* Ctrl/Cmd + K hint */
+.navbar .navbar__search [class*='searchHintContainer_'] {
+  right: 0.6rem;
+  gap: 3px;
+}
+
+.navbar .navbar__search [class*='searchHint_'] {
+  padding: 0.12rem 0.3rem;
+  border: 1px solid var(--search-navbar-border);
+  border-radius: 3px;
+  background: var(--search-navbar-surface-hover);
+  box-shadow: none;
+  color: var(--search-navbar-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
+/* Clear (✕) button, shown once the field has a value */
+.navbar .navbar__search [class*='searchClearButton_'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  right: 0.7rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  line-height: 1;
+  color: var(--search-navbar-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color var(--site-transition-fast);
+}
+
+.navbar .navbar__search [class*='searchClearButton_']:hover {
+  color: var(--search-navbar-text);
+}
+
+.navbar .navbar__search [class*='searchClearButton_']:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Results dropdown
+ *
+ * Styled as the site's own navbar dropdown (`.dropdown__menu` in shell.css):
+ * a light panel on the dark navbar, thin border, 1.1rem radius.
+ * ------------------------------------------------------------------ */
+
+.navbar .navbar__search [class*='dropdownMenu_'] {
+  max-width: calc(100vw - 1.5rem);
+  max-height: min(70vh, 32rem);
+  margin-top: 0.55rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--site-border);
+  border-radius: 1.1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--site-border-strong) transparent;
+}
+
+.navbar .navbar__search [class*='dropdownMenu_'] [class*='suggestion_'] {
+  padding: 0 0.6rem;
+  border-radius: 0.8rem;
+  font-size: 1rem;
+  transition:
+    background var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+/*
+ * autocomplete.js applies `cursor` on both hover and arrow-key navigation, so
+ * this is the single active-row state. The inset rail mirrors the active
+ * treatment used by `.navbar-sidebar .menu__link--active` in shell.css and
+ * keeps keyboard position readable, not just tinted.
+ */
+.navbar .navbar__search [class*='dropdownMenu_'] [class*='suggestion_']:hover,
+.navbar .navbar__search [class*='dropdownMenu_'] [class*='suggestion_'][class*='cursor_'] {
+  background-color: var(--site-accent-soft);
+  box-shadow: inset 2px 0 var(--site-accent);
+}
+
+.navbar .navbar__search [class*='hitTitle_'] {
+  font-size: 0.86rem;
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: -0.005em;
+}
+
+.navbar .navbar__search [class*='hitPath_'] {
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  font-weight: var(--site-font-weight-normal);
+}
+
+/* The ⏎ affordance is noise on every row; surface it on the active one. */
+.navbar .navbar__search [class*='hitAction_'] {
+  opacity: 0;
+  transition: opacity var(--site-transition-fast);
+}
+
+.navbar .navbar__search [class*='suggestion_']:hover [class*='hitAction_'],
+.navbar .navbar__search [class*='suggestion_'][class*='cursor_'] [class*='hitAction_'] {
+  opacity: 1;
+}
+
+/* No results */
+.navbar .navbar__search [class*='noResults_'] {
+  gap: 0.2rem;
+  padding: 1.5rem 0.75rem;
+  color: var(--site-muted-bright);
+  font-size: 0.85rem;
+}
+
+.navbar .navbar__search [class*='noResultsIcon_'] {
+  margin-bottom: 0.4rem;
+  opacity: 0.65;
+}
+
+/* "See all results" footer */
+.navbar .navbar__search [class*='hitFooter_'] {
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.6rem 0.25rem;
+  border-top: 1px solid var(--site-border);
+  font-size: 0.75rem;
+}
+
+.navbar .navbar__search [class*='hitFooter_'] a {
+  color: var(--site-muted-bright);
+  text-decoration: none;
+  transition: color var(--site-transition-fast);
+}
+
+.navbar .navbar__search [class*='hitFooter_'] a:hover {
+  color: var(--site-text-strong);
+  text-decoration: underline;
+}
+
+.navbar .navbar__search [class*='hitFooter_'] a:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Responsive
+ *
+ * shell.css hides `.navbar__items--right` below 1100px, which would hide the
+ * search control on every tablet and phone. Restore the container — and only
+ * the container — so search stays reachable; the README treats mobile as
+ * first class. Everything else in that group stays hidden as before.
+ * ------------------------------------------------------------------ */
+
+@media (min-width: 1200px) {
+  /* Extra room for the Ctrl/Cmd + K chips, which the plugin only renders
+     while the field is empty — exactly when the placeholder is showing. */
+  .navbar .navbar__search-input:placeholder-shown {
+    padding-right: 4.4rem;
+  }
+}
+
+@media (max-width: 1199px) {
+  /* Below this the navbar gets tight, so drop the hint and narrow the field
+     rather than let the right-hand group crowd the nav links. */
+  .navbar .navbar__search-input {
+    width: 11.5rem;
+  }
+
+  .navbar .navbar__search [class*='searchHintContainer_'] {
+    display: none;
+  }
+}
+
+@media (max-width: 1099px) {
+  .navbar__inner .navbar__items--right {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  /* Keep search + theme toggle reachable; hide the rest of the right group. */
+  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']):not(.navbar-color-mode-toggle) {
+    display: none;
+  }
+
+  .navbar__inner .navbar-color-mode-toggle {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 996px) {
+  /*
+   * Docusaurus absolutely pins search to the navbar edge below 996px. Keep
+   * search + theme toggle in normal flow instead so the toggle stays at the
+   * extreme right and nothing overlaps.
+   */
+  .navbar__inner [class*='navbarSearchContainer_'] {
+    position: relative;
+    top: auto;
+    right: auto;
+    transform: none;
+  }
+
+  .navbar [class*='searchBarContainer_'] {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  /* Collapsed to an icon until focused, then wide enough to type in without
+     running under the logo. */
+  .navbar .navbar__search-input:not(:focus) {
+    width: 2.4rem;
+    padding-right: 0;
+  }
+
+  .navbar .navbar__search-input:focus {
+    width: min(55vw, 12rem);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * /search — the standalone results page
+ *
+ * A "page" route, so it follows the active content palette (light/dark).
+ * The plugin puts no stable class on the page wrapper, hence the :has()
+ * scope (shell.css already relies on :has() elsewhere).
+ * ------------------------------------------------------------------ */
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) {
+  max-width: var(--site-doc-max);
+}
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) > h1 {
+  margin-bottom: 1.5rem;
+  font-size: var(--site-text-h1);
+  line-height: var(--site-leading-tight);
+}
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) > p {
+  margin-bottom: 0.5rem;
+  color: var(--site-muted);
+  font-size: var(--site-text-caption);
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+input[class*='searchQueryInput_'] {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 0.9rem;
+  background: var(--site-surface);
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--site-text-body);
+  transition:
+    border-color var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+input[class*='searchQueryInput_']::placeholder {
+  color: var(--site-muted);
+}
+
+input[class*='searchQueryInput_']:hover {
+  border-color: var(--site-hover-border);
+}
+
+input[class*='searchQueryInput_']:focus {
+  border-color: var(--site-accent);
+  box-shadow: var(--site-hover-inset);
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+article[class*='searchResultItem_'] {
+  margin: 0 -0.9rem;
+  padding: 1.15rem 0.9rem;
+  border-bottom: 1px solid var(--site-border);
+  transition: background var(--site-transition-fast);
+}
+
+article[class*='searchResultItem_']:hover {
+  background: var(--site-hover-row-bg);
+}
+
+article[class*='searchResultItem_']:last-child {
+  border-bottom: 0;
+}
+
+article[class*='searchResultItem_'] > h2 {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+article[class*='searchResultItem_'] > h2 a {
+  color: var(--site-text-strong);
+  transition: color var(--site-transition-fast);
+}
+
+article[class*='searchResultItem_'] > h2 a:hover {
+  color: var(--site-accent-strong);
+  text-decoration: underline;
+}
+
+article[class*='searchResultItem_'] > h2 a:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+p[class*='searchResultItemPath_'] {
+  color: var(--site-muted);
+  font-size: var(--site-text-caption);
+}
+
+p[class*='searchResultItemSummary_'] {
+  color: var(--site-muted-bright);
+  font-size: var(--site-text-small);
+  font-style: normal;
+  line-height: var(--site-leading-normal);
+}
+
+/* The plugin marks matches on this page but never styles them, so they fall
+   back to the browser's yellow default. */
+article[class*='searchResultItem_'] mark {
+  padding: 0 0.15em;
+  border-radius: 3px;
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
+}
+
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar .navbar__search-input,
+  .navbar .navbar__search [class*='searchClearButton_'],
+  .navbar .navbar__search [class*='suggestion_'],
+  .navbar .navbar__search [class*='hitAction_'],
+  .navbar .navbar__search [class*='hitFooter_'] a,
+  input[class*='searchQueryInput_'],
+  article[class*='searchResultItem_'],
+  article[class*='searchResultItem_'] > h2 a {
+    transition: none;
+  }
+}

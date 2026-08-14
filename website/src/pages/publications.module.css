@@ -91,7 +91,7 @@
 
 .rowTypePaper {
   border-color: var(--site-accent);
-  color: #087ac5;
+  color: var(--site-accent-strong);
 }
 
 .rowTypeTalk {

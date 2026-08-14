@@ -167,7 +167,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
-			SemanticCache: cfg.SemanticCache,
+			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 		},
@@ -328,6 +328,7 @@ func canonicalProviderModelFromRuntime(
 		ReasoningFamily:  params.ReasoningFamily,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
+		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
 		BackendRefs: canonicalProviderBackendRefs(
 			name,

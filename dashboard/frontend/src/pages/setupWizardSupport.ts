@@ -529,11 +529,30 @@ export function summarizeSetupConfig(
     config.routing && typeof config.routing === "object"
       ? (config.routing as Record<string, unknown>)
       : {};
+  const recipeRoutings = Array.isArray(config.recipes)
+    ? config.recipes.flatMap((recipe) => {
+        if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) {
+          return [];
+        }
+        const scopedRouting = (recipe as Record<string, unknown>).routing;
+        return scopedRouting &&
+          typeof scopedRouting === "object" &&
+          !Array.isArray(scopedRouting)
+          ? [scopedRouting as Record<string, unknown>]
+          : [];
+      })
+    : [];
+  const routingProfiles = [routing, ...recipeRoutings];
   const models = Array.isArray(providers.models) ? providers.models.length : 0;
-  const decisions = Array.isArray(routing.decisions)
-    ? routing.decisions.length
-    : 0;
-  const signals = countConfigSignals(routing.signals);
+  const decisions = routingProfiles.reduce(
+    (total, profile) =>
+      total + (Array.isArray(profile.decisions) ? profile.decisions.length : 0),
+    0,
+  );
+  const signals = routingProfiles.reduce(
+    (total, profile) => total + countConfigSignals(profile.signals),
+    0,
+  );
 
   return createSetupConfigCounts({
     models,

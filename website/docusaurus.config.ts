@@ -2,6 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import blogSearchIndexPlugin from './src/plugins/blogSearchIndex'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
@@ -49,7 +50,36 @@ const config: Config = {
       onBrokenMarkdownLinks: 'warn',
     },
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true, // cache-bust the index between deploys
+        indexDocs: true,
+        indexBlog: true,
+        indexPages: false, // homepage/community are marketing pages, not docs
+        docsRouteBasePath: '/docs',
+        blogRouteBasePath: '/blog',
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        // The site ships a full zh-Hans locale, so the index needs a Chinese
+        // tokenizer as well: Chinese is written without spaces and the default
+        // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
+        // native module that ships prebuilt binaries.
+        language: ['en', 'zh'],
+        // v1 scope: index the current docs version only, per the decision on #2737.
+        // To make archived versions searchable later, drop this and add
+        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // so results stay scoped to the version the reader is on.
+        // NOTE: ignoreFiles matches the route *without* a leading slash (the
+        // plugin strips baseUrl, which is "/" here, off the front) and without
+        // the base URL itself, so the pattern must not anchor on "/".
+        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        // styling is handled in a later phase
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -119,6 +149,9 @@ const config: Config = {
   ],
 
   plugins: [
+    // Publishes every published blog post as global data so the blog list page can
+    // search the whole archive instead of just the posts on the current page.
+    blogSearchIndexPlugin,
     [
       '@docusaurus/plugin-client-redirects',
       {
@@ -146,6 +179,10 @@ const config: Config = {
           {
             from: '/docs/tutorials/signal/heuristic/modality',
             to: '/docs/tutorials/signal/learned/modality',
+          },
+          {
+            from: '/docs/tutorials/plugin/semantic-cache',
+            to: '/docs/tutorials/plugin/response-cache',
           },
         ],
       },
@@ -188,6 +225,7 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
+      style: 'dark',
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm-sr-logo.white.png',
@@ -323,9 +361,19 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
+      // Only applies when the OS states no preference.
       defaultMode: 'light',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      disableSwitch: false,
+      // Sets the default from the OS. Upstream also uses this flag to make the
+      // navbar button a three-way cycle; the swizzle in
+      // `src/theme/Navbar/ColorModeToggle` keeps it at two states.
+      respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
   headTags: [

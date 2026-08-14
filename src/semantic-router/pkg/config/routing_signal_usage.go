@@ -37,6 +37,36 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
 }
 
+// UsesSignalTypeInReachableRouting reports whether a request-reachable routing
+// profile depends on the signal type. Immutable recipe-scoped configs evaluate
+// their own profile directly; root configs ignore named recipes that have no
+// entrypoint.
+func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool {
+	if c == nil {
+		return false
+	}
+
+	normalizedType := strings.ToLower(strings.TrimSpace(signalType))
+	if normalizedType == "" {
+		return false
+	}
+	if c.RoutingScope != "" {
+		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	}
+	if len(c.Recipes) == 0 {
+		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
+			return false
+		}
+		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	}
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if recipeUsesSignalType(recipe, normalizedType) {
+			return true
+		}
+	}
+	return false
+}
+
 func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
 	if recipe == nil {
 		return false
@@ -65,19 +95,150 @@ func decisionsUseSignalType(decisions []Decision, projections Projections, signa
 // NeedsCategoryMappingForRouting returns true when routing actually depends on
 // the local file-backed category classifier assets.
 func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
-	return c != nil && c.IsCategoryClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypeDomain)
+	return c != nil && c.IsCategoryClassifierEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypeDomain)
 }
 
 // NeedsPIIMappingForRouting returns true when routing actually depends on the
 // local file-backed PII classifier assets.
 func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
-	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypePII)
+	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypePII)
 }
 
 // NeedsJailbreakMappingForRouting returns true when routing actually depends on
 // the local file-backed jailbreak classifier assets.
 func (c *RouterConfig) NeedsJailbreakMappingForRouting() bool {
-	return c != nil && c.IsPromptGuardEnabled() && c.UsesSignalTypeInRouting(SignalTypeJailbreak)
+	return c != nil && c.IsPromptGuardEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypeJailbreak)
+}
+
+// NeedsFactCheckModelForAPI reports whether the default public fact-check API
+// is configured. Declared default-profile rules and the legacy global enable
+// flag both opt the API into the bound model, even when no decision references
+// those rules.
+func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
+	if !c.ownsDefaultAPIConsumer() ||
+		c.HallucinationMitigation.FactCheckModel.ModelID == "" {
+		return false
+	}
+	return c.HallucinationMitigation.Enabled ||
+		len(c.RoutingProfileSignals().FactCheckRules) > 0
+}
+
+// NeedsFeedbackModelForAPI reports whether the default public feedback API is
+// configured independently of recipe routing.
+func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
+	return c.ownsDefaultAPIConsumer() &&
+		c.FeedbackDetector.Enabled &&
+		c.FeedbackDetector.ModelID != "" &&
+		len(c.RoutingProfileSignals().UserFeedbackRules) > 0
+}
+
+// NeedsHallucinationDetectorForDefaultRuntime preserves the legacy global
+// hallucination-module consumer. For a local backend this detector also owns
+// the object through which the public NLI API is served.
+func (c *RouterConfig) NeedsHallucinationDetectorForDefaultRuntime() bool {
+	return c.ownsDefaultAPIConsumer() &&
+		c.HallucinationMitigation.Enabled &&
+		c.HallucinationMitigation.HallucinationModel.ModelID != ""
+}
+
+// NeedsLocalHallucinationNLIForAPI reports whether the default public NLI API
+// has a local detector and explainer configured. Endpoint-backed hallucination
+// detection does not implement the local NLI classification API.
+func (c *RouterConfig) NeedsLocalHallucinationNLIForAPI() bool {
+	return c.ownsDefaultAPIConsumer() &&
+		c.NeedsHallucinationDetectorForDefaultRuntime() &&
+		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle &&
+		c.HallucinationMitigation.NLIModel.ModelID != ""
+}
+
+func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
+	return c != nil &&
+		(c.RoutingScope == "" || c.RoutingScope == DefaultRecipeName)
+}
+
+// NeedsFactCheckModelForRouting reports whether an active routing path depends
+// on the configured fact-check classifier. Signal declarations alone do not
+// require model provisioning; a decision must reference the signal directly or
+// through a projection.
+func (c *RouterConfig) NeedsFactCheckModelForRouting() bool {
+	return c != nil &&
+		c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
+		c.UsesSignalTypeInReachableRouting(SignalTypeFactCheck)
+}
+
+// NeedsFeedbackModelForRouting reports whether an active routing path depends
+// on the configured feedback classifier.
+func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
+	return c != nil &&
+		c.FeedbackDetector.Enabled &&
+		c.FeedbackDetector.ModelID != "" &&
+		c.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback)
+}
+
+// NeedsHallucinationDetectorForRouting reports whether any decision in any
+// recipe enables the response-side hallucination plugin.
+func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
+	if c == nil || c.HallucinationMitigation.HallucinationModel.ModelID == "" {
+		return false
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetHallucinationConfig()
+		if plugin != nil && plugin.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
+// NeedsLocalHallucinationModelsForRouting reports whether routing requires the
+// in-process hallucination detector and optional NLI model. Endpoint-backed
+// detectors own their model lifecycle outside the router.
+func (c *RouterConfig) NeedsLocalHallucinationModelsForRouting() bool {
+	return c != nil &&
+		c.NeedsHallucinationDetectorForRouting() &&
+		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle
+}
+
+// NeedsLocalHallucinationNLIForRouting reports whether an enabled local
+// hallucination plugin requests NLI explanations.
+func (c *RouterConfig) NeedsLocalHallucinationNLIForRouting() bool {
+	if c == nil ||
+		!c.NeedsLocalHallucinationModelsForRouting() ||
+		c.HallucinationMitigation.NLIModel.ModelID == "" {
+		return false
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetHallucinationConfig()
+		if plugin != nil && plugin.Enabled && plugin.UseNLI {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *RouterConfig) routingConsumerDecisions() []Decision {
+	if c == nil {
+		return nil
+	}
+	if c.RoutingScope != "" {
+		return c.Decisions
+	}
+	if len(c.Recipes) == 0 {
+		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
+			return nil
+		}
+		return c.Decisions
+	}
+
+	decisions := make([]Decision, 0)
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if recipe != nil {
+			decisions = append(decisions, recipe.Profile.Decisions...)
+		}
+	}
+	return decisions
 }
 
 func projectionsReferenceSignalType(projections Projections, outputs map[string]struct{}, signalType string) bool {
@@ -87,8 +248,10 @@ func projectionsReferenceSignalType(projections Projections, outputs map[string]
 
 	scoreByName := projectionScoresByName(projections.Scores)
 	sourceByOutput := projectionSourcesByOutput(projections.Mappings)
+	state := make(map[string]uint8, len(scoreByName))
+	matches := make(map[string]bool, len(scoreByName))
 	for outputName := range outputs {
-		if projectionOutputReferencesSignalType(outputName, sourceByOutput, scoreByName, signalType) {
+		if projectionOutputReferencesSignalType(outputName, sourceByOutput, scoreByName, signalType, state, matches) {
 			return true
 		}
 	}
@@ -118,28 +281,68 @@ func projectionSourcesByOutput(mappings []ProjectionMapping) map[string]string {
 	return sourceByOutput
 }
 
-func projectionOutputReferencesSignalType(outputName string, sourceByOutput map[string]string, scoreByName map[string]ProjectionScore, signalType string) bool {
-	scoreName, ok := sourceByOutput[outputName]
+func projectionOutputReferencesSignalType(
+	outputName string,
+	sourceByOutput map[string]string,
+	scoreByName map[string]ProjectionScore,
+	signalType string,
+	state map[string]uint8,
+	matches map[string]bool,
+) bool {
+	scoreName, ok := sourceByOutput[strings.ToLower(strings.TrimSpace(outputName))]
 	if !ok {
 		return false
 	}
-	score, ok := scoreByName[scoreName]
-	if !ok {
-		return false
-	}
-	return projectionScoreReferencesSignalType(score, signalType)
+	return projectionScoreReferencesSignalType(scoreName, sourceByOutput, scoreByName, signalType, state, matches)
 }
 
-func projectionScoreReferencesSignalType(score ProjectionScore, signalType string) bool {
+func projectionScoreReferencesSignalType(
+	scoreName string,
+	sourceByOutput map[string]string,
+	scoreByName map[string]ProjectionScore,
+	signalType string,
+	state map[string]uint8,
+	matches map[string]bool,
+) bool {
+	normalizedScoreName := strings.ToLower(strings.TrimSpace(scoreName))
+	switch state[normalizedScoreName] {
+	case 1:
+		// Invalid programmatic configs can bypass projection validation. Treat a
+		// back edge as non-matching so startup discovery terminates safely.
+		return false
+	case 2:
+		return matches[normalizedScoreName]
+	}
+
+	score, ok := scoreByName[normalizedScoreName]
+	if !ok {
+		return false
+	}
+	state[normalizedScoreName] = 1
 	for _, input := range score.Inputs {
-		if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
+		inputType := strings.ToLower(strings.TrimSpace(input.Type))
+		if inputType == ProjectionInputKBMetric {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(input.Type), signalType) {
-			return true
+		if inputType == signalType {
+			matches[normalizedScoreName] = true
+			break
+		}
+		if inputType != SignalTypeProjection {
+			continue
+		}
+
+		dependency := strings.ToLower(strings.TrimSpace(input.Name))
+		if strings.EqualFold(strings.TrimSpace(input.ValueSource), ProjectionValueSourceConfidence) {
+			dependency = sourceByOutput[dependency]
+		}
+		if projectionScoreReferencesSignalType(dependency, sourceByOutput, scoreByName, signalType, state, matches) {
+			matches[normalizedScoreName] = true
+			break
 		}
 	}
-	return false
+	state[normalizedScoreName] = 2
+	return matches[normalizedScoreName]
 }
 
 // collectSignalNames traverses a RuleNode tree and returns all leaf signal names

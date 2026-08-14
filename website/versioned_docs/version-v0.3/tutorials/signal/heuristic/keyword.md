@@ -2,7 +2,7 @@
 
 ## Overview
 
-`keyword` matches explicit lexical patterns in the request. It maps to `config/signal/keyword/` and is declared under `routing.signals.keywords`.
+`keyword` matches explicit lexical patterns in the request. It maps to `config/fragments/signal/keyword/` and is declared under `routing.signals.keywords`.
 
 This family is heuristic: it routes from configured words, phrases, or lightweight retrieval methods instead of learned intent classifiers.
 
@@ -30,7 +30,7 @@ Use `keyword` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/keyword/`
+Source fragment family: `config/fragments/signal/keyword/`
 
 ```yaml
 routing:

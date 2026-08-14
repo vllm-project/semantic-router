@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from itertools import chain
 from pathlib import Path
 
 import yaml
@@ -20,6 +22,7 @@ from cli.commands.runtime_config_mutation import (
     apply_platform_gpu_defaults,
 )
 from cli.commands.runtime_kb import _sync_runtime_kb_store
+from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_paths import (
     _container_runtime_config_path,
     _container_source_config_path,
@@ -43,6 +46,12 @@ RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
 SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
 
+# Mirrors resolveBracedEnvReference, including ${NAME:-default}. Upper case only, so
+# MCP tool-argument placeholders like ${user_content} are not read as env vars.
+_ENV_REFERENCE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::?-[^}]*)?\}")
+
+API_KEY_ENV_FIELD = "api_key_env"
+
 PASSTHROUGH_ENV_RULES = (
     ("HF_ENDPOINT", False),
     ("HF_TOKEN", True),
@@ -57,6 +66,26 @@ PASSTHROUGH_ENV_RULES = (
     ("SR_LOG_ENCODING", False),
     ("SR_LOG_DEVELOPMENT", False),
     ("SR_LOG_ADD_CALLER", False),
+)
+
+_STATIC_SENSITIVE = frozenset(name for name, masked in PASSTHROUGH_ENV_RULES if masked)
+
+# Never auto-forward these from a ${VAR} match: POSIX process/identity vars are present
+# in every host shell, so an incidental match (a templated path, an example URL) would
+# silently leak them into the container. CLI override vars are covered too, so a config
+# that happens to reference one can't inject a host value ahead of the CLI's own default.
+_DISCOVERY_DENYLIST = frozenset(
+    {"PATH", "HOME", "USER", "SHELL", "PWD", "LOGNAME"}
+) | frozenset(
+    {
+        SETUP_MODE_ENV,
+        DASHBOARD_SETUP_MODE_ENV,
+        RUNTIME_ALGORITHM_OVERRIDE_ENV,
+        "DISABLE_DASHBOARD",
+        "DASHBOARD_READONLY",
+        "DASHBOARD_PLATFORM",
+        "VLLM_SR_PLATFORM",
+    }
 )
 
 
@@ -96,9 +125,48 @@ def validate_setup_mode_flags(setup_mode: bool, minimal: bool, readonly: bool) -
         )
 
 
-def append_passthrough_env_vars(env_vars: dict[str, str]) -> None:
+def config_env_references(config_path: Path | str | None) -> set[str]:
+    """Env var names a config depends on: ``api_key_env`` targets and ``${VAR}`` refs.
+
+    ``api_key_env`` is free-form, so these cannot be enumerated ahead of the config.
+    """
+    if config_path is None:
+        return set()
+    try:
+        document = yaml.safe_load(Path(config_path).read_text())
+    except (OSError, yaml.YAMLError):
+        return set()
+
+    names: set[str] = set()
+    pending: list[object] = [document]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            named = node.get(API_KEY_ENV_FIELD)
+            if isinstance(named, str) and named.strip():
+                names.add(named.strip())
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+        elif isinstance(node, str):
+            names.update(_ENV_REFERENCE.findall(node))
+    return names - _DISCOVERY_DENYLIST
+
+
+def sensitive_env_names(config_path: Path | str | None = None) -> set[str]:
+    """Names that must reach the container as a secret, never as plain-text manifest."""
+    return _STATIC_SENSITIVE | config_env_references(config_path)
+
+
+def append_passthrough_env_vars(
+    env_vars: dict[str, str], config_path: Path | str | None = None
+) -> None:
     """Pass selected host environment variables into the container runtime."""
-    for name, masked in PASSTHROUGH_ENV_RULES:
+    # Static rules first so their masking wins; sorted for a stable log order.
+    discovered = ((name, True) for name in sorted(config_env_references(config_path)))
+    for name, masked in chain(PASSTHROUGH_ENV_RULES, discovered):
+        if name in env_vars:
+            continue
         value = os.environ.get(name)
         if value is None:
             continue
@@ -222,6 +290,7 @@ def resolve_effective_config_path(
         stack = resolve_runtime_stack()
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
+        changed = apply_local_looper_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
     if (

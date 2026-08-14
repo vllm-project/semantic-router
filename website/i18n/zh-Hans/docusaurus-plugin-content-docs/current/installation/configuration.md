@@ -46,7 +46,7 @@ global:
   - `global.router` 聚合路由引擎控制项（如配置来源选择、route-cache、模型选择默认等）
   - `global.router.config_source` 选择运行时配置来自 canonical YAML 文件（`file`）还是进程内 Kubernetes CRD 协调（`kubernetes`）
   - `global.services` 聚合共享 API 与控制面服务，如 `response_api`、`router_replay`、`observability`、`authz`、`ratelimit`
-  - `global.stores` 聚合有存储支撑的服务，如 `semantic_cache`、`memory`、`vector_store`
+  - `global.stores` 聚合有存储支撑的服务，如 `response_cache`、`memory`、`vector_store`
 - `global.integrations` 聚合辅助运行时集成，如 `tools`、`looper`
 - `global.model_catalog` 聚合路由器持有的模型资产，如嵌入、系统模型、外部模型、可复用分类器与模型支撑模块
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` 限制打分后路由要输出的嵌入规则条数上限；内置默认为 `1`
@@ -178,27 +178,31 @@ global:
 仓库将**详尽的 canonical 参考配置**与**可复用路由片段**分开：
 
 - `config/config.yaml`：详尽 canonical 参考配置
-- `config/signal/`：可复用的 `routing.signals` 片段
-- `config/decision/`：可复用的 `routing.decisions` 规则形状片段
-- `config/algorithm/`：可复用的 `decision.algorithm` 片段
-- `config/plugin/`：可复用的路由插件片段
+- `config/fragments/signal/`：可复用的 `routing.signals` 片段
+- `config/fragments/decision/`：可复用的 `routing.decisions` 规则形状片段
+- `config/fragments/algorithm/`：可复用的 `decision.algorithm` 片段
+- `config/fragments/plugin/`：可复用的路由插件片段
 
-`config/decision/` 按布尔情形组织：`single/`、`and/`、`or/`、`not/`、`composite/`。  
-`config/algorithm/` 按路由策略族组织：`looper/` 与 `selection/`。  
-`config/plugin/` 按每个插件或可复用包单独目录组织。  
+`config/fragments/decision/` 按布尔情形组织：`single/`、`and/`、`or/`、`not/`、`composite/`。
+`config/fragments/algorithm/` 按路由策略族组织：`looper/` 与 `selection/`。
+`config/fragments/plugin/` 按每个插件或可复用包单独目录组织。
 仓库在 `go test ./pkg/config/...` 中强制该片段目录，因此路由表面变更须同步更新 `config/` 树。
+
+四类片段原先直接位于 `config/` 下。仓库链接和自动化脚本现在必须使用
+`config/fragments/...`。这仅是资源路径迁移；YAML 配置结构和运行时字段名
+均未改变。
 
 最新教程遵循同一分类：
 
-- `tutorials/signal/overview` 以及 `tutorials/signal/heuristic/`、`tutorials/signal/learned/` 对应 `config/signal/`
-- `tutorials/decision/` 对应 `config/decision/`
-- `tutorials/algorithm/` 对应 `config/algorithm/`，每种算法一页
-- `tutorials/plugin/` 对应 `config/plugin/`，每种插件一页
+- `tutorials/signal/overview` 以及 `tutorials/signal/heuristic/`、`tutorials/signal/learned/` 对应 `config/fragments/signal/`
+- `tutorials/decision/` 对应 `config/fragments/decision/`
+- `tutorials/algorithm/` 对应 `config/fragments/algorithm/`，每种算法一页
+- `tutorials/plugin/` 对应 `config/fragments/plugin/`，每种插件一页
 - `tutorials/global/` 对应 `global:` 下的稀疏路由器级覆盖
 
 与仓库相关的运行时与测试台资产现位于 `config/` 之外：
 
-- `config/runtime/semantic-cache/`
+- `config/runtime/response-cache/`
 - `config/runtime/response-api/`
 - `config/runtime/tools/`
 - `e2e/config/`
@@ -408,4 +412,4 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 1. 对 `routing.modelCards`、`routing.signals`、`routing.decisions` 使用 DSL。
 2. 仍可导入完整 YAML 文件，但只有 `routing` 会反编译为 DSL。
 3. 端点、API 密钥、监听器与 `global` 保留在 YAML。
-4. 可复用路由片段现位于 `config/signal/`、`config/decision/`、`config/algorithm/`、`config/plugin/`。
+4. 可复用路由片段现位于 `config/fragments/signal/`、`config/fragments/decision/`、`config/fragments/algorithm/`、`config/fragments/plugin/`。

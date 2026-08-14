@@ -7,10 +7,16 @@ on:
   #   - cron: "0 3 * * *"
   workflow_dispatch:  # Allow manual triggering
 
+permissions:
+  contents: read
+
 jobs:
   update-baseline:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
+      issues: write
 
     steps:
       - name: Check out the repo

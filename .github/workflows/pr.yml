@@ -1,0 +1,261 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Changes
+    uses: ./.github/workflows/ci-changes.yml
+
+  quality:
+    name: Core quality
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+    uses: ./.github/workflows/pre-commit.yml
+    with:
+      docs_only: >-
+        ${{ needs.changes.outputs.docs_only == 'true'
+            && needs.changes.outputs.full != 'true' }}
+      website: ${{ needs.changes.outputs.website == 'true' }}
+
+  security:
+    name: Core security
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && (needs.changes.outputs.security == 'true'
+        || needs.changes.outputs.full == 'true')
+    uses: ./.github/workflows/security-scan.yml
+
+  core-tests:
+    name: Core tests
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && (needs.changes.outputs.core_test == 'true'
+        || needs.changes.outputs.full == 'true')
+    uses: ./.github/workflows/test-and-build.yml
+    secrets: inherit
+
+  dashboard:
+    name: Dashboard
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.dashboard == 'true'
+    uses: ./.github/workflows/dashboard-test.yml
+
+  operator:
+    name: Operator
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.operator == 'true'
+    uses: ./.github/workflows/operator-ci.yml
+    with:
+      run_integration: true
+      integration_matrix: >-
+        ${{ needs.changes.outputs.full == 'true'
+            && '[{"cache-backend":"memory","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router"},{"cache-backend":"redis","deploy-redis":true,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-redis"},{"cache-backend":"milvus","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-milvus"},{"cache-backend":"qdrant","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":true,"router-name":"test-router-qdrant"},{"cache-backend":"hybrid","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-hybrid"},{"cache-backend":"mmbert","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-mmbert"},{"cache-backend":"complexity","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-complexity"}]'
+            || '[{"cache-backend":"memory","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router"}]' }}
+
+  e2e:
+    name: E2E
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && (needs.changes.outputs.e2e == 'true'
+        || needs.changes.outputs.full == 'true')
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      profiles: >-
+        ${{ needs.changes.outputs.full == 'true'
+            && needs.changes.outputs.full_e2e_profiles
+            || needs.changes.outputs.e2e_profiles }}
+    secrets: inherit
+
+  cli:
+    name: CLI integration
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.cli == 'true'
+    uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
+
+  memory:
+    name: Memory integration
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.memory == 'true'
+    uses: ./.github/workflows/integration-test-memory.yml
+
+  recipe-conformance:
+    name: Recipe conformance
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.recipe_conformance == 'true'
+    uses: ./.github/workflows/recipe-conformance.yml
+    secrets: inherit
+
+  openvino:
+    name: OpenVINO
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.openvino == 'true'
+    uses: ./.github/workflows/openvino-binding-ci.yml
+
+  images:
+    name: Images
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.images == 'true'
+    uses: ./.github/workflows/docker-validate.yml
+    with:
+      images: ${{ needs.changes.outputs.pr_images }}
+
+  performance:
+    name: Performance
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.performance == 'true'
+    uses: ./.github/workflows/performance-test.yml
+
+  router-learning:
+    name: Router learning
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.router_learning == 'true'
+    uses: ./.github/workflows/router-learning-eval.yml
+    with:
+      profile: pr
+
+  paper:
+    name: Paper
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.paper == 'true'
+    uses: ./.github/workflows/paper-build.yml
+
+  compatibility:
+    name: ${{ matrix.check }}
+    if: always()
+    needs:
+      - changes
+      - quality
+      - security
+      - core-tests
+      - dashboard
+      - operator
+      - e2e
+      - cli
+      - memory
+      - recipe-conformance
+      - openvino
+      - images
+      - performance
+      - router-learning
+      - paper
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - Run pre-commit hooks check file lint
+          - test-and-build
+          - Lint
+          - Unit Tests
+          - Verify Manifests
+          - Validate OLM Bundle
+    steps:
+      - name: Preserve stable merge-gate context
+        env:
+          DOMAIN_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failures="$(
+            jq -r '
+              to_entries[]
+              | select(.value.result != "success" and .value.result != "skipped")
+              | "\(.key)=\(.value.result)"
+            ' <<< "$DOMAIN_RESULTS"
+          )"
+          if [ -n "$failures" ]; then
+            echo "::error::Affected PR domain failed or was cancelled"
+            echo "$failures"
+            exit 1
+          fi
+          echo "All affected PR domains passed or were deliberately skipped."
+
+  pr-gate:
+    name: PR Gate
+    if: always()
+    needs:
+      - changes
+      - quality
+      - security
+      - core-tests
+      - dashboard
+      - operator
+      - e2e
+      - cli
+      - memory
+      - recipe-conformance
+      - openvino
+      - images
+      - performance
+      - router-learning
+      - paper
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize affected domain results
+        env:
+          DOMAIN_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r '
+            to_entries[]
+            | "- \(.key): \(.value.result)"
+          ' <<< "$DOMAIN_RESULTS" >> "$GITHUB_STEP_SUMMARY"
+          failures="$(
+            jq -r '
+              to_entries[]
+              | select(.value.result != "success" and .value.result != "skipped")
+              | "\(.key)=\(.value.result)"
+            ' <<< "$DOMAIN_RESULTS"
+          )"
+          if [ -n "$failures" ]; then
+            echo "::error::Affected PR domain failed or was cancelled"
+            echo "$failures"
+            exit 1
+          fi

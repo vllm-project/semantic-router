@@ -8,7 +8,7 @@ listeners:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
   router:
@@ -38,7 +38,6 @@ providers:
           weight: 1
     - name: google/gemini-3.1-pro
       provider_model_id: google/gemini-3.1-pro
-      reasoning_family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 0.48
@@ -50,7 +49,6 @@ providers:
           weight: 1
     - name: openai/gpt5.4
       provider_model_id: openai/gpt5.4
-      reasoning_family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 1.20
@@ -545,7 +543,7 @@ routing:
             enabled: true
             mode: insert
             system_prompt: The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps.
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
             similarity_threshold: 0.86

@@ -199,7 +199,11 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
-        items: [{ kind: 'route', label: 'Status', to: '/status' }],
+        items: [
+          { kind: 'route', label: 'Status', to: '/status' },
+          { kind: 'route', label: 'Response Cache', to: '/response-cache' },
+          { kind: 'route', label: 'Context Compression', to: '/context-compression' },
+        ],
       },
       {
         title: 'Diagnostics',

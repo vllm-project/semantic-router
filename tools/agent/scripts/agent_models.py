@@ -18,6 +18,8 @@ class ResolvedContext:
     local_e2e_profiles: list[str] = field(default_factory=list)
     ci_e2e_profiles: list[str] = field(default_factory=list)
     workflow_integration_suites: list[str] = field(default_factory=list)
+    ci_test_domains: list[str] = field(default_factory=list)
+    expected_artifacts: list[str] = field(default_factory=list)
     ci_e2e_mode: str = "none"
     doc_only: bool = False
     loop_mode: str = "completion"
@@ -38,6 +40,8 @@ class ResolvedContext:
             "AGENT_WORKFLOW_INTEGRATION_SUITES": ",".join(
                 self.workflow_integration_suites
             ),
+            "AGENT_CI_TEST_DOMAINS": ",".join(self.ci_test_domains),
+            "AGENT_EXPECTED_ARTIFACTS": ",".join(self.expected_artifacts),
             "AGENT_CI_E2E_MODE": self.ci_e2e_mode,
             "AGENT_DOC_ONLY": str(self.doc_only).lower(),
             "AGENT_LOOP_MODE": self.loop_mode,
@@ -88,6 +92,8 @@ class ResolvedContext:
             f"  Local E2E profiles (manual): {', '.join(self.local_e2e_profiles) or 'none'}",
             "  Workflow integration suites (manual): "
             + (", ".join(self.workflow_integration_suites) or "none"),
+            f"  CI test domains: {', '.join(self.ci_test_domains) or 'none'}",
+            f"  Expected artifacts: {', '.join(self.expected_artifacts) or 'none'}",
             f"  CI E2E mode: {self.ci_e2e_mode}",
             f"  Failure policy: {self.failure_policy_summary()}",
             f"  Stop condition: {self.stop_condition_summary()}",

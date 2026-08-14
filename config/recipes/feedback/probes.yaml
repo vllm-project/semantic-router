@@ -1,3 +1,4 @@
+schema_version: v1
 name: feedback
 description: >
   Executable eval probes for the maintained feedback routing recipe. The suite
@@ -14,9 +15,27 @@ evaluation:
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 10.0
+  min_projection_assertion_percent: 0.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text, messages]
+  min_tag_counts:
+    language: 5
+    negative: 1
+    fallback: 1
+    multi_turn: 5
+  min_tag_pass_rate:
+    language: 100.0
+    negative: 100.0
+    fallback: 100.0
+    multi_turn: 100.0
 decisions:
   - id: feedback_verified_recovery
     expected_decision: feedback_verified_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Explicit correction on verification-sensitive legal or health follow-ups
@@ -37,6 +56,8 @@ decisions:
 
   - id: feedback_code_recovery
     expected_decision: feedback_code_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: google/gemini-3.1-pro
     objective: >
       Code follow-ups with explicit failure signals should route to the repair
@@ -54,9 +75,25 @@ decisions:
       - id: react_render_bug
         query: "That answer was wrong. My React component still crashes during render and the previous fix did not solve it. Repair the code path."
         tags: [feedback, code, react]
+      - id: one_prior_code_retry
+        messages:
+          - role: user
+            content: "Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
+          - role: assistant
+            content: "Try indexing the list with the dictionary key."
+          - role: user
+            content: "That is still wrong. Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
+        expected_signals:
+          reask: [likely_dissatisfied]
+        tags: [feedback, code, boundary, messages, one-reask]
+      - id: code_without_verification
+        query: "The previous code is wrong and still raises TypeError. Fix it directly; do not research or cite sources."
+        tags: [feedback, code, negative:verification]
 
   - id: feedback_persistent_code_recovery
     expected_decision: feedback_persistent_code_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Once the same coding failure has been re-asked across two consecutive
@@ -75,10 +112,29 @@ decisions:
             content: "Wrap the list in dict() and try again."
           - role: user
             content: "Still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages]
+      - id: repeated_javascript_type_error
+        messages:
+          - role: user
+            content: "Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+          - role: assistant
+            content: "Add optional chaining to the property access."
+          - role: user
+            content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+          - role: assistant
+            content: "Check whether the object is initialized before access."
+          - role: user
+            content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
+        expected_signals:
+          reask: [persistently_dissatisfied]
+        tags: [feedback, code, persistent, messages, javascript]
 
   - id: feedback_general_recovery
     expected_decision: feedback_general_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: google/gemini-3.1-pro
     objective: >
       General dissatisfied follow-ups that are neither code-specific nor
@@ -99,6 +155,8 @@ decisions:
 
   - id: feedback_persistent_recovery
     expected_decision: feedback_persistent_recovery
+    expected_algorithm: static
+    expected_plugins: [system_prompt, header_mutation]
     expected_alias: openai/gpt5.4
     objective: >
       Repeated same-question dissatisfaction across two prior user turns should
@@ -116,6 +174,8 @@ decisions:
             content: "Inflation is when goods become more expensive."
           - role: user
             content: "Still wrong. Explain inflation vs recession in plain English."
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages]
       - id: repeated_pythagorean_retry
         messages:
@@ -129,10 +189,14 @@ decisions:
             content: "也可以从相似三角形出发。"
           - role: user
             content: "请问如何证明勾股定理？"
+        expected_signals:
+          reask: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages, zh, math]
 
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
+    expected_algorithm: static
+    expected_plugins: [system_prompt, response_cache]
     expected_alias: qwen/qwen3.5-rocm
     objective: >
       Pure clarification requests should stay on the cheap lane when they do
@@ -153,6 +217,7 @@ decisions:
 
   - id: feedback_default
     expected_decision: feedback_default
+    expected_algorithm: static
     expected_alias: qwen/qwen3.5-rocm
     objective: Ordinary first-turn traffic without a recovery signal receives an explicit cheap fallback.
     variants:

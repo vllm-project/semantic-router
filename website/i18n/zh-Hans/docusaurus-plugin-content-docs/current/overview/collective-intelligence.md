@@ -131,7 +131,7 @@ routing:
   decisions:
     - name: "protected-route"
       plugins:
-        - type: "semantic-cache" # 加速
+        - type: "response_cache" # 加速
         - type: "response_jailbreak" # 响应筛查
         - type: "system_prompt" # 上下文
         - type: "hallucination" # 质量
@@ -184,7 +184,7 @@ reason: "擅长数学证明"
 
 ```yaml
 plugins_applied:
-  - semantic-cache: "未命中缓存，继续"
+  - response_cache: "未命中缓存，继续"
   - response_jailbreak: "持续检查输出是否越界"
   - system_prompt: "追加：请给出严格数学证明"
   - hallucination: "启用事实核验"

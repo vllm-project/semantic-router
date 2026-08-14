@@ -13,15 +13,16 @@ import (
 func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	configRoot := filepath.Join(root, "config")
+	fragmentsRoot := filepath.Join(configRoot, "fragments")
 
 	for _, signalType := range SupportedSignalTypes() {
-		dir := filepath.Join(configRoot, "signal", fragmentDirName(signalType))
+		dir := filepath.Join(fragmentsRoot, "signal", fragmentDirName(signalType))
 		requireYAMLFilesInDir(t, dir)
 	}
 
 	requiredDecisionCategories := []string{"single", "and", "or", "not", "composite"}
 	for _, category := range requiredDecisionCategories {
-		dir := filepath.Join(configRoot, "decision", category)
+		dir := filepath.Join(fragmentsRoot, "decision", category)
 		requireYAMLFilesInDir(t, dir)
 	}
 
@@ -48,18 +49,31 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing fragment mapping for algorithm type %q", algorithmType)
 		}
-		requireYAMLFile(t, filepath.Join(configRoot, "algorithm", relPath))
+		requireYAMLFile(t, filepath.Join(fragmentsRoot, "algorithm", relPath))
 	}
 
 	for _, pluginType := range SupportedDecisionPluginTypes() {
-		dir := filepath.Join(configRoot, "plugin", fragmentDirName(pluginType))
+		dir := filepath.Join(fragmentsRoot, "plugin", fragmentDirName(pluginType))
 		requireYAMLFilesInDir(t, dir)
+	}
+}
+
+func TestConfigFragmentsStayUnderUnifiedDirectory(t *testing.T) {
+	root := repoRootFromTestFile(t)
+	configRoot := filepath.Join(root, "config")
+	fragmentsRoot := filepath.Join(configRoot, "fragments")
+
+	for _, category := range []string{"signal", "decision", "algorithm", "plugin"} {
+		requireDirectory(t, filepath.Join(fragmentsRoot, category))
+		if _, err := os.Stat(filepath.Join(configRoot, category)); !os.IsNotExist(err) {
+			t.Fatalf("legacy fragment directory config/%s must not exist", category)
+		}
 	}
 }
 
 func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	configRoot := filepath.Join(root, "config")
+	configRoot := filepath.Join(root, "config", "fragments")
 
 	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -86,7 +100,7 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 
 func TestConfigFragmentsAvoidRetiredDomainAliases(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	configRoot := filepath.Join(root, "config")
+	configRoot := filepath.Join(root, "config", "fragments")
 
 	err := filepath.Walk(configRoot, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -147,6 +161,17 @@ func requireYAMLFile(t *testing.T, path string) {
 	}
 	if info.IsDir() {
 		t.Fatalf("expected fragment file %s, found directory", path)
+	}
+}
+
+func requireDirectory(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("expected directory %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory %s, found file", path)
 	}
 }
 

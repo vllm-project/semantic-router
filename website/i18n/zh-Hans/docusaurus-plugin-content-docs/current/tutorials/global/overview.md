@@ -54,7 +54,7 @@ global:
 | Global 区域 | 示例 | 文档 |
 | ----------- | ---- | ---- |
 | 路由器与服务 | `router.config_source`、`router.model_selection`、`services.api`、`services.response_api`、`services.observability`、`services.router_replay` | [API 与可观测性](./api-and-observability) |
-| 存储与集成 | `stores.semantic_cache`、`stores.memory`、`stores.vector_store`、`integrations.tools`、`integrations.looper` | [存储与工具](./stores-and-tools) |
+| 存储与集成 | `stores.response_cache`、`stores.memory`、`stores.vector_store`、`integrations.tools`、`integrations.looper` | [存储与工具](./stores-and-tools) |
 | 模型目录与模块 | `model_catalog.embeddings`、`model_catalog.external`、`model_catalog.system`、`model_catalog.modules.prompt_guard`、`model_catalog.modules.classifier`、`model_catalog.modules.hallucination_mitigation` | [安全、模型与策略](./safety-models-and-policy) |
 
 注意：
