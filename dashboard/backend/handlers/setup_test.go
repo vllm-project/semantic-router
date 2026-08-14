@@ -74,6 +74,29 @@ func createActivatedSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
+// createCanonicallyInvalidSetupConfig writes a config whose setup block is
+// perfectly readable but whose listeners field has a type error.
+//
+// This is the wedge between the two decoders: setupmode decodes only the setup
+// block, so it resolves this file cleanly, while readSetupConfigFile decodes
+// the whole canonical schema and fails on it. That divergence is deliberate -
+// it is what keeps a schema change from breaking the bootstrap gate - and it
+// is the only way to reach SetupStateHandler's read-error branch with a
+// resolution that succeeded.
+func createCanonicallyInvalidSetupConfig(t *testing.T, dir string, setupMode bool) string {
+	t.Helper()
+
+	configPath := filepath.Join(dir, "config.yaml")
+	body := "version: v0.3\nlisteners: \"not-a-list\"\n"
+	if setupMode {
+		body += "setup:\n  mode: true\n  state: bootstrap\n"
+	}
+	if err := os.WriteFile(configPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("failed to write canonically invalid config: %v", err)
+	}
+	return configPath
+}
+
 // decodeSetupState decodes a setup-state response and also returns the raw body,
 // because `reason` is `omitempty` and only the raw body can prove it is absent.
 func decodeSetupState(t *testing.T, w *httptest.ResponseRecorder) (SetupStateResponse, string) {
@@ -889,5 +912,102 @@ func TestSetupActivateHandlerFlipsSetupStateWithinOneRequest(t *testing.T) {
 		vw, httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body)))
 	if vw.Code != http.StatusBadRequest {
 		t.Fatalf("validate status = %d after activation, want 400; body=%s", vw.Code, vw.Body.String())
+	}
+}
+
+// TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails covers the
+// one branch where the two decoders disagree: the resolver answers cleanly from
+// the setup block while this handler cannot decode the full canonical schema.
+//
+// The response must carry the *resolved* value rather than a hardcoded false.
+// Reporting false while the bootstrap gate reads true is exactly the
+// invisible-open-door split this change exists to remove - the UI would look
+// normal while unauthenticated first-admin creation was open. Because the
+// resolution itself is clean, its Reason is empty, so the handler supplies its
+// own explanation for the otherwise-empty payload.
+func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testing.T) {
+	t.Run("setup mode active: state must agree with the bootstrap gate", func(t *testing.T) {
+		configPath := createCanonicallyInvalidSetupConfig(t, t.TempDir(), true)
+		// legacyFlag=true matches the config, so the resolution is clean and
+		// carries no Reason of its own.
+		resolver := setupmode.New(configPath, true)
+
+		if !resolver.Active() {
+			t.Fatalf("precondition failed: resolver must read the setup block of a canonically invalid config")
+		}
+		if reason := resolver.Resolve().Reason; reason != "" {
+			t.Fatalf("precondition failed: resolution should be clean, got reason %q", reason)
+		}
+
+		resp, raw := getSetupState(t, configPath, resolver)
+
+		if !resp.SetupMode {
+			t.Fatalf("setupMode = false while the bootstrap gate is open; the surfaces disagree. body=%s", raw)
+		}
+		if resp.Reason != unreadableConfigReason {
+			t.Fatalf("reason = %q, want the handler's own explanation %q", resp.Reason, unreadableConfigReason)
+		}
+		if !strings.Contains(raw, `"reason"`) {
+			t.Fatalf("raw body is missing the reason key: %s", raw)
+		}
+		// The rest of the payload is unavailable because the config could not be
+		// decoded; it must be empty rather than stale or invented.
+		if resp.ListenerPort != 0 || resp.Models != 0 || resp.Decisions != 0 || resp.CanActivate {
+			t.Fatalf("expected an empty payload alongside the reason, got %+v", resp)
+		}
+	})
+
+	t.Run("setup mode inactive", func(t *testing.T) {
+		configPath := createCanonicallyInvalidSetupConfig(t, t.TempDir(), false)
+		resolver := setupmode.New(configPath, false)
+
+		resp, raw := getSetupState(t, configPath, resolver)
+
+		if resp.SetupMode {
+			t.Fatalf("setupMode = true for a config with no setup block; body=%s", raw)
+		}
+		if resp.Reason != unreadableConfigReason {
+			t.Fatalf("reason = %q, want %q", resp.Reason, unreadableConfigReason)
+		}
+	})
+
+	// The reason is served unauthenticated, so it must not disclose where the
+	// config lives or what is in it.
+	t.Run("reason discloses neither path nor contents", func(t *testing.T) {
+		dir := t.TempDir()
+		configPath := createCanonicallyInvalidSetupConfig(t, dir, true)
+
+		resp, _ := getSetupState(t, configPath, setupmode.New(configPath, true))
+
+		for _, secret := range []string{configPath, dir, "not-a-list"} {
+			if strings.Contains(resp.Reason, secret) {
+				t.Fatalf("reason %q discloses %q", resp.Reason, secret)
+			}
+		}
+	})
+}
+
+// The write endpoints gate on the resolver first, then read the file. When the
+// gate passes but the read fails they must surface the read failure rather than
+// claiming setup mode is inactive, which would send an operator looking in the
+// wrong place.
+func TestSetupWriteEndpointsReportUnreadableConfigWhileSetupModeIsActive(t *testing.T) {
+	configPath := createCanonicallyInvalidSetupConfig(t, t.TempDir(), true)
+	resolver := setupmode.New(configPath, true)
+
+	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	SetupValidateHandler(configPath, resolver)(
+		w, httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body)))
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "failed to read existing config") {
+		t.Fatalf("body = %q, want it to report the read failure rather than an inactive gate", w.Body.String())
 	}
 }

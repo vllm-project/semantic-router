@@ -12,9 +12,12 @@
 package setupmode
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -51,8 +54,11 @@ type Resolution struct {
 	Conflict bool
 
 	// Reason explains a non-obvious resolution: an unreadable or unparseable
-	// config, or a conflict. Empty when the answer was clean. Safe to show to
-	// an operator; it never contains config contents.
+	// config, or a conflict. Empty when the answer was clean.
+	//
+	// Safe to serve from a public endpoint: it names the config file but never
+	// its contents, and never the absolute path it was read from. Operators get
+	// the full path from the startup log instead.
 	Reason string
 }
 
@@ -85,6 +91,12 @@ func statKey(info os.FileInfo) cacheKey {
 // the auth middleware consults this on every request.
 type Resolver struct {
 	configPath string
+	// configName is configPath's base name. Reason strings use it instead of
+	// the full path because they are served from an unauthenticated endpoint,
+	// where an absolute path discloses the deployment's directory layout (and,
+	// outside a container, the account name). The full path is already in the
+	// startup log for anyone who can read logs.
+	configName string
 	legacyFlag bool
 
 	mu       sync.RWMutex
@@ -111,7 +123,29 @@ type Resolver struct {
 // --setup-mode / DASHBOARD_SETUP_MODE value, recorded for conflict reporting
 // only.
 func New(configPath string, legacyFlag bool) *Resolver {
-	return &Resolver{configPath: configPath, legacyFlag: legacyFlag}
+	return &Resolver{
+		configPath: configPath,
+		configName: filepath.Base(configPath),
+		legacyFlag: legacyFlag,
+	}
+}
+
+// errDetail returns the cause of a filesystem error without the path it
+// happened on. os.Stat and os.ReadFile wrap their cause in *fs.PathError, whose
+// Error() embeds the absolute path; only the cause ("no such file or
+// directory", "permission denied") belongs in a Reason served publicly.
+func errDetail(err error) string {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		if pathErr.Err == nil {
+			// (*fs.PathError).Error() dereferences Err, so falling through to
+			// err.Error() here would panic. Such an error carries nothing to
+			// report anyway beyond the path we are deliberately withholding.
+			return "unknown filesystem error"
+		}
+		return pathErr.Err.Error()
+	}
+	return err.Error()
 }
 
 // Active is the hot path: the boolean every gate needs.
@@ -141,7 +175,7 @@ func (r *Resolver) Resolve() Resolution {
 	// until the file changed again.
 	info, err := os.Stat(r.configPath)
 	if err != nil {
-		return r.failClosed(fmt.Sprintf("config file %s is unreadable (%v)", r.configPath, err))
+		return r.failClosed(fmt.Sprintf("config file %s is unreadable (%s)", r.configName, errDetail(err)))
 	}
 	key := statKey(info)
 
@@ -156,7 +190,7 @@ func (r *Resolver) Resolve() Resolution {
 
 	data, err := os.ReadFile(r.configPath)
 	if err != nil {
-		return r.failClosed(fmt.Sprintf("config file %s is unreadable (%v)", r.configPath, err))
+		return r.failClosed(fmt.Sprintf("config file %s is unreadable (%s)", r.configName, errDetail(err)))
 	}
 
 	var block setupBlock
@@ -165,7 +199,7 @@ func (r *Resolver) Resolve() Resolution {
 		// offending value in its messages ("cannot unmarshal !!str `notabool`
 		// into bool"), and Reason is served from an unauthenticated endpoint, so
 		// echoing it would leak config contents to anyone who can reach the port.
-		return r.failClosed(fmt.Sprintf("config file %s is not valid YAML", r.configPath))
+		return r.failClosed(fmt.Sprintf("config file %s is not valid YAML", r.configName))
 	}
 
 	resolution := r.resolve(block.Setup != nil && block.Setup.Mode)
@@ -212,13 +246,13 @@ func (r *Resolver) conflictReason(active bool) string {
 			"DASHBOARD_SETUP_MODE / --setup-mode is false or unset, but the config at %s declares an active setup.mode block; "+
 				"the config file is canonical, so setup mode is ON and first-run registration is available. "+
 				"Completing setup clears the block and closes it.",
-			r.configPath)
+			r.configName)
 	}
 	return fmt.Sprintf(
 		"DASHBOARD_SETUP_MODE / --setup-mode is set to true, but the config at %s has no active setup.mode block; "+
 			"the config file is canonical, so setup mode is OFF and the open bootstrap endpoint is closed. "+
 			"Remove the stale DASHBOARD_SETUP_MODE value.",
-		r.configPath)
+		r.configName)
 }
 
 // failClosed is the answer whenever the config cannot be read or parsed: never

@@ -2,6 +2,9 @@ package setupmode
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -273,8 +276,8 @@ func TestResolve_ConflictReasonNamesBothInputs(t *testing.T) {
 					t.Fatalf("Reason %q does not mention %q", got.Reason, part)
 				}
 			}
-			if !strings.Contains(got.Reason, path) {
-				t.Fatalf("Reason %q does not name the config path %q", got.Reason, path)
+			if !strings.Contains(got.Reason, filepath.Base(path)) {
+				t.Fatalf("Reason %q does not name the config file %q", got.Reason, filepath.Base(path))
 			}
 		})
 	}
@@ -632,5 +635,124 @@ func TestResolve_ConflictWarningLogsAgainAfterReturningFromClean(t *testing.T) {
 	}
 	if n := countWarnings(buf); n != 2 {
 		t.Fatalf("step 3: logged %d WARNING lines, want 2 (a second, distinct conflict transition); log:\n%s", n, buf.String())
+	}
+}
+
+// Reason is served from /api/setup/state, which is unauthenticated. It names
+// the config file so an operator can act on it, but must never carry the
+// absolute path: outside a container that discloses the account name and the
+// deployment's directory layout to anyone who can reach the port. The full
+// path is logged at startup instead, where it is already privileged.
+//
+// The filesystem error is the easy one to get wrong: os.Stat and os.ReadFile
+// return *fs.PathError, whose Error() embeds the path, so the cause has to be
+// unwrapped rather than formatted with %v.
+func TestResolve_ReasonNeverContainsTheAbsoluteConfigPath(t *testing.T) {
+	tests := []struct {
+		name string
+		// legacyFlag is chosen per case so that every one produces a non-empty
+		// Reason: the flag must disagree with the config to force a conflict.
+		legacyFlag bool
+		setup      func(t *testing.T) string // returns the config path
+	}{
+		{
+			name:       "missing file",
+			legacyFlag: true,
+			setup:      func(t *testing.T) string { return filepath.Join(t.TempDir(), "config.yaml") },
+		},
+		{
+			name:       "malformed config",
+			legacyFlag: true,
+			setup:      func(t *testing.T) string { return newConfigFile(t, configMalformed) },
+		},
+		{
+			name:       "conflict, config off",
+			legacyFlag: true,
+			setup:      func(t *testing.T) string { return newConfigFile(t, configActivated) },
+		},
+		{
+			name:       "conflict, config on",
+			legacyFlag: false,
+			setup:      func(t *testing.T) string { return newConfigFile(t, configSetupModeOn) },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := tt.setup(t)
+			got := New(path, tt.legacyFlag).Resolve()
+
+			if got.Reason == "" {
+				t.Fatalf("Reason is empty; nothing to check")
+			}
+			if strings.Contains(got.Reason, path) {
+				t.Fatalf("Reason leaks the absolute config path %q: %s", path, got.Reason)
+			}
+			if dir := filepath.Dir(path); strings.Contains(got.Reason, dir) {
+				t.Fatalf("Reason leaks the config directory %q: %s", dir, got.Reason)
+			}
+			if !strings.Contains(got.Reason, filepath.Base(path)) {
+				t.Fatalf("Reason %q dropped the config file name, losing its diagnostic value", got.Reason)
+			}
+		})
+	}
+}
+
+// The unreadable-config Reason must keep the cause of the failure, which is
+// what tells an operator whether the file is missing or unreadable, while
+// dropping the path that *fs.PathError.Error() would have embedded.
+func TestResolve_UnreadableReasonKeepsCauseWithoutPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+
+	got := New(path, false).Resolve()
+
+	if !strings.Contains(got.Reason, "no such file or directory") {
+		t.Fatalf("Reason = %q, want it to keep the underlying cause", got.Reason)
+	}
+	if strings.Contains(got.Reason, path) {
+		t.Fatalf("Reason leaks the absolute path: %s", got.Reason)
+	}
+}
+
+// errDetail unwraps *fs.PathError so the path never reaches a Reason. The
+// fallback matters as much as the unwrap: an error that is not a *fs.PathError
+// must still explain itself rather than vanish.
+func TestErrDetail(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "path error keeps the cause and drops the path",
+			err:  &fs.PathError{Op: "stat", Path: "/very/secret/path/config.yaml", Err: fs.ErrNotExist},
+			want: fs.ErrNotExist.Error(),
+		},
+		{
+			name: "wrapped path error is still unwrapped",
+			err:  fmt.Errorf("reading config: %w", &fs.PathError{Op: "open", Path: "/secret/x.yaml", Err: fs.ErrPermission}),
+			want: fs.ErrPermission.Error(),
+		},
+		{
+			name: "plain error falls back to its own message",
+			err:  errors.New("some other failure"),
+			want: "some other failure",
+		},
+		{
+			// (*fs.PathError).Error() dereferences Err, so this input panics if
+			// errDetail falls through to it. The stdlib never builds one, but a
+			// guard that still panics is worse than no guard.
+			name: "path error with no cause is reported without panicking",
+			err:  &fs.PathError{Op: "stat", Path: "/secret/x.yaml"},
+			want: "unknown filesystem error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := errDetail(tt.err); got != tt.want {
+				t.Fatalf("errDetail() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
