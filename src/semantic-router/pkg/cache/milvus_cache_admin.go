@@ -100,6 +100,7 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		entity.MetricType(actualMetricType),
 		topK,
 		searchParam,
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
