@@ -436,7 +436,7 @@ global:
 	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
-	if !cfg.PromptGuard.UseMmBERT32K {
+	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
 		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
 	}
 	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {

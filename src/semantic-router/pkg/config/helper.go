@@ -314,9 +314,9 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return false
 	}
 
-	// Check configuration based on whether using vLLM or Candle
-	if c.PromptGuard.UseVLLM {
-		// For vLLM: need external model with role="guardrail"
+	// Check configuration based on the selected backend
+	if c.PromptGuard.Protocol != "" {
+		// For remote backends: need external model with role="guardrail"
 		externalCfg := c.FindExternalModelByRole(ModelRoleGuardrail)
 		return externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&

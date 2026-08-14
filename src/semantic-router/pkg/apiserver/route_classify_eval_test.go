@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,7 +36,7 @@ func (s *evalCaptureClassificationService) DetectPII(req services.PIIRequest) (*
 	return &services.PIIResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error) {
+func (s *evalCaptureClassificationService) CheckSecurity(_ context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
 	return &services.SecurityResponse{}, nil
 }
 

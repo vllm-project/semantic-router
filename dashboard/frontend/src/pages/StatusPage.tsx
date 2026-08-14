@@ -91,7 +91,7 @@ const StatusPage: React.FC = () => {
   }, [serviceHealth, serviceQuery])
 
   useEffect(() => {
-    if (!status?.models?.models.length) {
+    if (!status?.models?.models?.length) {
       return
     }
 
@@ -108,7 +108,7 @@ const StatusPage: React.FC = () => {
 
     scrolledHashRef.current = currentHash
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [status?.models?.models.length])
+  }, [status?.models?.models?.length])
 
   if (loading && !status) {
     return (

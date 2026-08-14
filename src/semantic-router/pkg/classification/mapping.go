@@ -243,3 +243,38 @@ func (jm *JailbreakMapping) GetJailbreakTypeCount() int {
 	// Fall back to alternative field
 	return len(jm.LabelToID)
 }
+
+// resolveSinglePositiveIndex resolves the configured positive_labels against
+// mapping down to a single class index, for backends (like http_chat) that
+// only ever produce one binary verdict and cannot represent more than one
+// positive class. Unlike the multi-label backends (candle, http_classify),
+// which sum every positive label's independent probability, a label here
+// that isn't found in mapping is skipped rather than treated as an error -
+// matching the general "at least one configured label must exist" leniency
+// enforced elsewhere (validateJailbreakPositiveLabels) - but if two or more
+// configured labels resolve to genuinely different class indices, that's a
+// real misconfiguration for a binary-verdict backend, not a benign no-op,
+// and is rejected rather than silently scored against only the first one.
+func resolveSinglePositiveIndex(mapping *JailbreakMapping, positiveLabels []string) (int, error) {
+	resolvedIdx := -1
+	for _, label := range resolvePositiveLabels(positiveLabels) {
+		idx, ok := mapping.GetIndexForJailbreakType(label)
+		if !ok {
+			continue
+		}
+		if resolvedIdx == -1 {
+			resolvedIdx = idx
+			continue
+		}
+		if idx != resolvedIdx {
+			return 0, fmt.Errorf(
+				"configured positive_labels %v resolve to more than one class index in jailbreak_mapping (%d and %d); "+
+					"this backend produces a single binary verdict and cannot treat more than one class as positive",
+				positiveLabels, resolvedIdx, idx)
+		}
+	}
+	if resolvedIdx == -1 {
+		return 0, fmt.Errorf("none of the configured positive_labels %v were found in jailbreak_mapping", positiveLabels)
+	}
+	return resolvedIdx, nil
+}

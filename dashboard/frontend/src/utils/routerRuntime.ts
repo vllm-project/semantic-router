@@ -83,7 +83,7 @@ export interface RouterModelsSystemInfo {
 }
 
 export interface RouterModelsInfo {
-  models: RouterModelInfo[]
+  models: RouterModelInfo[] | null
   summary?: RouterModelsSummary
   system?: RouterModelsSystemInfo
 }
@@ -186,7 +186,7 @@ export function getLoadedModelCount(modelsInfo?: RouterModelsInfo | null): numbe
   if (typeof modelsInfo.summary?.loaded_models === 'number') {
     return modelsInfo.summary.loaded_models
   }
-  return modelsInfo.models.filter((model) => model.loaded).length
+  return (modelsInfo.models ?? []).filter((model) => model.loaded).length
 }
 
 export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): number {
@@ -194,7 +194,7 @@ export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): n
   if (typeof modelsInfo.summary?.total_models === 'number') {
     return modelsInfo.summary.total_models
   }
-  return modelsInfo.models.length
+  return modelsInfo.models?.length ?? 0
 }
 
 export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
