@@ -27,10 +27,15 @@ Some routes need a different instruction layer than the router default. `system_
 Use this fragment under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: system_prompt
-  configuration:
-    enabled: true
-    mode: insert
-    system_prompt: You are a domain expert. Answer precisely, state tradeoffs, and keep the response actionable.
+plugins:
+  - type: system_prompt
+    configuration:
+      enabled: true
+      mode: insert
+      system_prompt: You are a domain expert. Answer precisely and state tradeoffs.
 ```
+
+The inserted text is sent to the selected model and can change cache identity
+and model behavior. Keep secrets and untrusted caller text out of it. Maintained
+example:
+[`config/fragments/plugin/system-prompt/expert.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/system-prompt/expert.yaml).

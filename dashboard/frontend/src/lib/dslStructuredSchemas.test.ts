@@ -86,5 +86,12 @@ describe('DSL structured field schemas', () => {
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')
     expect(requireField(headerMutation, 'delete').type).toBe('string[]')
+
+    const tools = getPluginFieldSchema('tools')
+    expect(requireField(tools, 'strip_tool_history').type).toBe('boolean')
+    const dynamicRetrieval = requireField(tools, 'dynamic_retrieval')
+    expect(dynamicRetrieval.type).toBe('object')
+    expect(requireField(dynamicRetrieval.fields || [], 'history_window').type).toBe('number')
+    expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
   })
 })

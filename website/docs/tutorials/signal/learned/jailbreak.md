@@ -8,7 +8,7 @@ This family is learned: it uses `global.model_catalog.modules.prompt_guard` and 
 
 ## Key Advantages
 
-- Blocks or downgrades unsafe traffic before model selection.
+- Lets decisions block or downgrade unsafe traffic before model selection.
 - Supports classifier, contrastive, and hybrid-style safety detection.
 - Keeps jailbreak policy visible inside routing decisions.
 - Reuses one safety signal across multiple guarded routes.
@@ -51,3 +51,11 @@ routing:
 ```
 
 Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
+
+## Dependencies and Limitations
+
+The configured prompt-guard runtime processes the current prompt and,
+optionally, conversation history. Detection is probabilistic and can be evaded
+or over-triggered; combine it with least-privilege tools and backend policy.
+Maintained example:
+[`config/fragments/signal/jailbreak/patterns.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/jailbreak/patterns.yaml).

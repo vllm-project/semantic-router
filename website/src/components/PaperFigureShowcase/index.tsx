@@ -54,7 +54,7 @@ const FIGURES: FigureMeta[] = [
     title: <Translate id="homepage.paperFigures.figure4.title">Signal Taxonomy</Translate>,
     summary: (
       <Translate id="homepage.paperFigures.figure4.summary">
-        All 14 signals are grouped into heuristic and learned paths, then merged into S(r).
+        Fourteen signals from the original research taxonomy are grouped into heuristic and learned paths, then merged into S(r).
       </Translate>
     ),
   },
@@ -671,7 +671,7 @@ const Figure4Panel: React.FC = () => {
       <p className={styles.taxonomyNote}>
         {translate({
           id: 'homepage.paperFigures.figure4.summaryText',
-          message: '14 total signals. Active signal: {signal}. {groupNote}',
+          message: 'This research snapshot shows 14 signals. Active signal: {signal}. {groupNote}',
           values: {
             signal: activeSignal,
             groupNote: FIGURE4_GROUPS[activeGroup].note,

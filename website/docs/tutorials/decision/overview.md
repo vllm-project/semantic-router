@@ -2,7 +2,8 @@
 
 ## Overview
 
-Latest decision tutorials mirror the boolean-case catalog under `config/fragments/decision/`.
+These tutorials mirror the maintained boolean examples under
+`config/fragments/decision/`.
 
 Signals tell the router what it detected. Decisions tell the router what to do with those detections:
 
@@ -41,6 +42,7 @@ In v0.3, decisions live under `routing.decisions`:
 routing:
   decisions:
     - name: business_route
+      description: Route business requests to the business model.
       priority: 110
       rules:
         operator: AND
@@ -70,3 +72,16 @@ Use the case-shape catalog below in the same order as the fragment tree:
 | `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
+
+## Operational Boundaries
+
+- Every leaf must reference a signal or projection output declared in the same
+  recipe.
+- Higher `priority` wins when more than one decision matches. Keep an explicit
+  unconditional fallback or configure `providers.defaults.default_model`.
+- Decision names and route diagnostics can become operational metadata; avoid
+  secrets or personal identifiers in names and descriptions.
+- Boolean logic is policy, not authentication. Use trusted identity through
+  the `authz` service and signal for access-sensitive routes.
+- Maintained examples:
+  [`config/fragments/decision/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/decision).

@@ -48,3 +48,9 @@ PLUGIN request_params {
   strip_unknown: true
 }
 ```
+
+This plugin enforces a bounded set of OpenAI Chat Completions fields. It is not
+a general JSON-schema firewall and does not authorize a caller. Test
+`strip_unknown` against clients that add provider-specific fields before
+enabling it. Maintained example:
+[`config/fragments/plugin/request-params/budget-tier.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/request-params/budget-tier.yaml).

@@ -27,10 +27,16 @@ Even if the request routed correctly, the generated answer may still need a fina
 Use this fragment under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: response_jailbreak
-  configuration:
-    enabled: true
-    threshold: 0.85
-    action: block
+plugins:
+  - type: response_jailbreak
+    configuration:
+      enabled: true
+      threshold: 0.85
+      action: block
 ```
+
+This plugin processes generated response text with the configured prompt-guard
+runtime. It adds latency and can produce false positives, so calibrate the
+threshold and choose `block` versus header-only handling according to policy.
+Maintained example:
+[`config/fragments/plugin/response-jailbreak/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-jailbreak/strict.yaml).

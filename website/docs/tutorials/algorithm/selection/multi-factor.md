@@ -2,36 +2,45 @@
 
 ## Overview
 
-`multi_factor` is a selection algorithm that composes four raw runtime signals — **quality**, **latency**, **cost**, and **load** — into a single weighted score per candidate, with optional SLO hard ceilings that prune candidates before scoring.
+`multi_factor` ranks candidates by a configurable combination of quality,
+latency, cost, and load, then rejects any candidate that violates a hard limit.
 
-The configuration belongs to the decision that declares it. If multiple decisions use `multi_factor`, each matched decision is evaluated with its own weights, SLOs, percentile, and no-candidate policy.
+The configuration belongs to the decision that declares it. Each matched
+decision uses its own weights, limits, percentile, and no-candidate policy.
 
-It aligns to `config/fragments/algorithm/selection/multi-factor.yaml` and addresses issue [#37](https://github.com/vllm-project/semantic-router/issues/37).
+It aligns to `config/fragments/algorithm/selection/multi-factor.yaml`.
 
 ## Key Advantages
 
 - Single-decision SLO-aware routing without orchestrating multiple selectors.
-- Each signal is a live source: quality from `quality_score` config, latency from `pkg/latency` percentiles, cost from pricing, load from `pkg/inflight`.
-- Min-max normalization across the candidate set means weights have intuitive meaning regardless of absolute signal scales.
+- Each factor has an explicit source: quality from `quality_score`, latency from
+  observed percentiles, cost from pricing, and load from in-flight requests.
+- Min-max normalization makes the configured weights comparable across the
+  candidate set.
 - No model state to train. No external service required.
 - Hard SLO ceilings (TPOT, TTFT, cost, in-flight) prune unsafe candidates before scoring.
 
 ## What Problem Does It Solve?
 
-Real routes care about more than one dimension at once: a faster cheaper model and a slower better model both exist in the same candidate pool, and the "right" answer depends on current load and SLO targets, not just the static config. Existing single-signal selectors (`latency_aware`, cost-only routing, quality-only routing) force a hard choice. `multi_factor` lets one decision rule express a smooth tradeoff across all four dimensions, with optional hard SLO ceilings to fence off unsafe candidates.
+Real routes often contain a faster, cheaper model and a slower, stronger one.
+The right choice depends on current observations and policy, not one fixed
+metric. `multi_factor` expresses that trade-off in one decision and can remove
+candidates that exceed configured limits.
 
 ## When to Use
 
-- A decision has 2+ candidate models that differ along multiple dimensions (e.g. a faster cheaper model and a slower better model) and you want a smooth tradeoff knob.
-- You want SLO enforcement (e.g. "never route to a model with p95 TPOT > 200ms") without writing a separate decision rule.
+- A decision has two or more candidates that differ in quality, latency, cost,
+  or load.
+- You want to enforce a latency ceiling when observations are available,
+  without writing a separate decision.
 - Quality, latency, cost, and load all matter and no single one dominates.
 
 ## Sibling Algorithms
 
 - `latency_aware` is a special case of this — latency-only scoring. Use it when the other dimensions truly do not matter.
-- `hybrid` composes request-time selectors and read-only learning evidence into
-  one score. `multi_factor` composes raw runtime signals directly. Both are
-  useful and complementary.
+- `hybrid` combines Elo, Router-DC, and AutoMix selector scores before applying
+  a cost adjustment. `multi_factor` scores configured quality and pricing plus
+  observed latency and load directly.
 
 ## Algorithm Principle
 
@@ -102,5 +111,11 @@ algorithm:
 
 - Quality scoring depends on `quality_score` being configured per model. Models without it contribute zero to the quality signal.
 - Min-max normalization is **per-request across the candidate set**, so absolute scale of any signal does not matter — but if all candidates have the same value on a dimension, that dimension contributes 0.5 (neutral).
-- Load uses an in-process tracker (`pkg/inflight`), so in multi-replica deployments each replica sees only its own load, not cluster-wide. Acceptable for the typical sidecar deployment; an external state store could be wired later for true cluster-wide load awareness.
-- The in-flight tracker self-heals via TTL eviction (default 10 minutes) to recover from missed `End` calls, but cannot detect actively-running long requests beyond that window — they will appear "free" to the selector. Tune via `pkg/inflight.SetMaxAge` if your workloads routinely exceed 10 minutes per request.
+- Load and latency are observed per Router process, not across the whole
+  cluster. Replicas can therefore choose different candidates.
+- A missing quality, latency, or cost observation contributes `0` for that
+  scoring dimension. It does not trigger an SLO exclusion, because absence is
+  not evidence that the configured ceiling was exceeded.
+
+The maintained example is
+[`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml).

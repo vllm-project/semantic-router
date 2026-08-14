@@ -9,7 +9,7 @@ These settings back route-local plugins and router-wide tool behavior.
 ## Key Advantages
 
 - Centralizes shared backing stores instead of repeating them per route.
-- Keeps semantic cache, memory, retrieval, and tool catalogs consistent.
+- Keeps response cache, memory, retrieval, and tool catalogs consistent.
 - Lets route-local plugins stay small and focused.
 - Makes shared infrastructure dependencies explicit.
 
@@ -23,19 +23,21 @@ These `global:` blocks solve that by defining shared backing services once.
 
 Use these blocks when:
 
-- multiple routes depend on the same semantic cache or memory backend
+- multiple routes depend on the same response cache or memory backend
 - retrieval features need one shared vector store
 - the router should expose one shared tool catalog
 - backing-store configuration belongs to the whole router rather than one route
 
 ## Configuration
 
-### Semantic Cache
+### Response Cache
 
 ```yaml
 global:
   stores:
-    semantic_cache:
+    response_cache:
+      enabled: true
+      backend_type: memory
       similarity_threshold: 0.8
 ```
 
@@ -84,7 +86,6 @@ global:
       qdrant:
         host: qdrant
         port: 6334
-        api_key: ""
         collection: agentic_memory
         dimension: 384
       embedding_model: bert
@@ -94,8 +95,8 @@ global:
 
 For full deployment instructions, see:
 
-- [Valkey Agentic Memory](../../installation/valkey-memory.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
-- [Qdrant](../../installation/qdrant.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
+- [Valkey Agentic Memory](../../installation/valkey-memory) — Docker, Kubernetes, config reference, tuning, and troubleshooting
+- [Qdrant](../../installation/qdrant) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `config/runtime/memory/` for backend-specific configuration references
 
 ### Vector Store
@@ -127,3 +128,17 @@ global:
       top_k: 3
       tools_db_path: config/runtime/tools/tools_db.json
 ```
+
+## Data and Security
+
+- Cache, memory, and vector stores can contain prompts, responses, embeddings,
+  retrieved documents, or extracted memories. Configure authentication,
+  encryption, retention, and tenant/user scope for the selected backend.
+- Embedding dimensions must match existing collections. Rebuild or migrate an
+  index when the embedding model or dimension changes.
+- Tool retrieval controls what is shown to a model; it does not authorize tool
+  execution. Enforce permissions at the tool service.
+- Maintained backend examples live under
+  [`config/runtime/`](https://github.com/vllm-project/semantic-router/tree/main/config/runtime),
+  with the exhaustive contract in
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

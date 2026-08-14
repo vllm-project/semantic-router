@@ -2,7 +2,8 @@
 
 ## Overview
 
-`mlp` is a GPU-accelerated neural network selection algorithm. It uses a Multi-Layer Perceptron to learn non-linear decision boundaries for model selection, trained on historical query-to-model assignment data.
+`mlp` runs a trained neural classifier on CPU to map a request to a candidate
+model.
 
 It aligns to `config/fragments/algorithm/selection/mlp.yaml`.
 
@@ -11,7 +12,7 @@ It aligns to `config/fragments/algorithm/selection/mlp.yaml`.
 ## Key Advantages
 
 - Learns complex, non-linear decision boundaries that linear methods (KNN, SVM with linear kernel) cannot capture.
-- GPU-accelerated inference via [Candle](https://github.com/huggingface/candle) for low-latency selection.
+- Uses the [Candle](https://github.com/huggingface/candle) inference binding.
 - Supports custom hidden layer sizes to balance model capacity and inference speed.
 - Integrates into the same `decision.algorithm` surface as other selection algorithms.
 
@@ -57,14 +58,15 @@ Some routing boundaries are non-linear and cannot be captured well by static ord
 ## When to Use
 
 - You need to capture complex non-linear patterns in query-to-model mapping.
-- You have sufficient training data (>1000 labeled query-model assignments).
-- GPU resources are available for accelerated inference.
+- You have a representative labeled query-to-model dataset.
+- CPU inference cost is acceptable for the route.
 - KNN/KMeans/SVM decision boundaries are insufficient for your workload.
 
 ## Known Limitations
 
 - Requires pre-trained model weights; cannot start from scratch without training data.
-- GPU dependency for optimal performance (falls back to CPU but slower).
+- The current decision factory always constructs the CPU selector. The
+  accepted `device` field is not wired to request-time selection.
 - Unlike KNN, MLP is a "black box" — harder to interpret why a specific model was chosen.
 - Training requires the separate `modelselection` training pipeline; see [ML Model Selection](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md).
 
@@ -87,7 +89,6 @@ global:
         models_path: ".cache/ml-models"
         embedding_dim: 768
         mlp:
-          device: cuda
           pretrained_path: .cache/ml-models/mlp_model.json
 ```
 
@@ -95,7 +96,7 @@ global:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `device` | string | `cpu` | Compute device: `cpu`, `cuda`, or `metal` (Apple Silicon) |
+| `device` | string | `cpu` | Compatibility field; the current decision factory uses CPU regardless of this value |
 | `pretrained_path` | string | — | Path to pre-trained MLP model weights (JSON format) |
 
 ## Feedback
@@ -105,3 +106,7 @@ MLP does not support online `UpdateFeedback()`. To improve selection quality, re
 ## Experimental Status
 
 This algorithm is marked as **experimental**. The API may change in future releases.
+
+Training examples and labels can contain sensitive request data; govern them
+and the derived artifact accordingly. The minimal decision fragment is
+[`config/fragments/algorithm/selection/mlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/mlp.yaml).

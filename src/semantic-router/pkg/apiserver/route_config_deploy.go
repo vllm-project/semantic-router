@@ -85,11 +85,11 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		return
 	}
 
-	if !deployMu.TryLock() {
-		s.writeErrorResponse(w, http.StatusConflict, "DEPLOY_IN_PROGRESS", "Another deploy operation is in progress.")
+	guard, ok := s.acquireConfigMutationGuard(w)
+	if !ok {
 		return
 	}
-	defer deployMu.Unlock()
+	defer guard.Release()
 
 	version, ok := s.parseRollbackVersion(w, r)
 	if !ok {
@@ -97,7 +97,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := filepath.Dir(paths.sourcePath)
+	configDir := configPersistenceBaseDir(paths.sourcePath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
 
@@ -288,7 +288,7 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := filepath.Dir(paths.sourcePath)
+	configDir := configPersistenceBaseDir(paths.sourcePath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
 
 	versions := []RouterConfigVersionEntry{}

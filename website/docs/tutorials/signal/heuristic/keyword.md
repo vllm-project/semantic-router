@@ -52,3 +52,12 @@ routing:
 ```
 
 Use plain keyword lists for simple matching, then add `method: bm25` or `method: ngram` when exact text matching becomes too brittle.
+
+## Dependencies and Limitations
+
+Keyword rules require no model, but they are sensitive to wording and can be
+triggered intentionally. Use them for routing hints, not security boundaries,
+and test false positives across supported languages. Maintained examples:
+[`nlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/nlp.yaml)
+and
+[`regex.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/regex.yaml).

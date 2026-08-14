@@ -9,6 +9,7 @@ import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
 import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
+import YouTubeSection from '@site/src/components/YouTubeSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
@@ -32,7 +33,7 @@ const homepageMetaTitle = translate({
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.',
+    'Mixture-of-Models is a serving architecture for heterogeneous LLM inference. vLLM Semantic Router makes it practical to deploy.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
@@ -45,23 +46,23 @@ const heroStats = [
       id: 'homepage.stats.signals.label',
       message: 'Signals',
     }),
-    value: '16',
+    value: '20',
     description: translate({
       id: 'homepage.stats.signals.description',
       message:
-        '16 signal families across heuristic and learned detectors, from knowledge base routing to history-aware reasks.',
+        '20 signal families spanning request context, safety, intent, preference, and system state.',
     }),
   },
   {
     label: translate({
       id: 'homepage.stats.algorithms.label',
-      message: 'Selection',
+      message: 'Algorithms',
     }),
-    value: '12',
+    value: '16',
     description: translate({
       id: 'homepage.stats.algorithms.description',
       message:
-        '12 routing strategies spanning rules, latency heuristics, reinforcement learning, and ML selection.',
+        '11 selection algorithms and 5 loopers for choosing, composing, and retrying model calls.',
     }),
   },
   {
@@ -91,7 +92,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.models.value',
-      message: 'Compose personalized model paths.',
+      message: 'Compose policy-specific model paths.',
     }),
   },
   {
@@ -102,7 +103,7 @@ const architectureDimensions = [
     }),
     fragmented: translate({
       id: 'homepage.capabilities.compute.reality',
-      message: 'GPUs, accelerators, edge, and cloud coexist.',
+      message: 'GPU generations and accelerators differ in capacity and latency.',
     }),
     unified: translate({
       id: 'homepage.capabilities.compute.value',
@@ -121,7 +122,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.location.value',
-      message: 'Keep data within its boundaries.',
+      message: 'Route to configured local, private, or cloud backends.',
     }),
   },
   {
@@ -136,7 +137,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.preference.value',
-      message: 'Make every preference executable.',
+      message: 'Express preferences as routing policy.',
     }),
   },
 ]
@@ -391,7 +392,7 @@ function FinalCtaSection(): JSX.Element {
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Shape every model path with signals, preferences, and policy.
+                  Shape model paths with signals, preferences, and policy.
                 </Translate>
               </p>
             </div>
@@ -486,13 +487,19 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandGraphite}>
-          <CapabilitySection />
-        </div>
-
-        <div className={styles.bandGraphite}>
           <ScrollReveal delay={50}>
             <InstallQuickStartSection />
           </ScrollReveal>
+        </div>
+
+        <div className={styles.bandRaised}>
+          <ScrollReveal delay={50}>
+            <YouTubeSection />
+          </ScrollReveal>
+        </div>
+
+        <div className={styles.bandGraphite}>
+          <CapabilitySection />
         </div>
 
         <div className={styles.bandRaised}>

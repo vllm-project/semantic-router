@@ -10,7 +10,7 @@ const pillars = [
       id: 'homepage.pillars.signal.title',
       message: 'Signal-driven',
     }),
-    stat: '16',
+    stat: '20',
     statLabel: translate({
       id: 'homepage.pillars.signal.stat',
       message: 'signal families',
@@ -18,7 +18,7 @@ const pillars = [
     description: translate({
       id: 'homepage.pillars.signal.description',
       message:
-        'Classify intent, safety, and domain signals — then route each request to the right model.',
+        'Combine request, safety, intent, preference, and system signals inside each recipe.',
     }),
   },
   {
@@ -34,7 +34,7 @@ const pillars = [
     description: translate({
       id: 'homepage.pillars.dropin.description',
       message:
-        'Deploy as Envoy ExtProc or local vllm-sr. No client changes for existing integrations.',
+        'Send OpenAI-compatible requests through Envoy ExtProc or the local vllm-sr runtime.',
     }),
   },
   {
@@ -42,15 +42,15 @@ const pillars = [
       id: 'homepage.pillars.observable.title',
       message: 'Observable',
     }),
-    stat: '12',
+    stat: '16',
     statLabel: translate({
       id: 'homepage.pillars.observable.stat',
-      message: 'routing algorithms',
+      message: 'selectors and loopers',
     }),
     description: translate({
       id: 'homepage.pillars.observable.description',
       message:
-        'From rules to reinforcement learning — every routing decision is configurable and measurable.',
+        'Choose from 11 selection algorithms and 5 loopers, then inspect routing metadata and metrics when enabled.',
     }),
   },
 ]
@@ -68,7 +68,7 @@ export default function ValuePillars(): JSX.Element {
               <Translate id="homepage.pillars.title">Intelligent multi-model routing</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.pillars.subtitle">Deploy fast, route by signal, and keep every decision observable.</Translate>
+              <Translate id="homepage.pillars.subtitle">Deploy fast, route by signal, and enable the observability your operation needs.</Translate>
             </p>
           </header>
         </ScrollReveal>

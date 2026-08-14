@@ -26,10 +26,17 @@ func main() {
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
 	startupWriter := newStartupWriter(cfg, opts.configPath)
+	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
+	if err != nil {
+		failStartup(startupWriter, "Failed to resolve management API: %v", err)
+	}
+	opts = resolvedOpts
 
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
-	startAPIServerIfEnabled(opts, runtimeRegistry)
+	if err := startAPIServerIfEnabled(opts, runtimeRegistry); err != nil {
+		failStartup(startupWriter, "Failed to start management API: %v", err)
+	}
 
 	ensureModelsDownloadedOrFatal(cfg, startupWriter)
 	exitIfDownloadOnly(opts.downloadOnly)
@@ -38,7 +45,7 @@ func main() {
 	initializeWindowedMetricsIfEnabled(cfg)
 
 	shutdownHooks := make([]func(), 0)
-	registerSignalHandler(&shutdownHooks)
+	defer runShutdownHooks(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
 	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)

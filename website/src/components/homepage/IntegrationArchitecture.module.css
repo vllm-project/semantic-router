@@ -4,6 +4,14 @@
   padding: clamp(1.15rem, 2.2vw, 1.6rem);
 }
 
+.routeControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .routeStatus {
   display: inline-flex;
   flex-wrap: wrap;
@@ -14,6 +22,37 @@
   border: 1px solid rgba(48, 162, 255, 0.28);
   border-radius: 999px;
   background: rgba(48, 162, 255, 0.1);
+}
+
+.routeToggle {
+  display: inline-flex;
+  gap: 0.42rem;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--site-text-caption);
+  font-weight: var(--site-font-weight-semibold);
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+.routeToggle:hover {
+  border-color: rgba(117, 197, 255, 0.5);
+  background: rgba(48, 162, 255, 0.12);
+  color: #fff;
+}
+
+.routeToggle:focus-visible {
+  outline: 2px solid #75c5ff;
+  outline-offset: 3px;
 }
 
 .routeStatusLabel {
@@ -29,6 +68,7 @@
   font-size: var(--site-text-small);
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
   animation: statusFade 0.35s ease-out;
 }
 
@@ -47,7 +87,7 @@
 .diagramShell {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(9.5rem, 0.72fr) minmax(31rem, 2.65fr) minmax(13rem, 1.05fr);
+  grid-template-columns: minmax(12rem, 0.85fr) minmax(39rem, 3.4fr) minmax(13rem, 1.05fr);
   gap: 1rem;
   align-items: stretch;
   min-height: 18rem;
@@ -163,6 +203,7 @@
 
 .query {
   border-color: rgba(56, 189, 248, 0.28);
+  padding: 0;
 }
 
 .queryActive {
@@ -174,6 +215,29 @@
 
 .queryLabel {
   font-weight: var(--site-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.queryButton {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: 0.35rem 0.55rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.62rem 0.78rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.queryButton:focus-visible {
+  outline: 2px solid #75c5ff;
+  outline-offset: 3px;
 }
 
 .querySending {
@@ -494,8 +558,8 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.55rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
   align-items: center;
   margin: 0;
   padding: 0;
@@ -508,8 +572,8 @@
   gap: 0.35rem;
   align-content: center;
   min-width: 0;
-  min-height: 6.7rem;
-  padding: 0.7rem 0.62rem;
+  min-height: 7.2rem;
+  padding: 0.65rem 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 0.55rem;
   background: rgba(4, 8, 15, 0.82);
@@ -521,7 +585,7 @@
   content: '→';
   position: absolute;
   top: 50%;
-  right: -0.52rem;
+  right: -0.43rem;
   z-index: 2;
   color: rgba(117, 197, 255, 0.48);
   font-size: 0.72rem;
@@ -553,7 +617,7 @@
 .pipelineStage strong {
   overflow-wrap: anywhere;
   color: rgba(255, 255, 255, 0.9);
-  font-size: clamp(0.65rem, 0.8vw, 0.76rem);
+  font-size: clamp(0.62rem, 0.72vw, 0.73rem);
   line-height: 1.22;
 }
 
@@ -562,6 +626,15 @@
   font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.pipelineStageDetailValue {
+  overflow-wrap: anywhere;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.53rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  text-transform: none;
 }
 
 @keyframes pipelineStage {
@@ -662,7 +735,7 @@
   text-decoration: none;
 }
 
-@media (max-width: 996px) {
+@media (max-width: 1180px) {
   .diagramShell {
     grid-template-columns: 1fr;
     min-height: 0;

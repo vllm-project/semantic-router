@@ -4,7 +4,8 @@
 
 `modality` detects whether a request should stay in text generation, switch into image generation, or support both. It maps to `config/fragments/signal/modality/` and is declared under `routing.signals.modality`.
 
-This family now sits under `learned` because maintained deployments typically rely on the router-owned `modality_detector` module to classify output mode, even when the routing outcome still looks like a simple request-shape decision.
+The Router-owned `modality_detector` classifies the intended output mode; the
+named result is then available to ordinary decisions.
 
 ## Key Advantages
 
@@ -45,3 +46,10 @@ routing:
 ```
 
 Keep the rule names aligned with the route behavior you want decisions to reference. In maintained configs, the backing detector is typically configured through `global.model_catalog.modules.modality_detector`.
+
+## Dependencies and Limitations
+
+The modality detector classifies intended output mode; it does not prove that a
+backend supports the request's input attachments. Keep model-card capabilities
+and provider validation aligned. Maintained example:
+[`config/fragments/signal/modality/multimodal.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/modality/multimodal.yaml).

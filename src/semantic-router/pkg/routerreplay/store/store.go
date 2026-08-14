@@ -60,6 +60,14 @@ type Outcome struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
+const (
+	LifecycleUnknown    = "unknown"
+	LifecycleInProgress = "in_progress"
+	LifecycleCompleted  = "completed"
+	LifecycleAborted    = "aborted"
+	LifecycleFailed     = "failed"
+)
+
 // ToolTrace captures the request-local assistant/tool exchange timeline.
 type ToolTrace struct {
 	Flow      string          `json:"flow,omitempty"`
@@ -198,6 +206,10 @@ type Record struct {
 	RequestBody           string                 `json:"request_body,omitempty"`
 	ResponseBody          string                 `json:"response_body,omitempty"`
 	ResponseStatus        int                    `json:"response_status,omitempty"`
+	LifecycleState        string                 `json:"lifecycle_state"`
+	EndedAt               *time.Time             `json:"ended_at,omitempty"`
+	DurationMS            int64                  `json:"duration_ms,omitempty"`
+	TerminalReason        string                 `json:"terminal_reason,omitempty"`
 	FromCache             bool                   `json:"from_cache,omitempty"`
 	Streaming             bool                   `json:"streaming,omitempty"`
 	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
@@ -278,22 +290,40 @@ type Record struct {
 	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
-// Writer mutates router replay records.
-type Writer interface {
+// RecordWriter creates records and advances their routing lifecycle.
+type RecordWriter interface {
 	// Add inserts a new record. Returns the record ID.
 	Add(ctx context.Context, record Record) (string, error)
 
 	// UpdateStatus updates the response status and flags for an existing record.
 	UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error
 
+	// UpdateLifecycle records terminal completion independently of response
+	// headers. A 2xx status is not considered successful until this transition
+	// reaches LifecycleCompleted.
+	UpdateLifecycle(ctx context.Context, id string, state string, endedAt time.Time, durationMS int64, reason string) error
+}
+
+// BodyWriter attaches bounded request and response bodies to replay records.
+type BodyWriter interface {
 	// AttachRequest updates the request body for an existing record.
 	AttachRequest(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+}
 
+// OutcomeWriter appends post-route feedback to replay records.
+type OutcomeWriter interface {
 	// AppendOutcome links post-route feedback to an existing replay record.
 	AppendOutcome(ctx context.Context, id string, outcome Outcome) error
+}
+
+// Writer groups the mutation capabilities required by the replay recorder.
+type Writer interface {
+	RecordWriter
+	BodyWriter
+	OutcomeWriter
 }
 
 // Reader retrieves router replay records.
@@ -459,6 +489,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }
 
@@ -514,6 +545,14 @@ func cloneIntPtr(value *int) *int {
 }
 
 func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneTimePtr(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}

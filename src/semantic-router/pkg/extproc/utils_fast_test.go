@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 // ---------- extractContentFast ----------
@@ -675,4 +676,103 @@ func TestExtractContentFast_LastUserAfterToolResult(t *testing.T) {
 	assert.Equal(t, "user", r.LastMessageRole)
 	assert.False(t, r.LastMessageToolResult)
 	assert.True(t, r.LastUserAfterToolResult)
+}
+
+func TestExtractContentFast_LastUserAfterToolResultRequiresAdjacency(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role":"tool","tool_call_id":"c1","content":"done"},
+			{"role":"user","content":"continue"},
+			{"role":"assistant","content":"intermediate reply"},
+			{"role":"user","content":"new turn"}
+		]
+	}`)
+	r, err := extractContentFast(body)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user", r.LastMessageRole)
+	assert.False(t, r.LastMessageToolResult)
+	assert.False(t, r.LastUserAfterToolResult,
+		"an older tool result must not mark a non-adjacent user turn")
+}
+
+func TestExtractContentFast_PendingAssistantToolCallIsNotToolResult(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role":"user","content":"look this up"},
+			{"role":"assistant","content":null,"tool_calls":[{
+				"id":"c1","type":"function",
+				"function":{"name":"lookup","arguments":"{}"}
+			}]}
+		]
+	}`)
+	r, err := extractContentFast(body)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, r.AssistantToolCallCount)
+	assert.Zero(t, r.ToolResultCount)
+	assert.Equal(t, "assistant", r.LastMessageRole)
+	assert.False(t, r.LastMessageToolResult)
+	assert.False(t, r.LastUserAfterToolResult)
+}
+
+func TestExtractContentFast_RequestContextEstimateCoversFullPromptEnvelope(t *testing.T) {
+	priorUser := strings.Repeat("prior", 2_000)
+	toolResult := strings.Repeat("result", 2_000)
+	schema := strings.Repeat("schema", 2_000)
+	body := []byte(fmt.Sprintf(`{
+		"model":"auto",
+		"messages":[
+			{"role":"user","content":%q},
+			{"role":"assistant","content":null,"tool_calls":[{
+				"id":"call-1","type":"function","function":{
+					"name":"lookup","arguments":{"id":9007199254740993123456789}
+				}
+			}]},
+			{"role":"tool","tool_call_id":"call-1","content":%q},
+			{"role":"user","content":[
+				{"type":"text","text":"ok"},
+				{"type":"image_url","image_url":{"url":"data:image/png;base64,PRIVATE"}}
+			]}
+		],
+		"tools":[{"type":"function","function":{
+			"name":"lookup","description":%q,"parameters":{"type":"object"}
+		}}],
+		"max_completion_tokens":4096
+	}`, priorUser, toolResult, schema))
+
+	fast, err := extractContentFast(body)
+	require.NoError(t, err)
+	want := classification.EstimateOpenAIRequestContext(body)
+
+	assert.Equal(t, "ok", fast.UserContent,
+		"keyword/embedding evaluation must remain scoped to the current user")
+	assert.Equal(t, want.TokenFloor, fast.ContextTokenFloor)
+	assert.Equal(t, want.TextBytes, fast.ContextTextBytes)
+	assert.Equal(t, want.EquivalentBytes, fast.ContextEquivalentBytes)
+	assert.True(t, fast.ContextHasNonText)
+	assert.Greater(t, fast.ContextTokenFloor, 16_000)
+}
+
+func TestExtractContentFast_ImagePayloadLengthDoesNotAffectContextEstimate(t *testing.T) {
+	makeBody := func(payload string) []byte {
+		return []byte(fmt.Sprintf(`{
+			"model":"auto",
+			"messages":[{"role":"user","content":[
+				{"type":"text","text":"describe"},
+				{"type":"image_url","image_url":{"url":"data:image/png;base64,%s"}}
+			]}]
+		}`, payload))
+	}
+
+	small, err := extractContentFast(makeBody("AAA"))
+	require.NoError(t, err)
+	large, err := extractContentFast(makeBody(strings.Repeat("PRIVATE", 20_000)))
+	require.NoError(t, err)
+
+	assert.Equal(t, small.ContextTokenFloor, large.ContextTokenFloor)
+	assert.Equal(t, small.ContextTextBytes, large.ContextTextBytes)
+	assert.Equal(t, small.ContextEquivalentBytes, large.ContextEquivalentBytes)
 }

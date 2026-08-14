@@ -1,138 +1,103 @@
-# Algorithm
+# Algorithms
 
 ## Overview
 
-Latest algorithm tutorials mirror the fragment catalog under `config/fragments/algorithm/`.
-
-Algorithms only matter after a decision matches and exposes multiple candidate models in `modelRefs`. The router then uses `decision.algorithm` to choose or coordinate those candidates.
+An algorithm runs after a decision matches. It either selects one model from
+the decision's `modelRefs` or coordinates several of them through the Looper.
+It does not decide whether the route is eligible; signals and decisions do
+that first.
 
 ## Key Advantages
 
-- Separates route eligibility from model selection policy.
-- Lets one decision keep several candidate models without inlining ranking logic.
-- Supports both one-model ranking and multi-model orchestration.
-- Mirrors the repo fragment tree exactly: one tutorial page per algorithm under `config/fragments/algorithm/selection/` and `config/fragments/algorithm/looper/`.
+- Keeps route eligibility separate from model choice.
+- Makes selection and orchestration policy reviewable per decision.
+- Supports both stateless policies and bounded multi-model execution.
 
 ## What Problem Does It Solve?
 
-Once a route matches, the router still needs a principled way to choose among candidate models. Without an algorithm layer, teams either hard-code one winner or duplicate ranking logic across routes.
-
-Algorithms solve that by making the post-match selection policy explicit and reusable.
+A matched route may have several valid model candidates. Algorithms make the
+choice explicit: fixed ordering, semantic fit, observed latency, multiple
+runtime factors, a learned selector, or multi-model orchestration.
 
 ## When to Use
 
-Use `algorithm/` when:
-
-- `modelRefs` contains more than one candidate
-- route policy depends on latency, feedback, semantic fit, or online exploration
-- one decision should orchestrate several models instead of choosing exactly one
-- you want model choice to evolve without changing the decision rule itself
+Add an algorithm when a decision has more than one candidate or deliberately
+runs a multi-model workflow. With one candidate, omit the algorithm unless the
+chosen Looper supports and needs a single-model execution plan.
 
 ## Configuration
 
-In canonical v0.3 YAML, algorithms live inside each matched decision:
+Algorithms are decision-local:
 
 ```yaml
 routing:
   decisions:
-    - name: computer-science-reasoning
+    - name: responsive-route
+      description: Prefer the model with the best observed latency.
+      priority: 100
       rules:
         operator: AND
-        conditions:
-          - type: domain
-            name: "computer science"
+        conditions: []
       modelRefs:
-        - model: qwen2.5:7b
-        - model: qwen3:14b
+        - model: small-model
+        - model: large-model
       algorithm:
-        type: router_dc
-        router_dc:
-          temperature: 0.07
+        type: latency_aware
+        latency_aware:
+          tpot_percentile: 90
+          ttft_percentile: 95
 ```
 
-The repo now keeps one tutorial page per algorithm.
+The runtime catalog is the source of truth for support status. The maintained
+examples live under
+[`config/fragments/algorithm/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/algorithm).
 
-## Algorithm Comparison
-
-### Selection Algorithms (single model from candidates)
-
-| Algorithm | Type | Feedback | Personalization | Key Paper | Best For |
-|-----------|------|----------|-----------------|-----------|----------|
-| **[Static](./selection/static)** | Fixed | No | No | — | Simplest possible selection, curated ordering |
-| **[Router DC](./selection/router-dc)** | Semantic | Yes | No | [Dual Contrastive (2409.19886)](https://arxiv.org/abs/2409.19886) | Query-to-model semantic matching |
-| **[AutoMix](./selection/automix)** | POMDP | Via logprob | No | [AutoMix (2310.12963)](https://arxiv.org/abs/2310.12963) | Cost-quality cascaded routing |
-| **[Hybrid](./selection/hybrid)** | Composite | Yes (3 sub) | No | [Hybrid LLM (2404.14618)](https://arxiv.org/abs/2404.14618) | Blending multiple ranking signals |
-| **[KNN](./selection/knn)** | ML (Rust) | No (offline) | No | — | Interpretable example-based routing |
-| **[KMeans](./selection/kmeans)** | ML (Rust) | No (offline) | No | — | Cluster-based routing |
-| **[SVM](./selection/svm)** | ML (Rust) | No (offline) | No | — | Decision boundary classification |
-| **[MLP](./selection/mlp)** | ML (GPU) | No (offline) | No | — | Non-linear neural network routing |
-| **[Latency Aware](./selection/latency-aware)** | Metrics | No | No | — | Fastest model selection by TPOT/TTFT |
-| **[Prompt](./selection/prompt)** | LLM policy | No | No | — | Qualitative selection among bounded candidates |
-
-### Looper Algorithms (multi-model orchestration)
-
-| Algorithm | Description | Key Feature |
-|-----------|-------------|-------------|
-| **[Confidence](./looper/confidence)** | Small-to-large escalation | Logprob-based confidence evaluation |
-| **[Fusion](./looper/fusion)** | Parallel panel deliberation | Judge analysis + final synthesis |
-| **[Router Flow](./looper/workflows)** | Micro-agent workflows behind one model name | Static role plans or dynamic planner-generated execution |
-| **[Ratings](./looper/ratings)** | Bounded concurrent execution | Concurrency cap + rating aggregation |
-| **[ReMoM](./looper/remom)** | Multi-round parallel reasoning | Breadth schedule + intelligent synthesis |
-
-## Algorithm Decision Guide
-
-```mermaid
-flowchart TD
-    Start[Need algorithm?] --> Q1{Multiple models in modelRefs?}
-    Q1 -- No --> Static[Static: first model wins]
-    Q1 -- Yes --> Q2{Orchestration type?}
-    Q2 -- Single model selection --> Q3{Latency critical?}
-    Q3 -- Yes --> Latency[Latency Aware]
-    Q3 -- No --> Q4{Semantic matching needed?}
-    Q4 -- Yes --> RDC[Router DC]
-    Q4 -- No --> Q5{Have offline selector assets?}
-    Q5 -- Yes --> ML[ML: KNN / KMeans / SVM / MLP]
-    Q5 -- No --> Q6{Need blended request-time signals?}
-    Q6 -- Yes --> Hybrid[Hybrid or Multi Factor]
-    Q6 -- No --> Static2[Static]
-    Q2 -- Multi-model orchestration --> Q11{Escalation needed?}
-    Q11 -- Yes --> Confidence[Confidence]
-    Q11 -- No --> Q12{Multi-round reasoning?}
-    Q12 -- Yes --> ReMoM[ReMoM]
-    Q12 -- No --> Q13{Need dynamic workflow planning?}
-    Q13 -- Yes --> Flow[Router Flow]
-    Q13 -- No --> Q14{Need judge synthesis?}
-    Q14 -- Yes --> Fusion[Fusion]
-    Q14 -- No --> Ratings[Ratings]
-```
+## Algorithm Inventory
 
 ### Selection Algorithms
 
-Conversation and session protection is configured as Router Learning, not as a
-decision algorithm. See [Protection](../learning/protection). There is no
-`algorithm/selection/session-aware` tutorial in the clean v0.3 surface because
-`algorithm.type: session_aware` is not a supported public algorithm.
+Selection algorithms return one candidate model.
 
-- [AutoMix](./selection/automix)
-- [Hybrid](./selection/hybrid)
-- [KMeans](./selection/kmeans)
-- [KNN](./selection/knn)
-- [Latency Aware](./selection/latency-aware)
-- [MLP](./selection/mlp)
-- [Multi Factor](./selection/multi-factor)
-- [Prompt](./selection/prompt)
-- [Router DC](./selection/router-dc)
-- [Static](./selection/static)
-- [SVM](./selection/svm)
-
-Future feedback-driven model-choice strategies belong under
-[Router Learning](../learning/adaptations), not `decision.algorithm`. The
-current Router Learning strategy is `routing_sampling`.
+| Type | Status | Goal | Main dependency | Guide |
+|---|---|---|---|---|
+| `static` | supported | Use declared order or fixed domain scores | None | [Static](./selection/static) |
+| `router_dc` | supported | Match request semantics to model descriptions | Embedding runtime and useful model cards | [Router DC](./selection/router-dc) |
+| `latency_aware` | supported | Prefer the candidate with the best observed TTFT/TPOT | Per-process latency observations | [Latency Aware](./selection/latency-aware) |
+| `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |
+| `hybrid` | supported | Blend several selector scores | Component selector inputs | [Hybrid](./selection/hybrid) |
+| `automix` | experimental | Optimize an estimated cost-quality value | Candidate pricing and quality metadata | [AutoMix](./selection/automix) |
+| `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model and Looper endpoint | [Prompt](./selection/prompt) |
+| `knn` | experimental | Follow similar labeled examples | Trained selector artifact and embeddings | [KNN](./selection/knn) |
+| `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
+| `svm` | experimental | Apply a learned decision boundary | Trained selector artifact and embeddings | [SVM](./selection/svm) |
+| `mlp` | experimental | Apply a learned nonlinear classifier | Trained selector artifact | [MLP](./selection/mlp) |
 
 ### Looper Algorithms
 
-- [Confidence](./looper/confidence)
-- [Fusion](./looper/fusion)
-- [Router Flow](./looper/workflows)
-- [Ratings](./looper/ratings)
-- [ReMoM](./looper/remom)
+Looper algorithms make additional model calls through
+`global.integrations.looper.endpoint`. They increase latency and token usage,
+and intermediate content is sent to every configured worker involved in the
+run.
+
+| Type | Status | Goal | Guide |
+|---|---|---|---|
+| `confidence` | supported | Escalate sequentially until confidence clears a threshold | [Confidence](./looper/confidence) |
+| `ratings` | supported | Return one choice from each candidate with bounded concurrency | [Ratings](./looper/ratings) |
+| `remom` | supported | Explore several reasoning paths over multiple rounds, then synthesize | [ReMoM](./looper/remom) |
+| `fusion` | experimental | Run an analysis panel and judge/synthesis pass | [Fusion](./looper/fusion) |
+| `workflows` | experimental | Execute a bounded static or planner-generated worker flow | [Router Flow](./looper/workflows) |
+
+Support tiers and execution paths are defined in
+[`routing_surface_catalog.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/routing_surface_catalog.go).
+
+## Operational Boundaries
+
+- Candidate model names must resolve through `routing.modelCards` and
+  `providers.models` in a complete config.
+- Learned selectors need artifacts produced for the same embedding dimension
+  and candidate labels used at runtime.
+- Latency and load observations are local to a Router process; they are not a
+  cluster-wide scheduler.
+- Looper algorithms share request content with their configured workers. Apply
+  privacy and provider-boundary decisions before choosing them.
+- Validate a complete config with `vllm-sr validate --config config.yaml`.

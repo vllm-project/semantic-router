@@ -353,7 +353,10 @@ global:
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
 	}
-	if cfg.RouterReplay.StoreBackend != "postgres" {
+	if cfg.RouterReplay.Enabled {
+		t.Fatal("expected sparse global override to preserve default router_replay.enabled=false")
+	}
+	if cfg.RouterReplay.StoreBackend != "memory" {
 		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
 	}
 	if cfg.RouterReplay.TTLSeconds != 2592000 {

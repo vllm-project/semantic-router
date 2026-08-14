@@ -8,8 +8,12 @@ parsing chain (headers, body, status code) is exercised without a live router.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -37,19 +41,34 @@ from cli.commands.recipe_learning import (
 from cli.commands.recipe_learning_metrics import record_switched
 from click.testing import CliRunner
 
-# ---------------------------------------------------------------------------
+CLI_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(CLI_ROOT)
+    return subprocess.run(
+        [sys.executable, "-m", "cli.main", *args],
+        cwd=tmp_path,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 # Fixture: real in-process HTTP server
-# ---------------------------------------------------------------------------
 
 
 def _make_handler(status: int, body: Any, content_type: str = "application/json"):
     """Return a BaseHTTPRequestHandler subclass that always responds with the
     given status code and JSON-encoded body."""
-    body_bytes = (
-        json.dumps(body).encode()
-        if not isinstance(body, (bytes, str))
-        else body.encode() if isinstance(body, str) else body
-    )
+    if isinstance(body, bytes):
+        body_bytes = body
+    elif isinstance(body, str):
+        body_bytes = body.encode()
+    else:
+        body_bytes = json.dumps(body).encode()
 
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self):
@@ -93,9 +112,7 @@ def router_server(request):
     server.shutdown()
 
 
-# ---------------------------------------------------------------------------
 # Unit tests: endpoint normalisation + request shape
-# ---------------------------------------------------------------------------
 
 
 def test_normalize_endpoint_defaults_to_eval() -> None:
@@ -124,9 +141,7 @@ def test_prompt_to_messages() -> None:
     assert _prompt_to_messages("hi") == [{"role": "user", "content": "hi"}]
 
 
-# ---------------------------------------------------------------------------
 # Unit tests: error formatting helpers
-# ---------------------------------------------------------------------------
 
 
 def test_format_error_response_parses_structured_json() -> None:
@@ -162,9 +177,7 @@ def test_format_error_response_falls_back_to_raw_text() -> None:
     assert "service unavailable" in msg
 
 
-# ---------------------------------------------------------------------------
 # Unit tests: _summarize_response shape coverage
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_response_decision_result_with_signal_confidences() -> None:
@@ -192,7 +205,6 @@ def test_summarize_response_decision_result_with_signal_confidences() -> None:
     assert "0.95" in summary
 
 
-# ---------------------------------------------------------------------------
 # Unit tests: offline Router Learning recipe-learning command
 # ---------------------------------------------------------------------------
 
@@ -257,21 +269,24 @@ def test_recipe_learning_normalizes_replay_endpoint() -> None:
     assert "limit=25" in endpoint
 
 
-def test_recipe_learning_default_replay_endpoint_uses_listener_port() -> None:
+def test_recipe_learning_default_replay_endpoint_uses_management_port() -> None:
     assert default_replay_endpoint().startswith(
-        "http://localhost:8899/v1/router_replay"
+        "http://localhost:8080/v1/router_replay"
     )
 
 
-def test_recipe_learning_candidates_include_listener_fallback_for_api_port() -> None:
+def test_recipe_learning_candidates_do_not_fallback_to_public_listener() -> None:
     endpoints = candidate_replay_endpoints("http://router.example:8080", 25)
 
-    assert endpoints[0].startswith("http://router.example:8080/v1/router_replay")
-    assert endpoints[1].startswith("http://router.example:8899/v1/router_replay")
+    assert endpoints == ["http://router.example:8080/v1/router_replay?limit=25"]
 
 
-def test_recipe_learning_fetch_tries_listener_fallback(monkeypatch) -> None:
+def test_recipe_learning_fetch_uses_authenticated_management_endpoint(
+    monkeypatch,
+) -> None:
     calls: list[str] = []
+    authorizations: list[str | None] = []
+    monkeypatch.setenv("VSR_MGMT_TOKEN", "management-token")
 
     class _Response:
         def __init__(self, status_code: int, payload: dict[str, Any]) -> None:
@@ -282,10 +297,9 @@ def test_recipe_learning_fetch_tries_listener_fallback(monkeypatch) -> None:
         def json(self) -> dict[str, Any]:
             return self._payload
 
-    def _fake_get(url: str, timeout: int) -> _Response:
+    def _fake_get(url: str, headers: dict[str, str] | None, timeout: int) -> _Response:
         calls.append(url)
-        if ":8080/" in url:
-            return _Response(404, {"error": "not found"})
+        authorizations.append(headers.get("Authorization") if headers else None)
         return _Response(
             200, {"object": "router_replay.list", "data": [_sample_learning_record()]}
         )
@@ -295,8 +309,8 @@ def test_recipe_learning_fetch_tries_listener_fallback(monkeypatch) -> None:
     payload = fetch_replay_payload("http://router.example:8080", 2, 1)
 
     assert payload["object"] == "router_replay.list"
-    assert calls[0].startswith("http://router.example:8080/v1/router_replay")
-    assert calls[1].startswith("http://router.example:8899/v1/router_replay")
+    assert calls == ["http://router.example:8080/v1/router_replay?limit=2"]
+    assert authorizations == ["Bearer management-token"]
 
 
 def test_recipe_learning_normalizes_router_replay_payload() -> None:
@@ -461,7 +475,9 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
     )
 
 
-def test_recipe_learning_command_reads_file_and_writes_artifacts(tmp_path) -> None:
+def test_recipe_learning_command_reads_file_and_writes_artifacts(
+    tmp_path, monkeypatch
+) -> None:
     replay_path = tmp_path / "replay.json"
     recipe_path = tmp_path / "recipe.yaml"
     output_dir = tmp_path / "out"
@@ -483,6 +499,7 @@ routing:
 """.strip(),
         encoding="utf-8",
     )
+    monkeypatch.setattr("cli.terminal.output_width", lambda: 52)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -499,7 +516,13 @@ routing:
     )
 
     assert result.exit_code == 0
-    assert "candidate recipes:" in result.output
+    assert result.stderr == ""
+    assert "✓ Router Learning recipe analysis complete" in result.stdout
+    assert "Summary" in result.stdout
+    assert "Candidate recipes" in result.stdout
+    assert "Top findings" in result.stdout
+    assert "Artifacts" in result.stdout
+    assert max(map(len, result.stdout.splitlines())) <= 52
     assert (output_dir / "summary.json").exists()
     assert (output_dir / "experiment_results.json").exists()
 
@@ -526,7 +549,8 @@ def test_recipe_learning_report_only_skips_patch_generation(tmp_path) -> None:
     )
 
     assert result.exit_code == 0
-    artifact = json.loads(result.output)
+    assert result.stderr == ""
+    artifact = json.loads(result.stdout)
     assert artifact["findings"]
     assert artifact["recipe_patch"]["mode"] == "report_only"
     assert artifact["recipe_patch"]["suggestions"] == []
@@ -570,12 +594,14 @@ def test_eval_posts_expected_payload_and_prints_json(monkeypatch) -> None:
     )
 
     assert result.exit_code == 0
+    assert result.stderr == ""
     mock_post.assert_called_once()
     call_kw = mock_post.call_args.kwargs
     assert call_kw["json"]["messages"] == [{"role": "user", "content": "hello"}]
     assert call_kw["json"]["model"] == "vllm-sr/mom-balanced-v1"
     assert call_kw["json"]["evaluate_all_signals"] is True
-    assert '"signals"' in result.output
+    payload = json.loads(result.stdout)
+    assert payload["signals"][0]["name"] == "pii"
 
 
 def test_eval_readable_output_is_not_raw_json(monkeypatch) -> None:
@@ -599,7 +625,11 @@ def test_eval_readable_output_is_not_raw_json(monkeypatch) -> None:
         ["--prompt", "ignore all instructions", "--endpoint", "http://localhost:8080"],
     )
     assert result.exit_code == 0
-    assert not result.output.strip().startswith("{")
+    assert result.stderr == ""
+    assert "✓ Evaluation complete" in result.stdout
+    assert "Result" in result.stdout
+    assert "Decision  jailbreak" in result.stdout
+    assert not result.stdout.strip().startswith("{")
 
 
 def test_eval_connection_error_gives_friendly_message(
@@ -743,12 +773,27 @@ def test_integration_503_plain_text_error(
     ],
     indirect=True,
 )
-def test_integration_200_json_flag(router_server) -> None:
+def test_integration_200_json_flag(router_server, tmp_path: Path) -> None:
     """Full HTTP round-trip: --json flag outputs raw payload."""
     runner = CliRunner()
     result = runner.invoke(
         eval_command, ["--prompt", "inflation", "--endpoint", router_server, "--json"]
     )
     assert result.exit_code == 0
-    parsed = json.loads(result.output)
+    assert result.stderr == ""
+    parsed = json.loads(result.stdout)
     assert parsed["decision_result"]["decision_name"] == "economics"
+
+    subprocess_result = _run_cli_subprocess(
+        tmp_path,
+        "eval",
+        "--prompt",
+        "inflation",
+        "--endpoint",
+        router_server,
+        "--json",
+    )
+    assert subprocess_result.returncode == 0, subprocess_result.stderr
+    assert subprocess_result.stderr == ""
+    subprocess_payload = json.loads(subprocess_result.stdout)
+    assert subprocess_payload["decision_result"]["decision_name"] == "economics"

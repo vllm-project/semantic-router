@@ -48,3 +48,8 @@ routing:
 ```
 
 Even for a single condition, keep the route named and reusable. If the policy becomes more complex later, you can promote it to `and/`, `or/`, or `composite/` without changing the surrounding config layout.
+
+The referenced signal must be declared in the same recipe. A single learned
+signal remains probabilistic, so use trusted identity or deterministic policy
+for authorization-sensitive routing. Maintained example:
+[`config/fragments/decision/single/domain-business.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/single/domain-business.yaml).

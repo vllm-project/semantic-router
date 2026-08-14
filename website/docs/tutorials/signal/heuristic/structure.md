@@ -11,7 +11,7 @@ This family is heuristic: it stays rule-based, but unlike `keyword` it can count
 - Keeps request-shape routing explicit instead of hiding it inside ad hoc keyword lists.
 - Lets one detector use counts, densities, or ordered marker sequences without changing the decision DSL.
 - Produces named reusable signals that projections and decisions can consume like any other family.
-- Preserves the repo-native layering: detector thresholds stay in signals, route policy stays in decisions.
+- Keeps detector thresholds in signals and route policy in decisions.
 
 ## What Problem Does It Solve?
 
@@ -147,3 +147,11 @@ Example signal meanings:
 - `constraint_dense`: count constraint markers and divide by multilingual text units to capture prompts whose requirements are unusually dense across English, Chinese, and mixed-script prompts.
 
 Use `structure` when routing depends on request form, but you still want the router contract to stay typed and declarative.
+
+## Dependencies and Limitations
+
+Structure rules inspect request text locally and require no learned model. They
+measure form rather than semantic difficulty, so calibrate their predicates on
+real prompts and combine them with learned signals when meaning matters.
+Maintained example:
+[`config/fragments/signal/structure/request-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/structure/request-shape.yaml).

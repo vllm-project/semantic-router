@@ -44,3 +44,13 @@ plugins:
       threshold: 0.8
       action: header
 ```
+
+This is a composition example, not a `content_safety` plugin type. The
+`system_prompt` adds request-side guidance, `header_mutation` adds a policy
+label, and `response_jailbreak` evaluates the generated response. The bundle
+does not run a request-side content classifier, and the header is not proof
+that content is safe. Calibrate response screening and decide whether
+header-only handling is sufficient.
+
+Maintained bundle:
+[`config/fragments/plugin/content-safety/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/content-safety/hybrid.yaml).

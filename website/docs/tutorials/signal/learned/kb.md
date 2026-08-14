@@ -68,14 +68,14 @@ global:
 routing:
   signals:
     kb:
-    - name: privacy_policy
-      kb: privacy_kb
+      - name: privacy_policy
+        kb: privacy_kb
         target:
           kind: group
           value: privacy_policy
         match: best
       - name: proprietary_code
-        kb: privacy_knowledge_base
+        kb: privacy_kb
         target:
           kind: label
           value: proprietary_code
@@ -114,10 +114,24 @@ routing:
         method: weighted_sum
         inputs:
           - type: kb_metric
-            kb: privacy_knowledge_base
+            kb: privacy_kb
             metric: private_vs_public
             value_source: score
             weight: 1.0
 ```
 
 Named knowledge base metrics are declared under `global.model_catalog.kbs[].metrics[]`. Built-in metrics `best_score` and `best_matched_score` are always available.
+
+## Dependencies and Limitations
+
+- The knowledge-base package is loaded from
+  `global.model_catalog.kbs[].source`. Keep its manifest and files versioned
+  together.
+- Request text is embedded through the shared semantic embedding runtime. A
+  remote embedding provider therefore receives the text.
+- Labels, groups, thresholds, and embedding model form one calibrated unit;
+  re-evaluate them together when any part changes.
+- Start from the maintained signal fragment
+  [`config/fragments/signal/kb/privacy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/kb/privacy.yaml)
+  and the complete KB declaration in
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

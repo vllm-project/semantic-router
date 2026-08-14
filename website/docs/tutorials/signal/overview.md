@@ -5,9 +5,9 @@
 `signal/` is the detection layer of `routing`.
 
 Signals define named detectors under `routing.signals`. A decision then references those names from `routing.decisions`, so detection stays reusable and route logic stays readable.
-Cross-signal coordination and derived routing bands now live under `routing.projections`. `routing.projections.partitions` is the runtime home for exclusive domain or embedding partitions, while decisions can reference `routing.projections.mappings` outputs with `type: projection`. In DSL authoring, the same concepts show up as `PROJECTION partition ...` plus `PROJECTION score ...` / `PROJECTION mapping ...` blocks.
-For the full projection workflow, canonical YAML contract, dashboard path, and DSL examples, see [Projections](../projection/overview).
-
+Cross-signal coordination and derived routing bands live under
+`routing.projections`. Decisions reference mapping outputs with
+`type: projection`; see [Projections](../projection/overview).
 This tutorial group maps directly to the fragment tree under `config/fragments/signal/`, but the docs are organized by extraction style:
 
 - `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
@@ -77,7 +77,8 @@ routing:
             gte: 0.25
 ```
 
-The latest signal docs still cover every family under `config/fragments/signal/`, but they are grouped into two second-level categories so the runtime cost and dependency model stay clear.
+The inventory below covers every supported signal family and groups it by
+runtime cost and dependency model.
 
 ### Heuristic Signals
 
@@ -125,6 +126,13 @@ Keep these rules in mind:
 
 - Read [Projections](../projection/overview) when you need `PROJECTION partition`, weighted score aggregation, or named routing bands.
 - Start from [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) for the exhaustive public contract.
-- Use the maintained `balance` assets when you want a realistic repo-native routing strategy:
+- Use the maintained `balance` assets for a complete routing strategy:
   - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
   - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
+
+Signals can inspect request text, conversation history, images, caller
+metadata, or trusted identity depending on the family. Learned signals may send
+that data to a configured remote classifier or embedding provider. Review the
+dependency and data notes on each family page before using it as a policy gate.
+The supported inventory is defined in
+[`routing_surface_catalog.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/routing_surface_catalog.go).

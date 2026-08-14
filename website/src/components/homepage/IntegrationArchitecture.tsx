@@ -15,28 +15,38 @@ import styles from './IntegrationArchitecture.module.css'
 
 const routerStages = [
   {
+    id: 'entrypoint',
+    label: translate({ id: 'homepage.integration.pipeline.entrypoint.label', message: 'Entrypoint' }),
+    detail: translate({ id: 'homepage.integration.pipeline.entrypoint.detail', message: 'Resolve' }),
+  },
+  {
+    id: 'recipe',
+    label: translate({ id: 'homepage.integration.pipeline.recipe.label', message: 'Recipe' }),
+    detail: translate({ id: 'homepage.integration.pipeline.recipe.detail', message: 'Isolate' }),
+  },
+  {
     id: 'signal',
-    label: translate({ id: 'homepage.integration.pipeline.signal.label', message: 'Signal layer' }),
+    label: translate({ id: 'homepage.integration.pipeline.signal.label', message: 'Signals' }),
     detail: translate({ id: 'homepage.integration.pipeline.signal.detail', message: 'Detect' }),
   },
   {
     id: 'projection',
-    label: translate({ id: 'homepage.integration.pipeline.projection.label', message: 'Projection layer' }),
-    detail: translate({ id: 'homepage.integration.pipeline.projection.detail', message: 'Coordinate' }),
+    label: translate({ id: 'homepage.integration.pipeline.projection.label', message: 'Projections' }),
+    detail: translate({ id: 'homepage.integration.pipeline.projection.detail', message: 'Enrich' }),
   },
   {
     id: 'decision',
-    label: translate({ id: 'homepage.integration.pipeline.decision.label', message: 'Decision engine' }),
+    label: translate({ id: 'homepage.integration.pipeline.decision.label', message: 'Decision' }),
     detail: translate({ id: 'homepage.integration.pipeline.decision.detail', message: 'Match' }),
   },
   {
     id: 'algorithm',
-    label: translate({ id: 'homepage.integration.pipeline.algorithm.label', message: 'Algorithms' }),
-    detail: translate({ id: 'homepage.integration.pipeline.algorithm.detail', message: 'Optimize' }),
+    label: translate({ id: 'homepage.integration.pipeline.algorithm.label', message: 'Algorithm' }),
+    detail: translate({ id: 'homepage.integration.pipeline.algorithm.detail', message: 'Select' }),
   },
   {
     id: 'plugins',
-    label: translate({ id: 'homepage.integration.pipeline.plugins.label', message: 'Plugins' }),
+    label: translate({ id: 'homepage.integration.pipeline.plugins.label', message: 'Plugin hooks' }),
     detail: translate({ id: 'homepage.integration.pipeline.plugins.detail', message: 'Enforce' }),
   },
 ] as const
@@ -53,7 +63,9 @@ type ModelTarget = {
 
 type IncomingQuery = {
   id: string
-  label: string
+  modelId: string
+  recipe: string
+  targetIndex: number
 }
 
 const modelTargets: ModelTarget[] = [
@@ -103,37 +115,28 @@ const modelTargets: ModelTarget[] = [
 
 const incomingQueries: IncomingQuery[] = [
   {
-    id: 'query-1',
-    label: translate({ id: 'homepage.integration.query1', message: 'Query 1' }),
+    id: 'flash',
+    modelId: 'vllm-sr/flash-v1',
+    recipe: 'flash recipe',
+    targetIndex: 3,
   },
   {
-    id: 'query-2',
-    label: translate({ id: 'homepage.integration.query2', message: 'Query 2' }),
+    id: 'ultra',
+    modelId: 'vllm-sr/ultra-v1',
+    recipe: 'ultra recipe',
+    targetIndex: 0,
   },
   {
-    id: 'query-3',
-    label: translate({ id: 'homepage.integration.query3', message: 'Query 3' }),
-  },
-  {
-    id: 'query-4',
-    label: translate({ id: 'homepage.integration.query4', message: 'Query 4' }),
-  },
-  {
-    id: 'query-5',
-    label: translate({ id: 'homepage.integration.query5', message: 'Query 5' }),
-  },
-  {
-    id: 'query-6',
-    label: translate({ id: 'homepage.integration.query6', message: 'Query 6' }),
+    id: 'balance',
+    modelId: 'vllm-sr/balance-v1',
+    recipe: 'balance recipe',
+    targetIndex: 4,
   },
 ]
 
-// Sequential queries, each routed to a different model in the fleet.
-const ROUTE_TARGET_BY_QUERY = [3, 0, 4, 1, 5, 2]
-
 function getModelForQuery(queryIndex: number): ModelTarget {
-  const modelIndex = ROUTE_TARGET_BY_QUERY[queryIndex % ROUTE_TARGET_BY_QUERY.length]
-  return modelTargets[modelIndex]
+  const query = incomingQueries[queryIndex % incomingQueries.length]
+  return modelTargets[query.targetIndex]
 }
 
 const ROUTE_CYCLE_MS = 3400
@@ -244,10 +247,14 @@ function measureRouteLayout(
 function QueryColumn({
   title,
   activeQueryIndex,
+  onSelect,
+  onPause,
   onRowRef,
 }: {
   title: string
   activeQueryIndex: number
+  onSelect: (queryIndex: number) => void
+  onPause: () => void
   onRowRef: (queryId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   return (
@@ -265,14 +272,23 @@ function QueryColumn({
               className={clsx(styles.flowNode, styles.query, {
                 [styles.queryActive]: active,
               })}
-              style={{ animationDelay: `${index * 0.15}s` }}
             >
-              <span className={styles.queryLabel}>{query.label}</span>
-              {active && (
-                <span className={styles.querySending}>
-                  <Translate id="homepage.integration.sending">Sending</Translate>
-                </span>
-              )}
+              <button
+                type="button"
+                className={styles.queryButton}
+                aria-pressed={active}
+                onClick={() => {
+                  onSelect(index)
+                }}
+                onFocus={onPause}
+              >
+                <span className={styles.queryLabel}>{query.modelId}</span>
+                {active && (
+                  <span className={styles.querySending}>
+                    <Translate id="homepage.integration.resolving">Resolving</Translate>
+                  </span>
+                )}
+              </button>
             </li>
           )
         })}
@@ -283,11 +299,11 @@ function QueryColumn({
 
 function RouterPipeline({
   logoSrc,
-  activeQueryId,
+  activeQuery,
   onStageRef,
 }: {
   logoSrc: string
-  activeQueryId: string
+  activeQuery: IncomingQuery
   onStageRef: (stageId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   return (
@@ -299,7 +315,7 @@ function RouterPipeline({
             <Translate id="homepage.integration.pipeline.eyebrow">System Level Intelligence</Translate>
           </span>
           <strong>
-            <Translate id="homepage.integration.pipeline.title">model id: vllm-sr/auto</Translate>
+            {activeQuery.modelId}
           </strong>
         </div>
       </header>
@@ -307,20 +323,30 @@ function RouterPipeline({
       <ol className={styles.pipelineStages}>
         {routerStages.map((stage, index) => (
           <li
-            key={`${activeQueryId}-${stage.id}`}
+            key={`${activeQuery.id}-${stage.id}`}
             ref={(node) => {
               onStageRef(stage.id, node)
             }}
             className={styles.pipelineStage}
             style={{
-              '--stage-delay': `${0.28 + index * 0.43}s`,
+              '--stage-delay': `${0.22 + index * 0.31}s`,
             } as React.CSSProperties}
           >
             <span className={styles.pipelineStageIndex}>
               {String(index + 1).padStart(2, '0')}
             </span>
             <strong>{stage.label}</strong>
-            <span className={styles.pipelineStageDetail}>{stage.detail}</span>
+            <span
+              className={clsx(styles.pipelineStageDetail, {
+                [styles.pipelineStageDetailValue]: stage.id === 'entrypoint' || stage.id === 'recipe',
+              })}
+            >
+              {stage.id === 'entrypoint'
+                ? activeQuery.modelId
+                : stage.id === 'recipe'
+                  ? activeQuery.recipe
+                  : stage.detail}
+            </span>
           </li>
         ))}
       </ol>
@@ -557,6 +583,7 @@ function RoutingAnimation({
 
 export default function IntegrationArchitecture(): JSX.Element {
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
+  const [isAutoCycling, setIsAutoCycling] = useState(true)
   const [layout, setLayout] = useState<RouteLayout | null>(null)
   const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const diagramRef = useRef<HTMLDivElement | null>(null)
@@ -576,6 +603,11 @@ export default function IntegrationArchitecture(): JSX.Element {
 
   const handleModelRowRef = useCallback((modelId: string, node: HTMLLIElement | null) => {
     modelRowRefs.current[modelId] = node
+  }, [])
+
+  const handleQuerySelect = useCallback((queryIndex: number) => {
+    setIsAutoCycling(false)
+    setActiveQueryIndex(queryIndex)
   }, [])
 
   const updateLayout = useCallback(() => {
@@ -645,6 +677,26 @@ export default function IntegrationArchitecture(): JSX.Element {
   }, [updateLayout, activeQueryIndex])
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updatePreference = () => {
+      if (mediaQuery.matches) {
+        setIsAutoCycling(false)
+      }
+    }
+
+    updatePreference()
+    mediaQuery.addEventListener?.('change', updatePreference)
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', updatePreference)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isAutoCycling) {
+      return undefined
+    }
+
     const intervalId = window.setInterval(() => {
       setActiveQueryIndex(current => (current + 1) % incomingQueries.length)
     }, ROUTE_CYCLE_MS)
@@ -652,7 +704,7 @@ export default function IntegrationArchitecture(): JSX.Element {
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [])
+  }, [isAutoCycling])
 
   return (
     <section className={shared.bandSection} aria-labelledby="integration-architecture-title">
@@ -666,46 +718,69 @@ export default function IntegrationArchitecture(): JSX.Element {
               <Translate id="homepage.integration.title">Route queries to the right model</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.integration.extproc.summary">Route each request to the best model pool through one OpenAI-compatible API.</Translate>
+              <Translate id="homepage.integration.extproc.summary">Resolve each request-facing model ID to an isolated recipe, then route within that recipe's model pool.</Translate>
             </p>
           </header>
         </ScrollReveal>
 
         <ScrollReveal delay={80}>
           <div className={`${shared.darkCard} ${styles.shell}`}>
-            <div className={styles.routeStatus} aria-live="polite">
-              <span className={styles.routeStatusLabel}>
-                <Translate id="homepage.integration.routing">Routing</Translate>
-              </span>
-              <span className={styles.routeStatusValue} key={`${activeQuery.id}-${activeModel.id}`}>
-                {activeQuery.label}
-                {' '}
-                →
-                {' '}
-                {activeModel.label}
-              </span>
+            <div className={styles.routeControls}>
+              <div className={styles.routeStatus}>
+                <span className={styles.routeStatusLabel}>
+                  <Translate id="homepage.integration.routing">Routing</Translate>
+                </span>
+                <span className={styles.routeStatusValue} key={`${activeQuery.id}-${activeModel.id}`}>
+                  {activeQuery.modelId}
+                  {' '}
+                  →
+                  {' '}
+                  {activeQuery.recipe}
+                  {' '}
+                  →
+                  {' '}
+                  {activeModel.label}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={styles.routeToggle}
+                aria-controls="integration-route-diagram"
+                onClick={() => {
+                  setIsAutoCycling(current => !current)
+                }}
+              >
+                <span aria-hidden="true">{isAutoCycling ? 'Ⅱ' : '▶'}</span>
+                {isAutoCycling
+                  ? <Translate id="homepage.integration.pause">Pause rotation</Translate>
+                  : <Translate id="homepage.integration.resume">Resume rotation</Translate>}
+              </button>
             </div>
 
-            <div className={styles.diagramShell} ref={diagramRef}>
+            <div id="integration-route-diagram" className={styles.diagramShell} ref={diagramRef}>
               <RoutingAnimation
                 activeQuery={activeQuery}
                 activeModel={activeModel}
                 layout={layout}
               />
               <QueryColumn
-                title={translate({ id: 'homepage.integration.incoming', message: 'Incoming queries' })}
+                title={translate({ id: 'homepage.integration.incoming', message: 'Entrypoint requests' })}
                 activeQueryIndex={activeQueryIndex}
+                onSelect={handleQuerySelect}
+                onPause={() => {
+                  setIsAutoCycling(false)
+                }}
                 onRowRef={handleQueryRowRef}
               />
               <RouterPipeline
                 logoSrc={logoSrc}
-                activeQueryId={activeQuery.id}
+                activeQuery={activeQuery}
                 onStageRef={handleStageRowRef}
               />
               <ModelColumn
                 title={translate({ id: 'homepage.integration.models', message: 'Model pools' })}
                 activeModelId={activeModel.id}
-                activeQueryLabel={activeQuery.label}
+                activeQueryLabel={activeQuery.modelId}
                 onRowRef={handleModelRowRef}
               />
             </div>
@@ -713,7 +788,7 @@ export default function IntegrationArchitecture(): JSX.Element {
             <div className={styles.footer}>
               <span className={styles.compatPill}>
                 <Translate id="homepage.integration.extproc.compat">
-                  Backward compatible — no client changes required
+                  OpenAI-compatible request and response surface
                 </Translate>
               </span>
               <Link className={styles.docsLink} to="/docs/installation">

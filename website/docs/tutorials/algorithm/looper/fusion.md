@@ -2,7 +2,8 @@
 
 ## Overview
 
-`fusion` is a **looper** algorithm for multi-model deliberation. It fans a prompt out to an analysis panel, asks a judge model for structured analysis, and then asks the judge/calling model to produce the final answer.
+`fusion` asks several models to analyze a request and a judge model to
+synthesize one final answer.
 
 It aligns to `config/fragments/algorithm/looper/fusion.yaml`.
 
@@ -68,7 +69,7 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 
 - Fusion costs multiple model calls per request.
 - Streaming is emitted after panel and judge phases complete.
-- The first implementation does not include OpenRouter web search/fetch parity.
+- The current Fusion path does not include OpenRouter web search or fetch.
 - Final quality depends on the configured judge/calling model.
 
 ## Configuration
@@ -79,6 +80,8 @@ Decision-level Fusion:
 routing:
   decisions:
     - name: deliberation
+      description: Compare candidate answers and synthesize one response.
+      priority: 100
       output_contract: Preserve any explicit output format exactly.
       modelRefs:
         - model: qwen3-32b
@@ -285,3 +288,8 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
 | `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
+
+Panel responses and the original request are sent to the judge model. Treat all
+panel and judge providers as one data boundary, and disable intermediate traces
+when they would expose sensitive content. Maintained example:
+[`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml).

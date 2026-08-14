@@ -21,61 +21,35 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
-        'overview/collective-intelligence',
+        'overview/use-cases',
         'overview/signal-driven-decisions',
         'overview/mom-model-family',
       ],
     },
     {
       type: 'category',
-      label: 'Installation',
+      label: 'Getting Started',
       items: [
         'installation/installation',
-        'installation/ollama',
-        'installation/amd-rocm',
-        {
-          type: 'link',
-          label: 'AMD Multi-Objective Model Pool',
-          href: '/blog/multi-objective-mom-on-amd-developer-cloud',
-        },
-        'installation/k8s/operator',
-        'installation/configuration',
-        'installation/native-backends',
-        'installation/upgrade-rollback',
-        {
-          type: 'category',
-          label: 'Install with Gateways',
-          items: [
-            'installation/k8s/ai-gateway',
-            'installation/k8s/agentgateway',
-            'installation/k8s/streamed-extproc',
-            'installation/k8s/istio',
-            'installation/k8s/gateway-api-inference-extension',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Install with Frameworks',
-          items: [
-            'installation/k8s/production-stack',
-            'installation/k8s/aibrix',
-            'installation/k8s/llm-d',
-            'installation/k8s/dynamo',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Backend Stores',
-          items: [
-            'installation/valkey-memory',
-          ],
-        },
+        'installation/deployment-options',
       ],
     },
     {
       type: 'category',
-      label: 'Capacities',
+      label: 'Capabilities',
       items: [
+        {
+          type: 'category',
+          label: 'Entrypoints & Recipes',
+          link: {
+            type: 'doc',
+            id: 'tutorials/global/entrypoints-and-recipes',
+          },
+          items: [
+            'tutorials/global/entrypoints',
+            'tutorials/global/recipes',
+          ],
+        },
         {
           type: 'category',
           label: 'Signals',
@@ -228,14 +202,135 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Global',
+          label: 'Shared Services',
+          link: {
+            type: 'doc',
+            id: 'tutorials/global/overview',
+          },
           items: [
-            'tutorials/global/overview',
-            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
             'tutorials/global/remote-embeddings',
+          ],
+        },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Deploy & Operate',
+      items: [
+        {
+          type: 'category',
+          label: 'Configure',
+          link: {
+            type: 'doc',
+            id: 'installation/configuration',
+          },
+          items: [
+            'installation/configuration-workflows',
+            'installation/models-and-recipes',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Deploy',
+          items: [
+            {
+              type: 'category',
+              label: 'Docker',
+              link: {
+                type: 'doc',
+                id: 'installation/docker',
+              },
+              items: [
+                'installation/ollama',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Kubernetes',
+              items: [
+                'installation/k8s/operator',
+                {
+                  type: 'category',
+                  label: 'Gateways',
+                  link: {
+                    type: 'doc',
+                    id: 'installation/k8s/gateways',
+                  },
+                  items: [
+                    'installation/k8s/ai-gateway',
+                    'installation/k8s/agentgateway',
+                    'installation/k8s/streamed-extproc',
+                    'installation/k8s/istio',
+                    'installation/k8s/gateway-api-inference-extension',
+                    'installation/k8s/gateway-testing',
+                  ],
+                },
+                {
+                  type: 'category',
+                  label: 'Inference Platforms',
+                  link: {
+                    type: 'doc',
+                    id: 'installation/k8s/inference-platforms',
+                  },
+                  items: [
+                    'installation/k8s/production-stack',
+                    'installation/k8s/aibrix',
+                    'installation/k8s/llm-d',
+                    {
+                      type: 'doc',
+                      id: 'installation/k8s/dynamo',
+                      label: 'Integrate with NVIDIA Dynamo',
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Hardware',
+              items: [
+                'installation/amd-rocm',
+                'installation/nvidia-cuda',
+              ],
+            },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Data & Storage',
+          link: {
+            type: 'doc',
+            id: 'installation/storage-overview',
+          },
+          items: [
+            'installation/valkey-memory',
+            'installation/qdrant',
+            'installation/milvus',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Security',
+          items: [
+            'installation/security-hardening',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Operations',
+          items: [
+            'installation/k8s/operator-operations',
+            'installation/upgrade-rollback',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Runtime Reference',
+          items: [
+            'installation/native-backends',
           ],
         },
       ],
@@ -250,29 +345,32 @@ const sidebars: SidebarsConfig = {
         'fleet-sim/use-cases',
         'fleet-sim/sim-algorithms',
         'fleet-sim/power-model',
-        {
-          type: 'link',
-          label: 'Fleet Simulator PDF',
-          href: 'pathname:///files/fleet-sim/fleet-sim.pdf',
-        },
+        'fleet-sim/guide',
       ],
     },
     {
       type: 'category',
       label: 'Proposals',
+      link: {
+        type: 'doc',
+        id: 'proposals/index',
+      },
       items: [
-        'proposals/batch-and-capacity-aware-routing',
         'proposals/model-execution-fallback',
-        'proposals/unified-config-contract-v0-3',
+        'proposals/batch-and-capacity-aware-routing',
         'proposals/router-flow-workflows',
-        'proposals/hallucination-mitigation-milestone',
-        'proposals/prompt-classification-routing',
-        'proposals/nvidia-dynamo-integration',
-        'proposals/production-stack-integration',
-        'proposals/multi-protocol-adaptor',
-        'proposals/agentic-rag',
-        'proposals/agentic-memory',
+        'proposals/router-learning-memory-and-adaptations',
+        'proposals/deliberation-algorithms',
         'proposals/Prism-153key',
+        'proposals/unified-config-contract-v0-3',
+        'proposals/multi-protocol-adaptor',
+        'proposals/agentic-memory',
+        'proposals/agentic-rag',
+        'proposals/advanced-tool-filtering',
+        'proposals/hallucination-mitigation-milestone',
+        'proposals/production-stack-integration',
+        'proposals/nvidia-dynamo-integration',
+        'proposals/prompt-classification-routing',
       ],
     },
     {
@@ -297,6 +395,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'api/router',
         'api/apiserver',
+        'api/session-identification',
+        'api/semantic-router-crd',
         'api/crd-reference',
       ],
     },
@@ -317,6 +417,7 @@ const sidebars: SidebarsConfig = {
         'community/overview',
         'community/development',
         'community/documentation',
+        'community/translation-guide',
         'community/code-style',
       ],
     },
@@ -324,5 +425,3 @@ const sidebars: SidebarsConfig = {
 }
 
 export default sidebars
-
-// ci: trigger rerun

@@ -6,7 +6,9 @@
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
-If `global.model_catalog.modules.classifier.preference.use_contrastive` is omitted, vSR now defaults it to `true`. That means a profile like `config/recipes/balance/config.yaml` can rely on preference signals without adding a separate global classifier block unless it wants to disable contrastive mode explicitly.
+`global.model_catalog.modules.classifier.preference.use_contrastive` defaults
+to `true`. Set it to `false` only when you intentionally want the alternative
+classifier path.
 
 ## Key Advantages
 
@@ -66,3 +68,10 @@ global:
 ```
 
 In contrastive mode, the router embeds each preference rule's descriptions and examples, compresses them into representative prototypes when `prototype_scoring` is enabled, and compares the incoming request against those prototypes. `margin_threshold` lets you reject ambiguous winners instead of forcing a weak preference match.
+
+## Dependencies and Limitations
+
+Preference rules use the shared embedding/classifier path and infer style only
+from the available request context. They should not be treated as durable user
+consent or identity. Maintained example:
+[`config/fragments/signal/preference/power-user.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/preference/power-user.yaml).

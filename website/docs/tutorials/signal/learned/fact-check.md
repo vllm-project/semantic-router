@@ -43,3 +43,10 @@ routing:
 ```
 
 Define only the labels your decisions will reference. The learned classifier decides which one fires.
+
+## Dependencies and Limitations
+
+The fact-check classifier processes request text through
+`global.model_catalog.modules.hallucination_mitigation.fact_check`. It predicts
+whether verification is useful; it does not verify a claim. Maintained example:
+[`config/fragments/signal/fact-check/needs-verification.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/fact-check/needs-verification.yaml).

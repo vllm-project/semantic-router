@@ -84,7 +84,7 @@ routing:
 
 最新信号文档仍覆盖 `config/fragments/signal/` 下各族，但按两级分类组织，便于看清运行时成本与依赖模型。
 
-### 启发式信号
+### 启发式信号 {#heuristic-signals}
 
 这类信号来自显式规则、请求形态或轻量检测，**不依赖**路由器自有分类模型。
 
@@ -96,7 +96,7 @@ routing:
 | `language` | `config/fragments/signal/language/` | 按检测到的请求语言路由 | [Language](./heuristic/language) |
 | `structure` | `config/fragments/signal/structure/` | 按请求形态（如问题数量、有序工作流标记）路由 | [Structure](./heuristic/structure) |
 
-### 学习型信号
+### 学习型信号 {#learned-signals}
 
 这类信号使用嵌入或分类模型，通常依赖 `global.model_catalog` 资产或模块配置。
 

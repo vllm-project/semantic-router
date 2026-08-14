@@ -43,3 +43,10 @@ routing:
 ```
 
 Define the feedback labels your decisions will consume, then let the learned detector decide which one matches each turn.
+
+## Dependencies and Limitations
+
+The feedback detector processes conversational text and can confuse quoted or
+hypothetical complaints with real feedback. Evaluate it on follow-up traffic
+and keep a normal fallback path. Maintained example:
+[`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).

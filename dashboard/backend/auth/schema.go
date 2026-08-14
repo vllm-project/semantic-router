@@ -44,7 +44,7 @@ const (
 var DefaultRolePermissions = map[string][]string{
 	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
 	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead},
+	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}

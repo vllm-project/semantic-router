@@ -8,31 +8,11 @@ sidebar_position: 3
 
 `routing.projections.scores` combines matched signal evidence into one continuous numeric value.
 
-Use scores when:
-
-- one route depends on several weak signals rather than one decisive detector
-- learned and heuristic evidence should contribute to the same routing outcome
-- you want numeric aggregation to stay outside the decision layer
-
-## Key Advantages
-
-- Aggregates several weak signals into one continuous numeric value for routing.
-- Keeps weighted blending logic in a single, auditable place.
-- Supports binary, confidence, and raw numeric value sources.
-- Negative weights let a matched signal actively lower the score (e.g., obvious simple requests).
-
 ## What Problem Does It Solve?
 
 Decisions are built for readable boolean logic. They are not a good place to express "take a little evidence from context length, some from reasoning markers, subtract some weight for very simple requests, and then decide which tier this belongs to."
 
 Scores solve that by giving you one explicit numeric layer between signals and decision policy.
-
-In the `balance` recipe, for example:
-
-- `difficulty_score` blends simplicity, context length, structure, reasoning markers, embeddings, and complexity signals
-- `verification_pressure` blends fact-check needs, reference requests, high-stakes domains, correction feedback, and context length
-
-That keeps the weighting story in one place instead of scattering it across many decisions.
 
 ## How Scores Behave at Runtime
 
@@ -53,7 +33,9 @@ Current defaults:
 - `match` defaults to `1.0`
 - `miss` defaults to `0.0`
 
-The validator requires every input to reference a declared signal under `routing.signals`.
+Most inputs reference a declared signal under `routing.signals`. The
+`kb_metric` and `projection` types instead reference derived runtime state as
+described below.
 
 Supported input types currently include:
 
@@ -72,10 +54,20 @@ Supported input types currently include:
 - `authz`
 - `jailbreak`
 - `pii`
+- `kb`
+- `conversation`
+- `event`
+- `kb_metric`
+- `projection`
+
+For `kb_metric`, `kb` identifies a configured knowledge base, `metric` selects
+`best_score`, `best_matched_score`, or a metric declared by that knowledge
+base, and `value_source` is `score`. For `projection`, `name` identifies an
+earlier score or mapping output.
 
 Scores are internal projection state. Decisions do not reference score names directly; mappings consume them next.
 
-## Canonical YAML
+## Configuration
 
 ```yaml
 routing:
@@ -126,36 +118,18 @@ routing:
 
 Raw values can differ in scale across signal families. Choose weights carefully or use threshold bands that account for the expected numeric range.
 
-## DSL
-
-```dsl
-PROJECTION score difficulty_score {
-  method: "weighted_sum"
-  inputs: [
-    { type: "keyword", name: "simple_request_markers", weight: -0.28 },
-    { type: "context", name: "long_context", weight: 0.18 },
-    { type: "keyword", name: "reasoning_request_markers", weight: 0.22, value_source: "confidence" },
-    { type: "embedding", name: "agentic_workflows", weight: 0.18, value_source: "confidence" },
-    { type: "complexity", name: "general_reasoning:hard", weight: 0.22 }
-  ]
-}
-```
-
 ## Config Fields
 
 | Field | Meaning |
 |-------|---------|
 | `name` | score identifier |
 | `method` | currently `weighted_sum` |
-| `inputs[].type` | signal family to read from, or `projection` to reference an earlier score or mapping output |
-| `inputs[].name` | declared signal name; for `type: projection` with `value_source: score` (default) this is a score name, with `value_source: confidence` this is a mapping output name |
+| `inputs[].type` | supported signal family, `kb_metric`, or `projection` |
+| `inputs[].name` | declared signal name, or an earlier score/mapping output for `projection` |
+| `inputs[].kb` / `inputs[].metric` | knowledge-base name and numeric metric for `kb_metric` |
 | `inputs[].weight` | contribution multiplier; negative weights lower the score |
 | `inputs[].value_source` | `binary`, `confidence`, `raw`, or `score` (for projection inputs); `confidence` on a `projection` input reads a mapping output's calibrated confidence |
 | `inputs[].match` / `inputs[].miss` | explicit values for binary mode |
-
-## Configuration
-
-Scores are configured under `routing.projections.scores`. Each score requires a `name`, a `method` (currently `weighted_sum`), and a list of `inputs` referencing declared signals. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
 
 ## When to Use
 
@@ -172,13 +146,6 @@ Do not use scores when:
 - one raw signal already decides the route cleanly
 - the rule can stay readable as ordinary boolean logic
 - you need a decision-visible output name immediately; scores still need a mapping
-
-## Design Notes
-
-- Keep score names stable because `routing.projections.mappings[*].source` depends on them.
-- Document why each weight exists, especially when mixing confidence-bearing learned signals with heuristic signals.
-- Prefer scores for numeric aggregation and keep `routing.decisions` focused on readable boolean composition.
-- Use negative weights when a matched signal should actively lower the tier, as `balance` does for obviously simple requests.
 
 ## Hierarchical Composition
 
@@ -237,16 +204,10 @@ Use `value_source: confidence` to read the calibrated confidence from a mapping 
 
 Scores can be declared in any order. The runtime evaluates them in topological order so that dependencies are always resolved before dependents. Cycles are rejected at config validation time.
 
-### Config Fields for Projection Inputs
-
-| Field | Meaning |
-|-------|---------|
-| `type` | `projection` |
-| `name` | declared score name (for `value_source: score`) or mapping output name (for `value_source: confidence`) |
-| `value_source` | `score` (read raw score value) or `confidence` (read mapping output confidence) |
-| `weight` | contribution multiplier |
-
-## Next Steps
-
-- Read [Mappings](./mappings) to turn a score into named routing bands for decisions.
-- Read [Overview](./overview) for the full projection workflow and signal/decision relationship.
+Scores make no additional model calls and do not persist content by themselves;
+they combine signal results already present for the request. Weights do not
+calibrate heterogeneous inputs automatically, so evaluate the complete score
+and mapping on labeled traffic. The schema is defined in
+[`projection_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/projection_config.go),
+with a maintained example in
+[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).

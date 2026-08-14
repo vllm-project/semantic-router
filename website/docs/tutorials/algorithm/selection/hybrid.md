@@ -2,9 +2,8 @@
 
 ## Overview
 
-`hybrid` is a composite selection algorithm that combines multiple ranking
-signals, such as Router-DC embedding similarity, AutoMix value estimates,
-Router Learning evidence, and cost, into one weighted score.
+`hybrid` combines Elo ratings, Router-DC description similarity, AutoMix's
+one-model value estimate, and cost into one weighted candidate score.
 
 It aligns to `config/fragments/algorithm/selection/hybrid.yaml`.
 
@@ -14,19 +13,18 @@ It aligns to `config/fragments/algorithm/selection/hybrid.yaml`.
 
 - Blends multiple selectors instead of committing to only one.
 - Makes weighting explicit and easy to audit.
-- Supports gradual migration between request-time ranking policies and
-  Router Learning evidence.
+- Makes it possible to introduce one component gradually by changing its
+  weight.
 - Cost-aware scoring to balance quality and operational expense.
 
 ## Algorithm Principle
 
-Hybrid computes a weighted composite score for each candidate model:
-
-$$S(m) = w_{\text{learning}} \cdot \hat{R}_{\text{learning}}(m) + w_{\text{rdc}} \cdot \hat{R}_{\text{rdc}}(m) + w_{\text{amix}} \cdot \hat{R}_{\text{amix}}(m) - w_{\text{cost}} \cdot \hat{C}(m)$$
-
-When `normalize_scores` is enabled (default), each component is min-max normalized to [0, 1] before combination, ensuring fair weighting regardless of scale differences.
-
-`quality_gap_threshold` is retained in the selector contract for data-driven upgrade policy experiments, while the current online selector uses the weighted composite score directly for the final pick.
+Hybrid first min-max normalizes the available Elo, Router-DC, and AutoMix
+scores when `normalize_scores` is enabled. It combines those components using
+their relative weights, renormalized across the components that returned data.
+It then applies a multiplicative bonus to cheaper models when cost adjustment
+is enabled. Cost is therefore a second-stage adjustment, not another linear
+term in the component average.
 
 ## Select Flow
 
@@ -34,9 +32,9 @@ When `normalize_scores` is enabled (default), each component is min-max normaliz
 flowchart TD
     A[Request arrives] --> B[Decision matched]
     B --> C[algorithm.type = hybrid]
-    C --> D[Read Router Learning evidence]
+    C --> D[Read the Elo selector ratings]
     C --> E[Run RouterDC: compute embedding similarity]
-    C --> F[Run AutoMix: compute POMDP value]
+    C --> F[Run AutoMix: compute one-model value]
     D --> G[Normalize scores, 0-1]
     E --> G
     F --> G
@@ -51,9 +49,9 @@ The Hybrid selector internally instantiates three sub-selectors:
 
 | Component | Source | What it provides |
 |-----------|--------|-----------------|
-| Router Learning evidence | Learning snapshots | Feedback-derived ratings or reward evidence |
+| `EloSelector` | Its own in-memory ratings | Relative model rating |
 | `RouterDCSelector` | Model descriptions | Semantic query-model similarity |
-| `AutoMixSelector` | POMDP solver | Cost-quality optimal value estimate |
+| `AutoMixSelector` | One-shot request path | Cost-quality value estimate |
 
 Each component shares the same `SelectionContext` and runs independently.
 
@@ -72,7 +70,6 @@ No single ranking signal is reliable for every workload: pure cost, pure similar
 
 - Higher computational cost than any single selector (runs 3 sub-selectors per request).
 - Weight tuning requires domain knowledge — suboptimal weights can degrade performance.
-- `quality_gap_threshold` is exposed for compatibility with lookup-table and upgrade-policy work, but it does not currently run an MLP escalation pass.
 
 ## Configuration
 
@@ -80,11 +77,10 @@ No single ranking signal is reliable for every workload: pure cost, pure similar
 algorithm:
   type: hybrid
   hybrid:
-    experience_weight: 0.3              # Feedback-derived experience evidence
+    experience_weight: 0.3       # Elo component weight
     router_dc_weight: 0.3        # Weight for embedding similarity
-    automix_weight: 0.2          # Weight for POMDP value
+    automix_weight: 0.2          # Weight for AutoMix's one-model value
     cost_weight: 0.2             # Weight for cost consideration
-    quality_gap_threshold: 0.1   # Reserved quality-gap threshold
     normalize_scores: true       # Normalize component scores to [0,1]
 ```
 
@@ -92,15 +88,22 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `experience_weight` | float | `0.3` | Weight for feedback-derived experience evidence (0-1) |
+| `experience_weight` | float | `0.3` | Weight for the Elo selector score (0–1) |
 | `router_dc_weight` | float | `0.3` | Weight for RouterDC embedding similarity (0–1) |
-| `automix_weight` | float | `0.2` | Weight for AutoMix POMDP value (0–1) |
+| `automix_weight` | float | `0.2` | Weight for AutoMix's one-model value estimate (0–1) |
 | `cost_weight` | float | `0.2` | Weight for cost consideration (0–1) |
-| `quality_gap_threshold` | float | `0.1` | Reserved quality-gap threshold for upgrade-policy experiments |
+| `quality_gap_threshold` | float | `0.1` | Accepted for compatibility; it has no effect in the current online selector |
 | `normalize_scores` | bool | `true` | Normalize component scores before combination |
 
 ## Feedback
 
-Hybrid does not own feedback state. Online model-choice experience belongs
-under `global.router.learning.adaptation`; Hybrid may consume read-only
-learning evidence when that integration is available.
+Hybrid does not read Router Learning snapshots or
+`global.router.learning.adaptation`. Its Elo, Router-DC, and AutoMix components
+own separate in-memory state, and the current Router Learning outcome endpoint
+does not feed that state automatically.
+
+Request text is embedded for Router-DC and AutoMix components. Missing model
+descriptions, pricing, or initialized component state make the corresponding component
+less informative, so tune weights against the data actually available. The
+maintained example is
+[`config/fragments/algorithm/selection/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/hybrid.yaml).

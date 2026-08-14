@@ -46,7 +46,7 @@ func (s receiptMemoryStore) Retrieve(context.Context, memory.RetrieveOptions) ([
 func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	router := &OpenAIRouter{
 		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
-		MemoryStore: &receiptMemoryStore{err: errors.New("backend unavailable")},
+		MemoryStore: &receiptMemoryStore{err: errors.New("backend unavailable secret-canary")},
 	}
 	ctx := &RequestContext{
 		Headers:                 map[string]string{headers.AuthzUserID: "user-1"},
@@ -59,6 +59,7 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	got, err := router.handleMemoryRetrieval(ctx, "What did I say?", body, &openai.ChatCompletionNewParams{})
 
 	require.ErrorContains(t, err, "memory retrieval failed")
+	require.NotContains(t, err.Error(), "secret-canary")
 	assert.Equal(t, body, got)
 	assert.Equal(t, before+1, testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues("memory", "balance", "unavailable")))
 	diagnostics := buildReplayRouteDiagnostics(ctx, "auto", "model-a", "balance", 0, 0)

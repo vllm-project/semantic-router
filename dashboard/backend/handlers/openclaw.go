@@ -20,6 +20,8 @@ import (
 
 var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
 
+const openClawContainerRuntimeDisabledEnv = "OPENCLAW_CONTAINER_RUNTIME_DISABLED"
+
 // --- Registry ---
 
 type ContainerEntry struct {
@@ -224,6 +226,15 @@ func canConnectTCP(host string, port int, timeout time.Duration) bool {
 }
 
 func detectContainerRuntime() (string, error) {
+	if strings.EqualFold(
+		strings.TrimSpace(os.Getenv(openClawContainerRuntimeDisabledEnv)),
+		"true",
+	) {
+		return "", fmt.Errorf(
+			"container runtime not available: Dashboard started without safe access to the container runtime socket",
+		)
+	}
+
 	candidates := []string{
 		strings.TrimSpace(os.Getenv("OPENCLAW_CONTAINER_RUNTIME")),
 		strings.TrimSpace(os.Getenv("CONTAINER_RUNTIME")),

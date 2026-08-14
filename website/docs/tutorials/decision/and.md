@@ -50,3 +50,8 @@ routing:
 ```
 
 Use `AND` when a model should only activate for a narrow, high-confidence slice of traffic.
+
+Every referenced signal must be declared in the same recipe. `AND` reduces
+broad matches but does not make probabilistic signals authoritative. Maintained
+example:
+[`config/fragments/decision/and/urgent-business.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/and/urgent-business.yaml).

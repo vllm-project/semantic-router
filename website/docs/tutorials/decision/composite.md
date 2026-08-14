@@ -58,3 +58,8 @@ routing:
 ```
 
 If a decision needs nested logic, prefer a `composite/` fragment instead of stretching one flat rule block until it becomes unreadable.
+
+Keep nesting shallow enough to review and test each branch. Signal results can
+be probabilistic, so a complex tree is not a substitute for authorization or
+backend policy. Maintained example:
+[`config/fragments/decision/composite/priority-safe-escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/composite/priority-safe-escalation.yaml).

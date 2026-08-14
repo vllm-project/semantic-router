@@ -47,3 +47,11 @@ routing:
 ```
 
 Each rule compares the current user turn to the latest `lookback_turns` prior user turns. A rule matches only when every turn in that recent streak stays above the configured similarity threshold.
+
+## Dependencies and Limitations
+
+Reask uses the shared embedding path and sends recent user turns to a remote
+embedding provider when one is configured. Repetition can be intentional rather
+than dissatisfaction, so use the signal for escalation rather than punishment.
+Maintained example:
+[`config/fragments/signal/reask/dissatisfaction.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/reask/dissatisfaction.yaml).

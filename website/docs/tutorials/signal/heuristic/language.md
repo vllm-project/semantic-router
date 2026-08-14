@@ -38,8 +38,19 @@ routing:
     language:
       - name: zh
         description: Chinese-language requests.
+        threshold: 0.6
       - name: es
         description: Spanish-language requests.
 ```
 
-The rule names should match the language codes you want decisions to reference, such as `zh`, `es`, or `en`.
+The rule names should match the language codes you want decisions to
+reference, such as `zh`, `es`, or `en`. `threshold` is the minimum detector
+confidence from `0` to `1`; omit it (or set `0`) to use the runtime default of
+`0.3`. A higher threshold reduces false positives but can leave more requests
+to the fallback route.
+
+## Dependencies and Limitations
+
+Short, mixed-language, and code-heavy prompts may be ambiguous. Always provide
+a fallback route and evaluate the detector on your traffic. Maintained example:
+[`config/fragments/signal/language/multilingual.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/language/multilingual.yaml).

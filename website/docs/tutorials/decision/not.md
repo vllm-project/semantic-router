@@ -48,3 +48,8 @@ routing:
 ```
 
 Use `NOT` sparingly and keep the excluded signal explicit, otherwise the decision becomes hard to audit.
+
+`NOT` also matches when its child signal is unavailable or does not fire, so do
+not treat it as proof that content is safe. Prefer a positive trusted condition
+for access-sensitive routes. Maintained example:
+[`config/fragments/decision/not/exclude-jailbreak.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/not/exclude-jailbreak.yaml).

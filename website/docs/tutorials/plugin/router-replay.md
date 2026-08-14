@@ -27,21 +27,27 @@ Replay capture is useful, but some routes need different capture policy than the
 Use this fragment under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: router_replay
-  configuration:
-    enabled: false
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: false
 ```
 
 Use this fragment when one route needs custom capture settings:
 
 ```yaml
-plugin:
-  type: router_replay
-  configuration:
-    enabled: true
-    max_records: 10000
-    capture_request_body: true
-    capture_response_body: true
-    max_body_bytes: 4096
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: true
+      max_records: 10000
+      capture_request_body: true
+      capture_response_body: true
+      max_body_bytes: 4096
+      max_tool_trace_steps: 100
 ```
+
+Request bodies, response bodies, and tool traces can contain secrets or personal
+data. Capture the minimum needed, set retention in the shared replay service,
+and restrict replay read permissions. Maintained example:
+[`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

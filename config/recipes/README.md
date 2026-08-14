@@ -1,119 +1,110 @@
-# Maintained routing recipes
+# Maintained Routing Recipes
 
-`config/recipes/` contains complete, executable use-case deliveries. Directory
-names describe the user outcome; implementation names such as Router Flow,
-SAARS, or MMLU belong inside the recipe documentation rather than in the
-catalog taxonomy.
+## Overview
 
-## Delivery contract
+This directory contains complete routing examples for common deployment goals.
+Each recipe is documented as a Model Card: it explains the intended use,
+request-facing behavior, backend requirements, safety properties, evaluation
+scope, and limitations.
 
-Every child directory has the same four files:
+A recipe selects among configured provider models. It does not install or
+start those inference backends.
 
-- `config.yaml` — canonical v0.3 runtime configuration.
-- `recipe.dsl` — reviewable routing policy that compiles back into the same
-  dynamic routing surface.
-- `probes.yaml` — backend-independent `/api/v1/eval` correctness probes.
-- `README.md` — intended use, routing policy, tradeoffs, and validation steps.
+## Model Cards
 
-The repository contract tests reject incomplete directories, invalid YAML or
-DSL, YAML/DSL drift, missing decision reachability, stale aliases, and loss of
-YAML-only decision adaptation policy during DSL merge.
-
-Probe manifests use `schema_version: v1` and are validated against
-`tools/agent/schemas/recipe-probes-v1.schema.json`. The conformance inventory
-discovers every immediate child directory automatically. Adding a recipe
-therefore adds it to static and live CI without a workflow or Go allowlist
-change.
-
-See [CONFORMANCE.md](CONFORMANCE.md) for the short contributor checklist,
-coverage tiers, tag conventions, and local commands.
-
-Single-profile recipes expose their `routing` block through the default
-`global.router.auto_model_names` entrypoint. Multi-profile configurations can
-disable that default and expose named `entrypoints` instead. Conformance counts
-and exercises both forms, so a default auto alias is not reported as zero
-entrypoints.
-
-## Catalog
-
-| Use case | Purpose |
+| Recipe | Best for |
 | --- | --- |
-| [`accuracy`](accuracy/README.md) | Spend bounded multi-model orchestration only where it has an expected quality benefit; keep long context single-model. |
-| [`agent`](agent/README.md) | Route agent, coding, specialist, privacy, and security work across local and frontier lanes. |
-| [`balance`](balance/README.md) | General-purpose quality, latency, and cost balance for a single default routing profile. |
-| [`feedback`](feedback/README.md) | Recover from corrections, repeated dissatisfaction, failed code, and verification requests. |
-| [`knowledge`](knowledge/README.md) | Use KB evidence to decide whether a knowledge-domain question merits frontier escalation. |
-| [`multi-objective`](multi-objective/README.md) | Expose isolated balanced, speed, cost, accuracy, and privacy recipes as request-facing entrypoints. |
-| [`privacy`](privacy/README.md) | Keep sensitive, suspicious, and private-context traffic on policy-compatible models. |
+| [Accuracy](accuracy/README.md) | Direct answers by default, with bounded workflow or fusion when accuracy benefits from orchestration. |
+| [Agent](agent/README.md) | Coding, research, specialist, privacy, and security work across local and frontier lanes. |
+| [Balanced](balance/README.md) | General-purpose quality, latency, cost, and answer-recovery trade-offs. |
+| [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
+| [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
+| [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
+| [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
-`bounded-candidate-iteration.dsl` and other syntax-only demonstrations are not
-deployable recipes. Their behavior is covered by DSL unit tests instead of
-being mixed into this catalog.
+The [built-in virtual model catalog](built-in/README.md) is a separate
+distribution surface. Its [Chorus V1 Model
+Card](built-in/latest/chorus-v1/README.md) describes the virtual models bundled
+with `vllm-sr`.
 
-## Maintained acceptance baseline
+## Use a recipe
 
-The blocking August 2026 baseline covers 275 base probes, 58 decisions, and 11
-recipe-entrypoint bindings across all seven recipes. Decision, entrypoint,
-fallback, algorithm, and plugin coverage is complete; signal and projection
-assertions use checked-in per-recipe ratchets that cannot decrease:
+Read the Model Card first, start the required provider backends, then validate
+and serve the recipe's config:
 
-- Accuracy: 13 probes, 4 decisions.
-- Agent: 27 probes, 11 decisions.
-- Balance: 57 probes, 14 decisions.
-- Feedback: 23 probes, 7 decisions.
-- Knowledge: 15 probes, 2 decisions.
-- Privacy: 20 probes, 4 decisions.
-- Multi-objective: 120 probes, 16 decisions, 5 named entrypoints.
+```bash
+vllm-sr validate --config config/recipes/<name>/config.yaml
+vllm-sr serve --config config/recipes/<name>/config.yaml
+```
 
-The live CPU gate requires router readiness and exact `/api/v1/eval?trace=true`
-results. Framing expansion, upstream generation, GPU parity, and latency SLOs
-are T4 reporting concerns rather than PR acceptance criteria.
+Single-profile recipes use the configured `vllm-sr/auto` entrypoint.
+Multi-profile recipes expose named virtual model IDs through top-level
+`entrypoints`.
 
-## Validate a recipe
+## Use a built-in model
 
-From the repository root:
+Built-in models can be discovered and selected without locating their source
+files:
+
+```bash
+vllm-sr model list
+vllm-sr model show vllm-sr/chorus-v1
+vllm-sr serve vllm-sr/chorus-v1
+```
+
+This starts the local routing stack, not the physical model engines. Use
+`model fork` when changing provider bindings or routing policy:
+
+```bash
+vllm-sr model fork vllm-sr/chorus-v1 chorus-custom.yaml
+vllm-sr model validate chorus-custom.yaml
+vllm-sr serve --config chorus-custom.yaml
+```
+
+See the [built-in catalog guide](built-in/README.md) for version selection,
+multiple virtual models, and customization.
+
+## Custom recipes and Dashboard
+
+Keep credentials out of recipe files. Reference environment variables from the
+config and authorize each required name when serving:
+
+```bash
+export PROVIDER_API_KEY=...
+vllm-sr serve --config path/to/recipe/config.yaml \
+  --recipe-env PROVIDER_API_KEY
+```
+
+`vllm-sr recipe pack` is available for teams that need to transport a custom
+recipe as an archive. Treat the archive as public source: the packer rejects
+literal credentials and unsafe package shapes, but it does not turn the recipe
+into a built-in model or provision its runtime dependencies.
+
+When a managed recipe is mounted, Dashboard shows its Model Card and probe
+catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
+request, and **Validate** evaluates routing without generating a model answer.
+See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
+for the user workflow.
+
+## For contributors
+
+Every maintained recipe contains:
+
+- `metadata.yaml` for identity and licensing;
+- `config.yaml` for runtime configuration;
+- `recipe.dsl` for the reviewable routing projection;
+- `probes.yaml` for backend-independent routing scenarios; and
+- `README.md` for the Model Card.
+
+The conformance tools discover recipe directories automatically and generate
+current coverage results. Do not copy probe inventories, pass counts, or CI
+receipts into Model Cards.
+
+Start with [Recipe authoring and conformance](CONFORMANCE.md):
 
 ```bash
 make recipe-conformance-static
-
-vllm-sr validate --config config/recipes/<use-case>/config.yaml
-
-(cd src/semantic-router && \
-  go run ./cmd/dsl validate ../../config/recipes/<use-case>/recipe.dsl)
-
-(cd src/semantic-router && \
-  go run ./cmd/dsl compile \
-    --base ../../config/recipes/<use-case>/config.yaml \
-    -o /tmp/<use-case>.yaml \
-    ../../config/recipes/<use-case>/recipe.dsl)
 ```
 
-Run the backend-independent calibration suite against a live router:
-
-```bash
-make recipe-conformance-eval \
-  RECIPE_CONFORMANCE_RECIPE=<use-case> \
-  RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080
-
-# Build the local CPU image and evaluate every maintained recipe.
-make recipe-conformance-live-cpu-all
-```
-
-Pull requests that touch recipes or their router semantics run the base probes
-through the reusable Recipe Conformance CI domain. Framing/whitespace
-expansion, real generation, GPU execution, and timing baselines remain
-scheduled or manual workloads rather than PR blockers.
-
-Each CI run publishes the coverage matrix in the GitHub Actions job summary and
-uploads a `recipe-conformance-report` artifact for 30 days. The consolidated
-artifact contains the inventory, per-recipe Eval reports, summaries, and
-failure logs, including partial results when a live shard fails. Its inventory
-lists configured, asserted, and uncovered signals, projections, algorithms,
-and plugins; live summaries include the T3 robustness pass-rate receipts.
-
-The multi-objective profile additionally checks requested model, selected
-recipe, decision, algorithm, plugins, signal evidence, multilingual variants,
-multi-turn/tool shapes, and long-context boundaries. Every maintained manifest
-also declares bounded concurrency, so the same report records end-to-end p50,
-p95, and p99 Eval latency, throughput, and transport errors alongside routing
-accuracy.
+Syntax-only DSL examples such as `bounded-candidate-iteration.dsl` are not
+deployable recipes and do not belong in the Model Card index.

@@ -50,3 +50,7 @@ routing:
 ```
 
 Use `OR` when the route outcome is the same, but several signals should be allowed to trigger it.
+
+Any child can make the route eligible, so audit each child as if it were a
+standalone route condition. Maintained example:
+[`config/fragments/decision/or/business-or-law.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/or/business-or-law.yaml).

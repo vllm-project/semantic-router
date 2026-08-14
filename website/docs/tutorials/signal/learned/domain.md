@@ -54,3 +54,10 @@ routing:
 ```
 
 Keep domain names stable because decisions reference those names directly.
+
+## Dependencies and Limitations
+
+Domain classification uses the configured classifier module and processes the
+request text. Treat `other` as a fallback, and re-evaluate labels and thresholds
+when the classifier changes. Maintained example:
+[`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml).

@@ -2223,10 +2223,10 @@ ROUTE test {
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
   ALGORITHM confidence {
-    confidence_method: "logprob"
+    confidence_method: "hybrid"
     threshold: 0.8
-    on_error: "fallback"
-    escalation_order: "asc"
+    on_error: "skip"
+    escalation_order: "automix"
     cost_quality_tradeoff: 0.7
     hybrid_weights: { logprob_weight: 0.5, margin_weight: 0.5 }
   }
@@ -2236,13 +2236,13 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	c := cfg.Decisions[0].Algorithm.Confidence
-	if c.ConfidenceMethod != "logprob" {
+	if c.ConfidenceMethod != "hybrid" {
 		t.Errorf("method = %q", c.ConfidenceMethod)
 	}
-	if c.OnError != "fallback" {
+	if c.OnError != "skip" {
 		t.Errorf("on_error = %q", c.OnError)
 	}
-	if c.EscalationOrder != "asc" {
+	if c.EscalationOrder != "automix" {
 		t.Errorf("escalation_order = %q", c.EscalationOrder)
 	}
 	if c.CostQualityTradeoff != 0.7 {
@@ -2944,7 +2944,7 @@ ROUTE test {
   ALGORITHM confidence {
     confidence_method: "hybrid"
     threshold: 0.5
-    on_error: "fallback"
+    on_error: "skip"
   }
 }`
 	cfg, errs := Compile(input)
@@ -2956,8 +2956,8 @@ ROUTE test {
 	if algo.OnError != "" {
 		t.Errorf("algo top-level on_error = %q, want empty", algo.OnError)
 	}
-	if algo.Confidence == nil || algo.Confidence.OnError != "fallback" {
-		t.Errorf("algo.Confidence.OnError = %q, want fallback", algo.Confidence.OnError)
+	if algo.Confidence == nil || algo.Confidence.OnError != "skip" {
+		t.Errorf("algo.Confidence.OnError = %q, want skip", algo.Confidence.OnError)
 	}
 }
 

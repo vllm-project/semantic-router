@@ -1,197 +1,141 @@
 ---
-sidebar_position: 2
-description: Quickstart guide for installing and running vLLM Semantic Router on CPU with Docker, from system requirements to first local launch.
+sidebar_position: 1
+title: Quickstart
+description: Install vLLM Semantic Router, start the local stack, configure a model, and send a first request.
 ---
 
 # Quickstart
 
-This guide will help you install and run the vLLM Semantic Router. The router runs entirely on CPU and does not require GPU for inference.
+This guide starts the local Docker stack and sends a request through the Router.
+The Router itself runs on CPU; the model backend can be local or remote.
 
-## System Requirements
+## Requirements
 
-:::note
-No GPU required - the router runs efficiently on CPU using optimized BERT models.
-:::
+- Python 3.10 or newer
+- Docker
+- Linux, macOS, or WSL2 on Windows
 
-**Requirements:**
+Native Windows Python can run configuration and validation commands, but the
+local Docker serving workflow requires WSL2 or another Linux environment.
 
-- **Python**: 3.10 or higher
-- **Container Runtime**: Docker (required for running the router container)
-- **Local host OS**: Linux, macOS, or WSL2 on Windows for `vllm-sr serve`
+## Install
 
-## Quick Start
+### One-line installer
 
-### 1. Use the one-line installer (macOS/Linux)
+On macOS or Linux:
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | \
+  bash -s -- --channel stable
 ```
 
-The installer:
+The installer creates an isolated CLI environment, adds a launcher under
+`~/.local/bin`, prepares Docker, and starts `vllm-sr serve` unless you opt out.
+It prints the Dashboard URL and, on a remote host, an SSH tunnel hint.
 
-- Detects Python 3.10 or newer
-- Installs the latest development `vllm-sr` release into `~/.local/share/vllm-sr`
-- Writes a launcher to `~/.local/bin/vllm-sr`
-- Prepares Docker for `vllm-sr serve` unless you opt out
-- Starts `vllm-sr serve` automatically and opens the dashboard when possible
-- Prints dashboard access and remote-server hints if a browser cannot be opened
-
-If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
-
-Need the latest stable release instead? Run:
+### Install with pip
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
-```
-
-Windows users should run the local `vllm-sr serve` workflow from WSL2 or another
-Linux environment with Docker. A native Windows Python environment can install
-the CLI for configuration and validation tasks, but the v0.3 local Docker
-runtime is not supported there.
-
-### 2. Manual PyPI install
-
-```bash
-# Create a virtual environment (recommended)
 python -m venv vsr
-source vsr/bin/activate  # On Windows: vsr\Scripts\activate
-
-# Install the latest development release
-pip install --pre vllm-sr
-
-# Install the latest stable release instead
+source vsr/bin/activate
 pip install vllm-sr
-```
-
-Verify installation:
-
-```bash
 vllm-sr --version
 ```
 
-### 3. Restart `vllm-sr` later
+To test a development build, select an explicit published development version
+or install from a reviewed source checkout. The pip `--pre` flag only permits
+prereleases; it does not guarantee that pip will prefer one over a newer stable
+release.
 
-Run the local Docker runtime from Linux, macOS, or WSL2 on Windows:
+## Open or start the local stack
+
+The one-line installer starts the stack automatically; continue to the
+Dashboard URL it prints. If you installed with pip or passed `--no-launch`, run
+the following command from the directory where you want to keep `config.yaml`
+and local runtime state:
 
 ```bash
 vllm-sr serve
 ```
 
-If you skipped `--no-launch`, the installer already ran one `vllm-sr serve` for you.
+On the first run, an empty workspace starts the Dashboard in setup mode. Open
+[http://localhost:8700](http://localhost:8700), then:
 
-If `config.yaml` does not exist yet in the current directory, `vllm-sr serve` bootstraps a minimal setup config and starts the dashboard in setup mode.
+1. add one or more model endpoints;
+2. choose a routing preset or a single-model baseline; and
+3. activate the generated configuration.
 
-The router will:
+Activation writes `config.yaml` and starts the inference listener. The local
+stack exposes Envoy at `http://localhost:8899` by default.
 
-- Automatically download required ML models (~1.5GB, one-time)
-- Start the dashboard on port 8700
-- Start the `vllm-sr-sim` sidecar on port 8810
-- Start Envoy proxy on port 8888 after activation
-- Start the semantic router service after activation
-- Enable metrics on port 9190
-
-### 4. Open the Dashboard
-
-Open [http://localhost:8700](http://localhost:8700) in your browser.
-
-If you ran the installer on a remote server and the browser did not open automatically, use the URL and SSH tunnel hint printed by the installer.
-
-For first-run setup:
-
-1. Configure one or more models.
-2. Choose a routing preset or keep the single-model baseline.
-3. Activate the generated config.
-
-After activation, `config.yaml` is written to the current directory and the router exits setup mode.
-
-:::tip[Local models with Ollama]
-If you want to run a local LLM without vLLM or a GPU stack, follow [Configure models with Ollama](ollama) for install, dashboard, and YAML steps with screenshots.
+:::tip[Want a local model?]
+Follow [Local model with Ollama](ollama) if you want a simple local backend
+without setting up vLLM or a GPU environment.
 :::
 
-### 5. Test the Router
+## Send a request
+
+After activation:
 
 ```bash
-curl http://localhost:8888/v1/chat/completions \
-  -H "Content-Type: application/json" \
+curl http://localhost:8899/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{
-    "model": "MoM",
+    "model": "vllm-sr/auto",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-### 6. Optional: open the dashboard from the CLI
+Use the model name shown by your active configuration. A virtual model resolves
+to its recipe; a configured physical model name is sent directly to that
+backend.
+
+## Operate the stack
 
 ```bash
+vllm-sr status
+vllm-sr logs router
+vllm-sr logs envoy -f
 vllm-sr dashboard
-```
-
-## Common Commands
-
-```bash
-# View logs
-vllm-sr logs router        # Router logs
-vllm-sr logs envoy         # Envoy logs
-vllm-sr logs simulator     # Fleet simulator sidecar logs
-vllm-sr logs router -f     # Follow logs
-
-# Check status
-vllm-sr status             # Includes simulator sidecar state
-
-# Stop the router
 vllm-sr stop
 ```
 
-## Advanced Configuration
+The Dashboard can show bounded Router, Envoy, and Dashboard logs for supported
+local stacks. Log access is permission-controlled, and service output may
+contain tenant or credential-adjacent data. Treat both Dashboard log access and
+the local log directory as sensitive.
 
-### YAML-first workflow
+## Start from YAML
 
-If you prefer to edit YAML directly instead of using the dashboard setup flow:
-
-```bash
-# Validate your canonical config before serving
-vllm-sr validate config.yaml
-```
-
-`vllm-sr init` was removed in v0.3. Create `config.yaml` directly with the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`.
-
-### HuggingFace Settings
-
-Set environment variables before starting:
+If you already have a complete canonical config:
 
 ```bash
-export HF_ENDPOINT=https://huggingface.co  # Or mirror: https://hf-mirror.com
-export HF_TOKEN=your_token_here            # Only for gated models
-export HF_HOME=/path/to/cache              # Custom cache directory
-
-vllm-sr serve
+vllm-sr validate --config config.yaml
+vllm-sr serve --config config.yaml
 ```
 
-### Custom Options
+Environment references such as `${MODEL_API_KEY}` are resolved from the launch
+environment. Do not put literal credentials in a config that will be shared or
+committed.
+
+For older configs, use:
 
 ```bash
-# Use custom config file
-vllm-sr serve --config my-config.yaml
-
-# Set the router log level
-vllm-sr serve --log-level debug
-
-# Use custom Docker image
-vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
-
-# Control image pull policy
-vllm-sr serve --image-pull-policy always
+vllm-sr config migrate --config old-config.yaml
 ```
 
-## Next Steps
+## Next
 
-- **[Configure models with Ollama](ollama)** - Run a local LLM with Ollama and connect it through the setup dashboard
-- **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
-- **[Configuration Guide](configuration)** - Advanced routing and signal configuration
-- **[API Documentation](../api/router)** - Complete API reference
-- **[Tutorials](../tutorials/signal/overview)** - Learn by example
+- [Choose a Deployment](deployment-options) for local, GPU, Kubernetes, and
+  gateway options.
+- [Configuration](configuration) for canonical YAML, recipes, and environment
+  bindings.
+- [Why Semantic Routing](../overview/goals) for the design goals.
+- [Routing Pipeline](../overview/signal-driven-decisions) for signals,
+  decisions, algorithms, and plugins.
+- [Troubleshooting](../troubleshooting/common-errors) when the stack does not
+  become ready.
 
-## Getting Help
-
-- **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
-- **Community**: Join `#semantic-router` channel in vLLM Slack
-- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai/)
+For support, open a
+[GitHub issue](https://github.com/vllm-project/semantic-router/issues) or join
+the `#semantic-router` channel in vLLM Slack.

@@ -51,3 +51,10 @@ routing:
 ```
 
 Use `role_bindings` when the signal should fire from authenticated identity and policy metadata instead of prompt content.
+
+## Dependencies and Limitations
+
+Identity comes from `global.services.authz`; the signal does not authenticate a
+request by itself. Trust only headers set or sanitized by your authentication
+layer. Maintained example:
+[`config/fragments/signal/authz/rbac.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/authz/rbac.yaml).

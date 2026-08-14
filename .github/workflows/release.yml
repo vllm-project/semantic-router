@@ -26,8 +26,18 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
+      catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install release validation dependencies
+        run: python -m pip install PyYAML==6.0.3
 
       - name: Resolve release version
         id: version
@@ -53,6 +63,8 @@ jobs:
       - name: Validate release version contract
         id: contract
         run: |
+          python3 tools/release/snapshot_model_catalog.py \
+            --check-published --base-ref "$GITHUB_SHA"
           python3 tools/release/check_version_contract.py \
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
@@ -94,6 +106,7 @@ jobs:
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
+      catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
     secrets: inherit
 
   crate:
@@ -139,6 +152,7 @@ jobs:
           name: Release ${{ needs.validate.outputs.tag }}
           draft: false
           prerelease: false
+          overwrite_files: false
           generate_release_notes: true
           files: |
             release-assets/python/*
@@ -183,6 +197,22 @@ jobs:
 
             ```toml
             candle-semantic-router = "${{ needs.validate.outputs.version }}"
+            ```
+
+            ### Built-in virtual models
+
+            Curated virtual models and their versioned Recipe YAML are bundled
+            in the `vllm-sr` wheel and release images. They are not published
+            as separate GitHub Release assets. This release binds immutable
+            catalog snapshot `${{ needs.validate.outputs.catalog_snapshot }}`.
+            Inspect or fork the installed catalog locally:
+
+            ```bash
+            vllm-sr model list
+            vllm-sr model show vllm-sr/chorus-v1 \
+              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
+            vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml \
+              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
             ```
 
             `vllm-sr-sim` Python releases remain on the independent

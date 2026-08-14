@@ -7,11 +7,15 @@ import (
 )
 
 type signalConversationHistory struct {
-	currentUserMessage string
-	priorUserMessages  []string
-	nonUserMessages    []string
-	hasAssistantReply  bool
-	metadata           map[string]string
+	currentUserMessage     string
+	priorUserMessages      []string
+	nonUserMessages        []string
+	hasAssistantReply      bool
+	metadata               map[string]string
+	contextTokenFloor      int
+	contextTextBytes       int
+	contextEquivalentBytes int
+	contextHasNonText      bool
 
 	// Conversation-shape facts for the conversation signal family.
 	hasDeveloperMessage     bool
@@ -39,6 +43,10 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		nonUserMessages:         append([]string(nil), result.NonUserMessages...),
 		hasAssistantReply:       result.HasAssistantReply,
 		metadata:                cloneRoutingMetadata(result.Metadata),
+		contextTokenFloor:       result.ContextTokenFloor,
+		contextTextBytes:        result.ContextTextBytes,
+		contextEquivalentBytes:  result.ContextEquivalentBytes,
+		contextHasNonText:       result.ContextHasNonText,
 		hasDeveloperMessage:     result.HasDeveloperMessage,
 		userMessageCount:        result.UserMessageCount,
 		assistantMessageCount:   result.AssistantMessageCount,

@@ -14,14 +14,19 @@ from pathlib import Path
 from typing import Any
 
 from router_calibration_evaluation import (
+    compare_eval_selection,
     compare_eval_trace,
     compare_expected_plugins,
     compare_expected_signals,
     expected_alias_matches,
     expected_signals_by_type,
     find_missing_expected_signals,
+    materialize_probe_messages,
     materialize_probe_text,
+    probe_generated_text_metadata,
+    probe_materialized_messages_metadata,
     probe_padding_metadata,
+    probe_playground_metadata,
     summarize_message_content,
     summarize_probe_messages,
 )
@@ -43,12 +48,16 @@ from router_calibration_manifest import (
 )
 
 __all__ = [
+    "compare_eval_selection",
     "compare_eval_trace",
     "compare_expected_plugins",
     "compare_expected_signals",
     "expected_alias_matches",
     "find_missing_expected_signals",
+    "materialize_probe_messages",
     "materialize_probe_text",
+    "probe_generated_text_metadata",
+    "probe_materialized_messages_metadata",
     "summarize_message_content",
 ]
 
@@ -195,15 +204,19 @@ def evaluate_probe(
 
 
 def evaluate_probes(
-    router_url: str, probes: Iterable[Probe], manifest: dict[str, Any] | None = None
+    router_url: str,
+    probes: Iterable[Probe],
+    manifest: dict[str, Any] | None = None,
+    selected_probe_ids: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     manifest = manifest or {}
     settings = resolve_evaluation_settings(manifest)
-    probe_list = list(probes)
+    all_probes = list(probes)
     decisions_by_recipe: dict[str, set[str]] = {}
-    for probe in probe_list:
+    for probe in all_probes:
         recipe_key = probe.expected_recipe or "default"
         decisions_by_recipe.setdefault(recipe_key, set()).add(probe.expected_decision)
+    probe_list = select_probes(all_probes, selected_probe_ids)
     started = time.perf_counter()
 
     def evaluate_one(probe: Probe) -> dict[str, Any]:
@@ -267,6 +280,23 @@ def evaluate_probes(
         "tags": tag_summaries,
         "results": results,
     }
+
+
+def select_probes(
+    probes: list[Probe], selected_probe_ids: Iterable[str] | None
+) -> list[Probe]:
+    if selected_probe_ids is None:
+        return probes
+    requested = [str(probe_id).strip() for probe_id in selected_probe_ids]
+    if not requested or any(not probe_id for probe_id in requested):
+        raise ValueError("at least one non-empty probe ID is required")
+    if len(requested) != len(set(requested)):
+        raise ValueError("selected probe IDs must be unique")
+    by_id = {probe.probe_id: probe for probe in probes}
+    missing = [probe_id for probe_id in requested if probe_id not in by_id]
+    if missing:
+        raise ValueError(f"unknown probe IDs: {', '.join(missing)}")
+    return [by_id[probe_id] for probe_id in requested]
 
 
 def summarize_performance(
@@ -349,6 +379,10 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "expected_decision": probe.expected_decision,
         "model": probe.model,
         "actual_model": "",
+        "selected_model": "",
+        "selection_status": "",
+        "selection_method": "",
+        "signal_errors": {},
         "expected_recipe": probe.expected_recipe or "default",
         "actual_recipe": "",
         "expected_algorithm": probe.expected_algorithm,
@@ -370,8 +404,12 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "forbidden_signal_matches": [],
         "expected_alias": probe.expected_alias,
         "query": probe.query or summarize_probe_messages(probe.messages),
+        "display_prompt": probe.display_prompt,
+        "playground": probe_playground_metadata(probe),
         "repeat": probe.repeat,
         "padding": probe_padding_metadata(probe),
+        "generated_text": probe_generated_text_metadata(probe),
+        "materialized_messages": probe_materialized_messages_metadata(probe),
         "messages": list(probe.messages),
         "tools": list(probe.tools),
         "notes": probe.notes,
@@ -385,6 +423,9 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "signals_matched": False,
         "alias_matched": False,
         "trace_matched": False,
+        "signal_errors_matched": False,
+        "selection_matched": False,
+        "selection_errors": ["Eval request failed before model selection"],
         "trace_decisions": [],
         "trace_errors": [str(exc)],
         "recommended_models": [],

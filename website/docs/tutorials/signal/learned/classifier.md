@@ -41,6 +41,8 @@ routing:
 
   decisions:
     - name: phishing-local
+      description: Keep suspected phishing requests on the local model.
+      priority: 200
       rules:
         operator: AND
         conditions:
@@ -68,3 +70,9 @@ the winning-label confidence. Changing its model or label order requires a
 router restart so an in-flight config reload cannot swap process-global native
 state. Management API updates that attempt this mutation return
 `RESTART_REQUIRED` rather than applying a partial runtime snapshot.
+
+The local path processes request text inside the Router. An `llm` classifier
+sends that text to its configured external model, so choose the provider and
+retention policy accordingly. Labels and thresholds must be evaluated as one
+versioned contract. Maintained example:
+[`config/fragments/signal/classifier/label-score.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml).

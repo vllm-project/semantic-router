@@ -2,7 +2,8 @@
 
 ## Overview
 
-`svm` is a selection algorithm that uses a **Support Vector Machine** classifier for model selection. It learns decision boundaries between query types and candidate models.
+`svm` uses a trained linear or RBF support-vector classifier to map request
+features to a candidate model.
 
 It aligns to `config/fragments/algorithm/selection/svm.yaml`.
 
@@ -27,11 +28,8 @@ With the **RBF (Radial Basis Function) kernel**:
 
 $$K(x_i, x_j) = \exp(-\gamma \|x_i - x_j\|^2)$$
 
-Where:
-
-- $\gamma$ controls the kernel width (default 1.0)
-- $C$ is the regularization parameter
-- $\phi(x)$ is the implicit feature map from the kernel trick
+The loaded RBF artifact contains the gamma used by its classifiers. Training
+also determines the support vectors, coefficients, and regularization.
 
 For multi-class selection (more than 2 candidates), the implementation uses one-vs-rest classification.
 
@@ -48,7 +46,7 @@ flowchart TD
     E --> G[SVM inference: compute kernel distances to support vectors]
     G --> H[One-vs-rest scoring for each candidate model]
     H --> I[Return model with highest SVM score]
-    I --> J[SelectionResult with margin confidence]
+    I --> J[Return the selected candidate]
 ```
 
 ## What Problem Does It Solve?
@@ -65,7 +63,8 @@ Some workloads need a lightweight learned classifier with clearer decision bound
 ## Known Limitations
 
 - Requires pre-training from historical query-to-model assignment data.
-- RBF kernel hyperparameters (γ, C) need tuning for optimal performance.
+- RBF hyperparameters must be tuned while building the artifact; the Router
+  does not retune them at request time.
 - Multi-class SVM uses one-vs-rest, which can be suboptimal for many candidates.
 - Does not support online learning — must be retrained for new patterns.
 
@@ -87,7 +86,6 @@ global:
         embedding_dim: 768
         svm:
           kernel: rbf
-          gamma: 1.0
           pretrained_path: .cache/ml-models/svm_model.json
 ```
 
@@ -95,10 +93,14 @@ global:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `kernel` | string | `rbf` | Kernel type: `rbf`, `linear`, or `polynomial` |
-| `gamma` | float | `1.0` | RBF kernel width (higher = tighter decision boundaries) |
+| `kernel` | string | `rbf` | Empty-selector kernel: `rbf` (or `gaussian`) and `linear` are supported; other values fall back to linear |
+| `gamma` | float | `1.0` | Accepted compatibility field; loading an artifact uses the gamma stored in that artifact rather than this value |
 | `pretrained_path` | string | — | Path to pre-trained SVM model (JSON format) |
 
 ## Training
 
 See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. SVM models are trained on labeled query-to-model assignment data using Linfa's SVM implementation.
+
+Training examples and labels can contain sensitive request data; govern them
+and the derived artifact accordingly. The minimal decision fragment is
+[`config/fragments/algorithm/selection/svm.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/svm.yaml).

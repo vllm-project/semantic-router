@@ -26,6 +26,25 @@ type ClassificationService struct {
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
+	evalSelector      EvalModelSelector
+}
+
+func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
+	if s == nil {
+		return
+	}
+	s.configMutex.Lock()
+	s.evalSelector = selector
+	s.configMutex.Unlock()
+}
+
+func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
+	if s == nil {
+		return nil
+	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	return s.evalSelector
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by

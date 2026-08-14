@@ -82,7 +82,9 @@ global:
 
 `prototype_scoring` compresses each embedding rule's candidate bank into a smaller set of representative prototypes, then scores the rule from those prototypes instead of relying on one flat candidate list forever.
 
-The router now scores every embedding rule first and only then applies `top_k` as an emission limit. The default is `1`, so only the strongest embedding signal is returned unless you explicitly raise the limit. Set `top_k: 0` if you need the legacy "return every matched embedding rule" behavior.
+The Router scores every embedding rule and then applies `top_k` as the
+emission limit. The default is `1`, so only the strongest embedding signal is
+returned. Set `top_k: 0` to return every rule that meets its threshold.
 
 ## Multimodal queries (`query_modality`)
 
@@ -91,10 +93,14 @@ Each embedding rule accepts an optional `query_modality` field that declares whi
 Accepted values:
 
 - `"text"` (default, backward-compatible): query embedded from request text. Existing rules with no `query_modality` field behave exactly as before.
-- `"image"`: query embedded from an image attachment (base64, data-URI, or local file path) on the incoming request.
-- `"audio"`: query embedded from an audio attachment. Schema-accepted but rejected at config-load until the candle-binding `MultiModalEncodeAudioFromBase64` FFI is exposed; remove the rule or use `text`/`image` until that lands.
+- `"image"`: query embedded from an allowlisted inline
+  `data:image/...;base64,...` attachment in an OpenAI-style chat message.
+- Audio query embeddings are not currently supported; use `text` or `image`.
 
-`"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal` so the candidates and queries are embedded into the same shared space. The router fails configuration validation at load time if an image- or audio-modality rule is paired with a text-only embedding model.
+`"image"` requires
+`global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`
+so candidates and queries share one embedding space. The Router rejects an
+image-modality rule paired with a text-only embedding model.
 
 ### Worked example: route sensitive imagery on-prem
 
@@ -110,8 +116,7 @@ global:
 routing:
   signals:
     embeddings:
-      # Existing text-modality rule - no migration needed; query_modality
-      # defaults to "text".
+      # query_modality defaults to text.
       - name: technical_support
         threshold: 0.75
         aggregation_method: max
@@ -120,14 +125,8 @@ routing:
           - installation guide
           - troubleshooting steps
 
-      # New image-modality rule - declares that this rule's query is computed
-      # from an image attachment. The classifier API accepts image payloads
-      # via ClassifyDetailedMultimodal and cosine-matches them against the
-      # text anchors below in the shared multimodal embedding space. The
-      # request-path extractor that pulls images out of OpenAI-shaped chat
-      # completion content arrays and feeds them into this rule lands in a
-      # follow-up PR; on this PR alone the API surface is in place but the
-      # running router does not yet read attachments off chat completions.
+      # Match an inline image attachment against text anchors in the shared
+      # multimodal embedding space.
       - name: medical_imagery_phi
         query_modality: image
         threshold: 0.55
@@ -145,6 +144,7 @@ A decision can then route on the new signal the same way it routes on any other:
 routing:
   decisions:
     - name: route_medical_imagery_on_prem
+      description: Keep medical imagery on the in-cluster vision model.
       priority: 200
       rules:
         operator: AND
@@ -157,13 +157,23 @@ routing:
 
 ### Default opt-in pack
 
-The repo ships an opt-in image-modality embedding pack at `config/fragments/signal/embedding/image-routing.yaml`. It contains three illustrative rules - `identifier_document_imagery` (for privacy-routing), `code_or_terminal_imagery` (for IP-routing), and `ambient_office_imagery` (the negative-space anchor that the authoring tips below recommend) - that operators can inline into their recipe. The pack uses `0.10` as a default threshold, calibrated against the bundled `multi-modal-embed-small` embedding model. Image-text cosines for this model land in roughly the 0.04 to 0.17 range, so the text-modality default of `0.70` would block all rules. Tune against your own evaluation corpus before relying on it in production, and replace the `ambient_office_imagery` anchors with content specific to your deployment surface.
+The repo ships an opt-in image-modality embedding pack at
+`config/fragments/signal/embedding/image-routing.yaml`. It contains three
+illustrative rules: `identifier_document_imagery`,
+`code_or_terminal_imagery`, and the negative-space anchor
+`ambient_office_imagery`. The checked-in threshold is a starting point for the
+bundled multimodal embedding model, not a portable default. See
+[Embedding Anchor Design Principles](./embedding-design-principles) for its
+calibration context, then replace the example anchors and recalibrate against
+your own labeled corpus.
 
 ### Authoring tips for image anchors
 
 - Anchors describe **visual signatures**, not text content of the image. "electronic health record screenshot showing patient demographics" works because clinical-record UIs have a recognizable visual signature; an anchor like "the words John Doe SSN 123-45-6789" would not, because the model embeds visual structure, not OCR.
 - The default `aggregation_method: max` is usually appropriate for distinct sensitive-imagery categories: any anchor matching strongly is enough to fire the signal.
-- Authoring 8-15 anchors per category gives a robust signal without overfitting. Add anchors for the negative space too (a separate "ambient_office_imagery" rule with anchors for whiteboards, conference rooms, generic infographics) so a low-confidence image stays low-confidence rather than landing closer to a sensitive anchor by accident.
+- Use several semantically distinct anchors per category, and add anchors for
+  relevant negative space. Near-duplicate anchors add little coverage and can
+  make a rule look better calibrated than it is.
 - Do not gate on a single anchor; cosine similarity is noisy enough that one anchor and one image will produce false positives at scale. The anchor pack as a whole is the signal, not any individual phrase.
 
 These tips generalize to text-modality packs as well. See [Embedding Anchor Design Principles](./embedding-design-principles) for the consolidated guidance.
@@ -171,3 +181,17 @@ These tips generalize to text-modality packs as well. See [Embedding Anchor Desi
 ### Distinction from the `modality` signal type
 
 `query_modality` (this section) declares **input modality** for an embedding rule — which modality of payload the query is computed from. The separate [`modality`](modality) signal type declares **output modality** (`AR`, `DIFFUSION`, `BOTH`) for routing image-generation requests. The two concepts share a name but solve different problems and live on different config surfaces.
+
+## Dependencies and Limitations
+
+- Text or image content is processed by the configured embedding runtime. A
+  remote provider currently supports text only and receives the text being
+  embedded. Audio query embeddings are not supported.
+- Similarity scores and thresholds are not portable across embedding models,
+  dimensions, or modalities. Recalibrate whenever those change.
+- Image matching is semantic rather than OCR or PII extraction; use a dedicated
+  detector when literal text or regulated entities matter.
+- Maintained examples:
+  [`support.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/support.yaml)
+  and
+  [`image-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml).

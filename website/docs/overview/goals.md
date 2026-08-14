@@ -1,106 +1,88 @@
 ---
 sidebar_position: 1
+title: Why Semantic Routing
+description: Why heterogeneous model fleets need a decision layer between applications and inference backends.
 ---
 
-# What are our Goals?
+# Why Semantic Routing
 
-**We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference.**
+There is no single best model for every request. Models differ in reasoning,
+latency, price, language, context length, modality, tool use, deployment
+location, and safety profile. The pool also changes as models are upgraded,
+scaled, or temporarily unavailable.
 
-**That is why we built vLLM Semantic Router**—to turn signals and preferences into executable model paths for every user, product, and workload.
+Without a routing layer, every application has to understand those differences.
+Model choice becomes client-side conditionals, policy is copied across services,
+and a backend change can require an application release.
 
-## Core Questions
+Semantic routing moves that decision into the serving path.
 
-Our project addresses five fundamental challenges in LLM systems:
+## The problems it addresses
 
-### 1. How to capture the missing signals?
+### Model choice leaks into applications
 
-In traditional LLM routing, we only look at the user's query text. But there's so much more information we're missing:
+An application should express what it needs, not maintain a list of model
+endpoints. Stable public model names let the routing policy and physical pool
+change without changing every client.
 
-- **Context signals**: What domain is this query about? (math, code, creative writing?)
-- **Quality signals**: Does this query need fact-checking? Is the user giving feedback or re-asking after a weak answer?
-- **User signals**: What are the user's preferences? What's their satisfaction level?
+### Constraints and preferences get mixed together
 
-**Our solution**: A comprehensive signal extraction system that captures 16
-maintained signal families from requests, responses, users, and runtime
-context.
+Some requirements are non-negotiable: authorization, privacy, data residency,
+modality, context capacity, or tool compatibility. Others are objectives to
+optimize, such as quality, latency, and cost. A useful router eliminates invalid
+paths first and ranks only the remaining candidates.
 
-### 2. How to combine the signals?
+### One routing rule is not enough
 
-Having multiple signals is great, but how do we use them together to make better decisions?
+Keywords can express a hard policy but cannot capture every semantic intent.
+A classifier can recognize intent but should not override an authorization
+boundary. Runtime metrics can choose a healthy replica but do not understand
+the task. Semantic Router keeps these responsibilities separate, then composes
+them into one decision.
 
-- Should we route to the math model if we detect **both** math keywords **and** math domain?
-- Should we enable fact-checking if we detect **either** a factual question **or** a sensitive domain?
+### The physical pool is dynamic
 
-**Our solution**: A reusable signal catalog plus projection coordination and
-AND/OR decision logic that lets you combine signals without duplicating policy.
+Routing is both a semantic and a systems problem. The request describes the
+workload; the model pool contributes capacity, health, latency, and placement.
+The Router must connect those two views without making either one the entire
+policy.
 
-### 3. How do models become one system?
+### Some answers require collaboration
 
-Different models are good at different things. How do we compose their strengths into one system?
+Selecting one model is often enough. Other tasks benefit from escalation,
+verification, parallel opinions, or a bounded workflow. These are distinct
+execution patterns and should be explicit rather than hidden behind retries in
+application code.
 
-- Route math questions to specialized math models
-- Route creative writing to models with better creativity
-- Route code questions to models trained on code
-- Use smaller models for simple tasks, larger models for complex ones
+## Design goals
 
-**Our solution**: Executable model paths that select, cascade, or fuse models using request signals and explicit preferences—not just simple rules.
+vLLM Semantic Router is designed around five goals:
 
-### 4. How to secure the system?
+1. **One stable API over many backends.** Clients use a public entrypoint while
+   operators manage the pool behind it.
+2. **Policy that can be read and tested.** Signals, projections, decisions,
+   algorithms, and plugins are named configuration objects rather than
+   scattered conditionals.
+3. **Hard boundaries before optimization.** Ineligible routes are removed
+   before quality, latency, cost, or load influences selection.
+4. **Selection and orchestration in one system.** A route can choose one model,
+   cascade, compare, or coordinate several models.
+5. **Operational feedback.** Replay, evaluation, metrics, and user feedback
+   support deliberate policy changes.
 
-LLM systems face unique security challenges:
+## What Semantic Router is not
 
-- **Jailbreak attacks**: Adversarial prompts trying to bypass safety guardrails
-- **PII leaks**: Accidentally exposing sensitive personal information
-- **Hallucinations**: Models generating false or misleading information
+- It is not an LLM server. Backends such as vLLM, Ollama, or hosted providers
+  still run the models.
+- It is not only a load balancer. Replica health matters, but request meaning
+  and policy determine which model pool is eligible.
+- It is not a universal quality guarantee. Routing quality depends on the
+  configured models, signals, policy, and evaluation data.
+- It is not a replacement for network, identity, or data-governance controls.
+  It enforces routing policy inside a broader security architecture.
 
-**Our solution**: A plugin chain architecture with multiple security layers (jailbreak detection, PII filtering, hallucination detection).
+## Next
 
-### 5. How to collect valuable signals?
-
-The system should learn and improve over time:
-
-- Track which signals lead to better routing decisions
-- Collect user feedback to improve signal detection
-- Build a self-learning system that gets smarter with use
-
-**Our solution**: Comprehensive observability and feedback collection that
-feeds back into signal extraction, projection tuning, and decision policy.
-
-## The Vision
-
-We envision a future where:
-
-- **LLM systems are intelligent at the system level**, not just at the model level
-- **Multiple models collaborate seamlessly**, each contributing their strengths
-- **Security is built-in**, not bolted on
-- **Systems learn and improve** from every interaction
-- **Collective intelligence emerges** from the combination of signals,
-  projections, decisions, and feedback
-
-## Why This Matters
-
-### For Developers
-
-- Build more capable LLM applications with less effort
-- Leverage multiple models without complex orchestration
-- Get built-in security and compliance
-
-### For Organizations
-
-- Reduce costs by routing to appropriate models
-- Improve quality through specialized model selection
-- Meet compliance requirements with built-in PII and security controls
-
-### For Users
-
-- Get better, more accurate responses
-- Experience faster response times through caching
-- Benefit from improved safety and privacy
-
-## Next Steps
-
-Learn more about the core concepts:
-
-- [What is Semantic Router?](semantic-router-overview) - Understanding semantic routing
-- [What is Collective Intelligence?](collective-intelligence) - How signals create intelligence
-- [What is Signal-Driven Decision?](signal-driven-decisions) - Deep dive into the decision engine
+Read the [System Overview](semantic-router-overview) for the components and
+request lifecycle, then see [Use Cases](use-cases) for concrete routing
+patterns.

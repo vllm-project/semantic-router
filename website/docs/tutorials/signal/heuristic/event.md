@@ -2,13 +2,14 @@
 
 ## Overview
 
-`event` is a heuristic routing signal family for **structured event metadata** extracted from request text: event type, severity level, temporal urgency, and domain-specific action codes.
+`event` routes structured event-like requests by event type, severity, urgency,
+or domain-specific action code.
 
 It maps to `config/fragments/signal/event/` and is declared under `routing.signals.events`.
 
 ## Key Advantages
 
-- Zero ML inference — all matching is regex-based, running in sub-millisecond time.
+- Uses regex-based matching without model inference.
 - Routes enterprise event-driven payloads (error alerts, audit logs, incident reports) to specialized model pools without requiring a domain classifier.
 - Confidence is proportional to the number of matched criteria, giving the decision engine a graded signal.
 - Temporal urgency detection (`urgent`, `immediate`, `asap`, `deadline`, `time-sensitive`, `now`, `critical.window`) routes time-sensitive events independently of event type.
@@ -64,9 +65,18 @@ A rule matches when at least one configured criterion is satisfied. **Confidence
 routing:
   decisions:
     - name: route_critical_event
+      description: Route critical payment events to the fast response model.
+      priority: 200
       rules:
         type: event
         name: critical_payment_event
       modelRefs:
         - model: fast-response-model
 ```
+
+## Dependencies and Limitations
+
+Event matching reads request text; it does not parse or validate an authoritative
+event schema. Regex matches can be spoofed by callers, so do not use this signal
+alone for authorization or incident severity. Maintained example:
+[`config/fragments/signal/event/payment-critical.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/event/payment-critical.yaml).

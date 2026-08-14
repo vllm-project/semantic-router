@@ -43,3 +43,10 @@ routing:
 ```
 
 Use `context` when the router should switch candidates based on prompt length or expected context demand.
+
+## Dependencies and Limitations
+
+Token estimates depend on the request representation and are not a guarantee
+that a backend accepts the resulting prompt. Keep model-card context windows
+accurate and allow room for generated output. Maintained example:
+[`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml).

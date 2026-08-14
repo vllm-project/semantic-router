@@ -45,3 +45,10 @@ routing:
 ```
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
+
+## Dependencies and Limitations
+
+The PII classifier processes the prompt and optional history. It is a routing
+control, not a substitute for redaction, encryption, access control, or data
+loss prevention. Calibrate thresholds by entity type. Maintained example:
+[`config/fragments/signal/pii/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/pii/strict.yaml).

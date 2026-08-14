@@ -74,7 +74,7 @@ describe('router model selection', () => {
     expect(selectRouterAutoModel({ data: 'invalid' })).toBeNull()
   })
 
-  it('trusts explicit routing metadata instead of special-casing model IDs', () => {
+  it('rejects the retired bare MoM alias even when stale metadata marks it selectable', () => {
     expect(
       selectRouterAutoModel({
         data: [
@@ -85,7 +85,18 @@ describe('router model selection', () => {
           },
         ],
       }),
-    ).toBe('MoM')
+    ).toBeNull()
+    expect(
+      listRouterModels({
+        data: [
+          {
+            id: 'MoM',
+            routing: routingMetadata.defaultRoute,
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+        ],
+      }),
+    ).toEqual([])
   })
 
   it('requires the canonical alias to be advertised as a selectable default route', () => {
