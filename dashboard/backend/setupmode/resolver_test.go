@@ -92,7 +92,7 @@ func freezeMTime(t *testing.T, path, content string) {
 }
 
 // The most important test here: it proves the error path cannot reopen the
-// unauthenticated bootstrap door. An unparseable config resolves to "not in
+// unauthenticated bootstrap door. An unparsable config resolves to "not in
 // setup mode" even when the legacy flag says true.
 func TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag(t *testing.T) {
 	path := newConfigFile(t, configMalformed)
@@ -117,7 +117,7 @@ func TestResolve_MalformedConfigDoesNotFallBackToLegacyFlag(t *testing.T) {
 		t.Fatalf("Conflict = false, want true: the flag says on and the resolved state is off")
 	}
 	if got.Reason == "" {
-		t.Fatalf("Reason is empty, want an explanation of the unparseable config")
+		t.Fatalf("Reason is empty, want an explanation of the unparsable config")
 	}
 }
 
@@ -135,7 +135,7 @@ func TestResolve_ReasonNeverContainsConfigContents(t *testing.T) {
 		t.Fatalf("Active = true for a config whose setup.mode is not a boolean")
 	}
 	if got.Reason == "" {
-		t.Fatalf("Reason is empty, want an explanation of the unparseable config")
+		t.Fatalf("Reason is empty, want an explanation of the unparsable config")
 	}
 	if strings.Contains(got.Reason, secret) {
 		t.Fatalf("Reason leaks config contents: %q", got.Reason)
