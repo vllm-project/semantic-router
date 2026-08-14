@@ -85,71 +85,103 @@ func TestReMoMDistributeCallsToModelsAcceptsRoundRobinStrategy(t *testing.T) {
 	assert.Equal(t, "lora-a", calls[2].LoRAName)
 }
 
-func TestReMoMCollectParallelResultsReturnsAfterQuorum(t *testing.T) {
-	results := make(chan remomParallelResult, 3)
-	results <- remomParallelResult{resp: &ModelResponse{Content: "a", Model: "model-a"}}
-	results <- remomParallelResult{resp: &ModelResponse{Content: "b", Model: "model-b"}}
+// executeParallelCallsTestServer answers each model's request according to
+// respond, keyed by the model name in the request body, so tests can give
+// individual candidates distinct (including deliberately slow) behavior.
+func executeParallelCallsTestServer(t *testing.T, respond map[string]func(w http.ResponseWriter, payload remomTestRequestPayload)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeReMoMTestRequest(t, r)
+		handler, ok := respond[payload.Model]
+		require.True(t, ok, "no test handler registered for model %q", payload.Model)
+		handler(w, payload)
+	}))
+}
 
-	responses, err := collectRemomParallelResults(
-		context.Background(),
-		3,
-		2,
-		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
-	)
+func remomTestModelCalls(models ...string) []ModelCall {
+	calls := make([]ModelCall, len(models))
+	for i, m := range models {
+		calls[i] = ModelCall{Model: m}
+	}
+	return calls
+}
+
+// Quorum of 2 out of 3 must return before the deliberately slow third call
+// completes - the two fast, usable responses satisfy quorum first.
+func TestReMoMExecuteParallelCallsReturnsAfterQuorum(t *testing.T) {
+	server := executeParallelCallsTestServer(t, map[string]func(http.ResponseWriter, remomTestRequestPayload){
+		"model-a": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletion(t, w, p.Model, "answer a")
+		},
+		"model-b": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletion(t, w, p.Model, "answer b")
+		},
+		"model-c": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			time.Sleep(2 * time.Second)
+			writeReMoMTestCompletion(t, w, p.Model, "answer c")
+		},
+	})
+	defer server.Close()
+
+	looper := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL})
+	req := newReMoMTestRequest(&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip}, false, nil)
+	cfg := &config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip, MinSuccessfulResponses: 2}
+
+	start := time.Now()
+	responses, err := looper.executeParallelCalls(context.Background(), req, cfg, remomTestModelCalls("model-a", "model-b", "model-c"), req.OriginalRequest)
+	elapsed := time.Since(start)
 
 	require.NoError(t, err)
 	require.Len(t, responses, 2)
-	assert.Equal(t, []string{"model-a", "model-b"}, responseModelNames(responses))
+	assert.ElementsMatch(t, []string{"model-a", "model-b"}, responseModelNames(responses))
+	assert.Less(t, elapsed, time.Second, "quorum should return well before the 2s straggler completes")
 }
 
-func TestReMoMCollectParallelResultsCountsOnlyUsableReplies(t *testing.T) {
-	results := make(chan remomParallelResult, 3)
-	results <- remomParallelResult{resp: &ModelResponse{
-		Model: "empty",
-		Usage: TokenUsage{TotalTokens: 3},
-	}}
-	results <- remomParallelResult{resp: &ModelResponse{
-		Model:            "reasoning",
-		ReasoningContent: "internal evidence",
-		Usage:            TokenUsage{TotalTokens: 5},
-	}}
-	results <- remomParallelResult{resp: &ModelResponse{
-		Model:   "answer",
-		Content: "public answer",
-		Usage:   TokenUsage{TotalTokens: 7},
-	}}
+func TestReMoMExecuteParallelCallsCountsOnlyUsableReplies(t *testing.T) {
+	server := executeParallelCallsTestServer(t, map[string]func(http.ResponseWriter, remomTestRequestPayload){
+		"empty": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletionWithReasoning(t, w, p.Model, "", "", TokenUsage{TotalTokens: 3})
+		},
+		"reasoning": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletionWithReasoning(t, w, p.Model, "", "internal evidence", TokenUsage{TotalTokens: 5})
+		},
+		"answer": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletionWithReasoning(t, w, p.Model, "public answer", "", TokenUsage{TotalTokens: 7})
+		},
+	})
+	defer server.Close()
 
-	responses, err := collectRemomParallelResults(
-		context.Background(),
-		3,
-		2,
-		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
-	)
+	looper := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL})
+	req := newReMoMTestRequest(&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip}, false, nil)
+	// Quorum of 3 (all calls) forces a full drain, so this is deterministic
+	// regardless of completion order - every response is guaranteed observed.
+	cfg := &config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip, MinSuccessfulResponses: 3}
+
+	responses, err := looper.executeParallelCalls(context.Background(), req, cfg, remomTestModelCalls("empty", "reasoning", "answer"), req.OriginalRequest)
 
 	require.NoError(t, err)
 	require.Len(t, responses, 3)
 	assert.Len(t, usableReMoMResponses(responses), 2)
-	assert.Empty(t, responses[1].Content)
-	assert.Equal(t, "internal evidence", responses[1].ReasoningContent)
 	assert.Equal(t, int64(15), SumUsage(responses...).TotalTokens)
 }
 
-func TestReMoMCollectParallelResultsReturnsPartialOnTimeoutWhenSkippingErrors(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
+func TestReMoMExecuteParallelCallsReturnsPartialOnTimeoutWhenSkippingErrors(t *testing.T) {
+	server := executeParallelCallsTestServer(t, map[string]func(http.ResponseWriter, remomTestRequestPayload){
+		"model-a": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			writeReMoMTestCompletion(t, w, p.Model, "answer a")
+		},
+		"model-b": func(w http.ResponseWriter, p remomTestRequestPayload) {
+			time.Sleep(2 * time.Second)
+			writeReMoMTestCompletion(t, w, p.Model, "answer b")
+		},
+	})
+	defer server.Close()
 
-	results := make(chan remomParallelResult, 3)
-	results <- remomParallelResult{resp: &ModelResponse{Content: "a", Model: "model-a"}}
+	looper := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL})
+	req := newReMoMTestRequest(&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip}, false, nil)
+	cfg := &config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip, MinSuccessfulResponses: 2, RoundTimeoutSeconds: 1}
 
-	responses, err := collectRemomParallelResults(
-		ctx,
-		3,
-		2,
-		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
-	)
+	responses, err := looper.executeParallelCalls(context.Background(), req, cfg, remomTestModelCalls("model-a", "model-b"), req.OriginalRequest)
 
 	require.Error(t, err)
 	require.Len(t, responses, 1)

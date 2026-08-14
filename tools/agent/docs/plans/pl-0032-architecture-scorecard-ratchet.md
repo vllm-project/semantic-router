@@ -15,6 +15,7 @@
   - [TD017](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
   - [TD020](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
   - [TD027](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
+  - [TD047](../tech-debt/td-047-looper-panel-executor-workflows-ratings-migration.md)
 - [../architecture-scorecard.md](../architecture-scorecard.md)
 - Harness scoring and validation logic that decides what is current.
 

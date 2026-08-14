@@ -65,6 +65,7 @@ Every debt entry should include:
 - [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD042 FFI Embedding File Carries Pre-Existing Structure-Rules Debt](td-042-ffi-embedding-structure-debt.md)
 - [TD043 candle-binding/semantic-router.go Carries Pre-Existing Cyclomatic Complexity Debt](td-043-semantic-router-go-cyclop-debt.md)
+- [TD047 Workflows and Ratings Still Duplicate Panel-Execution Semantics](td-047-looper-panel-executor-workflows-ratings-migration.md)
 
 ### PL0035 Router Flow Workflows
 
