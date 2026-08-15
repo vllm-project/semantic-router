@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -106,7 +107,8 @@ def test_backend_ref_ip_port_path_produces_correct_envoy_cluster_and_route(
 ):
     """Backend ref http://10.0.0.1:8000/v1 should split into address=10.0.0.1,
     port=8000, host_authority=10.0.0.1:8000, path_prefix=/v1, and the route
-    should use regex ^/v1(.*)$ to avoid duplicating /v1."""
+    should use the segment-anchored regex ^/v1/(.*)$ so the rewrite is
+    idempotent and /v1 is never duplicated."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -155,8 +157,8 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
-    assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1/(.*)$"
+    assert route_action["regex_rewrite"]["substitution"] == "/v1/\\1"
 
 
 def test_provider_reliability_renders_retry_outlier_and_least_request(
@@ -279,8 +281,8 @@ routing:
     route_action = route["route"]
     # standard port 443 → host_authority should omit port
     assert route_action["host_rewrite_literal"] == "api.example.com"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
-    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1/(.*)$"
+    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1/\\1"
 
 
 def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
@@ -338,7 +340,7 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "openrouter.ai"
-    assert route_action["regex_rewrite"]["substitution"] == "/api/v1\\1"
+    assert route_action["regex_rewrite"]["substitution"] == "/api/v1/\\1"
 
     headers = {
         item["header"]["key"]: item["header"]["value"]
@@ -446,3 +448,69 @@ routing:
         endpoint["address"]["socket_address"]["address"] == "vllm-sr-router-container"
     )
     assert endpoint["hostname"] == "vllm-sr-router-container"
+
+
+def test_backend_ref_v1_prefixed_base_url_rewrite_is_idempotent(tmp_path, monkeypatch):
+    """A backend whose base_url path starts with /v1 (e.g. Gemini's
+    https://generativelanguage.googleapis.com/v1beta/openai) must generate a
+    rewrite that is safe to apply twice: when ext_proc mutates the headers and
+    Envoy re-runs route selection, the already-rewritten path must not match
+    the pattern again and get the prefix doubled."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "gemini-3.5-flash"
+  models:
+    - name: "gemini-3.5-flash"
+      backend_refs:
+        - name: "primary"
+          base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+          provider: "openai"
+          weight: 100
+routing:
+  modelCards:
+    - name: "gemini-3.5-flash"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "gemini-3.5-flash"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    model_route = _model_route(rendered, "gemini-3.5-flash")["route"]
+    rewrite = model_route["regex_rewrite"]
+    regex = rewrite["pattern"]["regex"]
+    substitution = rewrite["substitution"]
+    assert regex == "^/v1/(.*)$"
+    assert substitution == "/v1beta/openai/\\1"
+
+    # default_model points at the same backend, so the default route carries an
+    # identical rewrite block; it must be anchored the same way.
+    routes = rendered["static_resources"]["listeners"][0]["filter_chains"][0][
+        "filters"
+    ][0]["typed_config"]["route_config"]["virtual_hosts"][0]["routes"]
+    default_route = routes[-1]["route"]
+    assert default_route["regex_rewrite"]["pattern"]["regex"] == "^/v1/(.*)$"
+    assert default_route["regex_rewrite"]["substitution"] == "/v1beta/openai/\\1"
+
+    # Simulate Envoy applying the rewrite a second time after route recompute:
+    # the second pass must be a no-op, not a doubled prefix.
+    first_pass = re.sub(regex, substitution, "/v1/chat/completions")
+    assert first_pass == "/v1beta/openai/chat/completions"
+    assert re.sub(regex, substitution, first_pass) == first_pass
