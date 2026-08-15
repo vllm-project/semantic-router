@@ -48,10 +48,17 @@ from .request import Request, RequestState
 
 @dataclass
 class _Event:
-    """A scheduled service completion event."""
+    """A scheduled service completion event.
+
+    ``admission_seq`` records the request's admission generation this event
+    belongs to.  When a request is preempted and later re-admitted its
+    admission_seq advances, so a stale completion event from the earlier
+    admission can be recognized and dropped.
+    """
 
     time: float
     req: Request
+    admission_seq: int
 
     def __lt__(self, other: _Event) -> bool:
         return self.time < other.time
@@ -163,8 +170,14 @@ class Instance:
 
             # If we can start a queued request right now (free slot), do it
             if self._queue and self._active_slots < self.n_slots:
-                self._start_next(self._now)
-                continue
+                qlen = len(self._queue)
+                if self._start_next(self._now) and len(self._queue) < qlen:
+                    continue
+                # Either the head could not be admitted (budget too small
+                # even after preemption), or admitting it required evicting
+                # another request, so the queue did not shrink and another
+                # attempt would just swap victims again.  Fall through so
+                # the clock advances to the next event instead of spinning.
 
             # Jump to next event or target_time, whichever comes first
             step = min(next_event_t, target_time)
@@ -189,9 +202,12 @@ class Instance:
                 while self._events and self._events[0].time <= self._now:
                     ev = heapq.heappop(self._events)
                     req = ev.req
-                    if req.preempted:
-                        # This completion event belongs to a preempted request;
-                        # the slot/blocks were already released at preemption time.
+                    if req.preempted or ev.admission_seq != req.admission_seq:
+                        # This completion event is stale: either the request is
+                        # currently preempted (slot/blocks were released at
+                        # preemption time), or it was re-admitted since this
+                        # event was scheduled, in which case only the event from
+                        # the latest admission may complete it.
                         continue
                     req.end_time = self._now
                     req.state = RequestState.DONE
@@ -207,28 +223,44 @@ class Instance:
 
                 # Fill freed slots from queue
                 while self._queue and self._active_slots < self.n_slots:
-                    self._start_next(self._now)
+                    qlen = len(self._queue)
+                    if not self._start_next(self._now):
+                        break
+                    if len(self._queue) >= qlen:
+                        # Preemption exchange: admitting this request pushed
+                        # another one back to the queue.  Stop here; the
+                        # main loop will advance the clock to the next event.
+                        break
 
             if step >= target_time:
                 break
 
         return completed
 
-    def _start_next(self, now: float) -> None:
+    def _start_next(self, now: float) -> bool:
         """Pull the next request from queue into active service.
 
         Checks KV block budget before admitting.  If the budget would be
         exceeded, preempts the longest currently-active request instead of
         admitting the new one.
+
+        Returns True when a request was admitted, False when the head of the
+        queue could not be admitted (queue empty, or budget too small for
+        even a single request).  Callers must not retry in a tight loop
+        when this returns False.
         """
-        req = self._queue[0]  # peek; may not admit
+        if not self._queue:
+            return False
+
+        # Take the candidate off the queue up front.  Preemption below
+        # re-queues victims at the head, so popping after that loop would
+        # remove the wrong request (the last victim) instead of this one.
+        req = self._queue.popleft()
         req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
 
         # ── Preempt longest active request if KV budget is tight ──────────
-        while (
-            self._used_kv_blocks + req_blocks > self._total_kv_blocks
-            and self._active_reqs
-        ):
+        n_victims = 0
+        while self._used_kv_blocks + req_blocks > self._total_kv_blocks and self._active_reqs:
             victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
             victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
             # Invalidate the victim's pending completion event via the preempted flag
@@ -239,15 +271,19 @@ class Instance:
             # Re-queue the victim at head so it is retried first
             self._queue.appendleft(victim)
             self.total_preempted += 1
+            n_victims += 1
 
-        # If still no room (budget too small for even 1 req), skip for now
+        # If still no room (budget too small for even 1 req), put the
+        # candidate back right after the victims that were just re-queued,
+        # preserving their retry-first ordering, and skip for now.
         if self._used_kv_blocks + req_blocks > self._total_kv_blocks:
-            return
+            self._queue.insert(n_victims, req)
+            return False
 
-        self._queue.popleft()
         req.start_time = now
         req.state = RequestState.PREFILLING
         req.preempted = False  # reset preemption flag on re-admission
+        req.admission_seq += 1  # invalidate completion events from before
         self._active_slots += 1
         self._used_kv_blocks += req_blocks
         self._active_reqs.append(req)
@@ -257,9 +293,7 @@ class Instance:
         # This correctly models pools serving short requests as faster than
         # pools serving long requests, even at the same n_slots.
         if self._active_reqs:
-            mean_seq_len = sum(r.l_in + r.l_out for r in self._active_reqs) / len(
-                self._active_reqs
-            )
+            mean_seq_len = sum(r.l_in + r.l_out for r in self._active_reqs) / len(self._active_reqs)
         else:
             mean_seq_len = float(req.l_in + req.l_out)
 
@@ -297,12 +331,19 @@ class Instance:
         s_eff = s_raw_full / self.n_slots
 
         completion_time = now + s_eff
-        heapq.heappush(self._events, _Event(completion_time, req))
+        heapq.heappush(self._events, _Event(completion_time, req, req.admission_seq))
+        return True
 
     def next_event_time(self) -> float:
-        """Time of the next completion event (or now if queue can be served)."""
+        """Time of the next completion event (or now if the queue can be served)."""
         if self._queue and self._active_slots < self.n_slots:
-            return self._now  # can immediately start a request
+            req = self._queue[0]
+            req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
+            # A request can start now only if it fits the KV budget, either
+            # directly or after preempting active requests.  Otherwise the
+            # clock must wait for the next completion to free blocks.
+            if self._used_kv_blocks + req_blocks <= self._total_kv_blocks or self._active_reqs:
+                return self._now
         if self._events:
             return self._events[0].time
         return float("inf")

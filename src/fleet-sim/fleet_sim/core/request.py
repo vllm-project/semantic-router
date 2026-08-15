@@ -60,6 +60,10 @@ class Request:
 
     # reliability
     preempted: bool = False
+    # incremented on every (re-)admission; lets completion events identify
+    # which admission they belong to, so a stale event from an earlier
+    # admission of the same request can be ignored after preemption.
+    admission_seq: int = 0
 
     # state
     state: RequestState = field(default=RequestState.PENDING, init=False)
