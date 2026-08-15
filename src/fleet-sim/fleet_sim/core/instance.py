@@ -260,7 +260,10 @@ class Instance:
 
         # ── Preempt longest active request if KV budget is tight ──────────
         n_victims = 0
-        while self._used_kv_blocks + req_blocks > self._total_kv_blocks and self._active_reqs:
+        while (
+            self._used_kv_blocks + req_blocks > self._total_kv_blocks
+            and self._active_reqs
+        ):
             victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
             victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
             # Invalidate the victim's pending completion event via the preempted flag
@@ -293,7 +296,9 @@ class Instance:
         # This correctly models pools serving short requests as faster than
         # pools serving long requests, even at the same n_slots.
         if self._active_reqs:
-            mean_seq_len = sum(r.l_in + r.l_out for r in self._active_reqs) / len(self._active_reqs)
+            mean_seq_len = sum(r.l_in + r.l_out for r in self._active_reqs) / len(
+                self._active_reqs
+            )
         else:
             mean_seq_len = float(req.l_in + req.l_out)
 
@@ -342,7 +347,10 @@ class Instance:
             # A request can start now only if it fits the KV budget, either
             # directly or after preempting active requests.  Otherwise the
             # clock must wait for the next completion to free blocks.
-            if self._used_kv_blocks + req_blocks <= self._total_kv_blocks or self._active_reqs:
+            if (
+                self._used_kv_blocks + req_blocks <= self._total_kv_blocks
+                or self._active_reqs
+            ):
                 return self._now
         if self._events:
             return self._events[0].time
