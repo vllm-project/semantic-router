@@ -136,7 +136,7 @@ spec:
               name: "medical"
 
     # Semantic cache configuration
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: "memory"
       embedding_model: "mmbert"

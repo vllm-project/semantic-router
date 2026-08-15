@@ -140,14 +140,21 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool    `yaml:"enabled"`
-	ModelID              string  `yaml:"model_id"`
-	Threshold            float32 `yaml:"threshold"`
-	UseCPU               bool    `yaml:"use_cpu"`
-	UseModernBERT        bool    `yaml:"use_modernbert"`
-	UseMmBERT32K         bool    `yaml:"use_mmbert_32k"`
-	JailbreakMappingPath string  `yaml:"jailbreak_mapping_path"`
-	UseVLLM              bool    `yaml:"use_vllm,omitempty"`
+	Enabled              bool     `yaml:"enabled"`
+	ModelID              string   `yaml:"model_id"`
+	Threshold            float32  `yaml:"threshold"`
+	UseCPU               bool     `yaml:"use_cpu"`
+	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+
+	// Variant selects a local Candle-backed model variant. Mutually
+	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
+	// both are unset.
+	Variant string `yaml:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured with
+	// model_role="guardrail".
+	Protocol string `yaml:"protocol,omitempty"`
 }
 
 type FeedbackDetectorConfig struct {
@@ -321,21 +328,22 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	PreferredEndpoints []string          `yaml:"preferred_endpoints,omitempty"`
-	Pricing            ModelPricing      `yaml:"pricing,omitempty"`
-	ReasoningFamily    string            `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter     `yaml:"loras,omitempty"`
-	AccessKey          string            `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string            `yaml:"param_size,omitempty"`
-	ContextWindowSize  int               `yaml:"context_window_size,omitempty"`
-	APIFormat          string            `yaml:"api_format,omitempty"`
-	Description        string            `yaml:"description,omitempty"`
-	Capabilities       []string          `yaml:"capabilities,omitempty"`
-	Tags               []string          `yaml:"tags,omitempty"`
-	QualityScore       float64           `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string `yaml:"external_model_ids,omitempty"`
-	Modality           string            `yaml:"modality,omitempty"`
-	ImageGenBackend    string            `yaml:"image_gen_backend,omitempty"`
+	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
+	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
+	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
+	ReasoningFamily    string              `yaml:"reasoning_family,omitempty"`
+	LoRAs              []LoRAAdapter       `yaml:"loras,omitempty"`
+	AccessKey          string              `yaml:"access_key,omitempty" json:"-"`
+	ParamSize          string              `yaml:"param_size,omitempty"`
+	ContextWindowSize  int                 `yaml:"context_window_size,omitempty"`
+	APIFormat          string              `yaml:"api_format,omitempty"`
+	Description        string              `yaml:"description,omitempty"`
+	Capabilities       []string            `yaml:"capabilities,omitempty"`
+	Tags               []string            `yaml:"tags,omitempty"`
+	QualityScore       float64             `yaml:"quality_score,omitempty"`
+	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
+	Modality           string              `yaml:"modality,omitempty"`
+	ImageGenBackend    string              `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {

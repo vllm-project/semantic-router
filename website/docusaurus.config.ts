@@ -180,6 +180,10 @@ const config: Config = {
             from: '/docs/tutorials/signal/heuristic/modality',
             to: '/docs/tutorials/signal/learned/modality',
           },
+          {
+            from: '/docs/tutorials/plugin/semantic-cache',
+            to: '/docs/tutorials/plugin/response-cache',
+          },
         ],
       },
     ],
@@ -221,6 +225,7 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
+      style: 'dark',
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm-sr-logo.white.png',
@@ -356,9 +361,19 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
+      // Only applies when the OS states no preference.
       defaultMode: 'light',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      disableSwitch: false,
+      // Sets the default from the OS. Upstream also uses this flag to make the
+      // navbar button a three-way cycle; the swizzle in
+      // `src/theme/Navbar/ColorModeToggle` keeps it at two states.
+      respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
   headTags: [

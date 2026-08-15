@@ -46,7 +46,7 @@ global:
   - `global.router` 聚合路由引擎控制项（如配置来源选择、route-cache、模型选择默认等）
   - `global.router.config_source` 选择运行时配置来自 canonical YAML 文件（`file`）还是进程内 Kubernetes CRD 协调（`kubernetes`）
   - `global.services` 聚合共享 API 与控制面服务，如 `response_api`、`router_replay`、`observability`、`authz`、`ratelimit`
-  - `global.stores` 聚合有存储支撑的服务，如 `semantic_cache`、`memory`、`vector_store`
+  - `global.stores` 聚合有存储支撑的服务，如 `response_cache`、`memory`、`vector_store`
 - `global.integrations` 聚合辅助运行时集成，如 `tools`、`looper`
 - `global.model_catalog` 聚合路由器持有的模型资产，如嵌入、系统模型、外部模型、可复用分类器与模型支撑模块
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` 限制打分后路由要输出的嵌入规则条数上限；内置默认为 `1`
@@ -202,7 +202,7 @@ global:
 
 与仓库相关的运行时与测试台资产现位于 `config/` 之外：
 
-- `config/runtime/semantic-cache/`
+- `config/runtime/response-cache/`
 - `config/runtime/response-api/`
 - `config/runtime/tools/`
 - `e2e/config/`

@@ -56,7 +56,7 @@ global:
         cluster_mode: false
         tls_enabled: false
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

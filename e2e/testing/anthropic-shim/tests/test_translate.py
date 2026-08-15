@@ -10,11 +10,13 @@ from __future__ import annotations
 import copy
 
 from anthropic_shim.translate import (
+    anthropic_to_openai,
     apply_cache_usage,
     cache_prefix_hash,
     has_cache_control,
     join_system_array,
     join_tool_result_content,
+    openai_to_anthropic,
 )
 
 
@@ -27,6 +29,47 @@ def test_join_system_array_collapses_text_blocks_with_newline() -> None:
     }
     join_system_array(body)
     assert body["system"] == "You are a helpful assistant.\nBe very concise."
+
+
+def test_anthropic_to_openai_maps_messages_and_stop_sequences() -> None:
+    body = {
+        "model": "qwen-test",
+        "system": "Be concise.",
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 12,
+        "stop_sequences": ["STOP"],
+    }
+
+    translated = anthropic_to_openai(body)
+
+    assert translated["messages"] == [
+        {"role": "system", "content": "Be concise."},
+        {"role": "user", "content": "hello"},
+    ]
+    assert translated["stop"] == ["STOP"]
+
+
+def test_openai_to_anthropic_maps_usage_and_stop_reason() -> None:
+    response = {
+        "id": "chatcmpl-1",
+        "model": "qwen-test",
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "done"},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 7, "completion_tokens": 2},
+    }
+
+    translated = openai_to_anthropic(
+        response,
+        {"model": "qwen-test", "stop_sequences": ["STOP"]},
+    )
+
+    assert translated["content"] == [{"type": "text", "text": "done"}]
+    assert translated["stop_reason"] == "stop_sequence"
+    assert translated["usage"] == {"input_tokens": 7, "output_tokens": 2}
 
 
 def test_join_system_array_passes_through_string() -> None:

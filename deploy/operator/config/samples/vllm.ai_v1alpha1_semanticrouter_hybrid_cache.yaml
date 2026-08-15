@@ -58,7 +58,7 @@ spec:
       use_cpu: true
 
     # Semantic cache with Hybrid backend (HNSW + Milvus)
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: hybrid
       similarity_threshold: "0.85"

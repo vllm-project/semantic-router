@@ -8,7 +8,7 @@ listeners:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       backend_type: memory
   router:
@@ -543,7 +543,7 @@ routing:
             enabled: true
             mode: insert
             system_prompt: The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps.
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
             similarity_threshold: 0.86

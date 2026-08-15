@@ -257,11 +257,12 @@ func (d *decompiler) writeDecisionAlgorithm(dec config.Decision) {
 
 func (d *decompiler) writeDecisionPlugins(dec config.Decision) {
 	for _, p := range dec.Plugins {
+		pluginType := config.NormalizeDecisionPluginType(p.Type)
 		pluginFields := decompilePluginConfig(&p)
 		if pluginFields != "" {
-			d.write("  PLUGIN %s {\n%s  }\n", sanitizeName(p.Type), pluginFields)
+			d.write("  PLUGIN %s {\n%s  }\n", sanitizeName(pluginType), pluginFields)
 			continue
 		}
-		d.write("  PLUGIN %s\n", sanitizeName(p.Type))
+		d.write("  PLUGIN %s\n", sanitizeName(pluginType))
 	}
 }

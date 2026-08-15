@@ -32,11 +32,11 @@ use crate::model_architectures::traditional::modernbert::{
 use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use crate::ffi::init::{
-    FEEDBACK_DETECTOR_CLASSIFIER, LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER,
-    PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
+    BERT_CLASSIFIER, BERT_JAILBREAK_CLASSIFIER, BERT_PII_CLASSIFIER, FEEDBACK_DETECTOR_CLASSIFIER,
+    LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
 };
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
@@ -54,10 +54,6 @@ const SECURITY_THREAT_CLASS_STR: &str = "1";
 
 /// Keywords used to identify security threats in category names
 const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
-
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
@@ -276,6 +272,90 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
             },
             Err(e) => {
                 eprintln!("Error classifying jailbreak text: {e}");
+                default_result
+            }
+        }
+    } else {
+        eprintln!("No jailbreak classifier initialized - call init_jailbreak_classifier first");
+        default_result
+    }
+}
+
+/// Classify text for jailbreak detection with LoRA auto-detection and return
+/// the full softmax probability distribution alongside the top-1 prediction.
+///
+/// This lets callers report the probability of the jailbreak class itself
+/// rather than the confidence of whichever class wins argmax. Tries LoRA
+/// first (preferred for higher accuracy), falls back to Traditional BERT.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with `class`/`confidence` for the
+/// top prediction plus the full `probabilities` array (`class` = -1 on error).
+/// The `probabilities` array is heap-allocated and must be freed with
+/// `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_jailbreak_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    // Try LoRA jailbreak classifier first (preferred for higher accuracy)
+    if let Some(classifier) = LORA_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_with_index_and_probabilities(text) {
+            Ok((class_idx, confidence, _label, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                return ModernBertClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                };
+            }
+            Err(e) => {
+                eprintln!(
+                    "LoRA jailbreak classifier error: {}, falling back to Traditional BERT",
+                    e
+                );
+                // Don't return - fall through to Traditional BERT classifier
+            }
+        }
+    }
+
+    // Fallback to Traditional BERT classifier
+    if let Some(classifier) = BERT_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Error classifying jailbreak text with probabilities: {e}");
                 default_result
             }
         }
@@ -1191,6 +1271,64 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
             predicted_class: -1,
             confidence: 0.0,
         }
+    }
+}
+
+/// Classify ModernBERT jailbreak text and return the full softmax probability
+/// distribution alongside the top-1 prediction. This lets callers report the
+/// probability of the jailbreak class itself rather than the confidence of
+/// whichever class wins argmax.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResultWithProbs` with `class`/`confidence` for the
+/// top prediction plus the full `probabilities` array (`class` = -1 on error).
+/// The `probabilities` array is heap-allocated and must be freed with
+/// `free_modernbert_probabilities`.
+#[no_mangle]
+pub extern "C" fn classify_modernbert_jailbreak_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    if let Some(classifier) = TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_id, confidence, probabilities)) => {
+                let num_classes = probabilities.len();
+                let probabilities_ptr = unsafe { allocate_c_float_array(&probabilities) };
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_id as i32,
+                    confidence,
+                    probabilities: probabilities_ptr,
+                    num_classes: num_classes as i32,
+                }
+            }
+            Err(e) => {
+                println!(
+                    "ModernBERT jailbreak classification (with probs) failed: {}",
+                    e
+                );
+                default_result
+            }
+        }
+    } else {
+        println!("TraditionalModernBertJailbreakClassifier not initialized - call init_modernbert_jailbreak_classifier first");
+        default_result
     }
 }
 

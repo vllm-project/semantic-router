@@ -1,0 +1,107 @@
+name: Community
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, ready_for_review]
+    branches: [main]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  linked-issue:
+    name: Check linked issue
+    if: >-
+      github.event_name == 'pull_request'
+      && !github.event.pull_request.draft
+      && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Verify pull request links an issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const relatedPattern =
+              /\brelated\b\s*:?\s*(?:https?:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/|[\w.-]+\/[\w.-]+#|#)(\d+)/gi;
+
+            const relatedNumbers = new Set();
+            const text =
+              `${context.payload.pull_request.title || ''}\n` +
+              `${context.payload.pull_request.body || ''}`;
+            for (const match of text.matchAll(relatedPattern)) {
+              relatedNumbers.add(Number(match[1]));
+            }
+
+            const query = `
+              query ($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number title url }
+                    }
+                  }
+                }
+              }
+            `;
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.payload.pull_request.number,
+            });
+            const linked = [
+              ...(result.repository.pullRequest.closingIssuesReferences.nodes || []),
+            ];
+
+            for (const issue_number of relatedNumbers) {
+              try {
+                const {data: issue} = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number,
+                });
+                if (!issue.pull_request) linked.push(issue);
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            if (linked.length === 0) {
+              core.setFailed(
+                'Link a tracking issue with `Closes #123` or `Related #123`.',
+              );
+            }
+
+  issue-manager:
+    name: Issue commands
+    if: >-
+      github.event_name == 'issue_comment'
+      && startsWith(github.event.comment.body, '/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: jpmcb/prow-github-actions@c44ac3a57d67639e39e4a4988b52049ef45b80dd
+        with:
+          prow-commands: '/assign
+            /unassign
+            /lgtm
+            /approve
+            /area
+            /priority
+            /remove
+            /close
+            /reopen
+            /lock
+            /milestone
+            /hold
+            /cc
+            /uncc'
+          github-token: ${{ secrets.GITHUB_TOKEN }}

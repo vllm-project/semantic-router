@@ -9,6 +9,6 @@ spec:
     app.kubernetes.io/name: anthropic-backend
   ports:
     - name: http
-      port: 9080
+      port: 8080
       targetPort: shim
       protocol: TCP

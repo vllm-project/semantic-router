@@ -191,9 +191,10 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful and knowledgeable assistant.
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
+            scope: global
             similarity_threshold: 0.75
   signals:
     keywords:
@@ -366,7 +367,7 @@ global:
           service_version: v0.1.0
           deployment_environment: development
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

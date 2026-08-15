@@ -66,7 +66,6 @@ func putSearchBuffers(buf *searchBuffers) {
 //
 // This provides fast search while supporting millions of entries without storing docs in memory
 type HybridCache struct {
-	SimilarityTracker // embedded — provides LastSimilarity()
 	// In-memory components (search only)
 	hnswIndex        *HNSWIndex
 	embeddings       [][]float32
@@ -401,7 +400,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	// Add to HNSW
 	entryIndex := len(h.embeddings)
 	h.embeddings = append(h.embeddings, embedding)
-	h.idMap[entryIndex] = requestID
+	h.idMap[entryIndex] = pendingRequestPrimaryKey(requestID)
 	h.addNodeHybridOrRebuild(entryIndex, embedding)
 
 	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s, ttl=%d",

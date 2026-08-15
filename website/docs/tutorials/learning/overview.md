@@ -67,7 +67,19 @@ global:
           idle_timeout_seconds: 300
           switch_margin: 0.05
           stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
 ```
+
+The shared store is optional. Request-time reads use a strict timeout and fail
+open to the bounded local store. Response-side updates write the same snapshot
+to Redis so another replica can recover conversation protection state.
 
 Decision-local controls are sparse. Most decisions inherit global behavior:
 

@@ -27,8 +27,11 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	queryResult, err := c.client.Query(
 		ctx,
 		c.collectionName,
-		[]string{},              // Empty partitions means search all
-		"response_body != \"\"", // Only get complete entries
+		[]string{}, // Empty partitions means search all
+		fmt.Sprintf(
+			`response_body != "" && query != %s`,
+			milvusStringLiteral(exactCacheQueryMarker),
+		),
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
 	)
 	if err != nil {

@@ -45,6 +45,14 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		if err != nil {
 			return fmt.Errorf("config.prompt_guard: %w", err)
 		}
+		// Variant/Protocol are mutually exclusive and, unlike the CRD's other
+		// PromptGuardConfig fields, deliberately carry no kubebuilder default
+		// for Variant (a per-field CRD default would be injected even when
+		// only Protocol is set, tripping mutual-exclusion validation). Apply
+		// the "neither set" default here instead, once both fields are read.
+		if promptGuard.Variant == "" && promptGuard.Protocol == "" {
+			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
+		}
 		canonical.Global.ModelCatalog.Modules.PromptGuard = promptGuard
 	}
 
@@ -59,12 +67,16 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 }
 
 func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	if spec.SemanticCache != nil {
-		semanticCache, err := convertToTypedConfig[routerconfig.SemanticCache](r, spec.SemanticCache)
+	responseCache, err := operatorResponseCacheConfig(spec)
+	if err != nil {
+		return err
+	}
+	if responseCache != nil {
+		typedCache, err := convertToTypedConfig[routerconfig.ResponseCacheStoreConfig](r, responseCache)
 		if err != nil {
-			return fmt.Errorf("config.semantic_cache: %w", err)
+			return fmt.Errorf("config.response_cache: %w", err)
 		}
-		canonical.Global.Stores.SemanticCache = semanticCache
+		canonical.Global.Stores.ResponseCache = typedCache
 	}
 	if spec.Tools != nil {
 		tools, err := convertToTypedConfig[routerconfig.ToolsConfig](r, spec.Tools)
@@ -74,6 +86,18 @@ func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical 
 		canonical.Global.Integrations.Tools = tools
 	}
 	return nil
+}
+
+func operatorResponseCacheConfig(
+	spec vllmv1alpha1.ConfigSpec,
+) (*vllmv1alpha1.SemanticCacheConfig, error) {
+	if spec.ResponseCache != nil && spec.SemanticCache != nil {
+		return nil, fmt.Errorf("config.response_cache conflicts with deprecated config.semantic_cache")
+	}
+	if spec.ResponseCache != nil {
+		return spec.ResponseCache, nil
+	}
+	return spec.SemanticCache, nil
 }
 
 func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {

@@ -12,8 +12,29 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib import error, request
 
+from router_calibration_evaluation import (
+    compare_eval_trace,
+    compare_expected_plugins,
+    compare_expected_signals,
+    expected_alias_matches,
+    expected_signals_by_type,
+    find_missing_expected_signals,
+    materialize_probe_text,
+    probe_padding_metadata,
+    summarize_message_content,
+    summarize_probe_messages,
+)
+from router_calibration_evaluation import (
+    evaluate_probe as evaluate_probe_request,
+)
+from router_calibration_http import (
+    HTTP_OK_MIN,
+    HTTP_REDIRECT_MIN,
+    ensure_success,
+    http_json,
+    normalize_router_url,
+)
 from router_calibration_manifest import (
     Probe,
     resolve_acceptance,
@@ -21,11 +42,19 @@ from router_calibration_manifest import (
     summarize_tag_results,
 )
 
+__all__ = [
+    "compare_eval_trace",
+    "compare_expected_plugins",
+    "compare_expected_signals",
+    "expected_alias_matches",
+    "find_missing_expected_signals",
+    "materialize_probe_text",
+    "summarize_message_content",
+]
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SEMANTIC_ROUTER_MODULE_ROOT = REPO_ROOT / "src" / "semantic-router"
 DEFAULT_REPORT_ROOT = REPO_ROOT / ".augment" / "router-loop"
-HTTP_OK_MIN = 200
-HTTP_REDIRECT_MIN = 300
 DEFAULT_EVAL_REQUEST_TIMEOUT_SECONDS = 60.0
 MAX_EVAL_REQUEST_TIMEOUT_SECONDS = 1200.0
 DEFAULT_EVAL_CONCURRENCY = 1
@@ -44,55 +73,6 @@ def resolve_repo_path(path: Path | None) -> Path | None:
     if path.is_absolute():
         return path
     return (REPO_ROOT / path).resolve()
-
-
-def normalize_router_url(router_url: str) -> str:
-    normalized = router_url.strip().rstrip("/")
-    eval_suffix = "/api/v1/eval"
-    normalized = normalized.removesuffix(eval_suffix)
-    return normalized
-
-
-def http_json(
-    method: str,
-    url: str,
-    payload: dict[str, Any] | None = None,
-    timeout_seconds: float = 60.0,
-) -> tuple[int, dict[str, Any] | list[Any] | str]:
-    body = None
-    headers = {"Accept": "application/json"}
-    if payload is not None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-
-    req = request.Request(url=url, method=method.upper(), data=body, headers=headers)
-    try:
-        with request.urlopen(req, timeout=timeout_seconds) as response:
-            status = response.getcode()
-            raw = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            parsed = raw
-        return exc.code, parsed
-    except (error.URLError, TimeoutError) as exc:
-        raise RuntimeError(f"request to {url} failed: {exc}") from exc
-
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        parsed = raw
-    return status, parsed
-
-
-def ensure_success(status: int, payload: Any, action: str) -> Any:
-    if HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN:
-        return payload
-    raise RuntimeError(
-        f"{action} failed with status {status}: {json.dumps(payload, ensure_ascii=False)}"
-    )
 
 
 def fetch_router_snapshot(router_url: str) -> dict[str, Any]:
@@ -199,184 +179,19 @@ def wait_for_config_activation(
 
 
 def evaluate_probe(
-    router_url: str, probe: Probe, request_timeout_seconds: float = 60.0
+    router_url: str,
+    probe: Probe,
+    request_timeout_seconds: float = 60.0,
+    allowed_decisions: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    request_payload: dict[str, Any]
-    if probe.messages:
-        request_payload = {"messages": list(probe.messages)}
-    else:
-        request_payload = {"text": materialize_probe_text(probe)}
-    if probe.model:
-        request_payload["model"] = probe.model
-    if probe.tools:
-        request_payload["tools"] = list(probe.tools)
-    status, payload = http_json(
-        "POST",
-        f"{normalize_router_url(router_url)}/api/v1/eval",
-        request_payload,
-        timeout_seconds=request_timeout_seconds,
+    """Evaluate one probe while preserving the patchable transport seam."""
+    return evaluate_probe_request(
+        router_url,
+        probe,
+        request_timeout_seconds=request_timeout_seconds,
+        allowed_decisions=allowed_decisions,
+        http_client=http_json,
     )
-    data = ensure_success(status, payload, "POST /api/v1/eval")
-    if not isinstance(data, dict):
-        raise RuntimeError(
-            f"unexpected eval payload for probe {probe.probe_id}: {data!r}"
-        )
-
-    decision_result = data.get("decision_result") or {}
-    actual_decision = (
-        str(data.get("routing_decision") or "").strip()
-        or str(decision_result.get("decision_name") or "").strip()
-    )
-    actual_models = data.get("recommended_models") or []
-    actual_model = str(data.get("requested_model") or "").strip()
-    actual_recipe = str(data.get("recipe") or "").strip()
-    actual_algorithm = str(decision_result.get("algorithm") or "").strip()
-    actual_plugins = tuple(
-        str(plugin).strip()
-        for plugin in decision_result.get("plugins") or []
-        if str(plugin).strip()
-    )
-    matched_signals = decision_result.get("matched_signals") or {}
-    missing_expected_signals = find_missing_expected_signals(
-        probe.expected_signals, matched_signals
-    )
-    model_matched = probe.model is None or actual_model == probe.model
-    recipe_matched = (
-        probe.expected_recipe is None or actual_recipe == probe.expected_recipe
-    )
-    algorithm_matched = (
-        probe.expected_algorithm is None or actual_algorithm == probe.expected_algorithm
-    )
-    plugins_matched = set(probe.expected_plugins).issubset(actual_plugins)
-    signals_matched = not missing_expected_signals
-    matched = (
-        actual_decision == probe.expected_decision
-        and model_matched
-        and recipe_matched
-        and algorithm_matched
-        and plugins_matched
-        and signals_matched
-    )
-    return {
-        "id": probe.probe_id,
-        "decision_id": probe.decision_id,
-        "variant_id": probe.variant_id,
-        "expected_decision": probe.expected_decision,
-        "model": probe.model,
-        "actual_model": actual_model,
-        "expected_recipe": probe.expected_recipe,
-        "actual_recipe": actual_recipe,
-        "expected_algorithm": probe.expected_algorithm,
-        "actual_algorithm": actual_algorithm,
-        "expected_plugins": list(probe.expected_plugins),
-        "actual_plugins": list(actual_plugins),
-        "expected_signals": expected_signals_by_type(probe.expected_signals),
-        "missing_expected_signals": missing_expected_signals,
-        "expected_alias": probe.expected_alias,
-        "query": probe.query or summarize_probe_messages(probe.messages),
-        "repeat": probe.repeat,
-        "padding": probe_padding_metadata(probe),
-        "messages": list(probe.messages),
-        "tools": list(probe.tools),
-        "notes": probe.notes,
-        "tags": list(probe.tags),
-        "actual_decision": actual_decision,
-        "matched": matched,
-        "model_matched": model_matched,
-        "recipe_matched": recipe_matched,
-        "algorithm_matched": algorithm_matched,
-        "plugins_matched": plugins_matched,
-        "signals_matched": signals_matched,
-        "recommended_models": actual_models,
-        "used_signals": decision_result.get("used_signals") or {},
-        "matched_signals": matched_signals,
-        "unmatched_signals": decision_result.get("unmatched_signals") or {},
-        "signal_confidences": data.get("signal_confidences") or {},
-        "metrics": data.get("metrics") or {},
-    }
-
-
-def find_missing_expected_signals(
-    expected: tuple[tuple[str, str], ...], actual: Any
-) -> list[str]:
-    if not isinstance(actual, dict):
-        actual = {}
-    actual_by_type = {
-        str(signal_type): {str(name) for name in names}
-        for signal_type, names in actual.items()
-        if isinstance(names, list)
-    }
-    return [
-        f"{signal_type}:{name}"
-        for signal_type, name in expected
-        if name not in actual_by_type.get(signal_type, set())
-    ]
-
-
-def expected_signals_by_type(
-    expected: tuple[tuple[str, str], ...],
-) -> dict[str, list[str]]:
-    result: dict[str, list[str]] = {}
-    for signal_type, name in expected:
-        result.setdefault(signal_type, []).append(name)
-    return result
-
-
-def materialize_probe_text(probe: Probe) -> str:
-    """Build adversarial long inputs without duplicating the trigger itself."""
-    query = "\n".join([probe.query or ""] * probe.repeat)
-    if probe.padding is None:
-        return query
-
-    padding_lines = [probe.padding.text] * probe.padding.repeat
-    if probe.padding.placement == "before":
-        parts = [*padding_lines, query]
-    elif probe.padding.placement == "after":
-        parts = [query, *padding_lines]
-    else:
-        midpoint = len(padding_lines) // 2
-        parts = [*padding_lines[:midpoint], query, *padding_lines[midpoint:]]
-    return "\n".join(part for part in parts if part)
-
-
-def probe_padding_metadata(probe: Probe) -> dict[str, Any] | None:
-    if probe.padding is None:
-        return None
-    return {
-        "text": probe.padding.text,
-        "repeat": probe.padding.repeat,
-        "placement": probe.padding.placement,
-    }
-
-
-def summarize_probe_messages(messages: tuple[dict[str, Any], ...]) -> str:
-    if not messages:
-        return ""
-    for message in reversed(messages):
-        if str(message.get("role") or "").strip().lower() != "user":
-            continue
-        content = summarize_message_content(message.get("content"))
-        if content:
-            return content
-    return json.dumps(list(messages), ensure_ascii=False)
-
-
-def summarize_message_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content.strip()
-    if not isinstance(content, list):
-        return ""
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        part_type = str(item.get("type") or "").strip().lower()
-        if part_type not in ("", "text", "input_text"):
-            continue
-        text = str(item.get("text") or "").strip()
-        if text:
-            parts.append(text)
-    return " ".join(parts).strip()
 
 
 def evaluate_probes(
@@ -385,12 +200,22 @@ def evaluate_probes(
     manifest = manifest or {}
     settings = resolve_evaluation_settings(manifest)
     probe_list = list(probes)
+    decisions_by_recipe: dict[str, set[str]] = {}
+    for probe in probe_list:
+        recipe_key = probe.expected_recipe or "default"
+        decisions_by_recipe.setdefault(recipe_key, set()).add(probe.expected_decision)
     started = time.perf_counter()
 
     def evaluate_one(probe: Probe) -> dict[str, Any]:
         probe_started = time.perf_counter()
         try:
-            result = evaluate_probe(router_url, probe, settings.request_timeout_seconds)
+            recipe_key = probe.expected_recipe or "default"
+            result = evaluate_probe(
+                router_url,
+                probe,
+                settings.request_timeout_seconds,
+                frozenset(decisions_by_recipe[recipe_key]),
+            )
         except RuntimeError as exc:
             result = failed_probe_result(probe, exc)
         result["latency_ms"] = round((time.perf_counter() - probe_started) * 1000, 3)
@@ -524,16 +349,25 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "expected_decision": probe.expected_decision,
         "model": probe.model,
         "actual_model": "",
-        "expected_recipe": probe.expected_recipe,
+        "expected_recipe": probe.expected_recipe or "default",
         "actual_recipe": "",
         "expected_algorithm": probe.expected_algorithm,
         "actual_algorithm": "",
         "expected_plugins": list(probe.expected_plugins),
+        "forbidden_plugins": list(probe.forbidden_plugins),
         "actual_plugins": [],
+        "plugin_match": probe.plugin_match,
+        "missing_expected_plugins": list(probe.expected_plugins),
+        "unexpected_plugins": [],
+        "forbidden_plugin_matches": [],
         "expected_signals": expected_signals_by_type(probe.expected_signals),
+        "forbidden_signals": expected_signals_by_type(probe.forbidden_signals),
+        "signal_match": probe.signal_match,
         "missing_expected_signals": [
             f"{signal_type}:{name}" for signal_type, name in probe.expected_signals
         ],
+        "unexpected_signals": [],
+        "forbidden_signal_matches": [],
         "expected_alias": probe.expected_alias,
         "query": probe.query or summarize_probe_messages(probe.messages),
         "repeat": probe.repeat,
@@ -549,6 +383,10 @@ def failed_probe_result(probe: Probe, exc: RuntimeError) -> dict[str, Any]:
         "algorithm_matched": False,
         "plugins_matched": False,
         "signals_matched": False,
+        "alias_matched": False,
+        "trace_matched": False,
+        "trace_decisions": [],
+        "trace_errors": [str(exc)],
         "recommended_models": [],
         "used_signals": {},
         "matched_signals": {},

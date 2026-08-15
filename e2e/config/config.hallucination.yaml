@@ -62,7 +62,7 @@ global:
           high_resolution_timing: false
           sample_rate: 1.0
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       embedding_model: mmbert
     memory:

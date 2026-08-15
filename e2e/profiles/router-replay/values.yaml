@@ -123,7 +123,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -138,7 +138,6 @@ config:
           model_ref: ""
           model_id: ""
           jailbreak_mapping_path: ""
-          use_mmbert_32k: false
         classifier:
           domain:
             model_ref: ""

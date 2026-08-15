@@ -96,9 +96,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		looperAlgorithms := []string{"confidence", "ratings", "fusion", "workflows"}
-
-		for _, algorithmType := range looperAlgorithms {
+		for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
 			decision := &config.Decision{
 				Name: "routing",
 				ModelRefs: []config.ModelRef{
@@ -771,7 +769,7 @@ func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *tes
 	}
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	ctx := &RequestContext{
-		LooperRequest: true,
+		LooperRequest: true, VSRSelectedDecision: &router.Config.Decisions[0],
 		Headers: map[string]string{
 			headers.VSRLooperDecision: "fusion_alias",
 		},

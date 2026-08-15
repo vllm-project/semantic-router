@@ -1,41 +1,17 @@
 name: Test And Build
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-  push:
-    branches:
-      - main
-  schedule:
-    # Run nightly at 2:00 AM UTC
-    - cron: "0 2 * * *"
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 env:
   HELM_VERSION: v3.14.0
 
 jobs:
-  # use changes as filter
-  changes:
-    uses: ./.github/workflows/ci-changes.yml
-
   test-and-build:
-    needs: changes
-    if: >-
-      ${{ !github.event.pull_request.draft
-          && (github.event_name == 'schedule'
-          || needs.changes.outputs.core == 'true'
-          || needs.changes.outputs.helm == 'true'
-          || needs.changes.outputs.e2e  == 'true'
-          || needs.changes.outputs.docker == 'true'
-          || needs.changes.outputs.make == 'true'
-          || needs.changes.outputs.ci   == 'true') }}
+    name: Core test and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -277,13 +253,3 @@ jobs:
           echo "::error::Test and build failed. Check the workflow run for details."
           echo "To reproduce this job locally: make test-and-build-local"
           echo "To run the baseline PR parity gate locally: make agent-pr-gate"
-
-  # Trigger Docker publishing on successful nightly runs
-  publish-docker:
-    needs: test-and-build
-    if: github.repository == 'vllm-project/semantic-router' && success() && github.event_name == 'schedule'
-    uses: ./.github/workflows/docker-publish.yml
-    with:
-      tag_suffix: nightly-$(date +'%Y%m%d')
-      is_nightly: true
-    secrets: inherit

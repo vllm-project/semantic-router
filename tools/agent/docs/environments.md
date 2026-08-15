@@ -34,7 +34,7 @@
 ## `nvidia-local`
 
 - Build with `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`
-- Local runtime uses the `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image (published via `docker-publish.yml` / `docker-release.yml`); a local build tagged `vllm-sr-cuda:local` is also supported
+- Local runtime uses the `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image (published through the canonical reusable `docker-publish.yml` from main, nightly, and release lifecycle workflows); a local build tagged `vllm-sr-cuda:local` is also supported
 - Start with `vllm-sr serve --platform nvidia --config <recipe>` — `--platform nvidia` selects the published CUDA image, wires `--gpus all` / CDI passthrough, and flips `use_cpu` to false for router internal models under `global.model_catalog`, at parity with `--platform amd`. Pass `--image` / `VLLM_SR_IMAGE` only to pin a specific image, and `VLLM_SR_NVIDIA_PRESERVE_CPU=1` to keep the recipe's CPU settings
 - Use this for CUDA/NVIDIA validation of BERT classifiers, mmBERT embeddings, jailbreak guard, PII detection, and other router-side ML modules on GPU
 - Verified hardware in the playbook: RTX 4090 (compute_cap 8.9), CUDA driver 580
@@ -45,7 +45,9 @@
 ## `ci-k8s`
 
 - Run local profile checks with `make e2e-test E2E_PROFILE=<profile>`
-- CI expands to the standard kind/Kubernetes matrix in [integration-test-k8s.yml](../../../.github/workflows/integration-test-k8s.yml)
+- CI change classification selects affected profiles once in
+  [pr.yml](../../../.github/workflows/pr.yml), then calls the reusable
+  [integration-test-k8s.yml](../../../.github/workflows/integration-test-k8s.yml)
 
 ## Selection Rule
 

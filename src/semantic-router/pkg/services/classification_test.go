@@ -323,7 +323,7 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.MatchedSignals.Projection)
 	assert.Equal(t, []string{"balance_medium"}, response.DecisionResult.UnmatchedSignals.Projection)
 	assert.Equal(t, "remom", response.DecisionResult.Algorithm)
-	assert.Equal(t, []string{"semantic-cache", "system_prompt"}, response.DecisionResult.Plugins)
+	assert.Equal(t, []string{"response_cache", "system_prompt"}, response.DecisionResult.Plugins)
 }
 
 func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {

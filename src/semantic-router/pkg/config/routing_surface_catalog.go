@@ -20,18 +20,22 @@ const (
 	DecisionAlgorithmWorkflows    = "workflows"
 	DecisionAlgorithmPrompt       = "prompt"
 
-	DecisionPluginSemanticCache     = "semantic-cache"
-	DecisionPluginSystemPrompt      = "system_prompt"
-	DecisionPluginHeaderMutation    = "header_mutation"
-	DecisionPluginHallucination     = "hallucination"
-	DecisionPluginResponseJailbreak = "response_jailbreak"
-	DecisionPluginRouterReplay      = "router_replay"
-	DecisionPluginMemory            = "memory"
-	DecisionPluginRAG               = "rag"
-	DecisionPluginImageGen          = "image_gen"
-	DecisionPluginFastResponse      = "fast_response"
-	DecisionPluginRequestParams     = "request_params"
-	DecisionPluginToolSelection     = "tool_selection"
+	DecisionPluginResponseCache = "response_cache"
+	// DecisionPluginSemanticCache is the deprecated public spelling retained
+	// for source compatibility. Runtime config is normalized to response_cache.
+	DecisionPluginSemanticCache      = "semantic-cache"
+	DecisionPluginSystemPrompt       = "system_prompt"
+	DecisionPluginHeaderMutation     = "header_mutation"
+	DecisionPluginHallucination      = "hallucination"
+	DecisionPluginResponseJailbreak  = "response_jailbreak"
+	DecisionPluginRouterReplay       = "router_replay"
+	DecisionPluginMemory             = "memory"
+	DecisionPluginRAG                = "rag"
+	DecisionPluginImageGen           = "image_gen"
+	DecisionPluginFastResponse       = "fast_response"
+	DecisionPluginRequestParams      = "request_params"
+	DecisionPluginToolSelection      = "tool_selection"
+	DecisionPluginContextCompression = "context_compression"
 )
 
 var supportedSignalTypes = []string{
@@ -65,37 +69,48 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginMemory,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
+	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
-	DecisionPluginSemanticCache,
+	DecisionPluginResponseCache,
 	DecisionPluginSystemPrompt,
 	DecisionPluginToolSelection,
 	DecisionPluginTools,
 }
 
-// AlgorithmCatalogEntry describes a model-selection algorithm and its tier
+// AlgorithmExecution identifies the runtime path for a decision algorithm.
+type AlgorithmExecution string
+
+const (
+	AlgorithmExecutionLooper   AlgorithmExecution = "looper"
+	AlgorithmExecutionSelector AlgorithmExecution = "selector"
+)
+
+// AlgorithmCatalogEntry describes a decision algorithm, its tier, and the
+// runtime path that executes it.
 type AlgorithmCatalogEntry struct {
-	Type string // algorithm type name (e.g., "elo")
-	Tier string // "supported" or "experimental"
+	Type      string             // algorithm type name (e.g., "automix")
+	Tier      string             // "supported" or "experimental"
+	Execution AlgorithmExecution // "selector" or "looper"
 }
 
 var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
-	{Type: DecisionAlgorithmAutoMix, Tier: "experimental"},
-	{Type: DecisionAlgorithmConfidence, Tier: "supported"},
-	{Type: DecisionAlgorithmFusion, Tier: "experimental"},
-	{Type: DecisionAlgorithmHybrid, Tier: "supported"},
-	{Type: DecisionAlgorithmKMeans, Tier: "experimental"},
-	{Type: DecisionAlgorithmKNN, Tier: "experimental"},
-	{Type: DecisionAlgorithmLatencyAware, Tier: "supported"},
-	{Type: DecisionAlgorithmMLP, Tier: "experimental"},
-	{Type: DecisionAlgorithmMultiFactor, Tier: "supported"},
-	{Type: DecisionAlgorithmRatings, Tier: "supported"},
-	{Type: DecisionAlgorithmReMoM, Tier: "supported"},
-	{Type: DecisionAlgorithmRouterDC, Tier: "supported"},
-	{Type: DecisionAlgorithmStatic, Tier: "supported"},
-	{Type: DecisionAlgorithmSVM, Tier: "experimental"},
-	{Type: DecisionAlgorithmWorkflows, Tier: "experimental"},
-	{Type: DecisionAlgorithmPrompt, Tier: "experimental"},
+	{Type: DecisionAlgorithmAutoMix, Tier: "experimental", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmConfidence, Tier: "supported", Execution: AlgorithmExecutionLooper},
+	{Type: DecisionAlgorithmFusion, Tier: "experimental", Execution: AlgorithmExecutionLooper},
+	{Type: DecisionAlgorithmHybrid, Tier: "supported", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmKMeans, Tier: "experimental", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmKNN, Tier: "experimental", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmLatencyAware, Tier: "supported", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmMLP, Tier: "experimental", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmMultiFactor, Tier: "supported", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmRatings, Tier: "supported", Execution: AlgorithmExecutionLooper},
+	{Type: DecisionAlgorithmReMoM, Tier: "supported", Execution: AlgorithmExecutionLooper},
+	{Type: DecisionAlgorithmRouterDC, Tier: "supported", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmStatic, Tier: "supported", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmSVM, Tier: "experimental", Execution: AlgorithmExecutionSelector},
+	{Type: DecisionAlgorithmWorkflows, Tier: "experimental", Execution: AlgorithmExecutionLooper},
+	{Type: DecisionAlgorithmPrompt, Tier: "experimental", Execution: AlgorithmExecutionSelector},
 }
 
 // supportedDecisionAlgorithmTypes is derived from the catalog for backwards compatibility
@@ -108,7 +123,9 @@ var supportedDecisionAlgorithmTypes = func() []string {
 }()
 
 var pluginTypeAliases = map[string]string{
-	"semantic_cache": DecisionPluginSemanticCache,
+	"semantic-cache": DecisionPluginResponseCache,
+	"semantic_cache": DecisionPluginResponseCache,
+	"response-cache": DecisionPluginResponseCache,
 }
 
 func SupportedSignalTypes() []string {
@@ -153,6 +170,28 @@ func IsSupportedDecisionAlgorithmType(algorithmType string) bool {
 	for _, candidate := range supportedDecisionAlgorithmTypes {
 		if candidate == algorithmType {
 			return true
+		}
+	}
+	return false
+}
+
+// SupportedLooperAlgorithmTypes returns the decision algorithms executed by
+// the multi-model Looper runtime.
+func SupportedLooperAlgorithmTypes() []string {
+	types := make([]string, 0)
+	for _, entry := range decisionAlgorithmCatalog {
+		if entry.Execution == AlgorithmExecutionLooper {
+			types = append(types, entry.Type)
+		}
+	}
+	return cloneSortedStrings(types)
+}
+
+// IsLooperAlgorithmType reports whether an algorithm is executed by Looper.
+func IsLooperAlgorithmType(algorithmType string) bool {
+	for _, entry := range decisionAlgorithmCatalog {
+		if entry.Type == algorithmType {
+			return entry.Execution == AlgorithmExecutionLooper
 		}
 	}
 	return false

@@ -156,6 +156,9 @@ func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, model
 		if params.Pricing == (ModelPricing{}) {
 			params.Pricing = providerParams.Pricing
 		}
+		if params.Reliability == (ProviderReliability{}) {
+			params.Reliability = providerParams.Reliability
+		}
 		if params.ReasoningFamily == "" {
 			params.ReasoningFamily = providerParams.ReasoningFamily
 		}
@@ -212,6 +215,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 			if _, ok := canonicalProviderDefaults(canonical.Providers).ReasoningFamilies[model.ReasoningFamily]; !ok {
 				return fmt.Errorf("providers.models[%s].reasoning_family %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamily)
 			}
+		}
+		if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
+			return err
 		}
 		if len(canonicalBackendRefs(model)) == 0 {
 			if !canonicalProviderModelHasMetadata(model) {
@@ -326,7 +332,8 @@ func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
 	if model.ReasoningFamily != "" || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
-	return model.Pricing != (ModelPricing{})
+	return model.Pricing != (ModelPricing{}) ||
+		model.Reliability != (ProviderReliability{})
 }
 
 func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[string]ProviderProfile, []VLLMEndpoint, map[string]ModelParams, error) {
@@ -342,6 +349,7 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		params := modelParams[model.Name]
 		params.ReasoningFamily = model.ReasoningFamily
 		params.Pricing = model.Pricing
+		params.Reliability = model.Reliability
 		params.APIFormat = model.APIFormat
 		params.ExternalModelIDs = normalizeExternalModelIDsFromProviderModel(model)
 

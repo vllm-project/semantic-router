@@ -33,6 +33,8 @@ import {
   loadOpenClawPage,
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
+  loadResponseCachePage,
+  loadContextCompressionPage,
   loadSecurityPolicyPage,
   loadSetupWizardPage,
   loadStatusPage,
@@ -69,6 +71,15 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
+  'response-cache': (
+    <RecoverableLazyRoute loader={loadResponseCachePage} routeLabel="Response Cache" />
+  ),
+  'context-compression': (
+    <RecoverableLazyRoute
+      loader={loadContextCompressionPage}
+      routeLabel="Context Compression"
+    />
+  ),
   security: <RecoverableLazyRoute loader={loadSecurityPolicyPage} routeLabel="Security" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,

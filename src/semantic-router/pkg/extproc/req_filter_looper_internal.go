@@ -256,6 +256,25 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
+	workingBody := ctx.workingRequestBody()
+	workingBody, compressionErr := r.applyContextCompressionPolicy(ctx, workingBody)
+	if compressionErr != nil {
+		return r.createErrorResponse(
+			500,
+			"Context compression failed under fail_closed policy",
+		), nil
+	}
+	ctx.setWorkingRequestBody(workingBody)
+	if ctx.requestBodyMutated() {
+		openAIRequest, err = parseOpenAIRequest(workingBody)
+		if err != nil {
+			logging.ComponentErrorEvent("extproc", "looper_mutated_request_reparse_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"error":      err.Error(),
+			})
+			return r.createErrorResponse(500, "Failed to process looper request"), nil
+		}
+	}
 
 	route, err := r.resolveLooperBackendRoute(ctx, modelName)
 	if err != nil {
@@ -404,7 +423,7 @@ func applyLooperReasoningContext(
 func (r *OpenAIRouter) parseLooperRequestForPlugins(
 	ctx *RequestContext,
 ) (*openai.ChatCompletionNewParams, error) {
-	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+	openAIRequest, err := parseOpenAIRequest(ctx.workingRequestBody())
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_parse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

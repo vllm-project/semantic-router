@@ -174,7 +174,7 @@ def test_summarize_response_decision_result_with_signal_confidences() -> None:
         "decision_result": {
             "decision_name": "economics",
             "algorithm": "multi_factor",
-            "plugins": ["semantic-cache"],
+            "plugins": ["response_cache"],
             "matched_signals": {"domains": ["economics"], "keywords": ["inflation"]},
             "unmatched_signals": {"embeddings": ["price_movement"]},
             "used_signals": ["domain:economics", "keyword:inflation"],
@@ -187,7 +187,7 @@ def test_summarize_response_decision_result_with_signal_confidences() -> None:
     assert "recipe: balanced" in summary
     assert "economics" in summary
     assert "algorithm: multi_factor" in summary
-    assert "plugins: semantic-cache" in summary
+    assert "plugins: response_cache" in summary
     assert "signal confidences" in summary
     assert "0.95" in summary
 

@@ -761,7 +761,7 @@ recipes:
           latency_percentile: 90
           on_no_candidates: first
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.9
@@ -885,7 +885,7 @@ recipes:
             load: 0.2
           on_no_candidates: first
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
           similarity_threshold: 0.88
@@ -1654,7 +1654,7 @@ global:
     startup_status:
       store_backend: redis
   stores:
-    semantic_cache:
+    response_cache:
       backend_type: memory
       enabled: true
       max_entries: 1000
@@ -1694,8 +1694,7 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
+        variant: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:
