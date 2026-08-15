@@ -18,9 +18,9 @@ import (
 func TestAuditMutationRecordsConfigDeploy(t *testing.T) {
 	t.Parallel()
 
-	store, err := auth.NewStore(filepath.Join(t.TempDir(), "auth.db"))
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
+	store, storeErr := auth.NewStore(filepath.Join(t.TempDir(), "auth.db"))
+	if storeErr != nil {
+		t.Fatalf("NewStore() error = %v", storeErr)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
@@ -89,9 +89,9 @@ func TestAuditMutationRecordsConfigDeploy(t *testing.T) {
 func TestAuditMutationSkipsReads(t *testing.T) {
 	t.Parallel()
 
-	store, err := auth.NewStore(filepath.Join(t.TempDir(), "auth.db"))
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
+	store, storeErr := auth.NewStore(filepath.Join(t.TempDir(), "auth.db"))
+	if storeErr != nil {
+		t.Fatalf("NewStore() error = %v", storeErr)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
