@@ -310,6 +310,64 @@ docker compose -f deploy/docker-compose/docker-compose.yml up -d dashboard
 docker logs -f semantic-router-dashboard
 ```
 
+## Testing and CI checks
+
+### The fast gate: `make dashboard-check`
+
+Run this before pushing. It is the single entrypoint for dashboard quality, and the
+required `Dashboard` CI workflow runs the **same target** — nothing here is CI-only,
+and nothing in CI is missing locally.
+
+```bash
+make dashboard-check
+```
+
+It runs, in order:
+
+| Step | What it covers |
+| --- | --- |
+| `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
+| `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
+| `dashboard-test-frontend` | Frontend unit tests |
+| `dashboard-test-backend` | `go test ./...` on `dashboard/backend` |
+| `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
+
+### Running just the backend tests
+
+```bash
+make dashboard-test-backend          # from the repo root
+cd dashboard/backend && go test ./... # equivalent, run directly
+```
+
+The dashboard backend is a **separate Go module**, so `go test ./...` from the repo
+root does not cover it — use one of the two commands above.
+
+Some backend tests shell out to the `vllm-sr` CLI (for example to regenerate Envoy
+config), so they need its Python dependencies importable:
+
+```bash
+pip install -e src/vllm-sr
+```
+
+Without it, those tests fail with `ModuleNotFoundError`. CI installs the same package.
+
+### Race detection is a local step, not part of the fast gate
+
+`dashboard-check` runs plain `go test`. The race detector roughly doubles the runtime,
+which is a poor trade on every PR, so it is deliberately **not** in the always-on gate.
+Run it locally before pushing concurrency-sensitive work — anything touching shared
+state, goroutines, caches or resolvers:
+
+```bash
+cd dashboard/backend && go test ./... -race
+```
+
+### Building
+
+```bash
+make dashboard-build   # frontend + backend, same target CI runs
+```
+
 ## Deployment Details
 
 ### Docker Compose Integration Notes
