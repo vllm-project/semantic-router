@@ -25,6 +25,11 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Cache Node.js dependencies
         uses: actions/cache@v4
         with:
@@ -43,6 +48,11 @@ jobs:
           key: ${{ runner.os }}-go-dashboard-${{ hashFiles('dashboard/backend/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-dashboard-
+
+      # The dashboard backend shells out to the vllm-sr CLI to regenerate Envoy
+      # config, so its Go tests need the CLI's Python dependencies importable.
+      - name: Install vllm-sr CLI
+        run: pip install -e src/vllm-sr
 
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -67,6 +77,9 @@ jobs:
           echo ""
           echo "To run only the backend Go tests:"
           echo "  make dashboard-test-backend"
+          echo ""
+          echo "The backend tests need the vllm-sr CLI importable:"
+          echo "  pip install -e src/vllm-sr"
           echo ""
           echo "To auto-fix lint issues:"
           echo "  make dashboard-lint-fix"
