@@ -30,16 +30,7 @@ func (c *Classifier) buildSignalDispatchers(
 	usedSignals map[string]bool,
 ) []signalDispatch {
 	dispatchers := []signalDispatch{
-		{
-			config.SignalTypeKeyword, "Keyword",
-			func() {
-				c.evaluateKeywordSignal(
-					results,
-					mu,
-					keywordSignalText(textForSignal(config.SignalTypeKeyword), priorUserMessages),
-				)
-			},
-		},
+		c.keywordSignalDispatcher(results, mu, textForSignal, priorUserMessages),
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
@@ -116,6 +107,24 @@ func (c *Classifier) buildSignalDispatchers(
 			usedSignals,
 		)...,
 	)
+}
+
+func (c *Classifier) keywordSignalDispatcher(
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	priorUserMessages []string,
+) signalDispatch {
+	return signalDispatch{
+		config.SignalTypeKeyword, "Keyword",
+		func() {
+			c.evaluateKeywordSignal(
+				results,
+				mu,
+				keywordSignalText(textForSignal(config.SignalTypeKeyword), priorUserMessages),
+			)
+		},
+	}
 }
 
 func (c *Classifier) evaluateBoundedReaskSignal(
