@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -31,7 +32,13 @@ func (c *Classifier) buildSignalDispatchers(
 	dispatchers := []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
-			func() { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
+			func() {
+				c.evaluateKeywordSignal(
+					results,
+					mu,
+					keywordSignalText(textForSignal(config.SignalTypeKeyword), priorUserMessages),
+				)
+			},
 		},
 		{
 			config.SignalTypeEmbedding, "Embedding",
@@ -131,6 +138,29 @@ func boundedReaskMessages(messages []string) []string {
 		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
 	}
 	return bounded
+}
+
+// keywordSignalText returns the text evaluated by keyword rules: the current
+// user message plus every prior user message in conversation order. Keyword
+// rules are exact-match markers (privacy, local-only, internal-doc, ...), so a
+// marker that appeared in an earlier turn must still match on the latest turn;
+// the previous behavior evaluated only the current user message and silently
+// dropped multi-turn privacy requests. Empty entries are skipped so stray
+// whitespace-only history cannot turn into a false-positive separator.
+func keywordSignalText(currentText string, priorUserMessages []string) string {
+	if len(priorUserMessages) == 0 {
+		return currentText
+	}
+	parts := make([]string, 0, len(priorUserMessages)+1)
+	for _, msg := range priorUserMessages {
+		if trimmed := strings.TrimSpace(msg); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	if trimmed := strings.TrimSpace(currentText); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	return strings.Join(parts, " ")
 }
 
 func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
