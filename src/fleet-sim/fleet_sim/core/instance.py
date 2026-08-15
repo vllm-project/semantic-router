@@ -258,23 +258,7 @@ class Instance:
         req = self._queue.popleft()
         req_blocks = math.ceil((req.l_in + req.l_out) / self.gpu.blk_size)
 
-        # ── Preempt longest active request if KV budget is tight ──────────
-        n_victims = 0
-        while (
-            self._used_kv_blocks + req_blocks > self._total_kv_blocks
-            and self._active_reqs
-        ):
-            victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
-            victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
-            # Invalidate the victim's pending completion event via the preempted flag
-            victim.preempted = True
-            self._active_reqs.remove(victim)
-            self._active_slots -= 1
-            self._used_kv_blocks -= victim_blocks
-            # Re-queue the victim at head so it is retried first
-            self._queue.appendleft(victim)
-            self.total_preempted += 1
-            n_victims += 1
+        n_victims = self._preempt_for(req_blocks)
 
         # If still no room (budget too small for even 1 req), put the
         # candidate back right after the victims that were just re-queued,
@@ -291,6 +275,39 @@ class Instance:
         self._used_kv_blocks += req_blocks
         self._active_reqs.append(req)
 
+        self._schedule_completion(req, now)
+        return True
+
+    def _preempt_for(self, req_blocks: int) -> int:
+        """Free KV blocks by evicting the longest active request.
+
+        Repeatedly preempts the longest currently-active sequence until
+        ``req_blocks`` fits in the budget or nothing is left to evict.
+        Victims are re-queued at the head so they are retried first.
+
+        Returns the number of requests preempted.
+        """
+        n_victims = 0
+        while (
+            self._used_kv_blocks + req_blocks > self._total_kv_blocks
+            and self._active_reqs
+        ):
+            victim = max(self._active_reqs, key=lambda r: r.l_in + r.l_out)
+            victim_blocks = math.ceil((victim.l_in + victim.l_out) / self.gpu.blk_size)
+            # Invalidate the victim's pending completion event via the preempted flag
+            victim.preempted = True
+            self._active_reqs.remove(victim)
+            self._active_slots -= 1
+            self._used_kv_blocks -= victim_blocks
+            # Re-queue the victim at head so it is retried first
+            self._queue.appendleft(victim)
+            self.total_preempted += 1
+            n_victims += 1
+        return n_victims
+
+    def _schedule_completion(self, req: Request, now: float) -> None:
+        """Compute service times for an admitted request and schedule its
+        completion event on the event heap."""
         # ── Seq-len-aware iter_t: scale H by mean active sequence length ─────
         # Attention cost ∝ seq_len, so H_eff = H * (mean_seq_len / calibration_ctx).
         # This correctly models pools serving short requests as faster than
@@ -337,7 +354,6 @@ class Instance:
 
         completion_time = now + s_eff
         heapq.heappush(self._events, _Event(completion_time, req, req.admission_seq))
-        return True
 
     def next_event_time(self) -> float:
         """Time of the next completion event (or now if the queue can be served)."""
