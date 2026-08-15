@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
@@ -19,7 +20,7 @@ const internalOpenClawMCPPath = "/_internal/openclaw/mcp"
 
 // SetupMCP configures MCP related routes
 // Returns MCP Manager instance for lifecycle management
-func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
+func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler, authSvc *auth.Service) *mcp.Manager {
 	if !cfg.MCPEnabled {
 		log.Printf("MCP feature disabled")
 		return nil
@@ -37,7 +38,7 @@ func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, o
 
 	// Create MCP handler
 	mcpHandler := handlers.NewMCPHandler(mcpManager, cfg.ReadonlyMode)
-	registerMCPAPIRoutes(mux, mcpHandler)
+	registerMCPAPIRoutes(mux, mcpHandler, authSvc)
 
 	log.Printf("MCP API endpoints registered: /api/mcp/*")
 
@@ -82,7 +83,7 @@ func registerBuiltInOpenClawMCP(
 	)
 }
 
-func registerMCPAPIRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
+func registerMCPAPIRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler, authSvc *auth.Service) {
 	// Server configuration - GET list, POST create
 	mux.HandleFunc("/api/mcp/servers", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
@@ -92,17 +93,17 @@ func registerMCPAPIRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
 		case http.MethodGet:
 			mcpHandler.ListServersHandler().ServeHTTP(w, r)
 		case http.MethodPost:
-			mcpHandler.CreateServerHandler().ServeHTTP(w, r)
+			auditMutation(authSvc, fixedAuditAction("mcp.server.create"), "mcp/servers", mcpHandler.CreateServerHandler())(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	registerMCPServerOperationRoutes(mux, mcpHandler)
+	registerMCPServerOperationRoutes(mux, mcpHandler, authSvc)
 	registerMCPToolRoutes(mux, mcpHandler)
 }
 
-func registerMCPServerOperationRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler) {
+func registerMCPServerOperationRoutes(mux *http.ServeMux, mcpHandler *handlers.MCPHandler, authSvc *auth.Service) {
 	// Server operations (update, delete, connect, disconnect, status, test)
 	mux.HandleFunc("/api/mcp/servers/", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
@@ -123,9 +124,9 @@ func registerMCPServerOperationRoutes(mux *http.ServeMux, mcpHandler *handlers.M
 		default:
 			switch r.Method {
 			case http.MethodPut:
-				mcpHandler.UpdateServerHandler().ServeHTTP(w, r)
+				auditMutation(authSvc, fixedAuditAction("mcp.server.update"), "mcp/servers", mcpHandler.UpdateServerHandler())(w, r)
 			case http.MethodDelete:
-				mcpHandler.DeleteServerHandler().ServeHTTP(w, r)
+				auditMutation(authSvc, fixedAuditAction("mcp.server.delete"), "mcp/servers", mcpHandler.DeleteServerHandler())(w, r)
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
