@@ -514,3 +514,57 @@ routing:
     first_pass = re.sub(regex, substitution, "/v1/chat/completions")
     assert first_pass == "/v1beta/openai/chat/completions"
     assert re.sub(regex, substitution, first_pass) == first_pass
+
+
+def test_backend_ref_non_v1_prefix_rewrite_not_applied_twice(tmp_path, monkeypatch):
+    """Prefixes that do not start with /v1 (e.g. Azure openai/v1) must keep
+    the old anchored behavior: the rewritten path can never match the pattern
+    again, so the prefix is applied exactly once even after route recompute."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "azure-openai-gpt-4o"
+  models:
+    - name: "azure-openai-gpt-4o"
+      backend_refs:
+        - name: "primary"
+          base_url: "https://my-azure.openai.azure.com/openai/v1"
+          provider: "openai"
+          weight: 100
+routing:
+  modelCards:
+    - name: "azure-openai-gpt-4o"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "azure-openai-gpt-4o"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    model_route = _model_route(rendered, "azure-openai-gpt-4o")["route"]
+    rewrite = model_route["regex_rewrite"]
+    regex = rewrite["pattern"]["regex"]
+    substitution = rewrite["substitution"]
+    assert regex == "^/v1/(.*)$"
+    assert substitution == "/openai/v1/\\1"
+
+    # A second application of the anchored pattern must not double the prefix.
+    first_pass = re.sub(regex, substitution, "/v1/chat/completions")
+    assert first_pass == "/openai/v1/chat/completions"
+    assert re.sub(regex, substitution, first_pass) == first_pass
