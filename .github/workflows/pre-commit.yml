@@ -153,6 +153,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
+      # agent-ci-lint runs the selected domains' fast tests, which for dashboard
+      # changes includes make dashboard-check. Some dashboard backend tests shell
+      # out to the vllm-sr CLI, so its Python dependencies must be importable.
+      - name: Install vllm-sr CLI
+        run: pip install -e src/vllm-sr
+
       - name: Run agent CI lint on changed files
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
