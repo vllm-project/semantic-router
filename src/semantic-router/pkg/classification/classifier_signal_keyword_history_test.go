@@ -2,6 +2,7 @@ package classification
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -78,6 +79,69 @@ func TestKeywordSignalMatchesPriorUserMessages(t *testing.T) {
 	}
 }
 
+// TestKeywordSignalMatchesNoCrossMessagePhrase ensures a rule cannot match a
+// phrase that spans the boundary between two turns: with a newline separator a
+// space in the rule pattern no longer matches across messages.
+func TestKeywordSignalMatchesNoCrossMessagePhrase(t *testing.T) {
+	cfg := &config.RouterConfig{
+		Recipes: []config.RoutingRecipe{
+			{
+				Name: "privacy",
+				Profile: config.RoutingProfile{
+					Signals: config.Signals{
+						KeywordRules: []config.KeywordRule{
+							{Name: "cross-boundary", Operator: "OR", Method: "regex", Keywords: []string{"do not upload to cloud"}},
+						},
+					},
+					Decisions: []config.Decision{
+						{
+							Name: "privacy-route",
+							Rules: config.RuleNode{
+								Type: config.SignalTypeKeyword,
+								Name: "cross-boundary",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildRecipeClassifiers() error = %v", err)
+	}
+	classifier, ok := classifiers.ForRecipe("privacy")
+	if !ok {
+		t.Fatal("privacy recipe classifier is unavailable")
+	}
+
+	// The phrase only exists across the turn boundary: "do not upload" ends one
+	// turn and "to cloud" starts the next. The space-joined text would match;
+	// the newline separator must not.
+	input := SignalEvaluationInput{
+		Text:              "to cloud",
+		ContextText:       "to cloud",
+		CurrentUserText:   "to cloud",
+		PriorUserMessages: []string{"please do not upload"},
+		ConversationFacts: ConversationFacts{
+			UserMessageCount:      2,
+			AssistantMessageCount: 1,
+		},
+	}
+	results, err := classifier.EvaluateAllSignalsWithHeaders(input)
+	if err != nil {
+		t.Fatalf("EvaluateAllSignalsWithHeaders() error = %v", err)
+	}
+
+	if slices.Contains(results.MatchedKeywordRules, "cross-boundary") {
+		t.Fatalf(
+			"keyword rule %q matched across the turn boundary; matched rules: %v",
+			"cross-boundary",
+			results.MatchedKeywordRules,
+		)
+	}
+}
+
 // TestKeywordSignalSingleTurnUnchanged ensures a single-turn request (no prior
 // user messages) still matches the current message as before.
 func TestKeywordSignalSingleTurnUnchanged(t *testing.T) {
@@ -131,8 +195,13 @@ func TestKeywordSignalSingleTurnUnchanged(t *testing.T) {
 
 // TestKeywordSignalTextAssemblesHistory unit-tests the text assembly used by
 // the keyword dispatcher: prior user messages in conversation order, then the
-// current message, with empty entries skipped.
+// current message, with empty entries skipped and the history window bounded.
 func TestKeywordSignalTextAssemblesHistory(t *testing.T) {
+	longHistory := make([]string, 0, keywordSignalHistoryLimit+5)
+	for i := 0; i < keywordSignalHistoryLimit+5; i++ {
+		longHistory = append(longHistory, "old turn")
+	}
+
 	cases := []struct {
 		name    string
 		current string
@@ -148,19 +217,31 @@ func TestKeywordSignalTextAssemblesHistory(t *testing.T) {
 			name:    "prior messages precede current",
 			current: "current message",
 			prior:   []string{"first turn", "second turn"},
-			want:    "first turn second turn current message",
+			want:    "first turn\nsecond turn\ncurrent message",
 		},
 		{
 			name:    "empty entries are skipped",
 			current: "current message",
 			prior:   []string{"first turn", "  ", "second turn"},
-			want:    "first turn second turn current message",
+			want:    "first turn\nsecond turn\ncurrent message",
 		},
 		{
 			name:    "blank current with history keeps history",
 			current: "   ",
 			prior:   []string{"only prior"},
 			want:    "only prior",
+		},
+		{
+			name:    "newline separator prevents cross-message phrase matches",
+			current: "to cloud storage",
+			prior:   []string{"please do not upload"},
+			want:    "please do not upload\nto cloud storage",
+		},
+		{
+			name:    "history beyond the window is dropped",
+			current: "current message",
+			prior:   longHistory,
+			want:    strings.Repeat("old turn\n", keywordSignalHistoryLimit) + "current message",
 		},
 	}
 
