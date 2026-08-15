@@ -134,10 +134,10 @@ func TestKeywordSignalSingleTurnUnchanged(t *testing.T) {
 // current message, with empty entries skipped.
 func TestKeywordSignalTextAssemblesHistory(t *testing.T) {
 	cases := []struct {
-		name          string
-		current       string
-		prior         []string
-		want          string
+		name    string
+		current string
+		prior   []string
+		want    string
 	}{
 		{
 			name:    "no history passes current through",
