@@ -198,6 +198,36 @@ func TestMilvusCacheFindExactHonorsConsistencyLevel(t *testing.T) {
 	assert.Equal(t, entity.ClEventually, level)
 }
 
+func TestMilvusCacheSearchDocumentsConsistencyScope(t *testing.T) {
+	cases := []struct {
+		name       string
+		collection string
+		wantSet    bool
+	}{
+		{"own collection honors the configured level", "test_cache", true},
+		{"foreign collection keeps its server-side level", "rag_docs", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &recordingMilvusClient{}
+			cache := &MilvusCache{
+				enabled:        true,
+				client:         fake,
+				config:         milvusCacheTestConfig("Strong"),
+				collectionName: "test_cache",
+			}
+
+			_, _, err := cache.SearchDocuments(context.Background(), tc.collection, []float32{0.1, 0.2}, 0.5, 5, "", "content", "", "", 0)
+			require.NoError(t, err)
+			level, set := appliedConsistencyLevel(t, fake.searchOpts)
+			assert.Equal(t, tc.wantSet, set)
+			if tc.wantSet {
+				assert.Equal(t, entity.ClStrong, level)
+			}
+		})
+	}
+}
+
 func TestMilvusCacheCreateCollectionConsistencyOptions(t *testing.T) {
 	cases := []struct {
 		name     string

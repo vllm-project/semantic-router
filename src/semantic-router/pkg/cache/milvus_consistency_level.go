@@ -31,9 +31,13 @@ func resolveMilvusConsistencyLevel(name string) (entity.ConsistencyLevel, bool) 
 }
 
 // searchQueryOptions returns the read options that pin every Milvus search
-// and query the cache issues to the configured consistency level. An empty or
-// unrecognized level yields no options, so the SDK default applies and the
-// behavior of existing deployments is unchanged.
+// and query the cache issues against its own collection to the configured
+// consistency level. Reads against foreign collections (e.g. RAG knowledge
+// bases via SearchDocuments) must not use these options: without an explicit
+// option the SDK adopts the target collection's server-side level, which is
+// the intended behavior there. An empty or unrecognized level yields no
+// options, so the SDK default applies and the behavior of existing
+// deployments is unchanged.
 func (c *MilvusCache) searchQueryOptions() []client.SearchQueryOptionFunc {
 	level, ok := resolveMilvusConsistencyLevel(c.config.Search.ConsistencyLevel)
 	if !ok {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -88,6 +89,16 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
 	}
 
+	// The cache's configured consistency level applies only to its own
+	// collection: a foreign collection (e.g. a RAG knowledge base) keeps its
+	// server-side level, which the SDK adopts when no option is passed.
+	// Overriding it here could weaken reads — a Session level degrades to
+	// Eventually on a collection this process never writes to.
+	var searchOpts []client.SearchQueryOptionFunc
+	if collectionName == c.collectionName {
+		searchOpts = c.searchQueryOptions()
+	}
+
 	// Use Milvus Search with collection-specific or default parameters
 	searchResult, err := c.client.Search(
 		ctx,
@@ -100,7 +111,7 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		entity.MetricType(actualMetricType),
 		topK,
 		searchParam,
-		c.searchQueryOptions()...,
+		searchOpts...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
