@@ -33,6 +33,7 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 			milvusStringLiteral(exactCacheQueryMarker),
 		),
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		logging.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
@@ -127,6 +128,7 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]b
 			milvusStringLiteral(model),
 		),
 		[]string{"response_body"}, // Only fetch document, not embedding!
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)

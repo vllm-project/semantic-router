@@ -1490,6 +1490,23 @@ spec:
                       model_id:
                         default: models/mmbert32k-jailbreak-detector-merged
                         type: string
+                      positive_labels:
+                        description: |-
+                          PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+                          for a custom backend whose positive class isn't named "jailbreak"
+                          (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+                        items:
+                          type: string
+                        type: array
+                      protocol:
+                        description: |-
+                          Protocol selects a remote HTTP backend's wire contract. Mutually
+                          exclusive with Variant. Requires an external model configured via a
+                          vllmEndpoints/externalModels entry with model_role="guardrail".
+                        enum:
+                        - http_chat
+                        - http_classify
+                        type: string
                       threshold:
                         default: "0.7"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1499,9 +1516,18 @@ spec:
                       use_cpu:
                         default: true
                         type: boolean
-                      use_modernbert:
-                        default: false
-                        type: boolean
+                      variant:
+                        description: |-
+                          Variant selects a local Candle-backed model variant. Mutually
+                          exclusive with Protocol. Deliberately has no kubebuilder default: a
+                          per-field CRD default would be injected by the API server even when
+                          only Protocol is set, tripping mutual-exclusion validation - the
+                          mmbert32k default for "neither set" is applied by the canonical config
+                          builder instead (canonical_config_spec.go), after both fields are read.
+                        enum:
+                        - candle
+                        - mmbert32k
+                        type: string
                     type: object
                   reasoning_families:
                     additionalProperties:

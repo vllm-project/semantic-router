@@ -54,7 +54,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		return
 	}
 
-	securityResp, err := s.classificationSvc.CheckSecurity(services.SecurityRequest{
+	securityResp, err := s.classificationSvc.CheckSecurity(r.Context(), services.SecurityRequest{
 		Text:    req.Text,
 		Options: req.SecurityOptions,
 	})
