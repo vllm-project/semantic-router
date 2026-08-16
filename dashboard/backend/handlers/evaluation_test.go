@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
@@ -326,6 +327,22 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 	harness.handler.RunTaskHandler().ServeHTTP(rec, req)
 	t.Cleanup(func() {
 		_ = harness.handler.runner.CancelTask(task.ID)
+		// Join the background evaluation goroutine before the harness
+		// cleanups (db.Close, TempDir removal) run: RunTaskHandler deletes
+		// the task's cancelFunc entry only after runner.RunTask returns, so
+		// once the entry is gone the goroutine performs no further DB or
+		// filesystem writes.
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			if _, ok := harness.handler.cancelFuncs.Load(task.ID); !ok {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Error("background evaluation goroutine did not exit within 10s")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	})
 
 	if rec.Code != http.StatusOK {
@@ -345,7 +362,12 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 	if updatedTask.ProgressPercent != 0 {
 		t.Fatalf("task progress = %d, want 0", updatedTask.ProgressPercent)
 	}
-	if updatedTask.CurrentStep != "Starting evaluation" {
-		t.Fatalf("task current_step = %q, want %q", updatedTask.CurrentStep, "Starting evaluation")
-	}
+	// CurrentStep is intentionally not asserted here. The handler writes
+	// "Starting evaluation" synchronously, then hands off to a background
+	// goroutine that advances the step to "Evaluating <dimension>" as soon
+	// as the first dimension starts. That handoff is a race by design, so
+	// asserting the transient step after the response returns is inherently
+	// flaky (the goroutine can win the race and the step is already
+	// "Evaluating accuracy"). The stable contract is status=Running and
+	// progress=0, both set before the goroutine is spawned.
 }
