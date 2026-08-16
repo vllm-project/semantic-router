@@ -236,7 +236,9 @@ TPOT = (physical_end_time − first_token_time) / (l_out − 1)    [for l_out > 
 When a new request's KV block requirement would exceed the GPU's budget, the
 longest currently-active request is preempted:
 
-1. Invalidate the victim's pending completion event (`req.preempted = True`).
+1. Invalidate the victim's pending completion event: set `req.preempted = True`
+   and bump `req.admission_epoch`, so the event is skipped even once the
+   victim is re-admitted and `preempted` resets to `False`.
 2. Release victim's KV blocks and slot.
 3. Re-queue the victim at the **head of the queue** (priority re-admission).
 4. Retry admission for the new request.
