@@ -26,6 +26,11 @@ const videos: Video[] = [
     publisher: 'Red Hat',
   },
   {
+    id: 'ExbMEW-Os1I',
+    title: 'Inside open source AI strategy ft. Steve Watt | Technically Speaking with Chris Wright',
+    publisher: 'Red Hat',
+  },
+  {
     id: '6SL27J7EyXM',
     title: 'Intelligent Query Routing using vLLM Semantic Router',
     publisher: 'NVIDIA Developer',
@@ -66,7 +71,7 @@ export default function YouTubeSection(): JSX.Element {
             <Translate id="homepage.videos.label">See it in action</Translate>
           </SectionLabel>
           <h2 id="video-showcase-title">
-            <Translate id="homepage.videos.title">Watch the Router at work.</Translate>
+            <Translate id="homepage.videos.title">Semantic routing in the real world.</Translate>
           </h2>
           <p>
             <Translate id="homepage.videos.description">
