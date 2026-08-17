@@ -4,8 +4,6 @@
 
 `tools` is a route-local plugin for tool filtering and semantic tool selection.
 
-It aligns to `config/fragments/plugin/tools/semantic-select.yaml`.
-
 ## Key Advantages
 
 - Keeps tool policy attached to the matched route.
@@ -25,7 +23,7 @@ Tool behavior is part of route policy. Some routes should strip tools entirely, 
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -49,5 +47,5 @@ rejects `strip_tool_history: true` with any other tool mode.
 
 Tool selection controls what reaches the model; it does not authorize tool
 execution. Enforce permissions at the tool service and treat tool schemas and
-results as provider-bound content. Maintained example:
+results as provider-bound content. See a complete example:
 [`config/fragments/plugin/tools/semantic-select.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tools/semantic-select.yaml).

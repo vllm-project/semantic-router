@@ -2,20 +2,25 @@
 
 ## Overview
 
-`kb` binds routing signals to the output of a named knowledge base instance. It maps to `config/fragments/signal/kb/` and is declared under `routing.signals.kb`.
+`kb` binds routing signals to the output of a named knowledge base instance.
+Define these bindings under `routing.signals.kb`.
 
-This signal family is for maintained embedding-backed knowledge bases that are loaded at router startup and then reused across several routes.
+Use it for an embedding-backed knowledge base that is loaded at Router startup
+and reused across several routes.
 
 ## Key Advantages
 
-- Reuses one maintained exemplar package across several routes.
+- Reuses one exemplar set across several routes.
 - Keeps labels, groups, and numeric metrics explicit instead of relying on magic runtime names.
 - Supports both winner-style and threshold-style signal bindings.
 - Lets projections consume continuous knowledge base metrics without turning signals into a scripting surface.
 
 ## What Problem Does It Solve?
 
-Some routing policies depend on a curated exemplar set rather than a single keyword or embedding candidate list. You may want one startup-loaded knowledge base to classify requests into privacy, safety, emotion, or preference labels, then expose only the specific label or group bindings that the routing graph should see.
+Some routing policies depend on a curated exemplar set rather than a single
+keyword or embedding candidate list. One knowledge base can classify requests
+into privacy, safety, emotion, or preference labels, while the routing config
+exposes only the labels or groups that decisions need.
 
 `kb` keeps that split explicit:
 
@@ -27,14 +32,12 @@ Some routing policies depend on a curated exemplar set rather than a single keyw
 
 Use `kb` when:
 
-- requests must be classified against a maintained exemplar package
+- requests must be classified against a curated exemplar set
 - one startup-loaded knowledge base result should feed several routes
 - you want stable route-level groups without duplicating exemplars
 - you need explicit bindings instead of implicit signal names
 
 ## Configuration
-
-Source fragment family: `config/fragments/signal/kb/`
 
 ```yaml
 global:
@@ -131,7 +134,7 @@ Named knowledge base metrics are declared under `global.model_catalog.kbs[].metr
   remote embedding provider therefore receives the text.
 - Labels, groups, thresholds, and embedding model form one calibrated unit;
   re-evaluate them together when any part changes.
-- Start from the maintained signal fragment
+- See the knowledge-base signal example
   [`config/fragments/signal/kb/privacy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/kb/privacy.yaml)
   and the complete KB declaration in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

@@ -85,5 +85,5 @@ The directive carries policy metadata, not prompt or response content. The
 cache, session, replay, and provider surfaces it influences still need their
 own authentication, encryption, tenant isolation, and retention settings.
 
-The canonical schema is defined by
-[`RetentionDirective`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/decision_config.go).
+Validate the complete recipe before deployment so incompatible retention
+settings fail before traffic reaches the Router.

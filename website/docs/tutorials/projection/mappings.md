@@ -14,11 +14,12 @@ Scores are useful internal signals, but decision rules should not depend on ever
 
 Mappings solve that by turning numeric thresholds into reusable policy names.
 
-This is also the point where a projection becomes decision-visible. In the current implementation, decisions can only reference `mapping.outputs[*].name`, not score names or partition names.
+This is also the point where a projection becomes decision-visible. Decisions
+reference `mapping.outputs[*].name`, not score names or partition names.
 
 ## How Mappings Behave at Runtime
 
-The implementation supports two mapping methods:
+Two mapping methods are supported:
 
 - `threshold_bands` (default, also used when `method` is unset) — emits the **first** matching output band.
 - `multi_emit` — emits **every** matching output band, so one mapping can set several orthogonal policy tags from the same score. Requires at least two outputs.
@@ -135,7 +136,5 @@ Do not use mappings when:
 
 Mappings make no model or storage calls; they transform scores already computed
 for the request. Thresholds still inherit the uncertainty and calibration of
-their input signals. The schema is defined in
-[`projection_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/projection_config.go),
-with a maintained end-to-end example in
+their input signals. See a complete end-to-end example in the
 [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).

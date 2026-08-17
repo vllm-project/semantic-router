@@ -2,9 +2,11 @@
 
 ## Overview
 
-`embedding` matches requests by semantic similarity to representative examples. It maps to `config/fragments/signal/embedding/` and is declared under `routing.signals.embeddings`.
+`embedding` matches requests by semantic similarity to representative examples.
+Define embedding rules under `routing.signals.embeddings`.
 
-This family is learned: it depends on the semantic embedding assets in `global.model_catalog.embeddings`.
+It depends on the embedding model configured in
+`global.model_catalog.embeddings`.
 
 Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Remote Embedding Providers](../../global/remote-embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
 
@@ -32,8 +34,6 @@ Use `embedding` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/embedding/`
-
 ```yaml
 routing:
   signals:
@@ -60,7 +60,7 @@ routing:
 
 Tune the threshold and candidate list together; that matters more than adding many low-quality examples.
 
-Ranked fallback behavior is tuned separately under the router-owned embedding catalog:
+Configure ranked fallback behavior with the embedding model settings:
 
 ```yaml
 global:
@@ -85,6 +85,32 @@ global:
 The Router scores every embedding rule and then applies `top_k` as the
 emission limit. The default is `1`, so only the strongest embedding signal is
 returned. Set `top_k: 0` to return every rule that meets its threshold.
+
+## Design and validate candidate sets
+
+Treat a rule's `candidates` as a small semantic classifier, not as a keyword
+list:
+
+- Describe the kind of input you want to recognize. For text, use varied
+  examples of the intent rather than several versions of one sentence. For an
+  image rule, describe visible structure such as `photograph of a passport
+  page`; do not rely on literal words that would require OCR.
+- Cover the category from several distinct angles. Near-duplicate candidates
+  add little recall and can make a rule look better calibrated than it is.
+- Include routine, benign examples in your evaluation set. When winner-style
+  emission is appropriate, a competing benign rule can also give ordinary
+  inputs a better semantic match. Test it with your actual `top_k` and
+  threshold settings; a benign rule is not a security blocklist.
+- Use `aggregation_method: max` when any strong example should match. Use
+  `mean` only when broad agreement across the candidate set is the behavior
+  you want.
+- Calibrate `threshold` against labeled positive and negative traffic for the
+  deployed model. Thresholds do not transfer reliably between models,
+  dimensions, modalities, or traffic distributions.
+
+Re-run the labeled evaluation whenever you change a candidate, model, or
+threshold. Record those three inputs together so a configuration update does
+not silently reuse an incompatible threshold.
 
 ## Multimodal queries (`query_modality`)
 
@@ -155,28 +181,14 @@ routing:
         - model: in-cluster-vlm
 ```
 
-### Default opt-in pack
+### Image-routing example
 
-The repo ships an opt-in image-modality embedding pack at
-`config/fragments/signal/embedding/image-routing.yaml`. It contains three
-illustrative rules: `identifier_document_imagery`,
-`code_or_terminal_imagery`, and the negative-space anchor
-`ambient_office_imagery`. The checked-in threshold is a starting point for the
-bundled multimodal embedding model, not a portable default. See
-[Embedding Anchor Design Principles](./embedding-design-principles) for its
-calibration context, then replace the example anchors and recalibrate against
-your own labeled corpus.
-
-### Authoring tips for image anchors
-
-- Anchors describe **visual signatures**, not text content of the image. "electronic health record screenshot showing patient demographics" works because clinical-record UIs have a recognizable visual signature; an anchor like "the words John Doe SSN 123-45-6789" would not, because the model embeds visual structure, not OCR.
-- The default `aggregation_method: max` is usually appropriate for distinct sensitive-imagery categories: any anchor matching strongly is enough to fire the signal.
-- Use several semantically distinct anchors per category, and add anchors for
-  relevant negative space. Near-duplicate anchors add little coverage and can
-  make a rule look better calibrated than it is.
-- Do not gate on a single anchor; cosine similarity is noisy enough that one anchor and one image will produce false positives at scale. The anchor pack as a whole is the signal, not any individual phrase.
-
-These tips generalize to text-modality packs as well. See [Embedding Anchor Design Principles](./embedding-design-principles) for the consolidated guidance.
+The optional
+[`image-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml)
+example includes `identifier_document_imagery`,
+`code_or_terminal_imagery`, and a benign `ambient_office_imagery` rule. Replace
+its candidates with examples from your deployment and recalibrate the
+threshold. The example value is not a portable default.
 
 ### Distinction from the `modality` signal type
 
@@ -191,7 +203,7 @@ These tips generalize to text-modality packs as well. See [Embedding Anchor Desi
   dimensions, or modalities. Recalibrate whenever those change.
 - Image matching is semantic rather than OCR or PII extraction; use a dedicated
   detector when literal text or regulated entities matter.
-- Maintained examples:
+- Complete examples:
   [`support.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/support.yaml)
   and
   [`image-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml).

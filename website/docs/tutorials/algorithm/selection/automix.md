@@ -7,7 +7,7 @@ quality and cost plus internal verification and escalation estimates. It
 returns one model; it is not the sequential
 [`confidence`](../looper/confidence) Looper.
 
-The implementation is inspired by
+This selector is inspired by
 [Automatically Mixing Language Models](https://arxiv.org/abs/2310.12963), but
 the public configuration is intentionally smaller than the research system.
 
@@ -44,23 +44,23 @@ algorithm:
 ```
 
 Only the fields above are part of the current decision-level AutoMix contract.
-`max_escalations` and `use_logprob_verification` are retained for compatibility
-with unfinished cascade helpers; the current `Select` path does not read them.
-The minimal maintained fragment is
+`max_escalations` and `use_logprob_verification` are accepted for compatibility
+but do not affect AutoMix selection.
+See a complete example:
 [`config/fragments/algorithm/selection/automix.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/automix.yaml).
 
 ## Dependencies and Limitations
 
 - Candidate prices come from `providers.models[].pricing`; missing metadata
   reduces the usefulness of cost-aware scoring.
-- Capability estimates initialize from model config and internal defaults. An
-  internal feedback hook exists, but the public outcome endpoint does not call
-  it, so deployed selectors do not learn from that endpoint.
+- Capability estimates start from configured model metadata and defaults.
+  AutoMix does not learn from the public outcome endpoint; retune estimates
+  explicitly when traffic or models change.
 - `verification_threshold`, configured costs, `cost_quality_tradeoff`, and
   `discount_factor` affect the one-model score. `max_escalations` and
   `use_logprob_verification` currently do not.
 - This decision algorithm does not itself make multiple backend calls. Use
   `confidence` for request-time generation and escalation.
 - Request content is embedded through the configured semantic embedding path.
-- AutoMix is marked experimental in the runtime catalog, so validate behavior
-  on your own traffic before relying on it for an SLO.
+- AutoMix is experimental. Validate it on your own traffic before relying on it
+  for an SLO.

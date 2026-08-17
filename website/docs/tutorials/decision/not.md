@@ -2,9 +2,8 @@
 
 ## Overview
 
-Use `config/fragments/decision/not/` when a route should match only if a risky or disallowed signal is absent.
-
-`NOT` is the simplest exclusion rule in the decision catalog.
+A `NOT` decision matches only when its child condition does not match. Use it
+to make an exclusion explicit in route policy.
 
 ## Key Advantages
 
@@ -21,15 +20,13 @@ Some routes should only run when a known risk signal is absent. If that exclusio
 
 ## When to Use
 
-Use `not/` when:
+Use `NOT` when:
 
 - known jailbreak or PII-bearing traffic must be excluded
 - premium routes should stay away from unsafe inputs
 - a conflicting signal must be absent before escalation
 
 ## Configuration
-
-Source fragment: `config/fragments/decision/not/exclude-jailbreak.yaml`
 
 ```yaml
 routing:
@@ -51,5 +48,5 @@ Use `NOT` sparingly and keep the excluded signal explicit, otherwise the decisio
 
 `NOT` also matches when its child signal is unavailable or does not fire, so do
 not treat it as proof that content is safe. Prefer a positive trusted condition
-for access-sensitive routes. Maintained example:
+for access-sensitive routes. See a complete example:
 [`config/fragments/decision/not/exclude-jailbreak.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/not/exclude-jailbreak.yaml).

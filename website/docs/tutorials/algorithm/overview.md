@@ -48,9 +48,8 @@ routing:
           ttft_percentile: 95
 ```
 
-The runtime catalog is the source of truth for support status. The maintained
-examples live under
-[`config/fragments/algorithm/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/algorithm).
+Choose an algorithm from the inventory below, then follow its guide for the
+required fields and dependencies.
 
 ## Algorithm Inventory
 
@@ -87,8 +86,8 @@ run.
 | `fusion` | experimental | Run an analysis panel and judge/synthesis pass | [Fusion](./looper/fusion) |
 | `workflows` | experimental | Execute a bounded static or planner-generated worker flow | [Router Flow](./looper/workflows) |
 
-Support tiers and execution paths are defined in
-[`routing_surface_catalog.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/routing_surface_catalog.go).
+Treat experimental algorithms as evaluation features: validate them on your
+traffic before using them for production routing.
 
 ## Operational Boundaries
 

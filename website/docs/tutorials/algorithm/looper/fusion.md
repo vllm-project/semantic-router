@@ -5,8 +5,6 @@
 `fusion` asks several models to analyze a request and a judge model to
 synthesize one final answer.
 
-It aligns to `config/fragments/algorithm/looper/fusion.yaml`.
-
 The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
 
 ## Key Advantages
@@ -56,7 +54,7 @@ flowchart TD
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` makes that orchestration a router-owned policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
 
 ## When to Use
 
@@ -111,7 +109,7 @@ or reference dereferencing. Extraction defaults to exact `content` matching;
 use `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 
-Algorithm-only fragment:
+Minimal algorithm configuration:
 
 ```yaml
 algorithm:
@@ -291,5 +289,5 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 
 Panel responses and the original request are sent to the judge model. Treat all
 panel and judge providers as one data boundary, and disable intermediate traces
-when they would expose sensitive content. Maintained example:
+when they would expose sensitive content. See a complete example:
 [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml).

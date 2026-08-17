@@ -5,8 +5,6 @@
 `mlp` runs a trained neural classifier on CPU to map a request to a candidate
 model.
 
-It aligns to `config/fragments/algorithm/selection/mlp.yaml`.
-
 **Reference**: This is part of the ML-based model selection family alongside KNN, KMeans, and SVM.
 
 ## Key Advantages
@@ -72,7 +70,7 @@ Some routing boundaries are non-linear and cannot be captured well by static ord
 
 ## Configuration
 
-Use this fragment inside `routing.decisions[].algorithm`:
+Configure it under `routing.decisions[].algorithm`:
 
 ```yaml
 algorithm:
@@ -108,5 +106,5 @@ MLP does not support online `UpdateFeedback()`. To improve selection quality, re
 This algorithm is marked as **experimental**. The API may change in future releases.
 
 Training examples and labels can contain sensitive request data; govern them
-and the derived artifact accordingly. The minimal decision fragment is
+and the derived artifact accordingly. See a complete example:
 [`config/fragments/algorithm/selection/mlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/mlp.yaml).

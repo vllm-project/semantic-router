@@ -4,8 +4,6 @@
 
 `kmeans` sends a request to the model assigned to its nearest learned cluster.
 
-It aligns to `config/fragments/algorithm/selection/kmeans.yaml`.
-
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-clustering`).
 
 ## Key Advantages
@@ -91,6 +89,6 @@ global:
 See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. KMeans models are trained using Lloyd's algorithm on historical query embeddings.
 
 Historical prompts and outcome labels can contain sensitive data; minimize and
-govern the training set before producing selector artifacts. The minimal
-decision fragment is
+govern the training set before producing selector artifacts. See a complete
+example:
 [`config/fragments/algorithm/selection/kmeans.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/kmeans.yaml).

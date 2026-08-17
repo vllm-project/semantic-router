@@ -3,9 +3,8 @@
 ## Overview
 
 `conversation` routes on the structure of a chat, such as message count,
-developer instructions, available tools, or an active tool loop. It maps to
-`config/fragments/signal/conversation/` and is declared under
-`routing.signals.conversation`.
+developer instructions, available tools, or an active tool loop. Define these
+rules under `routing.signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
@@ -104,5 +103,5 @@ routing:
 
 The signal inspects the incoming `messages` and `tools` structure but does not
 persist it. It describes request shape, not tool safety or user intent. Apply
-authorization at the tool boundary. Maintained example:
+authorization at the tool boundary. See a complete example:
 [`config/fragments/signal/conversation/agentic-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/conversation/agentic-shape.yaml).

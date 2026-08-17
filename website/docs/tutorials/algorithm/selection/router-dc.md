@@ -5,8 +5,6 @@
 `router_dc` embeds the request and each model description, then selects the
 candidate with the strongest semantic similarity.
 
-It aligns to `config/fragments/algorithm/selection/router-dc.yaml`.
-
 **Paper**: [Query-Based Router by Dual Contrastive Learning](https://arxiv.org/abs/2409.19886)
 
 ## Key Advantages
@@ -18,7 +16,7 @@ It aligns to `config/fragments/algorithm/selection/router-dc.yaml`.
 
 ## Algorithm Principle
 
-The implementation is inspired by RouterDC, but the shipped request path does
+This selector is inspired by RouterDC, but the request path does
 not train a dual encoder. It uses the same configured embedding function for
 requests and model descriptions:
 
@@ -88,9 +86,6 @@ only on static priority or cost rules.
 
 - **Requires model descriptions**: If models lack descriptions, embedding quality degrades.
 - **Cold query problem**: Rare query types may not match well with any model embedding.
-- **Feedback scope**: the selector has an internal hook that can populate an
-  in-memory affinity table, but the public outcome endpoint does not call it,
-  and the table does not change request-time similarity scores.
 - **Temperature sensitivity**: Very low temperature makes the selector near-greedy; very high temperature makes it near-uniform.
 
 ## Configuration
@@ -142,11 +137,11 @@ curl -sS -X POST http://localhost:8080/v1/router/outcomes \
   }'
 ```
 
-This endpoint does not update RouterDC's internal affinity hook or its
-request-time similarity scores.
+This endpoint records data for replay and offline analysis. It does not change
+RouterDC's request-time similarity scores.
 
 Router DC sends request text through the configured embedding runtime. With a
 remote embedding provider, that text crosses the provider boundary. Model-card
-descriptions and embedding thresholds must be evaluated together. Maintained
-example:
+descriptions and embedding thresholds must be evaluated together. See a
+complete example:
 [`config/fragments/algorithm/selection/router-dc.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/router-dc.yaml).

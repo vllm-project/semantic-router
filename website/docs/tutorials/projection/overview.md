@@ -129,7 +129,6 @@ under **Config > Projections**.
 - Weighted sums do not automatically calibrate inputs from different signal
   families. Evaluate weights and mapping bands together on labeled traffic.
 - Cycles between derived scores are rejected during validation.
-- The schema is defined in
-  [`projection_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/projection_config.go),
-  and the maintained `balance` recipe provides an end-to-end example in
-  [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).
+- See the
+  [`balance` recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+  for an end-to-end example.

@@ -20,7 +20,7 @@ Partitions solve that by coordinating the detector results after signal extracti
 
 ## How Partitions Behave at Runtime
 
-In the current implementation:
+Partitions follow these rules:
 
 - partitions only accept `domain` or `embedding` members
 - all members in one partition must share the same type
@@ -98,7 +98,5 @@ Do not use partitions when:
 
 Partitions make no additional model calls; they coordinate results produced by
 their member signals. A configured default is a routing fallback, not evidence
-that the default actually matched. The schema is defined in
-[`projection_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/projection_config.go),
-with a maintained example in
+that the default actually matched. See a complete example in the
 [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).

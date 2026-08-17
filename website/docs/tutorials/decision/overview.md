@@ -1,11 +1,9 @@
-# Decision Tutorials
+# Decisions
 
 ## Overview
 
-These tutorials mirror the maintained boolean examples under
-`config/fragments/decision/`.
-
-Signals tell the router what it detected. Decisions tell the router what to do with those detections:
+Signals tell the Router what it detected. Decisions turn those detections into
+a route policy:
 
 - which route matched
 - which models are candidates
@@ -17,7 +15,6 @@ Signals tell the router what it detected. Decisions tell the router what to do w
 - Keeps route policy readable even when multiple signals must cooperate.
 - Makes boolean logic explicit and reviewable.
 - Separates route matching from deployment bindings, algorithms, and plugins.
-- Maps directly to reusable fragment directories under `config/fragments/decision/`.
 
 ## What Problem Does It Solve?
 
@@ -27,7 +24,7 @@ Decisions solve that by turning named signals into clear route policies with sta
 
 ## When to Use
 
-Use `decision/` when:
+Use a decision when:
 
 - a route should activate from one or more signals
 - the same model policy should be reused across several signal combinations
@@ -60,16 +57,16 @@ Decision matching stays separate from:
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 
-Use the case-shape catalog below in the same order as the fragment tree:
+Choose the smallest shape that expresses the policy clearly:
 
-| Decision shape | Fragment example | Best for | Tutorial |
-|----------------|------------------|----------|----------|
-| `single` | `config/fragments/decision/single/domain-business.yaml` | one decisive signal | [Single Condition](./single) |
-| `and` | `config/fragments/decision/and/urgent-business.yaml` | multiple required signals | [AND Decisions](./and) |
-| `or` | `config/fragments/decision/or/business-or-law.yaml` | shared route across alternatives | [OR Decisions](./or) |
-| `not` | `config/fragments/decision/not/exclude-jailbreak.yaml` | explicit exclusion or safety guard | [NOT Decisions](./not) |
-| `composite` | `config/fragments/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
-| `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
+| Decision shape | Best for | Guide |
+|----------------|----------|-------|
+| Single condition | One decisive signal | [Single Condition](./single) |
+| `AND` | Several conditions that must all match | [AND Decisions](./and) |
+| `OR` | One route shared by several alternative conditions | [OR Decisions](./or) |
+| `NOT` | An explicit exclusion or safety guard | [NOT Decisions](./not) |
+| Composite | Nested combinations of `AND`, `OR`, and `NOT` | [Composite Decisions](./composite) |
+| Retention directives | Cache or session side effects after a decision matches | [Retention Directives](./retention) |
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
 
@@ -83,5 +80,3 @@ Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one c
   secrets or personal identifiers in names and descriptions.
 - Boolean logic is policy, not authentication. Use trusted identity through
   the `authz` service and signal for access-sensitive routes.
-- Maintained examples:
-  [`config/fragments/decision/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/decision).

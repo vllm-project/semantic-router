@@ -21,10 +21,10 @@ connections and makes the data and trust boundaries visible.
 
 ## When to Use
 
-Use `global:` for behavior or infrastructure shared by several routes. Keep
-route matching, candidate models, algorithms, and plugins in `routing:`. Unlike
-`signal/`, `decision/`, `algorithm/`, and `plugin/`, this layer is not
-decision-local.
+Use `global:` for behavior or infrastructure shared by several recipes. Keep
+route matching, candidate models, algorithms, and plugins in `routing:`. Global
+settings are shared across recipes; signals, projections, and decisions are
+recipe-scoped, while algorithms and plugins belong to individual decisions.
 
 ## Configuration
 
@@ -40,7 +40,7 @@ global:
       backend_type: memory
 ```
 
-The global tree has five stable groups:
+Global configuration has five groups:
 
 | Group | Owns | Guide |
 |---|---|---|
@@ -66,5 +66,5 @@ Remote text embeddings are covered in
 - `providers.defaults.reasoning_families` and
   `providers.models[].reasoning_family` are provider configuration, not
   `global:` configuration.
-- The exhaustive maintained reference is
+- See the complete configuration reference in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

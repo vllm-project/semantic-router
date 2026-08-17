@@ -47,9 +47,6 @@ routing:
             ttl_seconds: 3600
 ```
 
-The maintained examples live under
-[`config/fragments/plugin/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin).
-
 ## Plugin Inventory
 
 | Type | Goal | Shared dependency | Guide |
@@ -69,7 +66,7 @@ The maintained examples live under
 | `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |
 | `image_gen` | Send a matched route to an image-generation backend | Configured image backend | [Image Generation](./image-gen) |
 
-[Content Safety](./content-safety) is a maintained bundle of three supported
+[Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.
 
 ## Operational Boundaries
@@ -82,5 +79,5 @@ plugins, not an additional plugin type.
   the selected backend.
 - Header and prompt mutation can cross trust boundaries. Do not copy untrusted
   caller metadata into privileged headers or system instructions.
-- The supported type list is defined in
-  [`routing_surface_catalog.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/routing_surface_catalog.go).
+- Validate the complete recipe before deployment so unsupported plugin names or
+  incompatible settings fail before traffic reaches the Router.

@@ -5,8 +5,6 @@
 `hybrid` combines Elo ratings, Router-DC description similarity, AutoMix's
 one-model value estimate, and cost into one weighted candidate score.
 
-It aligns to `config/fragments/algorithm/selection/hybrid.yaml`.
-
 **Paper**: [Hybrid LLM: Cost-Efficient Quality-Aware Query Routing](https://arxiv.org/abs/2404.14618)
 
 ## Key Advantages
@@ -105,5 +103,5 @@ does not feed that state automatically.
 Request text is embedded for Router-DC and AutoMix components. Missing model
 descriptions, pricing, or initialized component state make the corresponding component
 less informative, so tune weights against the data actually available. The
-maintained example is
+complete example is
 [`config/fragments/algorithm/selection/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/hybrid.yaml).

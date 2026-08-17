@@ -2,7 +2,7 @@
 
 ## Overview
 
-`global.model_catalog` declares Router-owned model assets and the modules that
+`global.model_catalog` declares shared model assets and the modules that
 use them. `global.services.authz` and `global.services.ratelimit` declare shared
 identity and rate policy. Route-specific thresholds and actions still belong in
 signals, decisions, and plugins.
@@ -148,7 +148,6 @@ deliberate policy choice.
   keep least-privilege tool, provider, and storage controls in place.
 - Store endpoint credentials in environment variables or Secrets. Do not place
   them in route descriptions or model IDs.
-- The exhaustive maintained examples are in
-  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml),
-  and the canonical grouping is defined in
-  [`canonical_global.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/canonical_global.go).
+- See the
+  [complete configuration example](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+  for all available model and policy groups.

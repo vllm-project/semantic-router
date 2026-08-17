@@ -441,7 +441,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
-			"`config/fragments/signal/`",
+			"Signals turn request facts into names",
 			"### Heuristic Signals",
 			"### Learned Signals",
 			"[Keyword](./heuristic/keyword)",
@@ -451,7 +451,8 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
-			"`config/fragments/decision/`",
+			"Signals tell the Router what it detected",
+			"`routing.decisions`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -459,7 +460,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
-			"`config/fragments/algorithm/`",
+			"An algorithm runs after a decision matches",
 			"### Selection Algorithms",
 			"### Looper Algorithms",
 			"[Static](./selection/static)",
@@ -469,7 +470,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
-			"`config/fragments/plugin/`",
+			"Plugins add route-local behavior after a decision matches",
 			"`routing.decisions[].plugins`",
 			"[Fast Response](./fast-response)",
 			"[Response Cache](./response-cache)",
@@ -479,8 +480,28 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
 		needles: []string{
 			"`global:`",
-			"`signal/`",
+			"`global.services`",
+			"`global.stores`",
 		},
+	},
+}
+
+var latestTutorialOverviewForbidden = []docNeedles{
+	{
+		path:    repoRel("website", "docs", "tutorials", "signal", "overview.md"),
+		needles: []string{"`config/fragments/signal/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "decision", "overview.md"),
+		needles: []string{"`config/fragments/decision/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
+		needles: []string{"`config/fragments/algorithm/`"},
+	},
+	{
+		path:    repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
+		needles: []string{"`config/fragments/plugin/`"},
 	},
 }
 
@@ -582,6 +603,7 @@ func TestLatestTutorialTaxonomyMatchesConfigHierarchy(t *testing.T) {
 
 	assertTutorialSidebarTaxonomy(t, root)
 	assertDocsContainAll(t, root, latestTutorialOverviewDocs)
+	assertDocsDoNotContainAny(t, root, latestTutorialOverviewForbidden)
 	assertTutorialFilesContainRequiredSections(t, root)
 	assertTutorialRootDirectories(t, root)
 	assertSignalTutorialDocsMatchConfigHierarchy(t, root)

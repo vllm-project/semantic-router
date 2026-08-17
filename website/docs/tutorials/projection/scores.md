@@ -16,7 +16,7 @@ Scores solve that by giving you one explicit numeric layer between signals and d
 
 ## How Scores Behave at Runtime
 
-The current implementation supports `method: weighted_sum` only.
+Only `method: weighted_sum` is supported.
 
 Each input contributes:
 
@@ -28,7 +28,7 @@ How `input_value` is computed depends on `value_source`:
 - `confidence`: use the matched signal confidence, or `0` when the signal did not match
 - `raw`: use the raw numeric value from `SignalValues` (e.g., a count or measurement), or `0` when absent
 
-Current defaults:
+Defaults:
 
 - `match` defaults to `1.0`
 - `miss` defaults to `0.0`
@@ -37,7 +37,7 @@ Most inputs reference a declared signal under `routing.signals`. The
 `kb_metric` and `projection` types instead reference derived runtime state as
 described below.
 
-Supported input types currently include:
+Supported input types include:
 
 - `keyword`
 - `embedding`
@@ -207,7 +207,5 @@ Scores can be declared in any order. The runtime evaluates them in topological o
 Scores make no additional model calls and do not persist content by themselves;
 they combine signal results already present for the request. Weights do not
 calibrate heterogeneous inputs automatically, so evaluate the complete score
-and mapping on labeled traffic. The schema is defined in
-[`projection_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/projection_config.go),
-with a maintained example in
+and mapping on labeled traffic. See a complete example in the
 [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).

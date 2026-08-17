@@ -258,7 +258,7 @@ function QueryColumn({
   onRowRef: (queryId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   return (
-    <div className={styles.flowColumn}>
+    <div className={clsx(styles.flowColumn, styles.queryColumn)}>
       <span className={styles.flowColumnTitle}>{title}</span>
       <ul className={styles.flowList}>
         {incomingQueries.map((query, index) => {
@@ -366,12 +366,10 @@ function RouterPipeline({
 function ModelTile({
   model,
   active,
-  activeQueryLabel,
   onRowRef,
 }: {
   model: ModelTarget
   active: boolean
-  activeQueryLabel?: string
   onRowRef: (modelId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   const { Icon } = model
@@ -394,13 +392,6 @@ function ModelTile({
         <Icon size={isOpen ? 30 : 28} />
       </div>
       <span className={styles.modelTileName}>{model.label}</span>
-      {active && activeQueryLabel && (
-        <span className={styles.routeBadge}>
-          {activeQueryLabel}
-          {' '}
-          →
-        </span>
-      )}
     </li>
   )
 }
@@ -408,12 +399,10 @@ function ModelTile({
 function ModelColumn({
   title,
   activeModelId,
-  activeQueryLabel,
   onRowRef,
 }: {
   title: string
   activeModelId: string
-  activeQueryLabel: string
   onRowRef: (modelId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
   const closedModels = modelTargets.filter(model => model.kind === 'closed')
@@ -433,7 +422,6 @@ function ModelColumn({
                 key={model.id}
                 model={model}
                 active={model.id === activeModelId}
-                activeQueryLabel={activeQueryLabel}
                 onRowRef={onRowRef}
               />
             ))}
@@ -450,7 +438,6 @@ function ModelColumn({
                 key={model.id}
                 model={model}
                 active={model.id === activeModelId}
-                activeQueryLabel={activeQueryLabel}
                 onRowRef={onRowRef}
               />
             ))}
@@ -780,7 +767,6 @@ export default function IntegrationArchitecture(): JSX.Element {
               <ModelColumn
                 title={translate({ id: 'homepage.integration.models', message: 'Model pools' })}
                 activeModelId={activeModel.id}
-                activeQueryLabel={activeQuery.modelId}
                 onRowRef={handleModelRowRef}
               />
             </div>

@@ -29,9 +29,9 @@ analysis; persistence requires a durable replay backend.
 
 ## Configuration
 
-The current public API does not expose `experience.enabled`,
+The public API does not expose `experience.enabled`,
 `experience.source`, or a runtime seed-pack import field. If adaptation is
-enabled, model experience is part of the `routing_sampling` implementation.
+enabled, model experience is included in `routing_sampling`.
 
 Online experience is keyed by matched decision, decision tier, and model:
 

@@ -4,8 +4,6 @@
 
 `memory` is a route-local plugin for retrieving and storing conversation memory.
 
-It aligns to `config/fragments/plugin/memory/session-memory.yaml`.
-
 ## Key Advantages
 
 - Keeps memory behavior local to the routes that benefit from it.
@@ -32,7 +30,7 @@ The memory plugin requires a backing store configured under `global.stores.memor
 
 See the [Stores and Tools](../global/stores-and-tools) tutorial for global memory configuration, the [Valkey Memory deployment guide](../../installation/valkey-memory) for Valkey-specific setup, or the [Qdrant deployment guide](../../installation/qdrant) for Qdrant-specific setup.
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -47,5 +45,5 @@ plugins:
 Memory can persist request-derived content and send retrieved memories to the
 selected model. Choose user/tenant isolation, retention, authentication, and
 transport security appropriate for that data. Thresholds depend on the
-embedding model. Maintained example:
+embedding model. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).

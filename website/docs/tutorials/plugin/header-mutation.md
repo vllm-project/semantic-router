@@ -4,8 +4,6 @@
 
 `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers.
 
-It aligns to `config/fragments/plugin/header-mutation/tenant-routing.yaml`.
-
 ## Key Advantages
 
 - Keeps downstream header policy local to the matched route.
@@ -24,7 +22,7 @@ Some routes need different downstream headers than the rest of the router. `head
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -41,6 +39,6 @@ plugins:
 ```
 
 Header values are static configuration, not templates. Do not use untrusted
-request metadata to manufacture identity or authorization headers. Maintained
-example:
+request metadata to manufacture identity or authorization headers. See a
+complete example:
 [`config/fragments/plugin/header-mutation/tenant-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/header-mutation/tenant-routing.yaml).

@@ -68,5 +68,5 @@ Chat Completions, Anthropic Messages, `/api/v1/classify/intent`, and
 
 Metadata is caller-controlled and is not forwarded to model selectors. It must
 not grant privileges or bypass safety policy; use `authz` for trusted identity.
-Maintained example:
+See a complete example:
 [`config/fragments/signal/metadata/routing-hints.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/metadata/routing-hints.yaml).

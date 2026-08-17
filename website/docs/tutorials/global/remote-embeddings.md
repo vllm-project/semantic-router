@@ -106,7 +106,5 @@ It reports the environment-variable name and whether it is set, never the key
 value. The Dashboard exposes the same fields under **Global Config > Model
 Catalog > Embedding Models**.
 
-The maintained full example is
-[`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml),
-and the public endpoint fields are defined in
-[`embedding_config.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/embedding_config.go).
+See the full configuration example in
+[`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

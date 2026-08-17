@@ -70,6 +70,6 @@ duration plus fallback counts without request content.
 The helper model receives the current user turn and candidate descriptions, so
 its provider must be allowed by the route's data policy. Its choice is bounded
 to declared candidates but remains model-generated; deterministic privacy,
-authorization, and safety gates belong in signals and decisions. Maintained
-example:
+authorization, and safety gates belong in signals and decisions. See a
+complete example:
 [`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml).

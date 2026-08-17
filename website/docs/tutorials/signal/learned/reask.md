@@ -2,7 +2,9 @@
 
 ## Overview
 
-`reask` detects when the current user turn semantically repeats the most recent user turns in the same conversation. It maps to `config/fragments/signal/reask/` and is declared under `routing.signals.reasks`.
+`reask` detects when the current user turn semantically repeats recent user
+turns in the same conversation. Define reask rules under
+`routing.signals.reasks`.
 
 This family is learned: it uses the router's shared semantic embedding path to compare the current user turn against prior user turns.
 
@@ -30,8 +32,6 @@ Use `reask` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/reask/`
-
 ```yaml
 routing:
   signals:
@@ -53,5 +53,5 @@ Each rule compares the current user turn to the latest `lookback_turns` prior us
 Reask uses the shared embedding path and sends recent user turns to a remote
 embedding provider when one is configured. Repetition can be intentional rather
 than dissatisfaction, so use the signal for escalation rather than punishment.
-Maintained example:
+See a complete example:
 [`config/fragments/signal/reask/dissatisfaction.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/reask/dissatisfaction.yaml).

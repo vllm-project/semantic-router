@@ -5,8 +5,6 @@
 `workflows` runs a bounded, multi-step Router Flow behind one
 OpenAI-compatible model name.
 
-It aligns to `config/fragments/algorithm/looper/workflows.yaml`.
-
 The runtime also supports a direct Flow model slug through
 `global.integrations.looper.flow.model_names`. The built-in default is
 `vllm-sr/flow`. Direct Flow calls evaluate only decisions with
@@ -27,7 +25,7 @@ routes.
 Some requests need orchestration rather than a one-step route decision: split the
 task, ask multiple workers for targeted work, verify or reconcile the outputs,
 and return one final answer through the same chat completions API. `workflows`
-makes that orchestration a router-owned policy while keeping the public model
+makes that orchestration part of Router policy while keeping the public model
 surface as small as `vllm-sr/flow`.
 
 ## When to Use
@@ -202,5 +200,5 @@ orchestrate that pool, not a second model catalog.
 Planner and worker models receive request-derived content according to the
 workflow plan. Tool-call state can be persisted in memory, files, or Redis;
 choose a backend, TTL, authentication, and encryption appropriate for that
-content. Maintained example:
+content. See a complete example:
 [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml).

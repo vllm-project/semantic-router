@@ -5,8 +5,6 @@
 `latency_aware` ranks eligible candidates using observed TTFT and TPOT
 percentiles and selects the lowest relative-latency score.
 
-It aligns to `config/fragments/algorithm/selection/latency-aware.yaml`.
-
 ## Key Advantages
 
 - Compares candidates using the latency percentiles that matter to the route.
@@ -96,5 +94,5 @@ generation speed and time to first token together.
 Latency observations are held by each Router process, so replicas can make
 different choices and a newly started process falls back when it lacks data.
 This selector does not enforce latency ceilings or account for model quality
-or price. Maintained example:
+or price. See a complete example:
 [`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml).

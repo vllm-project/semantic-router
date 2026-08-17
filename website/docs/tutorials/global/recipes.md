@@ -83,7 +83,7 @@ definition.
 | --- | --- |
 | Signals and their thresholds | Provider models and backend endpoints |
 | Projections and dependency graph | Top-level `routing.modelCards` |
-| Decisions, priorities, and routing strategy | Router-owned classifier and embedding assets |
+| Decisions, priorities, and routing strategy | Shared classifier and embedding assets |
 | Selection and looper policy | API, identity, observability, and transport settings |
 | Route-local plugins | External stores and integration services |
 | Cache, replay, learning, session, and metric namespaces | Model files and service connections |
@@ -129,5 +129,5 @@ or move every entrypoint that refers to it. See the
   metadata. Apply retention, access, and encryption policies to every enabled
   store.
 
-Complete maintained examples and their Model Cards live under
-[`config/recipes/`](https://github.com/vllm-project/semantic-router/tree/main/config/recipes).
+Browse the
+[complete recipe examples and their Model Cards](https://github.com/vllm-project/semantic-router/tree/main/config/recipes).

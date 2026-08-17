@@ -85,5 +85,5 @@ global:
   traffic. Re-evaluate them whenever the embedding model changes.
 - Ambiguous prompts can land in the `medium` band; always define a route or
   fallback for every band you rely on.
-- The maintained example is
+- See a complete example:
   [`config/fragments/signal/complexity/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/complexity/escalation.yaml).

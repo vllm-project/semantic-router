@@ -1031,6 +1031,54 @@
   "homepage.architecture.title": {
     "message": "架构"
   },
+  "homepage.videos.label": {
+    "message": "实际案例"
+  },
+  "homepage.videos.title": {
+    "message": "语义路由的真实应用"
+  },
+  "homepage.videos.description": {
+    "message": "了解团队如何在企业推理、开放模型服务、混合系统和 Mixture-of-Models 中使用语义路由。"
+  },
+  "homepage.videos.featured": {
+    "message": "精选"
+  },
+  "homepage.videos.selected": {
+    "message": "已选视频"
+  },
+  "homepage.videos.previous.aria": {
+    "message": "显示上一个视频"
+  },
+  "homepage.videos.previous": {
+    "message": "上一个"
+  },
+  "homepage.videos.next.aria": {
+    "message": "显示下一个视频"
+  },
+  "homepage.videos.next": {
+    "message": "下一个"
+  },
+  "homepage.videos.rail.aria": {
+    "message": "视频播放列表"
+  },
+  "homepage.videos.play.aria": {
+    "message": "显示视频：{title}"
+  },
+  "homepage.videos.pagination.aria": {
+    "message": "视频播放列表分页"
+  },
+  "homepage.videos.previousPage.aria": {
+    "message": "显示上一页视频"
+  },
+  "homepage.videos.previousPage": {
+    "message": "上一页"
+  },
+  "homepage.videos.nextPage.aria": {
+    "message": "显示下一页视频"
+  },
+  "homepage.videos.nextPage": {
+    "message": "下一页"
+  },
   "features.sectionTitle": {
     "message": "我们的目标"
   },
@@ -2520,7 +2568,7 @@
     "message": "贡献者排行榜"
   },
   "community.contributors.pageDescription": {
-    "message": "vLLM Semantic Router 贡献者排行榜：按近期与历史提交活跃度统计。"
+    "message": "按版本窗口查看 vLLM Semantic Router 贡献者的提交与拉取请求审阅活动。"
   },
   "community.contributors.eyebrow": {
     "message": "社区"
@@ -2538,10 +2586,16 @@
     "message": "贡献者"
   },
   "community.contributors.metrics.newContributors": {
-    "message": "新增贡献者"
+    "message": "首次提交作者"
+  },
+  "community.contributors.metrics.commitAuthors": {
+    "message": "提交作者"
   },
   "community.contributors.metrics.commits": {
     "message": "提交数"
+  },
+  "community.contributors.metrics.reviews": {
+    "message": "审阅数"
   },
   "community.contributors.podium.aria": {
     "message": "贡献者领奖台"
@@ -2560,6 +2614,9 @@
   },
   "community.contributors.updated": {
     "message": "更新于"
+  },
+  "community.contributors.method": {
+    "message": "贡献者包括产生非合并提交或有效审阅的人。首次提交作者在更早的仓库历史中没有提交记录。审阅贡献按审阅提交日期归类；对每个最终合并的拉取请求，每位贡献者最多计一次。"
   },
   "community.contributors.sort.label": {
     "message": "排序"
@@ -2587,6 +2644,12 @@
   },
   "community.contributors.table.share": {
     "message": "占比"
+  },
+  "community.contributors.table.commitShare": {
+    "message": "提交占比"
+  },
+  "community.contributors.table.reviewShare": {
+    "message": "审阅占比"
   },
   "community.contributors.table.latest": {
     "message": "最新提交"
@@ -2631,25 +2694,25 @@
     "message": "v0.3 -> 当前"
   },
   "community.contributors.range.v03ToNow.caption": {
-    "message": "当前 release"
+    "message": "自 v0.3 起"
   },
   "community.contributors.range.v02ToV03.label": {
     "message": "v0.2 -> v0.3"
   },
   "community.contributors.range.v02ToV03.caption": {
-    "message": "Release gap"
+    "message": "两个版本之间"
   },
   "community.contributors.range.v01ToV02.label": {
     "message": "v0.1 -> v0.2"
   },
   "community.contributors.range.v01ToV02.caption": {
-    "message": "Release gap"
+    "message": "两个版本之间"
   },
   "community.contributors.range.v0ToV01.label": {
     "message": "v0 -> v0.1"
   },
   "community.contributors.range.v0ToV01.caption": {
-    "message": "初始 release"
+    "message": "项目起步阶段"
   },
   "community.contributors.range.all.label": {
     "message": "全部历史"

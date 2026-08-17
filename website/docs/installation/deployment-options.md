@@ -1,31 +1,26 @@
 ---
 title: Choose a Deployment
-description: Pick the simplest vLLM Semantic Router deployment path for local development, GPUs, Kubernetes, or an existing gateway.
+description: Choose a Docker, Kubernetes, or hardware-specific path for deploying vLLM Semantic Router.
 ---
 
 # Choose a Deployment
 
-Semantic Router and the inference backends are separate services. The Router
-can run on CPU while the models run locally, on GPUs, in Kubernetes, or behind
-a remote provider API.
+Semantic Router and its inference backends are separate services. Choose how to
+run the Router first, then connect model endpoints that it can reach.
 
-Start with the smallest deployment that represents your production request
-path. Add a gateway, operator, or external store only when you need what it
-provides.
+The deployment guides are organized into three paths: **Docker** for one host,
+**Kubernetes** for cluster-managed deployments, and **Hardware** for preparing
+GPU-backed model servers or accelerating Router-side models.
 
 ## At a glance
 
-| Goal | Recommended path | Continue with |
+| Deployment | Choose it when | Start here |
 | --- | --- | --- |
-| Try the Router and Dashboard locally | CLI-managed Docker stack | [Quickstart](/docs/installation) |
-| Use a local model without a GPU stack | Ollama plus the local Router | [Ollama](ollama) |
-| Serve models on AMD Instinct GPUs | vLLM ROCm backend plus the Router | [AMD ROCm](amd-rocm) |
-| Deploy from a complete config into Kubernetes | `vllm-sr serve --target k8s` and Helm | [Configuration Workflows](configuration-workflows#helm) |
-| Manage Router resources as Kubernetes objects | Semantic Router Operator | [Kubernetes Operator](k8s/operator) |
-| Attach routing to an existing gateway | Envoy AI Gateway, agentgateway, Istio, or Gateway API Inference Extension | [Kubernetes Gateways](k8s/gateways) |
-| Integrate an inference platform | vLLM Production Stack, AIBrix, llm-d, or Dynamo | [Inference Platforms](k8s/inference-platforms) |
+| Docker | You are evaluating the Router, developing locally, or deploying on one host. | [Deploy with Docker](docker) |
+| Kubernetes | You need replicas, declarative rollouts, an operator, or an existing gateway or inference platform. | [Kubernetes](#kubernetes) |
+| Hardware | You need to start a vLLM backend on AMD or NVIDIA GPUs, or accelerate supported Router-side models. | [Hardware](#hardware) |
 
-## Local Docker stack
+## Docker
 
 `vllm-sr serve` starts the local Router, Envoy, Dashboard, and supporting
 services. It is the fastest path for configuration work, evaluation, and a
@@ -35,40 +30,45 @@ The command does not normally provision the provider models referenced by a
 custom config or built-in virtual model. Start those endpoints first, or bind
 the config to endpoints that already exist.
 
-Use the local stack when you want:
-
-- interactive Dashboard setup;
-- a repeatable development environment;
-- local validation and recipe evaluation; or
-- one host without Kubernetes lifecycle requirements.
+Follow [Deploy with Docker](docker) for the stack lifecycle and backend
+networking. If you want a small local model server, add
+[Ollama](ollama). Both guides keep the Router and model-server responsibilities
+separate.
 
 ## Kubernetes
 
-There are two main Kubernetes paths:
+Choose the Kubernetes path that matches who should own the Router lifecycle:
 
-- **CLI and Helm** translate a complete canonical config into a Helm release.
-  This suits teams that already manage configuration and releases through
-  command-line or GitOps workflows.
-- **Operator** manages `SemanticRouter` resources and related lifecycle inside
-  the cluster. This suits Kubernetes-native control planes and backend
-  discovery.
+- Use the [CLI and Helm workflow](configuration-workflows#helm) when your team
+  already owns a complete canonical config and deploys releases through CLI or
+  GitOps automation.
+- Use the [Kubernetes Operator](k8s/operator) when Kubernetes should manage
+  `SemanticRouter` resources, discovery, and lifecycle.
+- Choose a supported [gateway](k8s/gateways) when Semantic Router must join an
+  existing traffic data plane.
+- Choose an [inference-platform integration](k8s/inference-platforms) when
+  another platform owns model deployment and replica scheduling.
 
-Gateway and inference-platform guides are integrations, not alternative Router
-policy models. They show where Semantic Router fits into an existing data plane
-or model-serving stack.
+Gateway and inference-platform integrations do not replace Router policy. They
+connect semantic model selection to infrastructure that already owns traffic
+or model-serving lifecycle.
 
-## Model placement
+## Hardware
 
-Choose model placement independently from the Router deployment:
+The Hardware guides prepare GPU-backed vLLM endpoints and explain when to run
+supported Router-side signal models on a GPU:
 
-- **local or edge** for privacy, offline operation, or small pools;
-- **GPU datacenter** for shared, high-throughput model services;
-- **hybrid** when some requests must stay local and others may use a remote
-  provider; or
-- **hosted providers** when the deployment does not own model servers.
+- [AMD ROCm](amd-rocm) for vLLM on AMD Instinct GPUs;
+- [NVIDIA CUDA](nvidia-cuda) for vLLM on NVIDIA GPUs and optional CUDA
+  acceleration in the Router.
 
-Whichever path you choose, verify that each backend supports the context,
-modality, tool, and protocol requirements declared by its routes.
+Hardware is not a separate Router topology. You can connect these model servers
+to either Docker or Kubernetes. Keep the Router on CPU unless measurements show
+that its local embeddings or classifiers benefit from sharing GPU capacity.
+
+Whichever hardware path you choose, test the model endpoint directly before
+testing it through the Router. Confirm that it supports the context, modality,
+tool, and protocol requirements declared by the recipe.
 
 ## Before production
 

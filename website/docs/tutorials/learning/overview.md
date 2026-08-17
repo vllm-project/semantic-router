@@ -27,8 +27,8 @@ handoff cost, switch history, or runtime outcomes.
 - Lets hard policy decisions bypass learning without changing route rules.
 - Records compact response headers and, when replay is enabled, detailed
   Router Replay diagnostics.
-- Feeds offline agent loops that can find routing problems and propose recipe
-  patches.
+- Supports offline analysis that can identify routing problems and evaluate
+  recipe changes before deployment.
 
 ## What Problem Does It Solve?
 
@@ -141,12 +141,12 @@ values, and hashed identity diagnostics are stored there and keyed by
   controls.
 - [Memory And Replay](./memory-and-replay) explains diagnostics and outcomes.
 
-## Offline Recipe Learning
+## Evaluate Recipe Changes Offline
 
 Router Learning does not rewrite deployed recipes on the request path. Use the
 offline recipe-learning command to turn replay and outcomes into findings,
-metrics, candidate recipe variants, experiment estimates, recipe patch
-suggestions, and experience seed packs:
+metrics, candidate variants, experiment estimates, suggested changes, and
+experience seed packs:
 
 ```bash
 vllm-sr eval recipe-learning \

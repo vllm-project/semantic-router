@@ -11,8 +11,8 @@ type Props = WrapperProps<typeof LayoutType>
 function DocMasthead(): JSX.Element {
   const { metadata, frontMatter } = useDoc()
   const description = typeof frontMatter.description === 'string'
-    ? frontMatter.description
-    : metadata.description
+    ? frontMatter.description.trim()
+    : ''
 
   return (
     <div className="site-doc-masthead">

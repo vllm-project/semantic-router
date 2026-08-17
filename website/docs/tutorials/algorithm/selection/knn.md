@@ -5,8 +5,6 @@
 `knn` chooses a candidate from the models that performed well on the most
 similar recorded requests.
 
-It aligns to `config/fragments/algorithm/selection/knn.yaml`.
-
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-nn`) for high-performance nearest-neighbor search.
 
 ## Key Advantages
@@ -103,6 +101,6 @@ global:
 See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. KNN artifacts are built from query embeddings, model assignments, outcome quality, and latency, then serialized to JSON.
 
 KNN artifacts retain information derived from historical prompts and outcomes.
-Apply the same access and retention policy as the source evaluation data. The
-minimal decision fragment is
+Apply the same access and retention policy as the source evaluation data. See
+a complete example:
 [`config/fragments/algorithm/selection/knn.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/knn.yaml).

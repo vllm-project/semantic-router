@@ -2,16 +2,13 @@
 
 ## Overview
 
-`signal/` is the detection layer of `routing`.
+Signals turn request facts into names that routing decisions can reuse. For
+example, a signal can identify a long prompt, a tool-heavy conversation, a
+language, or a likely prompt-injection attempt. A decision then chooses what to
+do when that signal matches.
 
-Signals define named detectors under `routing.signals`. A decision then references those names from `routing.decisions`, so detection stays reusable and route logic stays readable.
-Cross-signal coordination and derived routing bands live under
-`routing.projections`. Decisions reference mapping outputs with
-`type: projection`; see [Projections](../projection/overview).
-This tutorial group maps directly to the fragment tree under `config/fragments/signal/`, but the docs are organized by extraction style:
-
-- `heuristic/` for request-shape, lexical, identity, and lightweight detector signals
-- `learned/` for embedding- or classifier-driven signals that rely on router-owned model assets or maintained detector modules
+Use [Projections](../projection/overview) when you need to combine several
+signals into a score, partition, or routing band before a decision runs.
 
 ## Key Advantages
 
@@ -28,12 +25,12 @@ Signals solve that by turning request understanding into a named catalog that th
 
 ## When to Use
 
-Use `signal/` when:
+Use signals when:
 
 - more than one route needs the same detector
 - you want to mix different detection methods in one decision tree
 - you need a clean boundary between detection, decision logic, algorithms, and plugins
-- you want config fragments that map cleanly to `config/fragments/signal/`
+- you want to tune detection without rewriting route outcomes
 
 ## Configuration
 
@@ -77,42 +74,43 @@ routing:
             gte: 0.25
 ```
 
-The inventory below covers every supported signal family and groups it by
-runtime cost and dependency model.
+Choose a signal by the kind of fact you need to detect.
 
 ### Heuristic Signals
 
-These signals route from explicit rules, request form, or lightweight detectors without depending on router-owned classifier models.
+These signals use explicit rules, request shape, identity, or lightweight
+detectors. They do not require a general-purpose classifier model.
 
-| Signal family | Fragment directory         | Purpose                                                                      | Doc                                |
-| ------------- | -------------------------- | ---------------------------------------------------------------------------- | ---------------------------------- |
-| `authz`       | `config/fragments/signal/authz/`     | route from identity, role, or tenant policy                                  | [Authz](./heuristic/authz)         |
-| `conversation` | `config/fragments/signal/conversation/` | route from chat/request structure such as tool loops and multi-turn shape | [Conversation](./heuristic/conversation) |
-| `context`     | `config/fragments/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
-| `event`       | `config/fragments/signal/event/`     | route from structured event metadata, severity, action codes, and urgency    | [Event](./heuristic/event)         |
-| `keyword`     | `config/fragments/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
-| `language`    | `config/fragments/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
-| `metadata`    | `config/fragments/signal/metadata/`  | route from untrusted caller-provided application hints                       | [Metadata](./heuristic/metadata)   |
-| `structure`   | `config/fragments/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
+| Signal | Use it to |
+| ------ | --------- |
+| [Authz](./heuristic/authz) | route from trusted identity, role, or tenant policy |
+| [Conversation](./heuristic/conversation) | detect multi-turn, tool-heavy, or agentic request structure |
+| [Context](./heuristic/context) | route by effective context-window needs |
+| [Event](./heuristic/event) | detect structured events by type, severity, action code, or urgency |
+| [Keyword](./heuristic/keyword) | match explicit words, phrases, BM25 terms, or n-grams |
+| [Language](./heuristic/language) | route by detected request language |
+| [Metadata](./heuristic/metadata) | use bounded, caller-provided application hints |
+| [Structure](./heuristic/structure) | detect counts, density, and ordered markers in a prompt |
 
 ### Learned Signals
 
-These signals use embeddings or classifier models and typically rely on `global.model_catalog` assets or module config.
+These signals use embeddings, classifiers, or configured detector models. Check
+each page's data-handling notes before choosing a remote provider.
 
-| Signal family | Fragment directory | Purpose | Doc |
-|---------------|--------------------|---------|-----|
-| `classifier` | `config/fragments/signal/classifier/` | expose reusable label scores from generic native or LLM classifiers | [Classifier](./learned/classifier) |
-| `complexity` | `config/fragments/signal/complexity/` | detect hard vs easy reasoning traffic | [Complexity](./learned/complexity) |
-| `domain` | `config/fragments/signal/domain/` | classify the request topic family | [Domain](./learned/domain) |
-| `embedding` | `config/fragments/signal/embedding/` | match by semantic similarity | [Embedding](./learned/embedding) |
-| `modality` | `config/fragments/signal/modality/` | classify text-only, image-generation, or hybrid output mode | [Modality](./learned/modality) |
-| `fact-check` | `config/fragments/signal/fact-check/` | detect prompts that need evidence verification | [Fact Check](./learned/fact-check) |
-| `jailbreak` | `config/fragments/signal/jailbreak/` | detect prompt-injection or jailbreak attempts | [Jailbreak](./learned/jailbreak) |
-| `pii` | `config/fragments/signal/pii/` | detect sensitive personal data | [PII](./learned/pii) |
-| `preference` | `config/fragments/signal/preference/` | infer response-style preferences | [Preference](./learned/preference) |
-| `reask` | `config/fragments/signal/reask/` | detect repeated user questions as implicit dissatisfaction | [Reask](./learned/reask) |
-| `kb` | `config/fragments/signal/kb/` | bind knowledge base labels or groups into named routing signals | [Knowledge Base](./learned/kb) |
-| `user-feedback` | `config/fragments/signal/user-feedback/` | detect correction or escalation feedback | [User Feedback](./learned/user-feedback) |
+| Signal | Use it to |
+| ------ | --------- |
+| [Classifier](./learned/classifier) | expose labels from a custom local classifier or external LLM |
+| [Complexity](./learned/complexity) | estimate easy, medium, or hard reasoning traffic |
+| [Domain](./learned/domain) | classify the request topic |
+| [Embedding](./learned/embedding) | match semantic intent from representative examples |
+| [Modality](./learned/modality) | classify text, image-generation, or mixed output intent |
+| [Fact Check](./learned/fact-check) | detect prompts that may need evidence verification |
+| [Jailbreak](./learned/jailbreak) | detect prompt-injection or jailbreak attempts |
+| [PII](./learned/pii) | detect sensitive personal data |
+| [Preference](./learned/preference) | infer response-style preferences |
+| [Reask](./learned/reask) | detect a repeated question in recent conversation history |
+| [Knowledge Base](./learned/kb) | match labels or groups from a reusable exemplar set |
+| [User Feedback](./learned/user-feedback) | detect correction, dissatisfaction, or escalation feedback |
 
 Keep these rules in mind:
 
@@ -126,7 +124,7 @@ Keep these rules in mind:
 
 - Read [Projections](../projection/overview) when you need `PROJECTION partition`, weighted score aggregation, or named routing bands.
 - Start from [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) for the exhaustive public contract.
-- Use the maintained `balance` assets for a complete routing strategy:
+- See the `balance` recipe for a complete routing strategy:
   - [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
   - [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
@@ -134,5 +132,3 @@ Signals can inspect request text, conversation history, images, caller
 metadata, or trusted identity depending on the family. Learned signals may send
 that data to a configured remote classifier or embedding provider. Review the
 dependency and data notes on each family page before using it as a policy gate.
-The supported inventory is defined in
-[`routing_surface_catalog.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/routing_surface_catalog.go).

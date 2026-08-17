@@ -9,6 +9,8 @@ type Video = {
   publisher: string
 }
 
+const VIDEOS_PER_PAGE = 6
+
 const videos: Video[] = [
   {
     id: 'Xow8Ns645sU',
@@ -58,9 +60,18 @@ function getThumbnailUrl(videoId: string): string {
 export default function YouTubeSection(): JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0)
   const activeVideo = videos[activeIndex]
+  const pageCount = Math.ceil(videos.length / VIDEOS_PER_PAGE)
+  const activePage = Math.floor(activeIndex / VIDEOS_PER_PAGE)
+  const pageStart = activePage * VIDEOS_PER_PAGE
+  const visibleVideos = videos.slice(pageStart, pageStart + VIDEOS_PER_PAGE)
 
   const selectRelativeVideo = (offset: number) => {
     setActiveIndex(current => (current + offset + videos.length) % videos.length)
+  }
+
+  const selectRelativePage = (offset: number) => {
+    const nextPage = (activePage + offset + pageCount) % pageCount
+    setActiveIndex(nextPage * VIDEOS_PER_PAGE)
   }
 
   return (
@@ -150,8 +161,9 @@ export default function YouTubeSection(): JSX.Element {
               message: 'Video playlist',
             })}
           >
-            {videos.map((video, index) => {
-              const active = index === activeIndex
+            {visibleVideos.map((video, index) => {
+              const videoIndex = pageStart + index
+              const active = videoIndex === activeIndex
 
               return (
                 <li key={video.id} className={styles.videoRailItem}>
@@ -167,7 +179,7 @@ export default function YouTubeSection(): JSX.Element {
                       { title: video.title },
                     )}
                     onClick={() => {
-                      setActiveIndex(index)
+                      setActiveIndex(videoIndex)
                     }}
                   >
                     <span className={styles.thumbnail}>
@@ -189,6 +201,50 @@ export default function YouTubeSection(): JSX.Element {
               )
             })}
           </ul>
+
+          {pageCount > 1 && (
+            <nav
+              className={styles.videoPagination}
+              aria-label={translate({
+                id: 'homepage.videos.pagination.aria',
+                message: 'Video playlist pages',
+              })}
+            >
+              <button
+                type="button"
+                className={styles.directionButton}
+                onClick={() => {
+                  selectRelativePage(-1)
+                }}
+                aria-label={translate({
+                  id: 'homepage.videos.previousPage.aria',
+                  message: 'Show previous page of videos',
+                })}
+              >
+                <span aria-hidden="true">←</span>
+                <Translate id="homepage.videos.previousPage">Previous page</Translate>
+              </button>
+              <span className={styles.videoCount} aria-live="polite">
+                {activePage + 1}
+                {' / '}
+                {pageCount}
+              </span>
+              <button
+                type="button"
+                className={styles.directionButton}
+                onClick={() => {
+                  selectRelativePage(1)
+                }}
+                aria-label={translate({
+                  id: 'homepage.videos.nextPage.aria',
+                  message: 'Show next page of videos',
+                })}
+              >
+                <Translate id="homepage.videos.nextPage">Next page</Translate>
+                <span aria-hidden="true">→</span>
+              </button>
+            </nav>
+          )}
         </div>
       </div>
     </section>

@@ -2,7 +2,8 @@
 
 ## Overview
 
-`preference` infers user response-style preferences from examples and classifier settings. It maps to `config/fragments/signal/preference/` and is declared under `routing.signals.preferences`.
+`preference` infers response-style preferences from examples and classifier
+settings. Define preference rules under `routing.signals.preferences`.
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
@@ -33,8 +34,6 @@ Use `preference` when:
 - user style signals should influence model choice, plugin choice, or both
 
 ## Configuration
-
-Source fragment family: `config/fragments/signal/preference/`
 
 ```yaml
 routing:
@@ -73,5 +72,5 @@ In contrastive mode, the router embeds each preference rule's descriptions and e
 
 Preference rules use the shared embedding/classifier path and infer style only
 from the available request context. They should not be treated as durable user
-consent or identity. Maintained example:
+consent or identity. See a complete example:
 [`config/fragments/signal/preference/power-user.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/preference/power-user.yaml).

@@ -5,8 +5,6 @@
 `remom` runs several candidate models across bounded rounds and synthesizes
 their responses into one answer.
 
-It aligns to `config/fragments/algorithm/looper/remom.yaml`.
-
 The runtime also supports a direct ReMoM model slug through
 `global.integrations.looper.remom.model_names`. The built-in default is
 `vllm-sr/remom`. Direct ReMoM calls evaluate only decisions with
@@ -140,7 +138,7 @@ prompt-text heuristics. Extraction defaults to exact `content` matching; use
 `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 
-Algorithm-only fragment:
+Minimal algorithm configuration:
 
 ```yaml
 algorithm:
@@ -185,6 +183,6 @@ algorithm:
 
 Each round shares request-derived and intermediate text with its assigned
 models, and the synthesis model receives the collected results. Bound breadth,
-completion tokens, concurrency, and timeouts before production use. Maintained
-example:
+completion tokens, concurrency, and timeouts before production use. See a
+complete example:
 [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml).

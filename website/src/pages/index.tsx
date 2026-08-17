@@ -3,7 +3,6 @@ import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import ValuePillars from '@site/src/components/homepage/ValuePillars'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
 import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
 import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
@@ -473,14 +472,6 @@ export default function Home(): JSX.Element {
         <SemanticTerrainHero />
 
         <div className={styles.bandGraphite}>
-          <ValuePillars />
-        </div>
-
-        <div className={styles.bandBlack}>
-          <IntegrationArchitecture />
-        </div>
-
-        <div className={styles.bandGraphite}>
           <ScrollReveal>
             <TestimonialsRail />
           </ScrollReveal>
@@ -496,6 +487,10 @@ export default function Home(): JSX.Element {
           <ScrollReveal delay={50}>
             <YouTubeSection />
           </ScrollReveal>
+        </div>
+
+        <div className={styles.bandBlack}>
+          <IntegrationArchitecture />
         </div>
 
         <div className={styles.bandGraphite}>

@@ -5,7 +5,7 @@
 `event` routes structured event-like requests by event type, severity, urgency,
 or domain-specific action code.
 
-It maps to `config/fragments/signal/event/` and is declared under `routing.signals.events`.
+Define event rules under `routing.signals.events`.
 
 ## Key Advantages
 
@@ -78,5 +78,5 @@ routing:
 
 Event matching reads request text; it does not parse or validate an authoritative
 event schema. Regex matches can be spoofed by callers, so do not use this signal
-alone for authorization or incident severity. Maintained example:
+alone for authorization or incident severity. See a complete example:
 [`config/fragments/signal/event/payment-critical.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/event/payment-critical.yaml).

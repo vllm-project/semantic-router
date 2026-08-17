@@ -5,8 +5,6 @@
 `svm` uses a trained linear or RBF support-vector classifier to map request
 features to a candidate model.
 
-It aligns to `config/fragments/algorithm/selection/svm.yaml`.
-
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-svm`).
 
 ## Key Advantages
@@ -31,7 +29,7 @@ $$K(x_i, x_j) = \exp(-\gamma \|x_i - x_j\|^2)$$
 The loaded RBF artifact contains the gamma used by its classifiers. Training
 also determines the support vectors, coefficients, and regularization.
 
-For multi-class selection (more than 2 candidates), the implementation uses one-vs-rest classification.
+Multi-class selection (more than 2 candidates) uses one-vs-rest classification.
 
 ## Select Flow
 
@@ -102,5 +100,5 @@ global:
 See [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md) for the training pipeline. SVM models are trained on labeled query-to-model assignment data using Linfa's SVM implementation.
 
 Training examples and labels can contain sensitive request data; govern them
-and the derived artifact accordingly. The minimal decision fragment is
+and the derived artifact accordingly. See a complete example:
 [`config/fragments/algorithm/selection/svm.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/svm.yaml).

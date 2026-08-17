@@ -2,11 +2,10 @@
 
 ## Overview
 
-`rag` is a route-local plugin for retrieval-augmented generation.
-
-Maintained fragments cover Milvus and Qdrant. The runtime also supports
-external HTTP APIs, MCP tools, OpenAI file search, the Router's vector-store
-service, and a primary/fallback hybrid.
+`rag` retrieves external context for a matched route before generation. Choose
+Milvus or Qdrant for direct vector-store retrieval, or use an external HTTP
+API, MCP tools, OpenAI file search, the Router's vector-store service, or a
+primary/fallback hybrid.
 
 ## Key Advantages
 
@@ -38,11 +37,11 @@ Choose one backend:
 | `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
-The examples below show the two maintained direct-store fragments. For the
+The examples below show the two direct-store options. For the
 other backends, start from the field names above and validate the complete
 config before deployment.
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 **Milvus backend:**
 
@@ -83,7 +82,7 @@ plugins:
 
 Retrieved documents become provider-bound context. Apply collection-level
 access control and avoid mixing tenants in one unrestricted search scope.
-Similarity thresholds are embedding-model specific. Maintained examples:
+Similarity thresholds are embedding-model specific. See complete examples:
 [`milvus.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/milvus.yaml)
 and
 [`qdrant.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/qdrant.yaml).

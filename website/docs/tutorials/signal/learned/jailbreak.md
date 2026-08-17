@@ -2,9 +2,11 @@
 
 ## Overview
 
-`jailbreak` detects prompt-injection and jailbreak attempts before the router commits to a route. It maps to `config/fragments/signal/jailbreak/` and is declared under `routing.signals.jailbreak`.
+`jailbreak` detects prompt-injection and jailbreak attempts before the Router
+commits to a route. Define jailbreak rules under `routing.signals.jailbreak`.
 
-This family is learned: it uses `global.model_catalog.modules.prompt_guard` and the router-owned jailbreak model bindings in `global.model_catalog.system`.
+It uses `global.model_catalog.modules.prompt_guard` and the configured
+jailbreak model bindings in `global.model_catalog.system`.
 
 ## Key Advantages
 
@@ -29,8 +31,6 @@ Use `jailbreak` when:
 - safety policy must be visible and testable in the same graph as routing logic
 
 ## Configuration
-
-Source fragment family: `config/fragments/signal/jailbreak/`
 
 ```yaml
 routing:
@@ -57,5 +57,5 @@ Use `include_history` for multi-turn attacks, and treat the pattern lists as tun
 The configured prompt-guard runtime processes the current prompt and,
 optionally, conversation history. Detection is probabilistic and can be evaded
 or over-triggered; combine it with least-privilege tools and backend policy.
-Maintained example:
+See a complete example:
 [`config/fragments/signal/jailbreak/patterns.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/jailbreak/patterns.yaml).

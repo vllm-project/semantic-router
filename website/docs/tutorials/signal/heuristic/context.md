@@ -2,7 +2,8 @@
 
 ## Overview
 
-`context` detects requests that need a larger effective context window. It maps to `config/fragments/signal/context/` and is declared under `routing.signals.context`.
+`context` detects requests that need a larger effective context window. Define
+context rules under `routing.signals.context`.
 
 This family is heuristic: it routes from token-window requirements rather than classifier inference.
 
@@ -30,8 +31,6 @@ Use `context` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/context/`
-
 ```yaml
 routing:
   signals:
@@ -48,5 +47,5 @@ Use `context` when the router should switch candidates based on prompt length or
 
 Token estimates depend on the request representation and are not a guarantee
 that a backend accepts the resulting prompt. Keep model-card context windows
-accurate and allow room for generated output. Maintained example:
+accurate and allow room for generated output. See a complete example:
 [`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml).

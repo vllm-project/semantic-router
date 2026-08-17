@@ -192,5 +192,5 @@ The `store_backend` field controls where routing-decision replay records are per
   authentication before remote exposure.
 - Traces and metric labels should carry bounded identifiers, not raw request
   content or secrets.
-- The exhaustive maintained service configuration is in
+- See the complete service configuration in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

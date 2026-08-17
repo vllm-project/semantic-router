@@ -34,7 +34,7 @@ algorithm:
 Place the intended fallback winner first in `modelRefs`. To rank with domain
 `model_scores`, score every candidate and avoid `1.0`, which is reserved by the
 selector's first-candidate fallback.
-The maintained fragment is
+See a complete example:
 [`config/fragments/algorithm/selection/static.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/static.yaml).
 
 ## Dependencies and Limitations

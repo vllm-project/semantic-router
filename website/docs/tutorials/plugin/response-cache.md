@@ -5,9 +5,6 @@
 `response_cache` is the route-local plugin for reusing exact or semantically
 compatible prior responses.
 
-It aligns to `config/fragments/plugin/response-cache/high-recall.yaml` and
-`config/fragments/plugin/response-cache/memory.yaml`.
-
 ## Key Advantages
 
 - Reuses prior responses only on routes that benefit from cache hits.
@@ -27,7 +24,7 @@ every time. `response_cache` keeps the reuse policy local to the route.
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -93,7 +90,7 @@ Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
 thresholds must be calibrated for the configured embedding model, and routes
 with personalized RAG or memory should not reuse pre-enrichment responses
-without an explicit policy. Maintained examples:
+without an explicit policy. See complete examples:
 [`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)
 and
 [`memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/memory.yaml).

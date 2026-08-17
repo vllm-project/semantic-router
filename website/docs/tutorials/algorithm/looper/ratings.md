@@ -37,7 +37,7 @@ algorithm:
     on_error: skip
 ```
 
-The maintained fragment is
+See a complete example:
 [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml).
 
 ## Dependencies and Limitations

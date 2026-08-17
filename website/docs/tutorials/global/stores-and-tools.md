@@ -138,7 +138,7 @@ global:
   index when the embedding model or dimension changes.
 - Tool retrieval controls what is shown to a model; it does not authorize tool
   execution. Enforce permissions at the tool service.
-- Maintained backend examples live under
-  [`config/runtime/`](https://github.com/vllm-project/semantic-router/tree/main/config/runtime),
-  with the exhaustive contract in
+- See
+  [complete backend examples](https://github.com/vllm-project/semantic-router/tree/main/config/runtime)
+  and the full configuration contract in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

@@ -4,8 +4,6 @@
 
 `image_gen` is a route-local plugin for handing a matched route off to an image-generation backend.
 
-It aligns to `config/fragments/plugin/image-gen/basic.yaml`.
-
 ## Key Advantages
 
 - Keeps multimodal or image generation behavior local to the route.
@@ -24,7 +22,7 @@ Some routes should not follow the standard chat-completions flow. `image_gen` ma
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -41,5 +39,5 @@ plugins:
 
 The selected backend receives the image prompt and generation parameters. Use
 an authenticated, trusted endpoint and apply request-side safety policy before
-this plugin. Maintained example:
+this plugin. See a complete example:
 [`config/fragments/plugin/image-gen/basic.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/image-gen/basic.yaml).

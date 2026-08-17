@@ -8,8 +8,6 @@ latency, cost, and load, then rejects any candidate that violates a hard limit.
 The configuration belongs to the decision that declares it. Each matched
 decision uses its own weights, limits, percentile, and no-candidate policy.
 
-It aligns to `config/fragments/algorithm/selection/multi-factor.yaml`.
-
 ## Key Advantages
 
 - Single-decision SLO-aware routing without orchestrating multiple selectors.
@@ -117,5 +115,5 @@ algorithm:
   scoring dimension. It does not trigger an SLO exclusion, because absence is
   not evidence that the configured ceiling was exceeded.
 
-The maintained example is
+See a complete example:
 [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml).

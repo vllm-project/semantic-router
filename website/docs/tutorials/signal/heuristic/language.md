@@ -2,9 +2,11 @@
 
 ## Overview
 
-`language` detects the request language and exposes it as a routing signal. It maps to `config/fragments/signal/language/` and is declared under `routing.signals.language`.
+`language` detects the request language and exposes it as a routing signal.
+Define language rules under `routing.signals.language`.
 
-This family is heuristic in the tutorial taxonomy because it uses a lightweight language detector instead of router-owned classifier models.
+It uses a lightweight language detector rather than a general-purpose
+classifier model.
 
 ## Key Advantages
 
@@ -30,8 +32,6 @@ Use `language` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/language/`
-
 ```yaml
 routing:
   signals:
@@ -52,5 +52,6 @@ to the fallback route.
 ## Dependencies and Limitations
 
 Short, mixed-language, and code-heavy prompts may be ambiguous. Always provide
-a fallback route and evaluate the detector on your traffic. Maintained example:
+a fallback route and evaluate the detector on your traffic. See a complete
+example:
 [`config/fragments/signal/language/multilingual.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/language/multilingual.yaml).

@@ -7,7 +7,7 @@ tool/function outputs before the selected provider receives the request. It is
 separate from router signal compression: routing evaluates the original
 request, then this plugin performs the upstream body mutation.
 
-The implementation is local, extractive, query-aware, and fail-open. It uses
+Compression is local, extractive, query-aware, and fail-open. It uses
 bounded BM25-style ranking, keeps leading and trailing context, and never
 changes system, user, or assistant text.
 
@@ -33,7 +33,7 @@ routes that require byte-identical tool payloads.
 
 ## Configuration
 
-Place this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -148,7 +148,7 @@ tokens before/after/saved, content format, compressed message count, omitted
 chunk count, recovery count, and fail-open or skip reason. Raw omitted content
 and recovery keys are not recorded.
 
-The maintained starting point is
+See a complete example:
 [`config/fragments/plugin/context-compression/tool-output.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/context-compression/tool-output.yaml).
 Compression changes provider-bound context and can remove details needed for a
 correct answer. Keep fail-open behavior until the route has task-specific

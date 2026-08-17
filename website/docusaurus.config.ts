@@ -185,6 +185,10 @@ const config: Config = {
             to: '/docs/tutorials/plugin/response-cache',
           },
           {
+            from: '/docs/tutorials/signal/learned/embedding-design-principles',
+            to: '/docs/tutorials/signal/learned/embedding',
+          },
+          {
             from: '/docs/overview/collective-intelligence',
             to: '/docs/overview/mom-model-family',
           },
@@ -237,7 +241,6 @@ const config: Config = {
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm-sr-logo.white.png',
-        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {

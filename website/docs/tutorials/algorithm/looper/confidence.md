@@ -6,8 +6,6 @@
 reaches a configured threshold. It can start with a smaller or cheaper model
 and escalate only when the result is uncertain.
 
-It aligns to `config/fragments/algorithm/looper/confidence.yaml`.
-
 ## Key Advantages
 
 - Supports small-to-large escalation instead of a fixed winner.
@@ -128,5 +126,5 @@ Both implement the AutoMix paper's cascade idea but differ in how the verificati
 
 Every escalation sends the request and accumulated answer context to another
 candidate model. Make sure every candidate is allowed by the route's data
-policy, and bound latency and cost for the worst-case chain. Maintained example:
+policy, and bound latency and cost for the worst-case chain. See a complete example:
 [`config/fragments/algorithm/looper/confidence.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/confidence.yaml).

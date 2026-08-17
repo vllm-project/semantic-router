@@ -4,8 +4,6 @@
 
 `router_replay` is a route-local plugin for overriding replay/debug capture on one route.
 
-It aligns to `config/fragments/plugin/router-replay/debug.yaml`.
-
 ## Key Advantages
 
 - Lets one route override the router-wide replay default.
@@ -24,7 +22,7 @@ Replay capture is useful, but some routes need different capture policy than the
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+To disable replay for a route, add:
 
 ```yaml
 plugins:
@@ -33,7 +31,7 @@ plugins:
       enabled: false
 ```
 
-Use this fragment when one route needs custom capture settings:
+To customize capture for a route, add:
 
 ```yaml
 plugins:
@@ -49,5 +47,5 @@ plugins:
 
 Request bodies, response bodies, and tool traces can contain secrets or personal
 data. Capture the minimum needed, set retention in the shared replay service,
-and restrict replay read permissions. Maintained example:
+and restrict replay read permissions. See a complete example:
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).
