@@ -73,6 +73,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	if m := milvusConfig.Collection.VectorField.MetricType; m != "IP" && m != "COSINE" && m != "L2" {
 		logging.Warnf("MilvusCache: unrecognized metric_type %q; scores will be compared as similarities without conversion", m)
 	}
+	warnUnrecognizedMilvusConsistencyLevel(milvusConfig.Search.ConsistencyLevel)
 	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
 		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
 		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
@@ -362,8 +363,8 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 		},
 	}
 
-	// Create collection
-	if createErr := c.client.CreateCollection(ctx, schema, 1); createErr != nil {
+	// Create collection at the configured consistency level (SDK default when unset)
+	if createErr := c.client.CreateCollection(ctx, schema, 1, c.createCollectionOptions()...); createErr != nil {
 		return createErr
 	}
 
@@ -473,7 +474,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
 	// We request model, query, request_body and will detect which column is which
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "query", "request_body"})
+		[]string{"model", "query", "request_body"}, c.searchQueryOptions()...)
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
