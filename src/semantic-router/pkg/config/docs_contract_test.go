@@ -517,7 +517,7 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Response and Mutation'",
 	"label: 'Retrieval and Memory'",
 	"label: 'Safety and Generation'",
-	"label: 'Entrypoints & Recipes'",
+	"label: 'Entrypoints'",
 	"label: 'Shared Services'",
 	"'tutorials/signal/overview'",
 	"'tutorials/decision/overview'",
