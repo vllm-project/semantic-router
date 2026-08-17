@@ -2,7 +2,7 @@
 translation:
   source_commit: "043cee97"
   source_file: "docs/tutorials/global/safety-models-and-policy.md"
-  outdated: false
+  outdated: true
 ---
 
 # 安全、模型与策略

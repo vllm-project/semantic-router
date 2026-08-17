@@ -4,7 +4,7 @@ sidebar_label: 使用 Operator 安装
 translation:
   source_commit: "5ff00978"
   source_file: "docs/installation/k8s/operator.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 Operator 安装

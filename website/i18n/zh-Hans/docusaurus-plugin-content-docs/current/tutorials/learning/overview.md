@@ -2,7 +2,7 @@
 translation:
   source_commit: "ad233487"
   source_file: "docs/tutorials/learning/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # Router Learning
