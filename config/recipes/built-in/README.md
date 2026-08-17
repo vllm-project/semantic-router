@@ -14,13 +14,13 @@ engines. Start or bind the required provider services before serving a model.
 
 | Family | Description | Model Card |
 | --- | --- | --- |
-| Chorus V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a shared local model pool. | [Chorus V1](latest/chorus-v1/README.md) |
+| MoM V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a shared local model pool. | [MoM V1](latest/mom-v1/README.md) |
 
 ## Discover a model
 
 ```bash
 vllm-sr model list
-vllm-sr model show vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
 ```
 
 `model list` shows compatible models from the installed `latest` catalog. Use
@@ -33,12 +33,12 @@ After the physical backends described by its Model Card are reachable:
 
 ```bash
 # One routing profile
-vllm-sr serve vllm-sr/chorus-v1
+vllm-sr serve vllm-sr/mom-v1-blend
 
 # Several profiles sharing the same provider pool
 vllm-sr serve \
-  vllm-sr/chorus-v1-lite \
-  vllm-sr/chorus-v1-flash
+  vllm-sr/mom-v1-lite \
+  vllm-sr/mom-v1-flash
 ```
 
 Catalog IDs must be passed explicitly. Bare `vllm-sr serve` keeps the normal
@@ -53,12 +53,12 @@ Fork a built-in model before changing provider bindings, replicas, routing
 rules, or enabled entrypoints:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus-custom.yaml \
-  --enable vllm-sr/chorus-v1-vault \
-  --default vllm-sr/chorus-v1
+vllm-sr model fork vllm-sr/mom-v1-blend mom-custom.yaml \
+  --enable vllm-sr/mom-v1-vault \
+  --default vllm-sr/mom-v1-blend
 
-vllm-sr model validate chorus-custom.yaml
-vllm-sr serve --config chorus-custom.yaml
+vllm-sr model validate mom-custom.yaml
+vllm-sr serve --config mom-custom.yaml
 ```
 
 Recommended backends describe capabilities and pool shape, not mandatory
@@ -70,8 +70,8 @@ from the maintainer-reviewed catalog asset.
 - `latest` is the catalog bundled with the installed CLI build.
 - `vX.Y` identifies an installed release snapshot for reproducible inspection,
   validation, and forking.
-- A future family major, such as `chorus-v2`, uses a new public model ID and may
-  coexist with Chorus V1.
+- A future family major, such as `mom-v2-blend`, uses a new public model ID and may
+  coexist with MoM V1.
 
 Compatibility is declared by catalog metadata rather than inferred from a
 model name. Use `--catalog-version vX.Y` when a specific installed release is

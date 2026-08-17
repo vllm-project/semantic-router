@@ -47,8 +47,8 @@ def _catalog_model(model_id: str, asset: str, recipe: str) -> CatalogModel:
         display_name=model_id,
         description=model_id,
         kind="virtual",
-        family="chorus",
-        generation=1 if model_id.endswith("v1") else 2,
+        family="mom",
+        generation=1 if "/mom-v1-" in model_id else 2,
         policy_version="1.0.0",
         asset=asset,
         entrypoint=model_id,
@@ -65,26 +65,26 @@ def _catalog_model(model_id: str, asset: str, recipe: str) -> CatalogModel:
     )
 
 
-def test_materialization_merges_compatible_chorus_generations(monkeypatch) -> None:
-    v1 = "vllm-sr/chorus-v1"
-    v2 = "vllm-sr/chorus-v2"
+def test_materialization_merges_compatible_mom_generations(monkeypatch) -> None:
+    v1 = "vllm-sr/mom-v1-blend"
+    v2 = "vllm-sr/mom-v2-blend"
     catalog = ModelCatalog(
         version="latest",
         channel="latest",
         default_model=v1,
         enabled_models=(v1,),
         assets={
-            "chorus-v1": {"bundle": "chorus-v1", "sha256": "sha256:" + "0" * 64},
-            "chorus-v2": {"bundle": "chorus-v2", "sha256": "sha256:" + "0" * 64},
+            "mom-v1": {"bundle": "mom-v1", "sha256": "sha256:" + "0" * 64},
+            "mom-v2": {"bundle": "mom-v2", "sha256": "sha256:" + "0" * 64},
         },
         models=(
-            _catalog_model(v1, "chorus-v1", "balance"),
-            _catalog_model(v2, "chorus-v2", "next"),
+            _catalog_model(v1, "mom-v1", "balance"),
+            _catalog_model(v2, "mom-v2", "next"),
         ),
     )
     documents = {
-        "chorus-v1": _asset_document(v1, "balance", "local/v1"),
-        "chorus-v2": _asset_document(v2, "next", "local/v2"),
+        "mom-v1": _asset_document(v1, "balance", "local/v1"),
+        "mom-v2": _asset_document(v2, "next", "local/v2"),
     }
     monkeypatch.setattr(
         model_catalog,
@@ -119,8 +119,8 @@ def test_materialization_merges_compatible_chorus_generations(monkeypatch) -> No
 def test_materialization_deduplicates_a_recipe_shared_by_virtual_models(
     monkeypatch,
 ) -> None:
-    first = "vllm-sr/chorus-shared-a"
-    second = "vllm-sr/chorus-shared-b"
+    first = "vllm-sr/mom-shared-a"
+    second = "vllm-sr/mom-shared-b"
     shared_recipe = "shared"
     asset_document = _asset_document(first, shared_recipe, "local/shared")
     asset_document["entrypoints"].append(
@@ -132,14 +132,14 @@ def test_materialization_deduplicates_a_recipe_shared_by_virtual_models(
         default_model=first,
         enabled_models=(first,),
         assets={
-            "chorus-shared": {
-                "bundle": "chorus-shared",
+            "mom-shared": {
+                "bundle": "mom-shared",
                 "sha256": "sha256:" + "0" * 64,
             }
         },
         models=(
-            _catalog_model(first, "chorus-shared", shared_recipe),
-            _catalog_model(second, "chorus-shared", shared_recipe),
+            _catalog_model(first, "mom-shared", shared_recipe),
+            _catalog_model(second, "mom-shared", shared_recipe),
         ),
     )
     monkeypatch.setattr(
@@ -161,8 +161,8 @@ def test_materialization_deduplicates_a_recipe_shared_by_virtual_models(
 
 
 def test_multi_asset_materialization_rejects_global_conflicts() -> None:
-    first = _asset_document("vllm-sr/chorus-v1", "balance", "local/v1")
-    second = _asset_document("vllm-sr/chorus-v2", "next", "local/v2")
+    first = _asset_document("vllm-sr/mom-v1-blend", "balance", "local/v1")
+    second = _asset_document("vllm-sr/mom-v2-blend", "next", "local/v2")
     second["listeners"][0]["port"] = 9999
 
     with pytest.raises(ModelCatalogError, match="runtime-global field: listeners"):
@@ -170,27 +170,27 @@ def test_multi_asset_materialization_rejects_global_conflicts() -> None:
 
 
 def test_role_validation_scopes_future_generations_to_their_asset_and_recipe() -> None:
-    v1 = _asset_document("vllm-sr/chorus-v1", "balance", "local/v1")
-    v2 = _asset_document("vllm-sr/chorus-v2", "next", "local/v2")
+    v1 = _asset_document("vllm-sr/mom-v1-blend", "balance", "local/v1")
+    v2 = _asset_document("vllm-sr/mom-v2-blend", "next", "local/v2")
     v1["recipes"][0]["routing"]["decisions"] = [{"modelRefs": [{"model": "local/v1"}]}]
     v2["recipes"][0]["routing"]["decisions"] = [{"modelRefs": [{"model": "local/v2"}]}]
 
     model_catalog._validate_catalog_model_role_pool(
-        "vllm-sr/chorus-v1",
+        "vllm-sr/mom-v1-blend",
         "balance",
         ({"recommended_pool": ["local/v1", "operator/alternative"]},),
         v1,
     )
     model_catalog._validate_catalog_model_role_pool(
-        "vllm-sr/chorus-v2",
+        "vllm-sr/mom-v2-blend",
         "next",
         ({"recommended_pool": ["local/v2"]},),
         v2,
     )
 
-    with pytest.raises(ModelCatalogError, match=r"vllm-sr/chorus-v2.*local/v2"):
+    with pytest.raises(ModelCatalogError, match=r"vllm-sr/mom-v2-blend.*local/v2"):
         model_catalog._validate_catalog_model_role_pool(
-            "vllm-sr/chorus-v2",
+            "vllm-sr/mom-v2-blend",
             "next",
             ({"recommended_pool": ["local/v1"]},),
             v2,
@@ -217,15 +217,15 @@ def test_sync_script_discovers_every_declared_catalog_asset(
     destination.mkdir()
     (destination / "__init__.py").write_text("", encoding="utf-8")
     digests: dict[str, str] = {}
-    for bundle in ("chorus-v1", "chorus-v2"):
+    for bundle in ("mom-v1", "mom-v2"):
         bundle_path = version / bundle
         bundle_path.mkdir()
         for name in MODEL_BUNDLE_FILES:
             content = (
                 yaml.safe_dump(
                     _asset_document(
-                        f"vllm-sr/{bundle}",
-                        bundle.removeprefix("chorus-"),
+                        f"vllm-sr/{bundle}-blend",
+                        bundle.removeprefix("mom-"),
                         f"local/{bundle}",
                     ),
                     sort_keys=False,
@@ -237,20 +237,20 @@ def test_sync_script_discovers_every_declared_catalog_asset(
         digests[bundle] = model_bundle_digest(bundle_path)
     (version / "catalog.yaml").write_text(
         "assets:\n"
-        "  - id: chorus-v1\n"
-        "    bundle: chorus-v1\n"
-        f"    sha256: {digests['chorus-v1']}\n"
-        "  - id: chorus-v2\n"
-        "    bundle: chorus-v2\n"
-        f"    sha256: {digests['chorus-v2']}\n",
+        "  - id: mom-v1\n"
+        "    bundle: mom-v1\n"
+        f"    sha256: {digests['mom-v1']}\n"
+        "  - id: mom-v2\n"
+        "    bundle: mom-v2\n"
+        f"    sha256: {digests['mom-v2']}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(sync, "SOURCE", source)
     monkeypatch.setattr(sync, "DESTINATION", destination)
 
     assert sync.sync() == 0
-    assert (destination / "latest/chorus-v1/config.yaml").is_file()
-    assert (destination / "latest/chorus-v2/metadata.yaml").is_file()
+    assert (destination / "latest/mom-v1/config.yaml").is_file()
+    assert (destination / "latest/mom-v2/metadata.yaml").is_file()
 
     (version / "undeclared.yaml").write_text("version: v0.3\n", encoding="utf-8")
     with pytest.raises(ValueError, match="contents differ from the declared assets"):

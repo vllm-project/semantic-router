@@ -5,7 +5,7 @@ Start vLLM Semantic Router.
 
 With no MODEL, serve uses --config or config.yaml and preserves the existing
 Dashboard-first setup flow. MODEL operands select installed catalog virtual
-entrypoints such as vllm-sr/chorus-v1 for the local Docker target.
+entrypoints such as vllm-sr/mom-v1-blend for the local Docker target.
 
 Virtual models are routing policies. Semantic Router starts Router, Envoy, the
 Dashboard, and supporting services; it does not download or launch the physical
@@ -46,9 +46,9 @@ Examples:
   # Dashboard-first setup or an existing ./config.yaml
   vllm-sr serve
   # One installed virtual model
-  vllm-sr serve vllm-sr/chorus-v1
+  vllm-sr serve vllm-sr/mom-v1-blend
   # Multiple virtual entrypoints sharing one provider/backend pool
-  vllm-sr serve vllm-sr/chorus-v1-lite vllm-sr/chorus-v1-flash
+  vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
   # User-owned single or multi-model topology
   vllm-sr serve --config my-models.yaml
   # Deploy a user-owned config to Kubernetes

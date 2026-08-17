@@ -70,7 +70,7 @@ calling the selected model backend:
 vllm-sr eval --prompt "Explain inflation in plain English."
 vllm-sr eval --prompt "Explain inflation in plain English." --json
 vllm-sr eval \
-  --model vllm-sr/chorus-v1 \
+  --model vllm-sr/mom-v1-blend \
   --prompt "Summarize this architecture plan." \
   --json
 ```
@@ -160,7 +160,7 @@ The installed catalog is available offline:
 ```bash
 vllm-sr model list
 vllm-sr model list --all-versions
-vllm-sr model show vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
 ```
 
 When `./config.yaml` exists, the ordinary list merges its configured models
@@ -178,18 +178,18 @@ are omitted or redacted so the output can be shared in support logs. Use
 Fork a built-in model before changing it:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus.yaml
-vllm-sr model validate chorus.yaml
-vllm-sr serve --config chorus.yaml
+vllm-sr model fork vllm-sr/mom-v1-blend mom.yaml
+vllm-sr model validate mom.yaml
+vllm-sr serve --config mom.yaml
 ```
 
 For a local Docker stack, a catalog ID can also be passed directly:
 
 ```bash
-vllm-sr serve vllm-sr/chorus-v1
+vllm-sr serve vllm-sr/mom-v1-blend
 vllm-sr serve \
-  vllm-sr/chorus-v1-lite \
-  vllm-sr/chorus-v1-flash
+  vllm-sr/mom-v1-lite \
+  vllm-sr/mom-v1-flash
 ```
 
 These IDs select request-facing routing policies, not downloadable inference

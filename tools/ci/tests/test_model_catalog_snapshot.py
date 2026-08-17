@@ -40,7 +40,7 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
             self.assertEqual(catalog["channel"], "release")
             self.assertEqual(catalog["release"], "v9.8")
             self.assertEqual(catalog["catalog_version"], "v9.8")
-            bundle = destination / "chorus-v1"
+            bundle = destination / "mom-v1"
             self.assertEqual(
                 sorted(path.name for path in bundle.iterdir()),
                 sorted(MODEL_BUNDLE_FILES),
@@ -54,25 +54,25 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
                 )
             )
             probes = (bundle / "probes.yaml").read_text(encoding="utf-8")
-            self.assertIn("config/recipes/built-in/v9.8/chorus-v1/config.yaml", probes)
+            self.assertIn("config/recipes/built-in/v9.8/mom-v1/config.yaml", probes)
             self.assertNotIn(
-                "config/recipes/built-in/latest/chorus-v1/config.yaml", probes
+                "config/recipes/built-in/latest/mom-v1/config.yaml", probes
             )
             metadata_text = (bundle / "metadata.yaml").read_text(encoding="utf-8")
             metadata = yaml.safe_load(metadata_text)
             self.assertTrue(
                 metadata["links"]["source"].endswith(
-                    "/config/recipes/built-in/v9.8/chorus-v1"
+                    "/config/recipes/built-in/v9.8/mom-v1"
                 )
             )
             self.assertTrue(
                 metadata["links"]["documentation"].endswith(
-                    "/config/recipes/built-in/v9.8/chorus-v1/README.md"
+                    "/config/recipes/built-in/v9.8/mom-v1/README.md"
                 )
             )
             for name in MODEL_BUNDLE_FILES:
                 self.assertNotIn(
-                    "config/recipes/built-in/latest/chorus-v1",
+                    "config/recipes/built-in/latest/mom-v1",
                     (bundle / name).read_text(encoding="utf-8"),
                 )
 
@@ -110,7 +110,7 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = self._built_in_root(temporary)
             destination = snapshot.create_release_snapshot(root, "v9.8")
-            (destination / "chorus-v1" / "README.md").write_text(
+            (destination / "mom-v1" / "README.md").write_text(
                 "drift\n", encoding="utf-8"
             )
 
@@ -118,7 +118,7 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
 
             self.assertEqual(
                 errors,
-                ["release snapshot drifted from latest: chorus-v1/README.md"],
+                ["release snapshot drifted from latest: mom-v1/README.md"],
             )
 
     def test_published_tag_snapshot_is_immutable_but_new_version_is_allowed(

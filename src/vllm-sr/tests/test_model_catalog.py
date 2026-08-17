@@ -20,15 +20,15 @@ from cli.model_catalog import (
     materialize_catalog_models,
 )
 
-DEFAULT_MODEL = "vllm-sr/chorus-v1"
-LITE_MODEL = "vllm-sr/chorus-v1-lite"
-FLASH_MODEL = "vllm-sr/chorus-v1-flash"
+DEFAULT_MODEL = "vllm-sr/mom-v1-blend"
+LITE_MODEL = "vllm-sr/mom-v1-lite"
+FLASH_MODEL = "vllm-sr/mom-v1-flash"
 CATALOG_MODELS = {
     DEFAULT_MODEL,
     LITE_MODEL,
     FLASH_MODEL,
-    "vllm-sr/chorus-v1-ultra",
-    "vllm-sr/chorus-v1-vault",
+    "vllm-sr/mom-v1-ultra",
+    "vllm-sr/mom-v1-vault",
 }
 
 
@@ -353,11 +353,11 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
         (("release",), "v0.5", "latest catalog must use"),
         (("channel",), "preview", "unsupported value"),
         (("compatibility", "cli", "min"), "v0.3", "semantic version"),
-        (("assets", 0, "id"), "../chorus", "lowercase slug"),
-        (("assets", 0, "bundle"), "../chorus", "lowercase slug"),
-        (("models", 0, "id"), "chorus-v1", "public model ID"),
+        (("assets", 0, "id"), "../mom", "lowercase slug"),
+        (("assets", 0, "bundle"), "../mom", "lowercase slug"),
+        (("models", 0, "id"), "mom-v1", "public model ID"),
         (("models", 0, "kind"), "concrete", "unsupported value"),
-        (("models", 0, "family"), "Chorus", "lowercase slug"),
+        (("models", 0, "family"), "MoM", "lowercase slug"),
         (("models", 0, "policy_version"), "1", "semantic version"),
         (("models", 0, "protocols"), ["openai"], "unsupported values"),
         (
@@ -386,7 +386,7 @@ def test_catalog_rejects_role_pool_missing_nested_algorithm_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def mutate_asset(bundle: str, document: dict[str, Any]) -> None:
-        if bundle != "chorus-v1":
+        if bundle != "mom-v1":
             return
         accuracy = next(
             recipe for recipe in document["recipes"] if recipe["name"] == "accuracy"

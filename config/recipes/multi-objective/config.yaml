@@ -263,19 +263,19 @@ routing:
   strategy: priority
 entrypoints:
 - model_names:
-  - vllm-sr/mom-balanced-v1
+  - vllm-sr/mom-v1-blend
   recipe: balanced
 - model_names:
-  - vllm-sr/mom-flash-v1
+  - vllm-sr/mom-v1-flash
   recipe: speed-first
 - model_names:
-  - vllm-sr/mom-economy-v1
+  - vllm-sr/mom-v1-lite
   recipe: cost-first
 - model_names:
-  - vllm-sr/mom-frontier-v1
+  - vllm-sr/mom-v1-ultra
   recipe: accuracy-first
 - model_names:
-  - vllm-sr/mom-private-v1
+  - vllm-sr/mom-v1-vault
   recipe: privacy-first
 recipes:
 - name: balanced

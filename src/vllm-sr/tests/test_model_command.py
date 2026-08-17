@@ -31,9 +31,9 @@ main = importlib.import_module("cli.main").main
 model_catalog_module = importlib.import_module("cli.model_catalog")
 README_PATH = PROJECT_ROOT / "README.md"
 
-DEFAULT_CATALOG_MODEL = "vllm-sr/chorus-v1"
-LITE_CATALOG_MODEL = "vllm-sr/chorus-v1-lite"
-FLASH_CATALOG_MODEL = "vllm-sr/chorus-v1-flash"
+DEFAULT_CATALOG_MODEL = "vllm-sr/mom-v1-blend"
+LITE_CATALOG_MODEL = "vllm-sr/mom-v1-lite"
+FLASH_CATALOG_MODEL = "vllm-sr/mom-v1-flash"
 
 
 _VALID_CONFIG = {
@@ -242,11 +242,11 @@ def test_model_list_table_identifies_the_latest_catalog():
 
     assert result.exit_code == 0
     assert "Catalog: latest" in result.output
-    chorus_rows = [
+    mom_rows = [
         line for line in result.output.splitlines() if DEFAULT_CATALOG_MODEL in line
     ]
-    assert chorus_rows
-    assert not any("release" in line for line in chorus_rows)
+    assert mom_rows
+    assert not any("release" in line for line in mom_rows)
 
 
 def test_model_show_json_uses_the_latest_snapshot():
@@ -302,7 +302,7 @@ def test_model_show_table_includes_public_requirements():
     result = runner.invoke(main, ["model", "show", DEFAULT_CATALOG_MODEL])
 
     assert result.exit_code == 0
-    assert result.output.startswith(f"Chorus V1\n{DEFAULT_CATALOG_MODEL}\n")
+    assert result.output.startswith(f"MoM V1 Blend\n{DEFAULT_CATALOG_MODEL}\n")
     assert "Overview" in result.output
     fields = [
         parts
@@ -572,7 +572,7 @@ def test_model_list_reports_missing_config(tmp_path: Path):
 
 def test_model_fork_single_model_writes_canonical_yaml(tmp_path: Path):
     runner = CliRunner()
-    destination = tmp_path / "chorus.yaml"
+    destination = tmp_path / "mom.yaml"
 
     result = runner.invoke(
         main, ["model", "fork", DEFAULT_CATALOG_MODEL, str(destination)]

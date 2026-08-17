@@ -95,7 +95,7 @@ jobs:
           python -m pip install ./src/vllm-sr
           vllm-sr model list --output json >/tmp/model-catalog-latest.json
           vllm-sr model list --all-versions --output json >/tmp/model-catalog-all.json
-          vllm-sr model show vllm-sr/chorus-v1 --output json >/tmp/model-chorus-v1.json
+          vllm-sr model show vllm-sr/mom-v1-blend --output json >/tmp/model-mom-v1.json
 
       - name: Write catalog validation receipt
         run: |
@@ -104,7 +104,7 @@ jobs:
           mkdir -p "$receipt_dir"
           cp /tmp/model-catalog-latest.json "$receipt_dir/latest.json"
           cp /tmp/model-catalog-all.json "$receipt_dir/all-versions.json"
-          cp /tmp/model-chorus-v1.json "$receipt_dir/chorus-v1.json"
+          cp /tmp/model-mom-v1.json "$receipt_dir/mom-v1.json"
           printf '%s\n' "$GITHUB_SHA" >"$receipt_dir/source-commit.txt"
           find config/recipes/built-in src/vllm-sr/cli/model_assets \
             -type f \( -name '*.yaml' -o -name '*.md' -o -name '*.dsl' \) -print0 \

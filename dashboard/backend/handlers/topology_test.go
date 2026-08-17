@@ -199,10 +199,10 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 	result := callRouterAPI(TestQueryRequest{
 		Query: "hello",
 		Mode:  TestQueryModeDryRun,
-		Model: "vllm-sr/mom-balanced-v1",
+		Model: "vllm-sr/mom-v1-blend",
 	}, server.URL, configPath)
 
-	require.Equal(t, "vllm-sr/mom-balanced-v1", received.Model)
+	require.Equal(t, "vllm-sr/mom-v1-blend", received.Model)
 	require.Equal(t, "balanced-route", result.MatchedDecision)
 }
 
@@ -246,12 +246,12 @@ func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {
 			},
 		}},
 		Entrypoints: []routerconfig.EntrypointMapping{{
-			ModelNames: []string{"vllm-sr/mom-balanced-v1"},
+			ModelNames: []string{"vllm-sr/mom-v1-blend"},
 			Recipe:     "balanced",
 		}},
 	}
 
-	scoped := topologyConfigForRequestModel(cfg, "vllm-sr/mom-balanced-v1")
+	scoped := topologyConfigForRequestModel(cfg, "vllm-sr/mom-v1-blend")
 
 	require.Len(t, scoped.IntelligentRouting.Decisions, 1)
 	require.Equal(t, "balanced-route", scoped.IntelligentRouting.Decisions[0].Name)

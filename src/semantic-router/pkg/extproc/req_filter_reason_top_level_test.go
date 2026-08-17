@@ -240,7 +240,7 @@ func newTopLevelReasoningEffortFullPathRouter() (*OpenAIRouter, *config.Decision
 
 func explicitTopLevelReasoningFullPathRequest() []byte {
 	return []byte(`{
-		"model":"vllm-sr/chorus-v1-ultra",
+		"model":"vllm-sr/mom-v1-ultra",
 		"messages":[{"role":"user","content":"analyze"}],
 		"chat_template_kwargs":{"reasoning_effort":"medium","unrelated":"keep"},
 		"opaque_integer":9007199254740993

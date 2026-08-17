@@ -116,19 +116,19 @@ const modelTargets: ModelTarget[] = [
 const incomingQueries: IncomingQuery[] = [
   {
     id: 'flash',
-    modelId: 'vllm-sr/flash-v1',
+    modelId: 'vllm-sr/mom-v1-flash',
     recipe: 'flash recipe',
     targetIndex: 3,
   },
   {
     id: 'ultra',
-    modelId: 'vllm-sr/ultra-v1',
+    modelId: 'vllm-sr/mom-v1-ultra',
     recipe: 'ultra recipe',
     targetIndex: 0,
   },
   {
     id: 'balance',
-    modelId: 'vllm-sr/balance-v1',
+    modelId: 'vllm-sr/mom-v1-blend',
     recipe: 'balance recipe',
     targetIndex: 4,
   },

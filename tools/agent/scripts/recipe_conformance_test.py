@@ -30,12 +30,12 @@ class RecipeConformanceTest(unittest.TestCase):
 
         inventory = recipe_conformance.discover_inventory(root)
 
-        self.assertEqual([recipe.name for recipe in inventory], ["chorus-v1"])
-        chorus = inventory[0]
-        self.assertEqual(len(chorus.entrypoints), 5)
-        self.assertEqual(len(chorus.decisions), 43)
-        self.assertEqual(chorus.variants, 222)
-        self.assertTrue(chorus.coverage["passed"])
+        self.assertEqual([recipe.name for recipe in inventory], ["mom-v1"])
+        mom = inventory[0]
+        self.assertEqual(len(mom.entrypoints), 5)
+        self.assertEqual(len(mom.decisions), 43)
+        self.assertEqual(mom.variants, 222)
+        self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

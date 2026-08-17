@@ -52,7 +52,9 @@ def _entrypoint_models(document: dict[str, object]) -> list[str]:
 def test_serve_one_catalog_virtual_model_uses_private_workspace_source(
     monkeypatch, tmp_path: Path
 ):
-    result, captured = _invoke_catalog_serve(monkeypatch, tmp_path, "vllm-sr/chorus-v1")
+    result, captured = _invoke_catalog_serve(
+        monkeypatch, tmp_path, "vllm-sr/mom-v1-blend"
+    )
 
     assert result.exit_code == 0, result.output
     assert len(captured) == 1
@@ -63,7 +65,7 @@ def test_serve_one_catalog_virtual_model_uses_private_workspace_source(
     assert not (tmp_path / "config.yaml").exists()
 
     document = _source_document(deployment)
-    assert _entrypoint_models(document) == ["vllm-sr/chorus-v1"]
+    assert _entrypoint_models(document) == ["vllm-sr/mom-v1-blend"]
     assert len(document["recipes"]) == 1
     assert len(document["providers"]["models"]) == 7
 
@@ -86,20 +88,20 @@ def test_serve_multiple_catalog_models_preserves_operand_order(
     result, captured = _invoke_catalog_serve(
         monkeypatch,
         tmp_path,
-        "vllm-sr/chorus-v1-flash",
+        "vllm-sr/mom-v1-flash",
         "--minimal",
-        "vllm-sr/chorus-v1-lite",
+        "vllm-sr/mom-v1-lite",
     )
 
     assert result.exit_code == 0, result.output
     document = _source_document(captured[0])
     assert _entrypoint_models(document) == [
-        "vllm-sr/chorus-v1-flash",
-        "vllm-sr/chorus-v1-lite",
+        "vllm-sr/mom-v1-flash",
+        "vllm-sr/mom-v1-lite",
     ]
     assert len(document["recipes"]) == 2
     assert len(document["providers"]["models"]) == 7
-    assert "vllm-sr/chorus-v1" not in _entrypoint_models(document)
+    assert "vllm-sr/mom-v1-blend" not in _entrypoint_models(document)
     assert captured[0]["enable_observability"] is False
 
 
@@ -107,10 +109,10 @@ def test_serve_catalog_source_and_management_token_are_stable(
     monkeypatch, tmp_path: Path
 ):
     first, first_capture = _invoke_catalog_serve(
-        monkeypatch, tmp_path, "vllm-sr/chorus-v1-lite"
+        monkeypatch, tmp_path, "vllm-sr/mom-v1-lite"
     )
     second, second_capture = _invoke_catalog_serve(
-        monkeypatch, tmp_path, "vllm-sr/chorus-v1-lite"
+        monkeypatch, tmp_path, "vllm-sr/mom-v1-lite"
     )
 
     assert first.exit_code == second.exit_code == 0
@@ -158,7 +160,7 @@ def test_serve_catalog_warns_for_effective_router_image_override(
     result, captured = _invoke_catalog_serve(
         monkeypatch,
         tmp_path,
-        "vllm-sr/chorus-v1",
+        "vllm-sr/mom-v1-blend",
         *serve_args,
     )
 
@@ -177,10 +179,12 @@ def test_serve_catalog_rejects_config_custom_model_and_kubernetes_before_writes(
 
     conflict = runner.invoke(
         main,
-        ["serve", "vllm-sr/chorus-v1", "--config", "custom.yaml"],
+        ["serve", "vllm-sr/mom-v1-blend", "--config", "custom.yaml"],
     )
     custom = runner.invoke(main, ["serve", "my/qwen"])
-    kubernetes = runner.invoke(main, ["serve", "vllm-sr/chorus-v1", "--target", "k8s"])
+    kubernetes = runner.invoke(
+        main, ["serve", "vllm-sr/mom-v1-blend", "--target", "k8s"]
+    )
 
     assert conflict.exit_code == custom.exit_code == kubernetes.exit_code == 1
     assert "mutually exclusive" in conflict.stderr
@@ -210,7 +214,7 @@ def test_serve_catalog_rejects_silent_algorithm_override_before_writes(
 
     result = CliRunner().invoke(
         main,
-        ["serve", "vllm-sr/chorus-v1", "--algorithm", "static"],
+        ["serve", "vllm-sr/mom-v1-blend", "--algorithm", "static"],
     )
 
     assert result.exit_code == 1
@@ -226,7 +230,7 @@ def test_serve_catalog_rejects_symlinked_workspace_state(monkeypatch, tmp_path: 
     (tmp_path / ".vllm-sr").symlink_to(outside, target_is_directory=True)
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(main, ["serve", "vllm-sr/chorus-v1"])
+    result = CliRunner().invoke(main, ["serve", "vllm-sr/mom-v1-blend"])
 
     assert result.exit_code == 1
     assert "must not be a symbolic link" in result.stderr
@@ -238,8 +242,8 @@ def test_serve_help_explains_virtual_custom_and_multi_model_contracts():
 
     assert result.exit_code == 0
     assert "serve [OPTIONS] [MODEL]..." in result.output
-    assert "vllm-sr serve vllm-sr/chorus-v1" in result.output
-    assert "vllm-sr/chorus-v1-lite vllm-sr/chorus-v1-flash" in result.output
+    assert "vllm-sr serve vllm-sr/mom-v1-blend" in result.output
+    assert "vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash" in result.output
     assert "does not download or launch" in result.output
     assert "physical LLM engines" in result.output
     assert "vllm-sr serve --config my-models.yaml" in result.output
@@ -260,7 +264,9 @@ def test_serve_catalog_fails_closed_for_active_recipe(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(
         runtime_commands, "active_recipe_package_for_stack", lambda **_kwargs: True
     )
-    result, captured = _invoke_catalog_serve(monkeypatch, tmp_path, "vllm-sr/chorus-v1")
+    result, captured = _invoke_catalog_serve(
+        monkeypatch, tmp_path, "vllm-sr/mom-v1-blend"
+    )
 
     assert result.exit_code == 1
     assert "active managed Recipe" in result.stderr
@@ -278,7 +284,9 @@ def test_serve_catalog_fails_closed_when_runtime_edits_are_preserved(
         "materialize_runtime_config",
         lambda *_args, **_kwargs: preserved,
     )
-    result, captured = _invoke_catalog_serve(monkeypatch, tmp_path, "vllm-sr/chorus-v1")
+    result, captured = _invoke_catalog_serve(
+        monkeypatch, tmp_path, "vllm-sr/mom-v1-blend"
+    )
 
     assert result.exit_code == 1
     assert "Dashboard changes preserved" in result.stderr

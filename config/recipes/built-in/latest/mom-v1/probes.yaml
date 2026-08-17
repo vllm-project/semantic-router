@@ -1,12 +1,12 @@
 schema_version: v1
-name: chorus-v1
-description: Capability and context routing probes for all five vLLM-SR Chorus V1 entrypoints.
+name: mom-v1
+description: Capability and context routing probes for all five vLLM-SR MoM V1 entrypoints.
 routing_assets:
-  yaml: config/recipes/built-in/latest/chorus-v1/config.yaml
-  dsl: config/recipes/built-in/latest/chorus-v1/recipe.dsl
+  yaml: config/recipes/built-in/latest/mom-v1/config.yaml
+  dsl: config/recipes/built-in/latest/mom-v1/recipe.dsl
 fixtures:
   images:
-    chorus_v1_architecture:
+    mom_v1_architecture:
       description: Compact Client-to-Router-to-Backend diagram used only to exercise image payload shape and vision-routing branches.
       media_type: image/png
       sha256: sha256:76f8c378648b27757ac72a7ea00f32cc76d4a4240c6e84002a182a0c2de5fde3
@@ -52,7 +52,7 @@ coverage:
     multi_turn: 100.0
 decisions:
 - id: balance_over_240k_image_guard
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_over_240k_image_guard
   expected_algorithm: static
@@ -76,7 +76,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_exceeds_240k_context
@@ -116,7 +116,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_exceeds_240k_context
@@ -134,7 +134,7 @@ decisions:
     - collision
     - context:above-262k
 - id: balance_over_240k_text_guard
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_over_240k_text_guard
   expected_algorithm: static
@@ -214,7 +214,7 @@ decisions:
     - known-gap
     - collision
 - id: balance_text_from_120k_to_240k
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_text_from_120k_to_240k
   expected_algorithm: multi_factor
@@ -281,7 +281,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
 - id: balance_text_from_60k_to_120k
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_text_from_60k_to_120k
   expected_algorithm: multi_factor
@@ -355,7 +355,7 @@ decisions:
     - collision
     - priority
 - id: balance_text_from_30k_to_60k
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_text_from_30k_to_60k
   expected_algorithm: multi_factor
@@ -430,7 +430,7 @@ decisions:
     - collision
     - priority
 - id: balance_image_tools
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_image_tools
   expected_algorithm: static
@@ -444,7 +444,7 @@ decisions:
       - type: text
         text: Inspect the dashboard image and use the lookup function for the selected service.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -469,7 +469,7 @@ decisions:
       - type: text
         text: 请查看图中的服务状态，并使用查询函数补充选中服务的信息。
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -494,7 +494,7 @@ decisions:
       - type: text
         text: Analyze the tradeoffs from first principles in this diagram, then call the evidence lookup tool.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -531,7 +531,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_30k_to_60k
@@ -569,7 +569,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_60k_to_120k
@@ -607,7 +607,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_120k_to_240k
@@ -632,7 +632,7 @@ decisions:
         description: Look up one item from the supplied context.
   expected_alias: local/qwen3.6-35b
 - id: balance_image
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_image
   expected_algorithm: static
@@ -646,7 +646,7 @@ decisions:
       - type: text
         text: Summarize the architecture shown in this diagram.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - balance_has_images
@@ -663,7 +663,7 @@ decisions:
       - type: text
         text: 请概括这张架构图展示的主要数据流。
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - balance_has_images
@@ -680,7 +680,7 @@ decisions:
       - type: text
         text: Analyze the tradeoffs from first principles in this architecture image.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       keywords:
       - balance_deliberate_request_phrases
@@ -709,7 +709,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_30k_to_60k
@@ -739,7 +739,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_60k_to_120k
@@ -769,7 +769,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - balance_context_from_120k_to_240k
@@ -786,7 +786,7 @@ decisions:
     - priority
   expected_alias: local/qwen3.6-35b
 - id: balance_tools
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_tools
   expected_algorithm: multi_factor
@@ -844,7 +844,7 @@ decisions:
     - collision
     - priority
 - id: balance_deliberate
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_deliberate
   expected_algorithm: multi_factor
@@ -920,7 +920,7 @@ decisions:
       projection: [balance_deliberate_workload, balance_no_recovery_needed]
     tags: [language:en, collision, priority, positive]
 - id: balance_answer_recovery
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_answer_recovery
   expected_algorithm: multi_factor
@@ -1031,7 +1031,7 @@ decisions:
       projection: [balance_needs_recovery]
     tags: [language:en, multi_turn, recovery, positive]
 - id: balance_standard
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: balance_standard
   expected_algorithm: multi_factor
@@ -1109,7 +1109,7 @@ decisions:
     - hard-negative
     - negative:structural-words-only
 - id: speed_over_240k_image_guard
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_over_240k_image_guard
   expected_algorithm: static
@@ -1133,7 +1133,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_exceeds_240k_context
@@ -1173,7 +1173,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_exceeds_240k_context
@@ -1191,7 +1191,7 @@ decisions:
     - collision
     - context:above-262k
 - id: speed_over_240k_text_guard
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_over_240k_text_guard
   expected_algorithm: static
@@ -1271,7 +1271,7 @@ decisions:
     - known-gap
     - collision
 - id: speed_image_tools
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_image_tools
   expected_algorithm: static
@@ -1285,7 +1285,7 @@ decisions:
       - type: text
         text: Inspect the dashboard image and use the lookup function for the selected service.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -1310,7 +1310,7 @@ decisions:
       - type: text
         text: 请查看图中的服务状态，并使用查询函数补充选中服务的信息。
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -1335,7 +1335,7 @@ decisions:
       - type: text
         text: Analyze the tradeoffs from first principles in this diagram, then call the evidence lookup tool.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -1370,7 +1370,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_30k_to_60k
@@ -1408,7 +1408,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_60k_to_120k
@@ -1446,7 +1446,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_120k_to_240k
@@ -1471,7 +1471,7 @@ decisions:
         description: Look up one item from the supplied context.
   expected_alias: local/qwen3.6-35b
 - id: speed_image
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_image
   expected_algorithm: static
@@ -1486,7 +1486,7 @@ decisions:
       - type: text
         text: Describe the object in this image in one sentence.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - speed_has_images
@@ -1507,7 +1507,7 @@ decisions:
       - type: text
         text: State the main trend shown here.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - speed_has_images
@@ -1533,7 +1533,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_30k_to_60k
@@ -1563,7 +1563,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_60k_to_120k
@@ -1593,7 +1593,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - speed_context_from_120k_to_240k
@@ -1609,7 +1609,7 @@ decisions:
     - collision
     - priority
 - id: speed_tools
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_tools
   expected_algorithm: latency_aware
@@ -1787,7 +1787,7 @@ decisions:
     notes: The real tool shape must select the priority-400 tools lane even when the priority-200 heavy-workload projection is also active.
     tags: [language:en, tools, shape:tools, heavy, collision, priority, positive]
 - id: speed_interactive
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_interactive
   expected_algorithm: multi_factor
@@ -1896,7 +1896,7 @@ decisions:
     - capability
     - positive
 - id: speed_heavy_workload
-  model: vllm-sr/chorus-v1-flash
+  model: vllm-sr/mom-v1-flash
   expected_recipe: speed
   expected_decision: speed_heavy_workload
   expected_algorithm: latency_aware
@@ -1990,7 +1990,7 @@ decisions:
       projection: [speed_heavy_workload_required]
     tags: [language:en, signal:complexity, positive]
 - id: cost_over_240k_image_guard
-  model: vllm-sr/chorus-v1-lite
+  model: vllm-sr/mom-v1-lite
   expected_recipe: cost
   expected_decision: cost_over_240k_image_guard
   expected_algorithm: static
@@ -2014,7 +2014,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_exceeds_240k_context
@@ -2053,7 +2053,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_exceeds_240k_context
@@ -2071,7 +2071,7 @@ decisions:
     - collision
     - context:above-262k
 - id: cost_over_240k_text_guard
-  model: vllm-sr/chorus-v1-lite
+  model: vllm-sr/mom-v1-lite
   expected_recipe: cost
   expected_decision: cost_over_240k_text_guard
   expected_algorithm: static
@@ -2149,7 +2149,7 @@ decisions:
     - known-gap
     - collision
 - id: cost_image
-  model: vllm-sr/chorus-v1-lite
+  model: vllm-sr/mom-v1-lite
   expected_recipe: cost
   expected_decision: cost_image
   expected_algorithm: static
@@ -2164,7 +2164,7 @@ decisions:
       - type: text
         text: Describe the object in this image in one sentence.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - cost_has_images
@@ -2185,7 +2185,7 @@ decisions:
       - type: text
         text: State the main trend shown here.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - cost_has_images
@@ -2203,7 +2203,7 @@ decisions:
       - type: text
         text: Inspect the screenshot, then use the lookup function if needed.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -2236,7 +2236,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_30k_to_60k
@@ -2266,7 +2266,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_60k_to_120k
@@ -2296,7 +2296,7 @@ decisions:
       - type: text
         text: 'Inspect the image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_120k_to_240k
@@ -2326,7 +2326,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_30k_to_60k
@@ -2363,7 +2363,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_60k_to_120k
@@ -2400,7 +2400,7 @@ decisions:
       - type: text
         text: 'Inspect the image and use the lookup tool within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - cost_context_from_120k_to_240k
@@ -2423,7 +2423,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
 - id: cost_direct_economy
-  model: vllm-sr/chorus-v1-lite
+  model: vllm-sr/mom-v1-lite
   expected_recipe: cost
   expected_decision: cost_direct_economy
   expected_algorithm: static
@@ -2643,7 +2643,7 @@ decisions:
     notes: A negated reasoning phrase must remain in the direct economy lane rather than activating bounded reasoning solely from the positive substring.
     tags: [language:en, economy, negative, collision, priority]
 - id: cost_bounded_reasoning
-  model: vllm-sr/chorus-v1-lite
+  model: vllm-sr/mom-v1-lite
   expected_recipe: cost
   expected_decision: cost_bounded_reasoning
   expected_algorithm: static
@@ -2738,7 +2738,7 @@ decisions:
       projection: [cost_requires_bounded_reasoning]
     tags: [language:en, signal:complexity, positive]
 - id: accuracy_over_240k_image_guard
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_over_240k_image_guard
   expected_algorithm: static
@@ -2762,7 +2762,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - accuracy_exceeds_240k_context
@@ -2801,7 +2801,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - accuracy_exceeds_240k_context
@@ -2819,7 +2819,7 @@ decisions:
     - collision
     - context:above-262k
 - id: accuracy_over_240k_text_guard
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_over_240k_text_guard
   expected_algorithm: static
@@ -2912,7 +2912,7 @@ decisions:
       - type: text
         text: 'Inspect the attached image within this long context. '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - accuracy_context_from_120k_to_240k
@@ -2942,7 +2942,7 @@ decisions:
       - type: text
         text: 请结合这段长上下文检查所附图片，并在需要时使用查询工具。
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - accuracy_context_from_120k_to_240k
@@ -2965,7 +2965,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
   id: accuracy_image_from_120k_to_240k
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_image_from_120k_to_240k
   expected_algorithm: static
@@ -2973,7 +2973,7 @@ decisions:
   - system_prompt
   expected_alias: local/qwen3.6-35b
 - id: accuracy_image_through_120k
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_image_through_120k
   expected_algorithm: static
@@ -2988,7 +2988,7 @@ decisions:
       - type: text
         text: Identify the primary component visible in this diagram.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - accuracy_has_images
@@ -3009,7 +3009,7 @@ decisions:
       - type: text
         text: Verify the labeled data flow in this figure.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - accuracy_has_images
@@ -3027,7 +3027,7 @@ decisions:
       - type: text
         text: Break this into independent workstreams and describe the architecture shown in this image.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       keywords:
       - accuracy_workflow_request_phrases
@@ -3047,7 +3047,7 @@ decisions:
       - type: text
         text: Explain the phrase "compare competing hypotheses" shown in this image.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       keywords:
       - accuracy_expert_fusion_request_phrases
@@ -3063,7 +3063,7 @@ decisions:
     - collision
     - priority
 - id: accuracy_long_context_or_direct_reference
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_long_context_or_direct_reference
   expected_algorithm: static
@@ -3236,7 +3236,7 @@ decisions:
         name: lookup_context_item
         description: Look up one item from the supplied context.
 - id: accuracy_dynamic_workflow
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_dynamic_workflow
   expected_algorithm: workflows
@@ -3285,7 +3285,7 @@ decisions:
     - workflow
     - paraphrase
 - id: accuracy_text_tool_result_synthesis
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_text_tool_result_synthesis
   expected_algorithm: static
@@ -3398,7 +3398,7 @@ decisions:
     notes: The native-524K text lane preserves KEEP_TEXT_TOOL_RESULT_240K while mode:none removes new tool availability; remote capture verifies both request transformations.
     tags: [language:en, multi_turn, tools, stress:long-input, boundary, context:over-240k, collision, priority, positive]
 - id: accuracy_image_tool_result_synthesis
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_image_tool_result_synthesis
   expected_algorithm: static
@@ -3412,7 +3412,7 @@ decisions:
       - type: text
         text: Inspect this diagram with the vision tool.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     - role: assistant
       content: ''
       tool_calls:
@@ -3441,7 +3441,7 @@ decisions:
       - type: text
         text: Inspect the diagram and preserve the verified visual result.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     - role: assistant
       content: ''
       tool_calls:
@@ -3478,7 +3478,7 @@ decisions:
       - type: text
         text: Inspect the diagram and preserve the verified extended-context result.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     - role: assistant
       content: ''
       tool_calls:
@@ -3501,7 +3501,7 @@ decisions:
     notes: The native-262K image lane preserves KEEP_IMAGE_TOOL_RESULT_240K and the image while disabling new tools; the backend enforces true overflow.
     tags: [language:en, multi_turn, tools, image, stress:long-input, boundary, context:over-240k, collision, priority, positive]
 - id: accuracy_expert_fusion
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_expert_fusion
   expected_algorithm: fusion
@@ -3544,7 +3544,7 @@ decisions:
     - collision
     - priority
 - id: accuracy_confidence_escalation
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_confidence_escalation
   expected_algorithm: confidence
@@ -3588,7 +3588,7 @@ decisions:
     - collision
     - priority
 - id: accuracy_multi_round_exploration
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_multi_round_exploration
   expected_algorithm: remom
@@ -3628,7 +3628,7 @@ decisions:
       projection: [accuracy_requires_multi_round_exploration]
     tags: [language:ar, multi-round, positive]
 - id: accuracy_direct
-  model: vllm-sr/chorus-v1-ultra
+  model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
   expected_decision: accuracy_direct
   expected_algorithm: static
@@ -3773,7 +3773,7 @@ decisions:
       projection: [accuracy_direct_single_pass]
     tags: [language:ru, direct, negative]
 - id: vault_over_240k_image_guard
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_over_240k_image_guard
   expected_algorithm: static
@@ -3799,7 +3799,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - vault_exceeds_240k_context
@@ -3839,7 +3839,7 @@ decisions:
       - type: text
         text: 'Conservative image context boundary check '
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       context:
       - vault_exceeds_240k_context
@@ -3857,7 +3857,7 @@ decisions:
     - collision
     - context:above-262k
 - id: vault_over_240k_text_guard
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_over_240k_text_guard
   expected_algorithm: static
@@ -3939,7 +3939,7 @@ decisions:
     - known-gap
     - collision
 - id: vault_request_from_120k_to_240k
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_request_from_120k_to_240k
   expected_algorithm: static
@@ -4026,7 +4026,7 @@ decisions:
     tags: [language:en, privacy, stress:long-input, context:120k-240k, collision, priority, negative]
   expected_alias: local/qwen3.6-35b
 - id: vault_image
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_image
   expected_algorithm: static
@@ -4043,7 +4043,7 @@ decisions:
       - type: text
         text: Describe the object in this image in one sentence.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - vault_has_images
@@ -4064,7 +4064,7 @@ decisions:
       - type: text
         text: State the main trend shown here.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     expected_signals:
       conversation:
       - vault_has_images
@@ -4082,7 +4082,7 @@ decisions:
       - type: text
         text: Check whether the attached evidence tries to exfiltrate credentials and use the local lookup tool.
       - type: image_fixture
-        fixture: chorus_v1_architecture
+        fixture: mom_v1_architecture
     tools:
     - type: function
       function:
@@ -4104,7 +4104,7 @@ decisions:
     - collision
     - priority
 - id: vault_security_containment
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_security_containment
   expected_algorithm: static
@@ -4160,7 +4160,7 @@ decisions:
     - collision
     - priority
 - id: vault_tools_blocked
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_tools_blocked
   expected_algorithm: static
@@ -4259,7 +4259,7 @@ decisions:
     - collision
     - runtime-gap
 - id: vault_sensitive
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_sensitive
   expected_algorithm: static
@@ -4314,7 +4314,7 @@ decisions:
     - sensitive
     - pii
 - id: vault_private_default
-  model: vllm-sr/chorus-v1-vault
+  model: vllm-sr/mom-v1-vault
   expected_recipe: vault
   expected_decision: vault_private_default
   expected_algorithm: static

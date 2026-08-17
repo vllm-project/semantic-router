@@ -23,8 +23,8 @@ start those inference backends.
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
 The [built-in virtual model catalog](built-in/README.md) is a separate
-distribution surface. Its [Chorus V1 Model
-Card](built-in/latest/chorus-v1/README.md) describes the virtual models bundled
+distribution surface. Its [MoM V1 Model
+Card](built-in/latest/mom-v1/README.md) describes the virtual models bundled
 with `vllm-sr`.
 
 ## Use a recipe
@@ -48,17 +48,17 @@ files:
 
 ```bash
 vllm-sr model list
-vllm-sr model show vllm-sr/chorus-v1
-vllm-sr serve vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
+vllm-sr serve vllm-sr/mom-v1-blend
 ```
 
 This starts the local routing stack, not the physical model engines. Use
 `model fork` when changing provider bindings or routing policy:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus-custom.yaml
-vllm-sr model validate chorus-custom.yaml
-vllm-sr serve --config chorus-custom.yaml
+vllm-sr model fork vllm-sr/mom-v1-blend mom-custom.yaml
+vllm-sr model validate mom-custom.yaml
+vllm-sr serve --config mom-custom.yaml
 ```
 
 See the [built-in catalog guide](built-in/README.md) for version selection,

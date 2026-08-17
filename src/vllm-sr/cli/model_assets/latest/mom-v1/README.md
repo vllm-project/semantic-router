@@ -1,15 +1,15 @@
-# vLLM-SR Chorus V1 Model Card
+# vLLM-SR MoM V1 Model Card
 
 *Many models. One intelligence.*
 
 ## Overview
 
-vLLM-SR Chorus V1 is a family of five virtual models backed by a shared pool
+vLLM-SR MoM V1 is a family of five virtual models backed by a shared pool
 of specialized, OpenAI-compatible inference services. Each public model ID
 selects a different routing objective while hiding backend placement and
 checkpoint details from clients.
 
-Chorus is a routing policy, not a checkpoint or a model installer. The Router,
+MoM is a routing policy, not a checkpoint or a model installer. The Router,
 Envoy, and Dashboard can be started by `vllm-sr`, but the seven inference
 backends must already be running and reachable.
 
@@ -17,18 +17,18 @@ backends must already be running and reachable.
 
 | Public model ID | Best for | Main trade-off |
 | --- | --- | --- |
-| `vllm-sr/chorus-v1` | General-purpose use with adaptive quality, latency, cost, and answer recovery. | No single metric is always minimized. |
-| `vllm-sr/chorus-v1-lite` | Economical local responses with optional bounded reasoning. | Lower peak capability. |
-| `vllm-sr/chorus-v1-flash` | Interactive and tool-oriented traffic where latency matters most. | Heavy work may use a slower capable lane. |
-| `vllm-sr/chorus-v1-ultra` | High-accuracy answers, verification, expert comparison, and bounded orchestration. | Higher latency and compute use. |
-| `vllm-sr/chorus-v1-vault` | Sensitive, private, or suspicious workloads that must remain local. | Tools are disabled and provider choice is deliberately narrow. |
+| `vllm-sr/mom-v1-blend` | General-purpose multi-objective routing across quality, latency, cost, and answer recovery. | No single metric is always minimized. |
+| `vllm-sr/mom-v1-lite` | Economical local responses with optional bounded reasoning. | Lower peak capability. |
+| `vllm-sr/mom-v1-flash` | Interactive and tool-oriented traffic where latency matters most. | Heavy work may use a slower capable lane. |
+| `vllm-sr/mom-v1-ultra` | High-accuracy answers, verification, expert comparison, and bounded orchestration. | Higher latency and compute use. |
+| `vllm-sr/mom-v1-vault` | Sensitive, private, or suspicious workloads that must remain local. | Tools are disabled and provider choice is deliberately narrow. |
 
-The public IDs are stable within Chorus V1. Internal recipe names and backend
+The public IDs are stable within MoM V1. Internal recipe names and backend
 aliases may evolve with a new catalog version.
 
 ## Intended use
 
-Chorus V1 is a good fit when:
+MoM V1 is a good fit when:
 
 - one endpoint must serve several quality, cost, speed, and privacy profiles;
 - clients should choose a stable virtual model instead of a physical backend;
@@ -44,11 +44,11 @@ model pool is optimal for another workload or hardware platform.
 
 | Virtual model | High-level policy |
 | --- | --- |
-| Chorus | Protect modality and context limits first, recover after a weak answer, spend more effort on difficult or verification-heavy work, and otherwise balance quality, latency, cost, and load. |
-| Chorus Lite | Keep ordinary work on the economy model and enable bounded reasoning only when the request asks for it. |
-| Chorus Flash | Preserve tools and images, choose from low-latency candidates for ordinary work, and retain a capable lane for heavier requests. |
-| Chorus Ultra | Keep ordinary work direct; explicit planning, expert comparison, factual verification, or multi-path exploration can use Workflow, Fusion, Confidence, or ReMoM. |
-| Chorus Vault | Keep every request local, strip client tools and prior tool history, contain attacks, and use stronger local privacy handling when sensitive data is detected. |
+| MoM Blend | Protect modality and context limits first, recover after a weak answer, spend more effort on difficult or verification-heavy work, and otherwise balance quality, latency, cost, and load. |
+| MoM Lite | Keep ordinary work on the economy model and enable bounded reasoning only when the request asks for it. |
+| MoM Flash | Preserve tools and images, choose from low-latency candidates for ordinary work, and retain a capable lane for heavier requests. |
+| MoM Ultra | Keep ordinary work direct; explicit planning, expert comparison, factual verification, or multi-path exploration can use Workflow, Fusion, Confidence, or ReMoM. |
+| MoM Vault | Keep every request local, strip client tools and prior tool history, contain attacks, and use stronger local privacy handling when sensitive data is detected. |
 
 Capability checks run before semantic routing. Images are kept on multimodal
 backends, and long inputs move to backends with a larger configured context
@@ -80,7 +80,7 @@ deployment, not claims about each checkpoint's architectural maximum.
 
 ## Data handling and safety
 
-Chorus Vault keeps provider traffic on the local pool, removes callable tools
+MoM Vault keeps provider traffic on the local pool, removes callable tools
 and prior tool history, and disables replay capture on every Vault route. The
 other four profiles use Redis-backed Router Replay with a seven-day retention
 period and capture up to 4 KiB each from request and response bodies. Operators
@@ -96,23 +96,23 @@ stores.
 Inspect the installed Model Card and backend requirements:
 
 ```bash
-vllm-sr model show vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
 ```
 
 After starting or binding the required provider services, serve one or more
 virtual models:
 
 ```bash
-vllm-sr serve vllm-sr/chorus-v1
-vllm-sr serve vllm-sr/chorus-v1-lite vllm-sr/chorus-v1-flash
+vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
 ```
 
 To change the provider pool or routing policy, create a user-owned config:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml
-vllm-sr model validate chorus-v1.yaml
-vllm-sr serve --config chorus-v1.yaml
+vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
+vllm-sr model validate mom-v1.yaml
+vllm-sr serve --config mom-v1.yaml
 ```
 
 See the

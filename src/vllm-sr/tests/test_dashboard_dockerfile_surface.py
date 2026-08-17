@@ -22,11 +22,11 @@ DASHBOARD_PERMISSION_HELPER = (
 DASHBOARD_LOGS_HANDLER = REPO_ROOT / "dashboard" / "backend" / "handlers" / "logs.go"
 BUILT_IN_MODEL_ASSETS = (
     Path("latest/catalog.yaml"),
-    Path("latest/chorus-v1/README.md"),
-    Path("latest/chorus-v1/config.yaml"),
-    Path("latest/chorus-v1/metadata.yaml"),
-    Path("latest/chorus-v1/probes.yaml"),
-    Path("latest/chorus-v1/recipe.dsl"),
+    Path("latest/mom-v1/README.md"),
+    Path("latest/mom-v1/config.yaml"),
+    Path("latest/mom-v1/metadata.yaml"),
+    Path("latest/mom-v1/probes.yaml"),
+    Path("latest/mom-v1/recipe.dsl"),
 )
 
 

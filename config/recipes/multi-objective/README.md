@@ -14,11 +14,11 @@ physical model server.
 
 | Virtual model | Objective | Main trade-off |
 | --- | --- | --- |
-| `vllm-sr/mom-balanced-v1` | Adapt quality, speed, and efficiency to the request. | No single metric is always minimized. |
-| `vllm-sr/mom-flash-v1` | Prefer low observed latency. | Heavy requests may still use a slower capable lane. |
-| `vllm-sr/mom-economy-v1` | Keep work on economical local models. | Lower peak capability than frontier routing. |
-| `vllm-sr/mom-frontier-v1` | Use direct frontier or bounded orchestration for accuracy. | Higher latency and compute use. |
-| `vllm-sr/mom-private-v1` | Keep sensitive and suspicious traffic local. | Reduced provider diversity and no cloud escalation. |
+| `vllm-sr/mom-v1-blend` | Adapt quality, speed, and efficiency to the request. | No single metric is always minimized. |
+| `vllm-sr/mom-v1-flash` | Prefer low observed latency. | Heavy requests may still use a slower capable lane. |
+| `vllm-sr/mom-v1-lite` | Keep work on economical local models. | Lower peak capability than frontier routing. |
+| `vllm-sr/mom-v1-ultra` | Use direct frontier or bounded orchestration for accuracy. | Higher latency and compute use. |
+| `vllm-sr/mom-v1-vault` | Keep sensitive and suspicious traffic local. | Reduced provider diversity and no cloud escalation. |
 
 The reference configuration shares eight logical provider models across these
 five policies. Operators can replace that pool while keeping the public

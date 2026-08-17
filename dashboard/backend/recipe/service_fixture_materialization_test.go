@@ -450,7 +450,7 @@ func TestProbeManifestRejectsYAMLIndirection(t *testing.T) {
 	}
 }
 
-type chorusFixtureReceipt struct {
+type momFixtureReceipt struct {
 	probeCount      int
 	messageProbes   int
 	generatedProbes int
@@ -460,8 +460,8 @@ type chorusFixtureReceipt struct {
 	textDigest      string
 }
 
-func TestChorusGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "config", "recipes", "built-in", "latest", "chorus-v1", "probes.yaml")
+func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "config", "recipes", "built-in", "latest", "mom-v1", "probes.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%s): %v", path, err)
@@ -470,7 +470,7 @@ func TestChorusGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
-	receipt := materializeChorusFixtureReceipt(t, manifest)
+	receipt := materializeMoMFixtureReceipt(t, manifest)
 	if receipt.probeCount != 222 || receipt.messageProbes != 82 || receipt.generatedProbes != 50 ||
 		receipt.imageParts != 54 || receipt.textBytes != 26_229_486 {
 		t.Fatalf("receipt counts = %#v", receipt)
@@ -478,13 +478,13 @@ func TestChorusGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 	if receipt.textDigest != "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
-	assertChorusImageFixtureReceipt(t, manifest, receipt.imageURLs)
+	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)
 }
 
-func materializeChorusFixtureReceipt(t *testing.T, manifest probeManifest) chorusFixtureReceipt {
+func materializeMoMFixtureReceipt(t *testing.T, manifest probeManifest) momFixtureReceipt {
 	t.Helper()
 	probes, _ := flattenProbes(manifest)
-	receipt := chorusFixtureReceipt{probeCount: len(probes), imageURLs: map[string]struct{}{}}
+	receipt := momFixtureReceipt{probeCount: len(probes), imageURLs: map[string]struct{}{}}
 	digest := sha256.New()
 	for _, probe := range probes {
 		if len(probe.Messages) == 0 {
@@ -559,7 +559,7 @@ func collectImageURLs(content any, urls map[string]struct{}, count *int) {
 	}
 }
 
-func assertChorusImageFixtureReceipt(
+func assertMoMImageFixtureReceipt(
 	t *testing.T,
 	manifest probeManifest,
 	imageURLs map[string]struct{},
@@ -574,7 +574,7 @@ func assertChorusImageFixtureReceipt(
 			t.Fatalf("materialized image URL digest = %s, want %s", actual, expectedURLSHA)
 		}
 	}
-	fixture := manifest.Fixtures.Images["chorus_v1_architecture"]
+	fixture := manifest.Fixtures.Images["mom_v1_architecture"]
 	if fixture.Description != "Compact Client-to-Router-to-Backend diagram used only to exercise image payload shape and vision-routing branches." {
 		t.Fatalf("architecture fixture description = %q", fixture.Description)
 	}

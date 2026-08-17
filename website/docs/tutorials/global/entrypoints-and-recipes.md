@@ -56,9 +56,9 @@ routing:
     - name: accurate-model
 
 entrypoints:
-  - model_names: [vllm-sr/flash-v1]
+  - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
-  - model_names: [vllm-sr/ultra-v1]
+  - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
 
 recipes:

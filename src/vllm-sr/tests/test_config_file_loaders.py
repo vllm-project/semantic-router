@@ -86,7 +86,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     data["entrypoints"] = [
-        {"model_names": ["vllm-sr/mom-private-v1"], "recipe": "privacy-first"}
+        {"model_names": ["vllm-sr/mom-v1-vault"], "recipe": "privacy-first"}
     ]
     data["recipes"] = [
         {
@@ -123,7 +123,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
 
     parsed = parse_user_config(str(config_path))
 
-    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-private-v1"]
+    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-v1-vault"]
     assert parsed.entrypoints[0].recipe == "privacy-first"
     assert parsed.recipes[0].name == "privacy-first"
     assert parsed.recipes[0].routing.decisions[0].name == "privacy-route"

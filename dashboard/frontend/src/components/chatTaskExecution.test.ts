@@ -144,10 +144,10 @@ describe('runPlaygroundTask', () => {
         enableClawMode: false,
         enableWebSearch: false,
         executeToolCalls: false,
-        model: 'vllm-sr/chorus-v1',
+        model: 'vllm-sr/mom-v1-blend',
       },
       exactRequest: {
-        model: 'vllm-sr/chorus-v1',
+        model: 'vllm-sr/mom-v1-blend',
         messages: [{ role: 'user', content: exactContent }],
       },
       displayMessage: {
@@ -181,7 +181,7 @@ describe('runPlaygroundTask', () => {
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
-      model: 'vllm-sr/chorus-v1',
+      model: 'vllm-sr/mom-v1-blend',
       messages: [{ role: 'user', content: exactContent }],
       stream: true,
     })

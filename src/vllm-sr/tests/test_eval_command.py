@@ -182,7 +182,7 @@ def test_format_error_response_falls_back_to_raw_text() -> None:
 
 def test_summarize_response_decision_result_with_signal_confidences() -> None:
     payload = {
-        "requested_model": "vllm-sr/mom-balanced-v1",
+        "requested_model": "vllm-sr/mom-v1-blend",
         "recipe": "balanced",
         "decision_result": {
             "decision_name": "economics",
@@ -196,7 +196,7 @@ def test_summarize_response_decision_result_with_signal_confidences() -> None:
         "routing_decision": "economics",
     }
     summary = _summarize_response(payload)
-    assert "vllm-sr/mom-balanced-v1" in summary
+    assert "vllm-sr/mom-v1-blend" in summary
     assert "recipe: balanced" in summary
     assert "economics" in summary
     assert "algorithm: multi_factor" in summary
@@ -586,7 +586,7 @@ def test_eval_posts_expected_payload_and_prints_json(monkeypatch) -> None:
             "--messages",
             messages,
             "--model",
-            "vllm-sr/mom-balanced-v1",
+            "vllm-sr/mom-v1-blend",
             "--endpoint",
             "http://localhost:8080",
             "--json",
@@ -598,7 +598,7 @@ def test_eval_posts_expected_payload_and_prints_json(monkeypatch) -> None:
     mock_post.assert_called_once()
     call_kw = mock_post.call_args.kwargs
     assert call_kw["json"]["messages"] == [{"role": "user", "content": "hello"}]
-    assert call_kw["json"]["model"] == "vllm-sr/mom-balanced-v1"
+    assert call_kw["json"]["model"] == "vllm-sr/mom-v1-blend"
     assert call_kw["json"]["evaluate_all_signals"] is True
     payload = json.loads(result.stdout)
     assert payload["signals"][0]["name"] == "pii"

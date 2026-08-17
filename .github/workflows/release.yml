@@ -209,9 +209,9 @@ jobs:
 
             ```bash
             vllm-sr model list
-            vllm-sr model show vllm-sr/chorus-v1 \
+            vllm-sr model show vllm-sr/mom-v1-blend \
               --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
-            vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml \
+            vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml \
               --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
             ```
 

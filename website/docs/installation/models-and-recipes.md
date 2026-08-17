@@ -22,7 +22,7 @@ The `vllm-sr` package includes a versioned catalog of maintained virtual models:
 
 ```bash
 vllm-sr model list
-vllm-sr model show vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
 ```
 
 `model show` reports the public entrypoints, intended use, backend roles,
@@ -39,8 +39,8 @@ Router feature set.
 The local Docker target accepts one or more compatible virtual model IDs:
 
 ```bash
-vllm-sr serve vllm-sr/chorus-v1
-vllm-sr serve vllm-sr/chorus-v1-lite vllm-sr/chorus-v1-flash
+vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
 ```
 
 This starts Router, Envoy, Dashboard, and supporting services. It does not
@@ -56,9 +56,9 @@ Create a user-owned canonical config before changing a built-in policy or
 provider pool:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml
-vllm-sr model validate chorus-v1.yaml
-vllm-sr serve --config chorus-v1.yaml
+vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
+vllm-sr model validate mom-v1.yaml
+vllm-sr serve --config mom-v1.yaml
 ```
 
 An untouched deterministic fork retains its verified catalog provenance.

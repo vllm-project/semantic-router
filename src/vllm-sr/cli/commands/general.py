@@ -162,8 +162,8 @@ def model(ctx: click.Context) -> None:
 
     Examples:
         vllm-sr model list
-        vllm-sr model show vllm-sr/chorus-v1
-        vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml
+        vllm-sr model show vllm-sr/mom-v1-blend
+        vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
         vllm-sr model list --config my-config.yaml
     """
     if ctx.invoked_subcommand is not None:

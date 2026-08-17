@@ -85,7 +85,7 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
 
 	reqBody := map[string]interface{}{
-		"model": "vllm-sr/chorus-v1-vault",
+		"model": "vllm-sr/mom-v1-vault",
 		"tools": []map[string]interface{}{
 			{"type": "function", "function": map[string]interface{}{"name": "search"}},
 		},
@@ -144,7 +144,7 @@ func assertForwardedEvalRequest(t *testing.T, request services.IntentRequest) {
 	t.Helper()
 	assertForwardedEvalCollections(t, request)
 	assertForwardedEvalControls(t, request)
-	if request.Model != "vllm-sr/chorus-v1-vault" || request.Metadata["cohort"] != "canary" {
+	if request.Model != "vllm-sr/mom-v1-vault" || request.Metadata["cohort"] != "canary" {
 		t.Fatalf("expected model and metadata to be forwarded: %#v", request)
 	}
 }

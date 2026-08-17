@@ -183,8 +183,8 @@ class TestServeIntegration(CLITestBase):
             "Verifies serve MODEL... reaches the live Router model inventory",
         )
         selected = {
-            "vllm-sr/chorus-v1-lite",
-            "vllm-sr/chorus-v1-flash",
+            "vllm-sr/mom-v1-lite",
+            "vllm-sr/mom-v1-flash",
         }
         list_code, list_stdout, list_stderr = self.run_cli(
             ["model", "list", "--output", "json"]

@@ -118,12 +118,12 @@ describe('router model selection', () => {
       listRouterModels({
         data: [
           {
-            id: 'vllm-sr/mom-balanced-v1',
+            id: 'vllm-sr/mom-v1-blend',
             routing: { ...routingMetadata.profile, recipe: 'balanced' },
             description: 'Intelligent Router for Mixture-of-Models',
           },
           {
-            id: 'vllm-sr/mom-flash-v1',
+            id: 'vllm-sr/mom-v1-flash',
             routing: { ...routingMetadata.profile, mode: 'future-orchestrator' },
             description: 'Latency-first Mixture-of-Models profile',
           },
@@ -142,12 +142,12 @@ describe('router model selection', () => {
       }),
     ).toEqual([
       {
-        id: 'vllm-sr/mom-balanced-v1',
+        id: 'vllm-sr/mom-v1-blend',
         description: 'Intelligent Router for Mixture-of-Models',
         recipe: 'balanced',
       },
       {
-        id: 'vllm-sr/mom-flash-v1',
+        id: 'vllm-sr/mom-v1-flash',
         description: 'Latency-first Mixture-of-Models profile',
       },
     ])

@@ -129,25 +129,25 @@ const installedModelCatalog = {
     {
       catalog_version: 'latest',
       channel: 'latest',
-      default_model: 'vllm-sr/chorus-v1',
-      enabled_models: ['vllm-sr/chorus-v1'],
+      default_model: 'vllm-sr/mom-v1-blend',
+      enabled_models: ['vllm-sr/mom-v1-blend'],
     },
     {
       catalog_version: 'v0.3',
       channel: 'release',
-      default_model: 'vllm-sr/chorus-v1',
-      enabled_models: ['vllm-sr/chorus-v1'],
+      default_model: 'vllm-sr/mom-v1-blend',
+      enabled_models: ['vllm-sr/mom-v1-blend'],
     },
   ],
   models: ['latest', 'v0.3'].map((catalogVersion) => ({
-    id: 'vllm-sr/chorus-v1',
-    display_name: 'Chorus V1',
+    id: 'vllm-sr/mom-v1-blend',
+    display_name: 'MoM V1 Blend',
     description: 'Balanced out-of-box routing for chat and reasoning workloads.',
     kind: 'virtual',
-    family: 'chorus',
+    family: 'mom',
     generation: 1,
     policy_version: '1.0.0',
-    entrypoint: 'vllm-sr/chorus-v1',
+    entrypoint: 'vllm-sr/mom-v1-blend',
     recipe: 'balance',
     protocols: ['openai_chat'],
     traits: ['balanced', 'chat', 'reasoning'],
@@ -390,7 +390,7 @@ test('discovers installed catalog versions and backend role requirements without
   await expect(page.getByText('2 version packages')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'latest', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'v0.3', exact: true })).toBeVisible()
-  await expect(page.getByText('Chorus V1').first()).toBeVisible()
+  await expect(page.getByText('MoM V1 Blend').first()).toBeVisible()
   await expect(page.getByText('catalog verified').first()).toBeVisible()
 
   await page.getByText('1 backend role requirements').first().click()

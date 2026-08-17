@@ -459,7 +459,7 @@ def _merge_asset_documents(documents: list[dict[str, Any]]) -> dict[str, Any]:
     Runtime-global settings must be byte-semantically equal. Provider bindings
     and model cards are keyed by name and may be extended by another asset, but
     conflicting definitions fail closed. Entrypoints and recipes are likewise
-    additive and identity-unique. This lets Chorus generations coexist while
+    additive and identity-unique. This lets MoM generations coexist while
     preventing one asset from silently changing another asset's runtime.
     """
 

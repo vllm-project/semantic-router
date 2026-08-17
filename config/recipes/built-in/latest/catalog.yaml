@@ -15,23 +15,23 @@ compatibility:
     - isolated_recipes
     - decision_algorithms
 defaults:
-  model: vllm-sr/chorus-v1
+  model: vllm-sr/mom-v1-blend
   enabled:
-    - vllm-sr/chorus-v1
+    - vllm-sr/mom-v1-blend
 assets:
-  - id: chorus-v1
-    bundle: chorus-v1
-    sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
+  - id: mom-v1
+    bundle: mom-v1
+    sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13
 models:
-  - id: vllm-sr/chorus-v1
-    display_name: Chorus V1
-    description: Balanced quality, latency, cost, and answer-recovery routing.
+  - id: vllm-sr/mom-v1-blend
+    display_name: MoM V1 Blend
+    description: Multi-objective routing across quality, latency, cost, and answer recovery.
     kind: virtual
-    family: chorus
+    family: mom
     generation: 1
     policy_version: 1.0.0
-    asset: chorus-v1
-    entrypoint: vllm-sr/chorus-v1
+    asset: mom-v1
+    entrypoint: vllm-sr/mom-v1-blend
     recipe: balance
     protocols: [openai_chat, openai_responses, anthropic_messages]
     traits: [balanced, chat, reasoning, tools, multimodal]
@@ -53,16 +53,16 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
-  - id: vllm-sr/chorus-v1-lite
-    display_name: Chorus V1 Lite
+      asset_sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13
+  - id: vllm-sr/mom-v1-lite
+    display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
     kind: virtual
-    family: chorus
+    family: mom
     generation: 1
     policy_version: 1.0.0
-    asset: chorus-v1
-    entrypoint: vllm-sr/chorus-v1-lite
+    asset: mom-v1
+    entrypoint: vllm-sr/mom-v1-lite
     recipe: cost
     protocols: [openai_chat, openai_responses, anthropic_messages]
     traits: [cost_optimized, chat, reasoning, tools]
@@ -84,16 +84,16 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
-  - id: vllm-sr/chorus-v1-flash
-    display_name: Chorus V1 Flash
+      asset_sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13
+  - id: vllm-sr/mom-v1-flash
+    display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
     kind: virtual
-    family: chorus
+    family: mom
     generation: 1
     policy_version: 1.0.0
-    asset: chorus-v1
-    entrypoint: vllm-sr/chorus-v1-flash
+    asset: mom-v1
+    entrypoint: vllm-sr/mom-v1-flash
     recipe: speed
     protocols: [openai_chat, openai_responses, anthropic_messages]
     traits: [latency_optimized, chat, tools, multimodal]
@@ -115,16 +115,16 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
-  - id: vllm-sr/chorus-v1-ultra
-    display_name: Chorus V1 Ultra
+      asset_sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13
+  - id: vllm-sr/mom-v1-ultra
+    display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
     kind: virtual
-    family: chorus
+    family: mom
     generation: 1
     policy_version: 1.0.0
-    asset: chorus-v1
-    entrypoint: vllm-sr/chorus-v1-ultra
+    asset: mom-v1
+    entrypoint: vllm-sr/mom-v1-ultra
     recipe: accuracy
     protocols: [openai_chat, openai_responses, anthropic_messages]
     traits: [accuracy_optimized, chat, reasoning, tools, multimodal, orchestration]
@@ -146,16 +146,16 @@ models:
         recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
-  - id: vllm-sr/chorus-v1-vault
-    display_name: Chorus V1 Vault
+      asset_sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13
+  - id: vllm-sr/mom-v1-vault
+    display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
     kind: virtual
-    family: chorus
+    family: mom
     generation: 1
     policy_version: 1.0.0
-    asset: chorus-v1
-    entrypoint: vllm-sr/chorus-v1-vault
+    asset: mom-v1
+    entrypoint: vllm-sr/mom-v1-vault
     recipe: vault
     protocols: [openai_chat, openai_responses, anthropic_messages]
     traits: [privacy, local_only, chat, reasoning, tool_isolation]
@@ -177,4 +177,4 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:a1dc82474980325ac23abbe8e7e9bce6e74071b7cf8fbc205d0b5a709f8c3c30
+      asset_sha256: sha256:c77d1479bdf2d3f46dd864df0d9bdf021ce9662fcaf6aba12085e64ce175be13

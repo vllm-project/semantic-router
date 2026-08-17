@@ -103,7 +103,7 @@ var configContractRequiredDocs = []docNeedles{
 			"**Provider model**",
 			"**Virtual model**",
 			"**Router system model**",
-			"`vllm-sr/chorus-v1`",
+			"`vllm-sr/mom-v1-blend`",
 		},
 	},
 	{

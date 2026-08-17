@@ -75,7 +75,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("sync_model_catalog.py --check", self.text)
         self.assertIn("make recipe-conformance-static", self.text)
         self.assertIn("vllm-sr model list --all-versions", self.text)
-        self.assertIn("vllm-sr model show vllm-sr/chorus-v1", self.text)
+        self.assertIn("vllm-sr model show vllm-sr/mom-v1-blend", self.text)
 
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
         self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)

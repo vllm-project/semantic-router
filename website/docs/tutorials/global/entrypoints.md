@@ -14,7 +14,7 @@ need a Router-specific API or header.
 ## What Problem Does It Solve?
 
 Entrypoints solve a common coupling problem: an application can ask for a
-stable objective such as `vllm-sr/flash-v1` while operators change the models,
+stable objective such as `vllm-sr/mom-v1-flash` while operators change the models,
 thresholds, or algorithms behind that objective.
 
 ## When to Use
@@ -36,7 +36,7 @@ Each entrypoint lists one or more aliases and the named recipe they select:
 ```yaml
 entrypoints:
   - model_names:
-      - vllm-sr/flash-v1
+      - vllm-sr/mom-v1-flash
       - company/fast
     recipe: flash
 
@@ -55,7 +55,7 @@ chat-completions model:
 curl http://localhost:8899/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
-    "model": "vllm-sr/flash-v1",
+    "model": "vllm-sr/mom-v1-flash",
     "messages": [{"role": "user", "content": "Summarize this request."}]
   }'
 ```

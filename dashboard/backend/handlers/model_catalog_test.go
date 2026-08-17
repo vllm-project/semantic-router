@@ -50,7 +50,7 @@ func TestModelCatalogHandlerReturnsCLIContractAndCachesSuccess(t *testing.T) {
 		for _, expected := range []string{
 			`"catalog_version":"latest"`,
 			`"channel":"latest"`,
-			`"id":"vllm-sr/chorus-v1"`,
+			`"id":"vllm-sr/mom-v1-blend"`,
 			`"verification":{"status":"verified","authority":"vllm-sr-maintainers"`,
 			`"recommended_pool":["local/example"]`,
 		} {
@@ -200,16 +200,16 @@ printf '%s' "$MODEL_CATALOG_TEST_PAYLOAD"
 
 func validModelCatalogPayload(extra string) string {
 	return `{
-  "catalogs":[{"catalog_version":"latest","channel":"latest","default_model":"vllm-sr/chorus-v1","enabled_models":["vllm-sr/chorus-v1"]}],
+  "catalogs":[{"catalog_version":"latest","channel":"latest","default_model":"vllm-sr/mom-v1-blend","enabled_models":["vllm-sr/mom-v1-blend"]}],
   "models":[{
-    "id":"vllm-sr/chorus-v1",
-    "display_name":"Chorus V1",
+    "id":"vllm-sr/mom-v1-blend",
+    "display_name":"MoM V1 Blend",
     "description":"Balanced routing.",
     "kind":"virtual",
-    "family":"chorus",
+    "family":"mom",
     "generation":1,
     "policy_version":"1.0.0",
-    "entrypoint":"vllm-sr/chorus-v1",
+    "entrypoint":"vllm-sr/mom-v1-blend",
     "recipe":"balance",
     "protocols":["openai_chat"],
     "traits":["balanced","chat"],

@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-const chorusAsset = "config/recipes/built-in/latest/chorus-v1/config.yaml"
+const momAsset = "config/recipes/built-in/latest/mom-v1/config.yaml"
 
-func TestChorusRuntimeContract(t *testing.T) {
-	cfg, err := ParseYAMLBytes(mustReadRepoFile(t, chorusAsset))
+func TestMoMRuntimeContract(t *testing.T) {
+	cfg, err := ParseYAMLBytes(mustReadRepoFile(t, momAsset))
 	if err != nil {
-		t.Fatalf("parse vLLM-SR Chorus recipe: %v", err)
+		t.Fatalf("parse vLLM-SR MoM recipe: %v", err)
 	}
 
 	if got := cfg.Looper.Endpoint; got != "http://vllm-sr-envoy-container:8899/v1/chat/completions" {
@@ -32,31 +32,31 @@ func TestChorusRuntimeContract(t *testing.T) {
 		t.Fatalf("decision count = %d, want 43", decisionCount)
 	}
 
-	assertChorusMistralReasoning(t, cfg)
-	assertChorusOrchestrationBudgets(t, cfg)
-	assertChorusReplayBoundary(t, cfg)
-	assertChorusManagementBoundary(t, cfg)
+	assertMoMMistralReasoning(t, cfg)
+	assertMoMOrchestrationBudgets(t, cfg)
+	assertMoMReplayBoundary(t, cfg)
+	assertMoMManagementBoundary(t, cfg)
 }
 
-func assertChorusManagementBoundary(t *testing.T, cfg *RouterConfig) {
+func assertMoMManagementBoundary(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	assertChorusManagementListener(t, cfg.ManagementAPI)
-	assertChorusDashboardToken(t, cfg.ManagementAPI.Auth.Tokens)
-	assertChorusDashboardPermissions(t, cfg.ManagementAPI.Auth.Roles["dashboard_control_plane"])
+	assertMoMManagementListener(t, cfg.ManagementAPI)
+	assertMoMDashboardToken(t, cfg.ManagementAPI.Auth.Tokens)
+	assertMoMDashboardPermissions(t, cfg.ManagementAPI.Auth.Roles["dashboard_control_plane"])
 	if cfg.Observability.Tracing.Enabled {
-		t.Fatal("vLLM-SR Chorus must not emit traces to an undeclared collector")
+		t.Fatal("vLLM-SR MoM must not emit traces to an undeclared collector")
 	}
 }
 
-func assertChorusManagementListener(t *testing.T, management ManagementAPIConfig) {
+func assertMoMManagementListener(t *testing.T, management ManagementAPIConfig) {
 	t.Helper()
 	if management.BindAddress != "0.0.0.0" || management.Port != 8080 || !management.RemoteExposure ||
 		management.Auth.Mode != ManagementAuthModeBearer {
-		t.Fatalf("vLLM-SR Chorus management API is not remotely authenticated: %+v", management)
+		t.Fatalf("vLLM-SR MoM management API is not remotely authenticated: %+v", management)
 	}
 }
 
-func assertChorusDashboardToken(t *testing.T, tokens []ManagementAPITokenRef) {
+func assertMoMDashboardToken(t *testing.T, tokens []ManagementAPITokenRef) {
 	t.Helper()
 	foundToken := false
 	for _, token := range tokens {
@@ -65,11 +65,11 @@ func assertChorusDashboardToken(t *testing.T, tokens []ManagementAPITokenRef) {
 		}
 	}
 	if !foundToken {
-		t.Fatalf("vLLM-SR Chorus management API is missing its Dashboard token reference: %+v", tokens)
+		t.Fatalf("vLLM-SR MoM management API is missing its Dashboard token reference: %+v", tokens)
 	}
 }
 
-func assertChorusDashboardPermissions(t *testing.T, permissions []string) {
+func assertMoMDashboardPermissions(t *testing.T, permissions []string) {
 	t.Helper()
 	expectedPermissions := []string{
 		"cache.invalidate",
@@ -87,39 +87,39 @@ func assertChorusDashboardPermissions(t *testing.T, permissions []string) {
 		"replay.read",
 	}
 	if !slices.Equal(permissions, expectedPermissions) {
-		t.Fatalf("vLLM-SR Chorus Dashboard role = %v, want %v", permissions, expectedPermissions)
+		t.Fatalf("vLLM-SR MoM Dashboard role = %v, want %v", permissions, expectedPermissions)
 	}
 	for _, permission := range []string{"*", "secret_view", "data.write"} {
 		if slices.Contains(permissions, permission) {
-			t.Fatalf("vLLM-SR Chorus Dashboard role contains broad permission %q: %v", permission, permissions)
+			t.Fatalf("vLLM-SR MoM Dashboard role contains broad permission %q: %v", permission, permissions)
 		}
 	}
 }
 
-func assertChorusReplayBoundary(t *testing.T, cfg *RouterConfig) {
+func assertMoMReplayBoundary(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	assertChorusReplayStore(t, cfg.RouterReplay)
-	assertChorusVaultReplayDisabled(t, cfg)
+	assertMoMReplayStore(t, cfg.RouterReplay)
+	assertMoMVaultReplayDisabled(t, cfg)
 	if replay := cfg.EffectiveRouterReplayConfigForDecision("balance_standard"); replay == nil || !replay.Enabled {
-		t.Fatalf("ordinary vLLM-SR Chorus decisions must inherit enabled replay: %+v", replay)
+		t.Fatalf("ordinary vLLM-SR MoM decisions must inherit enabled replay: %+v", replay)
 	}
 }
 
-func assertChorusReplayStore(t *testing.T, replayConfig RouterReplayConfig) {
+func assertMoMReplayStore(t *testing.T, replayConfig RouterReplayConfig) {
 	t.Helper()
 	if !replayConfig.Enabled || replayConfig.StoreBackend != "redis" || replayConfig.Redis == nil {
-		t.Fatalf("vLLM-SR Chorus replay service = %+v, want enabled Redis", replayConfig)
+		t.Fatalf("vLLM-SR MoM replay service = %+v, want enabled Redis", replayConfig)
 	}
 	if replayConfig.TTLSeconds != 604800 || replayConfig.AsyncWrites {
-		t.Fatalf("vLLM-SR Chorus replay durability = ttl %d / async %v", replayConfig.TTLSeconds, replayConfig.AsyncWrites)
+		t.Fatalf("vLLM-SR MoM replay durability = ttl %d / async %v", replayConfig.TTLSeconds, replayConfig.AsyncWrites)
 	}
 	if replayConfig.Redis.Address != "redis:6379" || replayConfig.Redis.DB != 2 ||
-		replayConfig.Redis.KeyPrefix != "chorus-v1:router-replay:" {
-		t.Fatalf("vLLM-SR Chorus replay Redis isolation = %+v", replayConfig.Redis)
+		replayConfig.Redis.KeyPrefix != "mom-v1:router-replay:" {
+		t.Fatalf("vLLM-SR MoM replay Redis isolation = %+v", replayConfig.Redis)
 	}
 }
 
-func assertChorusVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
+func assertMoMVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	vault, ok := cfg.RecipeByName(RecipeName("vault"))
 	if !ok {
@@ -136,7 +136,7 @@ func assertChorusVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertChorusMistralReasoning(t *testing.T, cfg *RouterConfig) {
+func assertMoMMistralReasoning(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	family := cfg.ReasoningFamilies["mistral"]
 	if family.Type != ReasoningFamilyTypeTopLevelReasoningEffort || family.Parameter != "reasoning_effort" {
@@ -161,20 +161,20 @@ func assertChorusMistralReasoning(t *testing.T, cfg *RouterConfig) {
 		}
 	}
 	if mistralRefs == 0 {
-		t.Fatal("vLLM-SR Chorus recipe has no Mistral modelRefs")
+		t.Fatal("vLLM-SR MoM recipe has no Mistral modelRefs")
 	}
 }
 
-func assertChorusOrchestrationBudgets(t *testing.T, cfg *RouterConfig) {
+func assertMoMOrchestrationBudgets(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	assertChorusWorkflowBudget(t, cfg)
-	assertChorusFusionBudgets(t, cfg)
-	assertChorusReMoMBudget(t, cfg)
+	assertMoMWorkflowBudget(t, cfg)
+	assertMoMFusionBudgets(t, cfg)
+	assertMoMReMoMBudget(t, cfg)
 }
 
-func assertChorusWorkflowBudget(t *testing.T, cfg *RouterConfig) {
+func assertMoMWorkflowBudget(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	workflow := chorusDecision(t, cfg, "accuracy", "accuracy_dynamic_workflow")
+	workflow := momDecision(t, cfg, "accuracy", "accuracy_dynamic_workflow")
 	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
 		workflow.Algorithm.Workflows.MaxCompletionTokens != 2048 ||
 		workflow.Algorithm.Workflows.Planner.MaxCompletionTokens != 2048 {
@@ -182,18 +182,18 @@ func assertChorusWorkflowBudget(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertChorusFusionBudgets(t *testing.T, cfg *RouterConfig) {
+func assertMoMFusionBudgets(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	decision := chorusDecision(t, cfg, "accuracy", "accuracy_expert_fusion")
+	decision := momDecision(t, cfg, "accuracy", "accuracy_expert_fusion")
 	if decision.Algorithm == nil || decision.Algorithm.Fusion == nil ||
 		decision.Algorithm.Fusion.MaxCompletionTokens != 2048 {
 		t.Fatalf("accuracy Fusion output budget changed: %+v", decision.Algorithm)
 	}
 }
 
-func assertChorusReMoMBudget(t *testing.T, cfg *RouterConfig) {
+func assertMoMReMoMBudget(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	remom := chorusDecision(t, cfg, "accuracy", "accuracy_multi_round_exploration")
+	remom := momDecision(t, cfg, "accuracy", "accuracy_multi_round_exploration")
 	if remom.Algorithm == nil || remom.Algorithm.ReMoM == nil ||
 		remom.Algorithm.ReMoM.MaxCompletionTokens == nil ||
 		*remom.Algorithm.ReMoM.MaxCompletionTokens != 2048 {
@@ -201,7 +201,7 @@ func assertChorusReMoMBudget(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func chorusDecision(t *testing.T, cfg *RouterConfig, recipeName, decisionName string) Decision {
+func momDecision(t *testing.T, cfg *RouterConfig, recipeName, decisionName string) Decision {
 	t.Helper()
 	recipe, ok := cfg.RecipeByName(RecipeName(recipeName))
 	if !ok {

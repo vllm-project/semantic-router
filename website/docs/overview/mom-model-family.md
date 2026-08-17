@@ -15,7 +15,7 @@ stable virtual model that represents the desired behavior.
 
 ```mermaid
 flowchart LR
-    Client["model: vllm-sr/chorus-v1-flash"] --> Virtual["Virtual model"]
+    Client["model: vllm-sr/mom-v1-flash"] --> Virtual["Virtual model"]
     Virtual --> Recipe["Latency-first recipe"]
     Recipe --> Small["Efficient model"]
     Recipe --> Vision["Vision model"]
@@ -37,7 +37,7 @@ internal architecture does not change the routing abstraction.
 | Kind | Example | Role |
 | --- | --- | --- |
 | **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the application response. |
-| **Virtual model** | `vllm-sr/chorus-v1-flash` | Gives clients a stable objective and selects a recipe. |
+| **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
 Router system models support the decision process; they are not themselves the
@@ -99,20 +99,20 @@ does not reach the backend; it resolves to the selected provider model.
 See [Entrypoints and Multi-Recipe Routing](../tutorials/global/entrypoints-and-recipes)
 for the full schema and isolation rules.
 
-## Chorus V1
+## MoM V1
 
-Chorus V1 is the built-in MoM example. It exposes five public models over one
+MoM V1 is the built-in MoM example. It exposes five public models over one
 shared pool of seven logical provider aliases:
 
 | Virtual model | Objective |
 | --- | --- |
-| `vllm-sr/chorus-v1` | Balance quality, latency, cost, and answer recovery. |
-| `vllm-sr/chorus-v1-lite` | Prefer economical direct answers. |
-| `vllm-sr/chorus-v1-flash` | Prefer interactive latency while preserving capabilities. |
-| `vllm-sr/chorus-v1-ultra` | Prefer accuracy and allow bounded orchestration. |
-| `vllm-sr/chorus-v1-vault` | Keep traffic on the configured local pool with stricter containment. |
+| `vllm-sr/mom-v1-blend` | Balance quality, latency, cost, and answer recovery. |
+| `vllm-sr/mom-v1-lite` | Prefer economical direct answers. |
+| `vllm-sr/mom-v1-flash` | Prefer interactive latency while preserving capabilities. |
+| `vllm-sr/mom-v1-ultra` | Prefer accuracy and allow bounded orchestration. |
+| `vllm-sr/mom-v1-vault` | Keep traffic on the configured local pool with stricter containment. |
 
-Chorus is a routing policy, not a checkpoint or model installer. Its reference
+MoM is a routing policy, not a checkpoint or model installer. Its reference
 backends must already be running and available under the configured aliases.
 Tool execution remains the client's responsibility, and “local” privacy still
 depends on the deployment's network, backends, logs, caches, and stores.
@@ -121,25 +121,25 @@ Inspect the installed Model Card and requirements:
 
 ```bash
 vllm-sr model list
-vllm-sr model show vllm-sr/chorus-v1
+vllm-sr model show vllm-sr/mom-v1-blend
 ```
 
 Serve one objective, or expose several over the same pool:
 
 ```bash
-vllm-sr serve vllm-sr/chorus-v1
-vllm-sr serve vllm-sr/chorus-v1-lite vllm-sr/chorus-v1-flash
+vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
 ```
 
 To change the pool or policy, fork the asset into a user-owned configuration:
 
 ```bash
-vllm-sr model fork vllm-sr/chorus-v1 chorus-v1.yaml
-vllm-sr model validate chorus-v1.yaml
+vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
+vllm-sr model validate mom-v1.yaml
 ```
 
 Read the full
-[Chorus V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/chorus-v1/README.md)
+[MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
 for intended use, backend roles, data handling, evaluation, and limitations.
 
 ## When MoM is the wrong abstraction

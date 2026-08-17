@@ -168,7 +168,7 @@ coverage:
 decisions:
   - id: balanced
     expected_decision: unified_balance_route
-    model: vllm-sr/mom-balanced-v1
+    model: vllm-sr/mom-v1-blend
     expected_recipe: balanced
     expected_algorithm: multi_factor
     expected_plugins: [semantic-cache]
@@ -189,7 +189,7 @@ decisions:
             _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
 
         self.assertEqual(len(probes), 1)
-        self.assertEqual(probes[0].model, "vllm-sr/mom-balanced-v1")
+        self.assertEqual(probes[0].model, "vllm-sr/mom-v1-blend")
         self.assertEqual(probes[0].expected_recipe, "balanced")
         self.assertEqual(probes[0].expected_algorithm, "multi_factor")
         self.assertEqual(probes[0].expected_plugins, ("semantic-cache",))
@@ -386,7 +386,7 @@ decisions:
             variant_id="baseline",
             probe_id="balanced:baseline",
             expected_decision="unified_balance_route",
-            model="vllm-sr/mom-balanced-v1",
+            model="vllm-sr/mom-v1-blend",
             expected_recipe="balanced",
             expected_algorithm="multi_factor",
             expected_plugins=("semantic-cache",),

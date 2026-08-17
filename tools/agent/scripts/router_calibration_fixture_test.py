@@ -157,7 +157,7 @@ def _update_probe_digest(digest: Any, probe_id: str, payload: bytes) -> None:
     digest.update(payload)
 
 
-def _chorus_materialization_receipt(probes: list[Any]) -> dict[str, Any]:
+def _mom_materialization_receipt(probes: list[Any]) -> dict[str, Any]:
     text_digest = hashlib.sha256()
     semantic_digest = hashlib.sha256()
     receipt: dict[str, Any] = {
@@ -582,14 +582,14 @@ fixtures:
                     document, Path("untrusted/probes.yaml")
                 )
 
-    def test_chorus_materialization_preserves_legacy_semantic_receipt(self) -> None:
+    def test_mom_materialization_preserves_legacy_semantic_receipt(self) -> None:
         manifest_path = (
             SCRIPT_DIR.parents[2]
             / "config"
             / "recipes"
             / "built-in"
             / "latest"
-            / "chorus-v1"
+            / "mom-v1"
             / "probes.yaml"
         )
         document = manifest_path.read_text(encoding="utf-8")
@@ -607,7 +607,7 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        receipt = _chorus_materialization_receipt(probes)
+        receipt = _mom_materialization_receipt(probes)
         self.assertEqual(len(probes), 222)
         self.assertEqual(receipt["message_probes"], 82)
         self.assertEqual(receipt["generated_probes"], 50)
@@ -619,7 +619,7 @@ fixtures:
             hashlib.sha256(image_url.encode("utf-8")).hexdigest(),
             "c5506a9f23e55bafd166bd07c682566c21363a25c1433cd6e92bf22d3e28a1b3",
         )
-        fixture = probes[0].image_fixtures["chorus_v1_architecture"]
+        fixture = probes[0].image_fixtures["mom_v1_architecture"]
         self.assertEqual(fixture.bytes, 651)
         self.assertEqual(
             fixture.description,

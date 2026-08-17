@@ -10,7 +10,7 @@ import {
 const model = (
   catalogVersion: string,
   channel: 'latest' | 'release',
-  id = 'vllm-sr/chorus-v1',
+  id = 'vllm-sr/mom-v1-blend',
 ): BuiltInModelMetadata =>
   ({
     id,
@@ -18,7 +18,7 @@ const model = (
     display_name: id,
     description: 'test',
     kind: 'virtual',
-    family: 'chorus',
+    family: 'mom',
     generation: 1,
     policy_version: '1.0.0',
     recipe: 'balance',
@@ -43,14 +43,14 @@ const catalog: BuiltInModelCatalog = {
     {
       catalog_version: 'latest',
       channel: 'latest',
-      default_model: 'vllm-sr/chorus-v1',
-      enabled_models: ['vllm-sr/chorus-v1'],
+      default_model: 'vllm-sr/mom-v1-blend',
+      enabled_models: ['vllm-sr/mom-v1-blend'],
     },
     {
       catalog_version: 'v0.4',
       channel: 'release',
-      default_model: 'vllm-sr/chorus-v1',
-      enabled_models: ['vllm-sr/chorus-v1'],
+      default_model: 'vllm-sr/mom-v1-blend',
+      enabled_models: ['vllm-sr/mom-v1-blend'],
     },
   ],
   models: [
@@ -63,14 +63,14 @@ const catalog: BuiltInModelCatalog = {
 describe('config page model catalog support', () => {
   it('groups models by both version and immutable/moving channel', () => {
     expect(modelsForCatalogVersion(catalog, catalog.catalogs[0]).map((item) => item.id)).toEqual([
-      'vllm-sr/chorus-v1',
+      'vllm-sr/mom-v1-blend',
       'vllm-sr/other',
     ])
     expect(modelsForCatalogVersion(catalog, catalog.catalogs[1])).toHaveLength(1)
   })
 
   it('prefers latest metadata while retaining release snapshots', () => {
-    const entrypoint = { model_names: ['vllm-sr/chorus-v1'], recipe: 'balance' }
+    const entrypoint = { model_names: ['vllm-sr/mom-v1-blend'], recipe: 'balance' }
 
     expect(catalogSnapshotsForEntrypoint(catalog, entrypoint).map((item) => item.channel)).toEqual([
       'latest',
