@@ -126,6 +126,17 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
+      # Regenerates the apiserver OpenAPI JSON and reference Markdown from the
+      # route catalog and fails if either committed artifact differs, so API
+      # docs cannot be hand-edited or left stale when a route changes.
+      # Runs before the model/service setup so drift fails fast.
+      - name: Check generated API docs are up to date
+        run: make api-docs-check
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+
       - name: Install HuggingFace CLI
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
