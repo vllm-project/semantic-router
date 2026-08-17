@@ -26,6 +26,10 @@ class Request:
     l_out        : number of output tokens to generate
     category     : content category ("prose", "code", "rag", "mixed")
                    used by C&R router for compression safety decisions
+    archetype_id : workload archetype id when sampled from a mixture scenario
+    slo_class    : SLO class carried by a workload archetype
+    eligible_models : model ids this request archetype may use
+    residency    : locality/residency constraints carried by a workload archetype
     pool_id      : which pool this request was routed to (set by router)
     instance_id  : which instance within the pool (set by pool)
     compressed   : True if this request was compressed by C&R
@@ -44,6 +48,10 @@ class Request:
     l_out: int
     category: str = "prose"
     model_id: str | None = None  # desired model/pool; used by ModelRouter
+    archetype_id: str | None = None
+    slo_class: str | None = None
+    eligible_models: tuple[str, ...] = ()
+    residency: tuple[str, ...] = ()
 
     # routing metadata (filled by router)
     pool_id: str | None = None

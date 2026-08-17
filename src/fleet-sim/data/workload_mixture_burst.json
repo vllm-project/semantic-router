@@ -1,0 +1,92 @@
+{
+  "schema_version": "fleet-sim.workload-mixture/v1alpha1",
+  "id": "agent-heavy-burst",
+  "version": "2026-07-18",
+  "seed": 2558,
+  "description": "Three-window scenario with an agent-heavy burst between nominal periods.",
+  "archetypes": [
+    {
+      "id": "interactive-chat",
+      "version": "lmsys-single-turn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_cdf.json",
+        "l_in_frac": 0.8,
+        "l_out_frac": 0.2
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "qwen3-8b"],
+      "residency": ["global"],
+      "weight": 0.6
+    },
+    {
+      "id": "multiturn-chat",
+      "version": "lmsys-multiturn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_multiturn_cdf.json",
+        "l_in_frac": 0.85,
+        "l_out_frac": 0.15
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "llama-3.1-70b"],
+      "residency": ["global", "us"],
+      "weight": 0.25
+    },
+    {
+      "id": "agent-heavy",
+      "version": "agent-heavy-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "agent_heavy_cdf.json",
+        "l_in_frac": 0.9,
+        "l_out_frac": 0.1
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "batch",
+      "model_eligibility": ["llama-3.1-70b", "deepseek-v3"],
+      "residency": ["us"],
+      "weight": 0.15
+    }
+  ],
+  "composition_schedule": [
+    {
+      "start_s": 0,
+      "duration_s": 45,
+      "arrival_rate_multiplier": 1.0,
+      "weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.15
+      }
+    },
+    {
+      "start_s": 45,
+      "duration_s": 30,
+      "arrival_rate_multiplier": 2.5,
+      "weights": {
+        "interactive-chat": 0.35,
+        "multiturn-chat": 0.2,
+        "agent-heavy": 0.45
+      }
+    },
+    {
+      "start_s": 75,
+      "duration_s": 45,
+      "arrival_rate_multiplier": 1.0,
+      "weights": {
+        "interactive-chat": 0.6,
+        "multiturn-chat": 0.25,
+        "agent-heavy": 0.15
+      }
+    }
+  ]
+}

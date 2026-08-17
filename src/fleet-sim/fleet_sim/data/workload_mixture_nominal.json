@@ -1,0 +1,75 @@
+{
+  "schema_version": "fleet-sim.workload-mixture/v1alpha1",
+  "id": "nominal-chat-multiturn-agent",
+  "version": "2026-07-18",
+  "seed": 2556,
+  "description": "Nominal fixed mixture of interactive chat, multi-turn chat, and agent-heavy workloads.",
+  "archetypes": [
+    {
+      "id": "interactive-chat",
+      "version": "lmsys-single-turn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_cdf.json",
+        "l_in_frac": 0.8,
+        "l_out_frac": 0.2,
+        "category_mix": {
+          "prose": 0.7,
+          "code": 0.2,
+          "rag": 0.1
+        }
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "qwen3-8b"],
+      "residency": ["global"],
+      "weight": 0.6
+    },
+    {
+      "id": "multiturn-chat",
+      "version": "lmsys-multiturn-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "lmsys_multiturn_cdf.json",
+        "l_in_frac": 0.85,
+        "l_out_frac": 0.15,
+        "category_mix": {
+          "prose": 0.65,
+          "code": 0.15,
+          "rag": 0.2
+        }
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "interactive",
+      "model_eligibility": ["llama-3.1-8b", "llama-3.1-70b"],
+      "residency": ["global", "us"],
+      "weight": 0.25
+    },
+    {
+      "id": "agent-heavy",
+      "version": "agent-heavy-v1",
+      "source": {
+        "kind": "cdf",
+        "path": "agent_heavy_cdf.json",
+        "l_in_frac": 0.9,
+        "l_out_frac": 0.1,
+        "category_mix": {
+          "code": 0.4,
+          "rag": 0.35,
+          "prose": 0.25
+        }
+      },
+      "arrival_process": {
+        "kind": "poisson"
+      },
+      "slo_class": "batch",
+      "model_eligibility": ["llama-3.1-70b", "deepseek-v3"],
+      "residency": ["us"],
+      "weight": 0.15
+    }
+  ]
+}
