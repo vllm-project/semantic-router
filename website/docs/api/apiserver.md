@@ -114,102 +114,117 @@ Example response (fields vary by recipe):
 
 ## Endpoint index
 
+<!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 ### Discovery and health
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness probe |
-| `GET` | `/ready` | Readiness (green only after startup completes) |
-| `GET` | `/startup-status` | Detailed startup and model-download status |
-| `GET` | `/api/v1` | API discovery index |
+| `GET` | `/health` | Health check endpoint |
+| `GET` | `/ready` | Readiness endpoint that turns green only after startup completes |
+| `GET` | `/startup-status` | Detailed router startup and model-download status |
+| `GET` | `/api/v1` | API discovery and documentation |
 | `GET` | `/openapi.json` | OpenAPI 3.0 specification |
-| `GET` | `/docs` | Interactive Swagger UI |
+| `GET` | `/docs` | Interactive Swagger UI documentation |
 
 ### Classification and signals
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/classify/intent` | Classify query into routing categories / decisions |
-| `POST` | `/api/v1/classify/pii` | Detect personally identifiable information |
-| `POST` | `/api/v1/classify/security` | Detect jailbreak / prompt-injection risk |
-| `POST` | `/api/v1/classify/fact-check` | Classify whether text needs fact-checking |
-| `POST` | `/api/v1/classify/user-feedback` | Classify feedback type |
-| `POST` | `/api/v1/classify/combined` | Combined intent + PII + security |
-| `POST` | `/api/v1/classify/batch` | Batch classification with `task_type` |
-| `POST` | `/api/v1/eval` | Evaluate all configured signals (decision-level eval helper) |
-| `POST` | `/api/v1/nli` | Natural language inference (premise / hypothesis) |
-| `POST` | `/api/v1/embeddings` | Generate text / image embeddings |
-| `POST` | `/api/v1/similarity` | Pairwise text similarity |
-| `POST` | `/api/v1/similarity/batch` | Batch similarity matches |
+| `POST` | `/api/v1/classify/intent` | Classify user queries into routing categories |
+| `POST` | `/api/v1/classify/pii` | Detect personally identifiable information in text |
+| `POST` | `/api/v1/classify/security` | Detect jailbreak attempts and security threats |
+| `POST` | `/api/v1/classify/fact-check` | Classify if text needs fact-checking |
+| `POST` | `/api/v1/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
+| `POST` | `/api/v1/classify/combined` | Perform combined classification (intent, PII, and security) |
+| `POST` | `/api/v1/classify/batch` | Batch classification with configurable task_type parameter |
+| `POST` | `/api/v1/eval` | Evaluate all configured signals regardless of decision usage |
+| `POST` | `/api/v1/nli` | Natural language inference classification for premise and hypothesis pairs |
+| `POST` | `/api/v1/embeddings` | Generate text and image embeddings |
+| `POST` | `/api/v1/similarity` | Calculate pairwise text similarity |
+| `POST` | `/api/v1/similarity/batch` | Calculate batch text-similarity matches |
 
 ### Models and metrics
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/info/models` | Loaded classifier / embedding model inventory |
-| `GET` | `/info/classifier` | Classifier status (secrets redacted without `secret_view`) |
-| `GET` | `/api/v1/embeddings/models` | Loaded embedding models |
+| `GET` | `/info/models` | Get information about loaded models |
+| `GET` | `/info/classifier` | Get classifier information and status (secrets redacted without secret_view) |
+| `GET` | `/api/v1/embeddings/models` | Get information about loaded embedding models |
 | `GET` | `/v1/models` | OpenAI-compatible model listing |
-| `GET` | `/metrics/classification` | Classification metrics |
-| `POST` | `/v1/router/outcomes` | Submit Router Learning outcome linked to a replay id |
+| `GET` | `/metrics/classification` | Get classification metrics and statistics |
+| `POST` | `/v1/router/outcomes` | Submit Router Learning outcome feedback linked to a replay record |
 
 ### Router config and recipes
 
-Start with `GET /config/router` to read the active canonical document and its
-ETag before applying updates.
-
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/config/router` | Current router config as JSON |
-| `POST` | `/config/router/validate` | Validate YAML without writing |
-| `PATCH` | `/config/router` | Merge config update (validate, backup, write, hot-reload) |
-| `PUT` | `/config/router` | Replace config (validate, backup, write, hot-reload) |
-| `GET` | `/config/router/versions` | List config backup versions |
-| `POST` | `/config/router/rollback` | Roll back to a previous version |
-| `GET` | `/config/hash` | Compare persisted / generated / active config hashes |
-| `GET` | `/config/router/recipes` | List default and named recipes |
-| `POST` | `/config/router/recipes/validate` | Validate a recipe mutation without applying it |
-| `GET` | `/config/router/recipes/{name}` | Read one recipe |
-| `PUT` | `/config/router/recipes/{name}` | Create or replace one recipe (`If-Match` required) |
-| `DELETE` | `/config/router/recipes/{name}` | Delete an unreferenced named recipe (`If-Match` required) |
+| `GET` | `/config/router/recipes` | List the default and named routing recipes with their entrypoints |
+| `POST` | `/config/router/recipes/validate` | Validate a recipe mutation without writing or reloading config |
+| `GET` | `/config/router/recipes/{name}` | Read one routing recipe and its entrypoints |
+| `PUT` | `/config/router/recipes/{name}` | Atomically create or replace one routing recipe; requires If-Match |
+| `DELETE` | `/config/router/recipes/{name}` | Delete an unreferenced named routing recipe; requires If-Match |
+| `GET` | `/config/router` | Get the current router config as JSON (secrets redacted without secret_view) |
+| `POST` | `/config/router/validate` | Validate and normalize a router config without writing it |
+| `PATCH` | `/config/router` | Merge a router config update (validates, backs up, writes, triggers hot-reload) |
+| `PUT` | `/config/router` | Replace the router config (validates, backs up, writes, triggers hot-reload) |
+| `POST` | `/config/router/rollback` | Rollback to a previous router config version |
+| `GET` | `/config/router/versions` | List available router config backup versions |
+| `GET` | `/config/hash` | Compare persisted source, generated runtime, and active router config hashes |
 
 ### Knowledge bases
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/config/kbs` | List knowledge bases |
+| `GET` | `/config/kbs` | List configured knowledge bases |
 | `POST` | `/config/kbs` | Create a managed knowledge base |
 | `GET` | `/config/kbs/{name}` | Read a knowledge base |
+| `GET` | `/config/kbs/{name}/map/metadata` | Read generated knowledge-base map metadata |
+| `GET` | `/config/kbs/{name}/map/data.ndjson` | Stream generated knowledge-base map data as NDJSON |
 | `PUT` | `/config/kbs/{name}` | Update a managed knowledge base |
 | `DELETE` | `/config/kbs/{name}` | Delete a managed knowledge base |
-| `GET` | `/config/kbs/{name}/map/metadata` | Generated map metadata |
-| `GET` | `/config/kbs/{name}/map/data.ndjson` | Stream map data as NDJSON |
 
 ### Memory, vector stores, and files
 
-These require the corresponding service to be enabled; otherwise the API returns
-`503`.
+These require the corresponding service to be enabled; otherwise the API returns `503`.
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/v1/memory` | List long-term memories |
 | `DELETE` | `/v1/memory` | Delete memories by scope |
-| `GET` | `/v1/memory/{id}` | Read one memory |
-| `DELETE` | `/v1/memory/{id}` | Delete one memory |
+| `GET` | `/v1/memory/{id}` | Read one long-term memory |
+| `DELETE` | `/v1/memory/{id}` | Delete one long-term memory |
 | `POST` | `/v1/vector_stores` | Create a vector store |
 | `GET` | `/v1/vector_stores` | List vector stores |
 | `GET` | `/v1/vector_stores/{id}` | Read a vector store |
 | `POST` | `/v1/vector_stores/{id}` | Update a vector store |
 | `DELETE` | `/v1/vector_stores/{id}` | Delete a vector store |
 | `POST` | `/v1/vector_stores/{id}/search` | Search a vector store |
-| `POST` | `/v1/vector_stores/{id}/files` | Attach a file |
-| `GET` | `/v1/vector_stores/{id}/files` | List attached files |
-| `DELETE` | `/v1/vector_stores/{id}/files/{file_id}` | Detach a file |
-| `POST` | `/v1/files` | Upload a file (multipart) |
+| `POST` | `/v1/vector_stores/{id}/files` | Attach a file to a vector store |
+| `GET` | `/v1/vector_stores/{id}/files` | List files attached to a vector store |
+| `DELETE` | `/v1/vector_stores/{id}/files/{file_id}` | Detach a file from a vector store |
+| `POST` | `/v1/files` | Upload a file |
 | `GET` | `/v1/files` | List uploaded files |
-| `GET` | `/v1/files/{id}` | File metadata |
-| `DELETE` | `/v1/files/{id}` | Delete a file |
-| `GET` | `/v1/files/{id}/content` | Download file content |
+| `GET` | `/v1/files/{id}` | Read uploaded-file metadata |
+| `DELETE` | `/v1/files/{id}` | Delete an uploaded file |
+| `GET` | `/v1/files/{id}/content` | Download uploaded-file content |
+
+### Other endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/response-cache/capabilities` | Get response-cache backend capabilities |
+| `GET` | `/api/v1/response-cache/health` | Check response-cache backend health |
+| `GET` | `/api/v1/response-cache/stats` | Get redacted response-cache statistics |
+| `GET` | `/api/v1/response-cache/audit` | Get redacted response-cache mutation audit entries |
+| `POST` | `/api/v1/response-cache/test` | Validate and probe a response-cache candidate configuration |
+| `POST` | `/api/v1/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
+| `POST` | `/api/v1/response-cache/flush` | Advance a scoped or global response-cache epoch |
+| `GET` | `/api/v1/context-compression/capabilities` | Get context-compression capabilities |
+| `GET` | `/api/v1/context-compression/health` | Check context-compression runtime health |
+| `GET` | `/api/v1/context-compression/stats` | Get redacted context-compression statistics |
+| `POST` | `/api/v1/context-compression/preview` | Preview context compression without persistence |
+| `POST` | `/api/v1/context-compression/recovery/invalidate` | Invalidate a trusted context-recovery request scope |
+<!-- END-GENERATED-ENDPOINT-INDEX -->
 
 ## Worked examples
 

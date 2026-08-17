@@ -172,6 +172,7 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         or domains["helm"]
         or domains["common_e2e"]
         or domains["classifier_contract"]
+        or domains["api_docs_generated"]
         or (domains["make"] and not domains["docs_only"])
     )
     domains["security"] = full or not domains["docs_only"]
@@ -228,6 +229,16 @@ def _detect_direct_domains(
         ".github/workflows/main.yml",
         ".github/actions/**",
         "tools/ci/**",
+    )
+    # The apiserver API reference and OpenAPI JSON are generated from the route
+    # catalog by `make api-docs-generate`. Editing either artifact by hand is
+    # classified as docs-only, which would otherwise skip the `make
+    # api-docs-check` drift gate that keeps them faithful to the catalog.
+    domains["api_docs_generated"] = any_matches(
+        changed,
+        "website/docs/api/apiserver.md",
+        "website/static/openapi/apiserver/**",
+        "tools/openapi-gen/**",
     )
     domains["cli_source"] = any(
         is_vllm_sr_product_source(path) for path in product_changed
