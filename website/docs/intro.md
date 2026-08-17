@@ -1,88 +1,88 @@
 ---
 sidebar_position: 1
-description: Route each AI request to the right model, policy, and execution path behind one stable API.
+sidebar_label: Introduction
+description: Build a programmable Mixture-of-Models system behind one stable model API.
 ---
 
-# vLLM Semantic Router
+import ThemedImage from '@theme/ThemedImage';
 
-Modern AI applications rarely depend on one model. They use fast models for
-interactive work, specialist models for code or vision, larger models for hard
-reasoning, and private models for sensitive data. Those models may run on
-different hardware, in different locations, and with different limits.
+# Welcome to vLLM Semantic Router
 
-vLLM Semantic Router turns that changing model pool into one coherent service.
-Applications call a stable OpenAI- or Anthropic-compatible endpoint; the Router
-uses request meaning, policy, user intent, and runtime information to choose an
-allowed execution path.
+<div className="docs-intro-brand">
+  <ThemedImage
+    className="docs-intro-brand__logo"
+    alt="vLLM Semantic Router"
+    sources={{
+      light: '/img/vllm-sr-logo.light.png',
+      dark: '/img/vllm-sr-logo.white.png',
+    }}
+  />
+  <p className="docs-intro-brand__tagline">Make your Mixture-of-Models programmable.</p>
+</div>
 
-```mermaid
-flowchart LR
-    Client["Application"] --> API["Stable model API"]
-    API --> Router["Semantic Router"]
-    Router --> Fast["Fast model"]
-    Router --> Specialist["Specialist model"]
-    Router --> Private["Private model"]
-    Router --> Team["Multi-model workflow"]
-```
+vLLM Semantic Router is an open-source routing and control layer for building
+Mixture-of-Models systems across heterogeneous AI infrastructure. Applications
+call a stable OpenAI- or Anthropic-compatible endpoint while the serving layer
+chooses—or composes—the capability path for each request.
 
-## What it solves
+## The problem: an AI request is more than traffic
 
-- **Clients should not track the model fleet.** A public model name can remain
-  stable while its routing policy and backend pool evolve.
-- **Hard constraints belong before optimization.** Privacy, authorization,
-  modality, context length, and tool support can rule out unsafe or incapable
-  paths before cost or latency ranking begins.
-- **Different requests need different objectives.** The same pool can expose a
-  balanced, fast, economical, accuracy-first, or local-only experience.
-- **Some tasks need more than selection.** A route can choose one model,
-  escalate by confidence, compare several answers, or run a bounded workflow.
-- **Routing should be observable.** Decisions, feedback, replay, and evaluation
-  make policy behavior inspectable instead of hiding it in application code.
+Modern AI applications rarely rely on one interchangeable model. A request may
+need a fast local model, a specialist or frontier model, retrieval, memory,
+tools, a verifier, or several models working together. Those paths may span
+the cloud, a data center, or the edge.
 
-## How it works
+Each path carries different tradeoffs in capability, latency, cost, and trust.
+The right choice can also change with the request, user, session, and available
+infrastructure.
 
-The request path is organized into explicit layers:
+When every application hard-codes these choices, product code becomes coupled
+to the current model fleet. The same routing logic is repeated across clients,
+and it becomes difficult to change, explain, or evaluate as the system grows.
 
-1. **Signals** describe the request and its context.
-2. **Projections** combine related evidence into reusable scores or bands.
-3. **Decisions** apply policy and select an eligible route.
-4. **Algorithms** select or coordinate the route's candidate models.
-5. **Plugins** run route-specific request, execution, or response hooks.
-6. **Model pools** provide the physical inference endpoints.
+## The idea: make intelligence programmable
 
-The Router runs in the Envoy request path. The CLI and Dashboard configure and
-operate local deployments, while Helm and the Operator integrate the same
-canonical configuration with Kubernetes.
+Semantic Router moves that decision into a shared layer in the request path. It
+can observe the work in front of it—intent, difficulty, context, modality,
+identity, risk, preference, and system state—then resolve a stable entrypoint
+to an isolated recipe.
 
-## Common uses
+A recipe can choose one model, escalate through a cascade, coordinate a bounded
+multi-model workflow, or attach behavior such as retrieval, memory, tool
+filtering, caching, safety checks, and verification. The application keeps one
+familiar API while the capability path can evolve behind it.
 
-- route simple requests to efficient models and difficult work to stronger ones;
-- keep sensitive workloads on approved local backends;
-- preserve tool, vision, and long-context compatibility;
-- send domain-specific work to specialist models;
-- recover from low-confidence or unsatisfactory answers;
-- expose several routing objectives from one shared model pool; and
-- evaluate routing policy independently from model answer quality.
+The result is more than a model name:
 
-## Start here
+- **The right model path:** direct, specialist, local, cascade, or collaborative.
+- **The right supporting capabilities:** retrieval, memory, tools, prompts,
+  caching, or verification where the request needs them.
+- **The right execution boundary:** configured cloud, data center, or edge
+  backends across heterogeneous hardware.
+- **Evidence for what happened:** routing metadata plus configured feedback,
+  replay, and evaluation workflows.
 
-- [Why Semantic Routing](overview/goals) explains the problem and design goals.
-- [System Overview](overview/semantic-router-overview) shows the data plane,
-  control plane, and request lifecycle.
-- [Use Cases](overview/use-cases) maps real workloads to routing patterns.
-- [Routing Pipeline](overview/signal-driven-decisions) explains how the policy
-  layers fit together.
-- [Mixture of Models](overview/mom-model-family) explains virtual models,
-  selection, cascades, and orchestration.
-- [Quickstart](/docs/installation) starts a local stack and sends a first
-  request.
+vLLM Semantic Router does not replace the gateway or the model servers. Envoy
+continues to carry traffic, and inference runtimes continue to generate
+responses. The Router coordinates the semantic work between them.
 
-For a broader perspective on why semantic routing is becoming the decision
-layer for heterogeneous AI systems, read
-[The Semantic Routing Moment](https://www.liuxunzhuo.com/semantic-routing/).
+## Start with what you want to do
+
+- **Run it locally:** follow the [Quickstart](/docs/installation) and send a
+  request through the Router.
+- **Find the pattern for your workload:** explore [use cases](overview/use-cases)
+  from cloud and data center to edge and enterprise deployments.
+- **Understand the system:** read the [System
+  Overview](overview/semantic-router-overview) and [Routing
+  Pipeline](overview/signal-driven-decisions).
+- **Create a stable model experience:** learn how [entrypoints and
+  recipes](tutorials/global/entrypoints-and-recipes) turn one shared model pool
+  into purpose-built virtual models.
+- **Choose an environment:** compare [Docker, Kubernetes, and hardware
+  paths](installation/deployment-options).
 
 ## Project
 
 vLLM Semantic Router is open source under the Apache 2.0 license. See the
 [contributing guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md)
-to propose changes or join the project community.
+to propose a change or join the community.

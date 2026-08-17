@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Overview',
+      collapsed: false,
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
@@ -29,6 +30,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Getting Started',
+      collapsed: false,
       items: [
         'installation/installation',
         'installation/deployment-options',
@@ -37,10 +39,11 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Capabilities',
+      collapsed: false,
       items: [
         {
           type: 'category',
-          label: 'Entrypoints & Recipes',
+          label: 'Entrypoints',
           link: {
             type: 'doc',
             id: 'tutorials/global/entrypoints-and-recipes',
@@ -218,6 +221,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Deploy & Operate',
+      collapsed: false,
       items: [
         {
           type: 'category',
@@ -337,6 +341,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Fleet Simulator',
+      collapsed: false,
       items: [
         'fleet-sim/overview',
         'fleet-sim/getting-started',
@@ -350,31 +355,63 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Proposals',
+      collapsed: false,
       link: {
         type: 'doc',
         id: 'proposals/index',
       },
       items: [
-        'proposals/model-execution-fallback',
-        'proposals/batch-and-capacity-aware-routing',
-        'proposals/router-flow-workflows',
-        'proposals/router-learning-memory-and-adaptations',
-        'proposals/deliberation-algorithms',
-        'proposals/Prism-153key',
-        'proposals/unified-config-contract-v0-3',
-        'proposals/multi-protocol-adaptor',
-        'proposals/agentic-memory',
-        'proposals/agentic-rag',
-        'proposals/advanced-tool-filtering',
-        'proposals/hallucination-mitigation-milestone',
-        'proposals/production-stack-integration',
-        'proposals/nvidia-dynamo-integration',
-        'proposals/prompt-classification-routing',
+        {
+          type: 'category',
+          label: 'Routing & Selection',
+          items: [
+            'proposals/batch-and-capacity-aware-routing',
+            'proposals/router-learning-memory-and-adaptations',
+            'proposals/prompt-classification-routing',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Workflows, Memory & Tools',
+          items: [
+            'proposals/router-flow-workflows',
+            'proposals/deliberation-algorithms',
+            'proposals/agentic-memory',
+            'proposals/agentic-rag',
+            'proposals/advanced-tool-filtering',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Safety & Resilience',
+          items: [
+            'proposals/model-execution-fallback',
+            'proposals/Prism-153key',
+            'proposals/hallucination-mitigation-milestone',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Configuration & Protocols',
+          items: [
+            'proposals/unified-config-contract-v0-3',
+            'proposals/multi-protocol-adaptor',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Serving Integrations',
+          items: [
+            'proposals/production-stack-integration',
+            'proposals/nvidia-dynamo-integration',
+          ],
+        },
       ],
     },
     {
       type: 'category',
       label: 'Model Training',
+      collapsed: false,
       items: [
         'training/training-overview',
         'training/model-performance-eval',
@@ -384,6 +421,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Benchmarking',
+      collapsed: false,
       items: [
         'benchmarking/overview',
       ],
@@ -391,6 +429,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'API Reference',
+      collapsed: false,
       items: [
         'api/router',
         'api/apiserver',
@@ -402,6 +441,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Troubleshooting',
+      collapsed: false,
       items: [
         'troubleshooting/network-tips',
         'troubleshooting/container-connectivity',
@@ -412,6 +452,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Contributing',
+      collapsed: false,
       items: [
         'community/overview',
         'community/development',
