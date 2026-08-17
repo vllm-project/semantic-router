@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
 import { DataTable, type Column } from '../components/DataTable'
@@ -73,6 +73,13 @@ const getResponseError = async (response: Response) => {
   return text || `Request failed: ${response.status}`
 }
 
+const createPasswordResetIdempotencyKey = () => {
+  if (globalThis.crypto?.randomUUID) {
+    return `dashboard-password-reset-${globalThis.crypto.randomUUID()}`
+  }
+  return `dashboard-password-reset-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 const UsersPage: React.FC = () => {
   const { user: currentUser } = useAuth()
   const canManageUsers = canManageDashboardUsers(currentUser)
@@ -106,6 +113,9 @@ const UsersPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
   const [deletePending, setDeletePending] = useState(false)
   const [userRequests] = useState(createLatestUsersRequest)
+  const passwordResetRequestRef = useRef<{ userId: string; password: string; key: string } | null>(
+    null,
+  )
 
   const userHeaders = useMemo(
     () => ({
@@ -224,6 +234,7 @@ const UsersPage: React.FC = () => {
   }, [canManageUsers, fetchRolePermissions])
 
   const closeDialog = () => {
+    passwordResetRequestRef.current = null
     setDialogMode(null)
     setSelectedUser(null)
     setDialogError(null)
@@ -242,6 +253,7 @@ const UsersPage: React.FC = () => {
     setDialogMode('create')
     setSelectedUser(null)
     setDialogError(null)
+    passwordResetRequestRef.current = null
   }
 
   const openEditDialog = (user: AdminUser) => {
@@ -256,7 +268,19 @@ const UsersPage: React.FC = () => {
     setDialogMode('edit')
     setSelectedUser(user)
     setDialogError(null)
+    passwordResetRequestRef.current = null
   }
+
+  const passwordResetIdempotencyKey = useCallback((userId: string, password: string) => {
+    const current = passwordResetRequestRef.current
+    if (current && current.userId === userId && current.password === password) {
+      return current.key
+    }
+
+    const key = createPasswordResetIdempotencyKey()
+    passwordResetRequestRef.current = { userId, password, key }
+    return key
+  }, [])
 
   const handleDialogSubmit = async (values: UsersPageUserDraft) => {
     if (!dialogMode || !canManageUsers) {
@@ -314,9 +338,13 @@ const UsersPage: React.FC = () => {
       roleAndStatusSaved = true
 
       if (values.password.trim()) {
+        const passwordResetHeaders = {
+          ...userHeaders,
+          'Idempotency-Key': passwordResetIdempotencyKey(selectedUser.id, values.password),
+        }
         const passwordResponse = await fetch('/api/admin/users/password', {
           method: 'POST',
-          headers: userHeaders,
+          headers: passwordResetHeaders,
           body: JSON.stringify({ userId: selectedUser.id, password: values.password }),
         })
         if (!passwordResponse.ok) {

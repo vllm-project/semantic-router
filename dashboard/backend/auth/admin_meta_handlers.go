@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
+	"strings"
 )
 
 func adminPermissionsHandler(svc *Service) http.HandlerFunc {
@@ -98,22 +101,62 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			http.Error(w, "userId and password are required", http.StatusBadRequest)
 			return
 		}
-		if _, err := svc.store.GetUserByID(r.Context(), req.UserID); err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-
 		hash, err := svc.HashPassword(req.Password)
 		if err != nil {
 			writePasswordHashError(w, err)
 			return
 		}
-		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {
+		idempotencyKey := credentialLifecycleIdempotencyKey(r)
+		if idempotencyKey == "" {
+			log.Printf(
+				"auth credential lifecycle mutation without idempotency key: operation=%s actor_user_id=%s target_user_id=%s",
+				CredentialLifecycleAdminPasswordReset,
+				ac.UserID,
+				req.UserID,
+			)
+		}
+		result, err := svc.store.ResetUserPasswordWithAudit(r.Context(), CredentialLifecycleMutation{
+			Operation:          CredentialLifecycleAdminPasswordReset,
+			AuditAction:        legacyUserPasswordAuditAction,
+			ActorUserID:        ac.UserID,
+			TargetUserID:       req.UserID,
+			PasswordHash:       hash,
+			IdempotencyKey:     idempotencyKey,
+			RequestFingerprint: svc.CredentialLifecycleFingerprint(CredentialLifecycleAdminPasswordReset, req.UserID, req.Password),
+			Method:             r.Method,
+			Path:               "/api/admin/users/password",
+			IP:                 r.RemoteAddr,
+			UserAgent:          r.UserAgent(),
+			StatusCode:         http.StatusOK,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			case errors.Is(err, ErrCredentialLifecycleConflict):
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			recordCredentialLifecycleTerminalFailure(CredentialLifecycleAdminPasswordReset, credentialLifecycleFailureStore)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		writeAudit(r, svc, "user.password", "/api/admin/users/password", ac.UserID)
-		respondJSON(w, map[string]bool{"ok": true})
+		if err := respondJSONWithError(w, map[string]bool{"ok": true, "replayed": result.Replayed}); err != nil {
+			recordCredentialLifecycleTerminalFailure(
+				CredentialLifecycleAdminPasswordReset,
+				credentialLifecycleFailureResponseEncode,
+			)
+		}
 	}
+}
+
+func credentialLifecycleIdempotencyKey(r *http.Request) string {
+	for _, header := range []string{"Idempotency-Key", "X-Request-ID"} {
+		value := strings.TrimSpace(r.Header.Get(header))
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
