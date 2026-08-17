@@ -7,7 +7,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from ..models import BuiltinWorkload, CdfPoint, HistogramBucket, TraceStats
+from ...workload import load_mixture_scenario
+from ..models import (
+    BuiltinWorkload,
+    CdfPoint,
+    HistogramBucket,
+    MixtureWorkload,
+    TraceStats,
+)
 
 router = APIRouter(prefix="/workloads", tags=["Workloads"])
 
@@ -18,6 +25,12 @@ _BUILTIN: dict[str, str] = {
     "lmsys": "LMSYS-Chat-1M single-turn conversations",
     "lmsys_multiturn": "LMSYS-Chat-1M multi-turn conversations",
     "agent_heavy": "Agent-heavy workload (tool calls, long context)",
+}
+
+_MIXTURES: dict[str, str] = {
+    "nominal": "workload_mixture_nominal.json",
+    "drift": "workload_mixture_drift.json",
+    "burst": "workload_mixture_burst.json",
 }
 
 
@@ -101,6 +114,30 @@ async def get_cdf(name: str):
     except FileNotFoundError:
         raise HTTPException(404, f"Workload '{name}' not found")
     return [CdfPoint(threshold=int(t), cumulative_frac=float(f)) for t, f in cdf]
+
+
+@router.get(
+    "/mixtures",
+    response_model=list[MixtureWorkload],
+    summary="List built-in workload mixture scenarios",
+)
+async def list_mixture_workloads():
+    result = []
+    for name, filename in _MIXTURES.items():
+        path = _DATA_DIR / filename
+        scenario = load_mixture_scenario(path)
+        result.append(
+            MixtureWorkload(
+                name=name,
+                scenario_id=scenario.id,
+                version=scenario.version,
+                description=scenario.description,
+                path=str(path),
+                archetype_weights=scenario.nominal_weights,
+                has_composition_schedule=bool(scenario.composition_schedule),
+            )
+        )
+    return result
 
 
 @router.get(

@@ -305,6 +305,32 @@ class TestCLISubcommands:
         )
         assert "n_s" in out or "total" in out.lower()
 
+    def test_mixture_optimize(self, tmp_path):
+        out_file = tmp_path / "mixture-report.json"
+        out = self._run(
+            "mixture-optimize",
+            "--scenario",
+            "data/workload_mixture_nominal.json",
+            "--lam",
+            "20",
+            "--slo",
+            "500",
+            "--b-short",
+            "4096",
+            "--long-max-ctx",
+            "65536",
+            "--gamma-max",
+            "1.0",
+            "--out",
+            str(out_file),
+        )
+
+        assert "robust" in out.lower()
+        data = json.loads(out_file.read_text())
+        assert data["ok"] is True
+        assert data["robust_recommendation"]["total_gpus"] > 0
+        assert any(case["case_id"] == "aggregate-cdf" for case in data["cases"])
+
     def test_simulate(self):
         out = self._run(
             "simulate",

@@ -77,6 +77,16 @@ class BuiltinWorkload(BaseModel):
     stats: TraceStats | None = None
 
 
+class MixtureWorkload(BaseModel):
+    name: str
+    scenario_id: str
+    version: str
+    description: str | None = None
+    path: str
+    archetype_weights: dict[str, float]
+    has_composition_schedule: bool
+
+
 class CdfPoint(BaseModel):
     threshold: int
     cumulative_frac: float
@@ -117,6 +127,7 @@ class FleetConfigOut(FleetConfigIn):
 
 class JobType(str, Enum):
     optimize = "optimize"
+    mixture_optimize = "mixture_optimize"
     simulate = "simulate"
     whatif = "whatif"
 
@@ -167,6 +178,30 @@ class OptimizeParams(BaseModel):
     )
 
 
+class MixtureOptimizeParams(BaseModel):
+    scenario: str = Field(
+        "nominal",
+        description=(
+            "Built-in mixture scenario name ('nominal', 'drift', 'burst') or "
+            "workload_mixture_<name>.json in fleet_sim/data."
+        ),
+    )
+    lam: float = Field(..., gt=0, description="Base arrival rate (req/s)")
+    slo_ms: float = Field(500.0, gt=0, description="P99 TTFT SLO (ms)")
+    b_short: int = Field(4096, ge=1, description="Short/long context split (tokens)")
+    gpu_short: str = Field("a100", description="GPU for short pool")
+    gpu_long: str = Field("a100", description="GPU for long pool")
+    long_max_ctx: int = Field(65536, ge=1024)
+    gamma_min: float = Field(1.0, ge=1.0)
+    gamma_max: float = Field(2.0, le=4.0)
+    gamma_step: float = Field(0.1, ge=0.05)
+    n_sim_requests: int = Field(0, ge=0)
+    max_total_gpus: int | None = Field(None, ge=1)
+    fail_on_infeasible: bool = False
+    p_c: float = Field(0.75, ge=0.0, le=1.0)
+    node_avail: float = Field(1.0, gt=0.0, le=1.0)
+
+
 class SimulateParams(BaseModel):
     workload: WorkloadRef
     fleet_id: str | None = None  # use saved fleet
@@ -188,6 +223,7 @@ class WhatifParams(BaseModel):
 class JobRequest(BaseModel):
     type: JobType
     optimize: OptimizeParams | None = None
+    mixture_optimize: MixtureOptimizeParams | None = None
     simulate: SimulateParams | None = None
     whatif: WhatifParams | None = None
 
@@ -246,6 +282,47 @@ class OptResult(BaseModel):
     sim_validation: SimResult | None = None
 
 
+class RobustMixturePoint(BaseModel):
+    gamma: float
+    n_s: int
+    n_l: int
+    total_gpus: int
+    annual_cost_kusd: float
+    worst_case_id: str
+    worst_p99_short_ms: float
+    worst_p99_long_ms: float
+    slo_met: bool
+    infeasible_reason: str | None = None
+
+
+class MixtureCasePoint(BaseModel):
+    case_id: str
+    kind: str
+    lam: float
+    weights: dict[str, float]
+    active_archetypes: list[str] = Field(default_factory=list)
+    model_eligibility: list[str] = Field(default_factory=list)
+    residency: list[str] = Field(default_factory=list)
+    best: SweepPoint | None = None
+    baseline: SweepPoint | None = None
+    slo_met: bool
+    infeasible_reason: str | None = None
+    annual_cost_delta_vs_nominal_kusd: float | None = None
+    cost_sensitivity_pct: float | None = None
+
+
+class MixtureOptResult(BaseModel):
+    scenario_id: str
+    scenario_version: str
+    lam: float
+    ok: bool
+    aggregate_baseline_case_id: str
+    nominal_case_id: str
+    robust_recommendation: RobustMixturePoint | None = None
+    cases: list[MixtureCasePoint]
+    diagnostics: list[str] = Field(default_factory=list)
+
+
 class WhatifPoint(BaseModel):
     lam: float
     fleet_p99_ttft_ms: float
@@ -269,5 +346,6 @@ class JobOut(BaseModel):
     error: str | None = None
     request: JobRequest
     result_optimize: OptResult | None = None
+    result_mixture_optimize: MixtureOptResult | None = None
     result_simulate: SimResult | None = None
     result_whatif: WhatifResult | None = None
