@@ -180,14 +180,30 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 	mu.Unlock()
 }
 
+// jailbreakCandidateOutcome is the disposition of one cached result within
+// findBestJailbreakMatch's scan. A dedicated type (rather than two
+// independent bools) makes the invalid combination - both "matched" and
+// "fail-closed" true at once - unrepresentable.
+type jailbreakCandidateOutcome int
+
+const (
+	// jailbreakCandidateNone means this cached result contributed nothing:
+	// a classify error tolerated by on_error: skip, an unknown class index,
+	// or a risk score below the rule's threshold. The zero value, so a
+	// zero-value jailbreakCandidate is safely "no contribution".
+	jailbreakCandidateNone jailbreakCandidateOutcome = iota
+	// jailbreakCandidateMatched means jailbreakType/riskScore are a genuine
+	// content-based match.
+	jailbreakCandidateMatched
+	// jailbreakCandidateFailClosed means on_error: fail turned a classify
+	// error into an immediate, maximum-confidence match.
+	jailbreakCandidateFailClosed
+)
+
 // jailbreakCandidate is one cached result's contribution to
 // findBestJailbreakMatch's scan.
 type jailbreakCandidate struct {
-	// failClosed is set when config.PromptGuardOnErrorFail turned an
-	// inference error into an immediate, maximum-confidence match; the
-	// scan must stop rather than let a later successful result overwrite it.
-	failClosed    bool
-	matched       bool
+	outcome       jailbreakCandidateOutcome
 	jailbreakType string
 	riskScore     float32
 }
@@ -200,7 +216,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 	if cached.err != nil {
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
 		if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorFail {
-			return jailbreakCandidate{failClosed: true}
+			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
 		}
 		return jailbreakCandidate{}
 	}
@@ -214,7 +230,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 	if !aboveThreshold {
 		return jailbreakCandidate{}
 	}
-	return jailbreakCandidate{matched: true, jailbreakType: jailbreakType, riskScore: riskScore}
+	return jailbreakCandidate{outcome: jailbreakCandidateMatched, jailbreakType: jailbreakType, riskScore: riskScore}
 }
 
 // findBestJailbreakMatch scans cached BERT results and returns the highest
@@ -233,12 +249,17 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 		}
 		for _, cached := range cachedResults {
 			candidate := c.evaluateCachedJailbreakResult(rule, cached)
-			if candidate.failClosed {
+			switch candidate.outcome {
+			case jailbreakCandidateNone:
+				// No contribution: a tolerated error, an unknown class
+				// index, or a risk score below the rule's threshold.
+			case jailbreakCandidateFailClosed:
 				return jailbreakClassificationErrorType, 1.0
-			}
-			if candidate.matched && candidate.riskScore > bestScore {
-				bestScore = candidate.riskScore
-				bestType = candidate.jailbreakType
+			case jailbreakCandidateMatched:
+				if candidate.riskScore > bestScore {
+					bestScore = candidate.riskScore
+					bestType = candidate.jailbreakType
+				}
 			}
 		}
 	}
