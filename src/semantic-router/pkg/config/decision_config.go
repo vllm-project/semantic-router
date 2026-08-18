@@ -108,12 +108,12 @@ type ConfidenceAlgorithmConfig struct {
 	// entailment verification per arXiv:2310.12963 §3.2 and is reached over
 	// HTTP via selection.AutoMixVerifierClient. A reference implementation
 	// lives at src/training/model_selection/rl_model_selection/automix_verifier.py.
-	// Required only when confidence_method=automix_entailment; ignored otherwise.
+	// Required when confidence_method=automix_entailment and rejected otherwise.
 	VerifierServerURL string `yaml:"verifier_server_url,omitempty"`
 
 	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
 	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
-	// when confidence_method=automix_entailment.
+	// when confidence_method=automix_entailment and is rejected otherwise.
 	VerifierTimeoutSeconds int `yaml:"verifier_timeout_seconds,omitempty"`
 }
 

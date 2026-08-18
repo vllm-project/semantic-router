@@ -1,24 +1,20 @@
 <!-- markdownlint-disable -->
-PLEASE FILL IN THE PR DESCRIPTION BELOW AND CONFIRM THE CHECKLIST ITEMS.
+Describe the change and keep commands and results specific to this PR.
 
 Closes #xxxx
 <!-- For split PRs that should not auto-close the issue on merge, use: Related #xxxx -->
 
 ## Purpose
 
-- What does this PR change?
-- Why is this change needed?
-- Which module(s) does this affect? `Router` / `CLI` / `Dashboard` / `Operator` / `Fleet-Sim` / `Bindings` / `Training` / `E2E` / `Docs` / `CI/Build`
+<!-- What changes, why is it needed, and which modules are affected? -->
 
 ## Test Plan
 
-- What commands, checks, or manual steps should reviewers use?
-- Why is this validation sufficient for the affected module(s)?
+<!-- List the commands or manual checks that cover the affected behavior. -->
 
 ## Test Result
 
-- What were the actual results?
-- Any follow-up risks, gaps, or blockers?
+<!-- Record the actual outcome and any remaining risk or blocker. -->
 
 ---
 <details>

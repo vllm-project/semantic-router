@@ -35,6 +35,14 @@ describe('dashboard route manifest', () => {
       path: '/openclaw',
       to: '/clawos',
     })
+    expect(redirectRouteDefinitions).toContainEqual({
+      path: '/response-cache',
+      to: '/plugins/response-cache',
+    })
+    expect(redirectRouteDefinitions).toContainEqual({
+      path: '/context-compression',
+      to: '/plugins/context-compression',
+    })
   })
 
   it('routes unknown paths to setup only while setup mode is active', () => {

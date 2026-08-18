@@ -75,7 +75,8 @@ func (s *ClassificationAPIServer) handleContextCompressionCapabilities(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
-	service, recovery := s.currentContextCompression()
+	service, recovery, release := s.currentContextCompression()
+	defer release()
 	if service == nil {
 		service = contextcompression.NewService()
 	}
@@ -86,7 +87,8 @@ func (s *ClassificationAPIServer) handleContextCompressionHealth(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	service, recovery := s.currentContextCompression()
+	service, recovery, release := s.currentContextCompression()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(
 			w,
@@ -115,7 +117,8 @@ func (s *ClassificationAPIServer) handleContextCompressionStats(
 	w http.ResponseWriter,
 	_ *http.Request,
 ) {
-	service, _ := s.currentContextCompression()
+	service, _, release := s.currentContextCompression()
+	defer release()
 	if service == nil {
 		s.writeErrorResponse(
 			w,
@@ -268,7 +271,8 @@ func (s *ClassificationAPIServer) handleContextCompressionRecoveryInvalidate(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	_, recovery := s.currentContextCompression()
+	_, recovery, release := s.currentContextCompression()
+	defer release()
 	if recovery == nil {
 		s.writeErrorResponse(
 			w,

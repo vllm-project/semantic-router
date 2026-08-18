@@ -18,25 +18,25 @@ function modelName(index: number): string {
 function buildConfig() {
   const models = Array.from({ length: MODEL_COUNT }, (_, index) => {
     const name = modelName(index)
-    const reasoningFamily = index % 3 === 0
-      ? 'family-alpha'
-      : index % 3 === 1
-        ? 'family-beta'
-        : undefined
+    const reasoningFamily =
+      index % 3 === 0 ? 'family-alpha' : index % 3 === 1 ? 'family-beta' : undefined
 
     return {
       name,
       provider_model_id: `physical/Qwen-Scale-${String(index).padStart(3, '0')}`,
       api_format: 'openai',
       reasoning_family: reasoningFamily,
-      backend_refs: index % 2 === 0
-        ? [{
-            name: `local-rocm-${index % 4}`,
-            endpoint: 'vllm:8000',
-            protocol: 'http' as const,
-            weight: 1,
-          }]
-        : [],
+      backend_refs:
+        index % 2 === 0
+          ? [
+              {
+                name: `local-rocm-${index % 4}`,
+                endpoint: 'vllm:8000',
+                protocol: 'http' as const,
+                weight: 1,
+              },
+            ]
+          : [],
       pricing: {
         currency: 'USD',
         prompt_per_1m: index / 100,
@@ -61,26 +61,31 @@ function buildConfig() {
     routing: {
       modelCards: models.map((model, index) => ({
         name: model.name,
-        description: index === 299
-          ? 'Unique needle model for large inventory search coverage.'
-          : `Scale-test routing model ${index}`,
+        description:
+          index === 299
+            ? 'Unique needle model for large inventory search coverage.'
+            : `Scale-test routing model ${index}`,
         capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
         tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
         modality: 'text',
         param_size: `${8 + (index % 4) * 8}B`,
       })),
       signals: {},
-      decisions: [{
-        name: 'protected-production-route',
-        description: 'Keeps one non-default model protected by a routing reference.',
-        priority: 1,
-        rules: { operator: 'AND' as const, conditions: [] },
-        modelRefs: [{
-          model: REFERENCED_MODEL,
-          use_reasoning: false,
-          weight: 1,
-        }],
-      }],
+      decisions: [
+        {
+          name: 'protected-production-route',
+          description: 'Keeps one non-default model protected by a routing reference.',
+          priority: 1,
+          rules: { operator: 'AND' as const, conditions: [] },
+          modelRefs: [
+            {
+              model: REFERENCED_MODEL,
+              use_reasoning: false,
+              weight: 1,
+            },
+          ],
+        },
+      ],
     },
     global: {},
     plugins: {},
@@ -169,8 +174,14 @@ test.describe('Models inventory at 300+ scale', () => {
     await addDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305')
     await addDialog.getByLabel('API Format').fill('openai')
     await addDialog.getByLabel('Description').fill('Added from the 305-model inventory.')
-    await addDialog.getByLabel('Capabilities').fill('chat\nreasoning')
-    await addDialog.getByLabel('Tags').fill('rocm\nnew')
+    await addDialog.getByRole('button', { name: 'Add capability' }).click()
+    await addDialog.getByRole('textbox', { name: 'Capability 1', exact: true }).fill('chat')
+    await addDialog.getByRole('button', { name: 'Add capability' }).click()
+    await addDialog.getByRole('textbox', { name: 'Capability 2', exact: true }).fill('reasoning')
+    await addDialog.getByRole('button', { name: 'Add tag' }).click()
+    await addDialog.getByRole('textbox', { name: 'Tag 1', exact: true }).fill('rocm')
+    await addDialog.getByRole('button', { name: 'Add tag' }).click()
+    await addDialog.getByRole('textbox', { name: 'Tag 2', exact: true }).fill('new')
     await addDialog.getByRole('button', { name: 'Add', exact: true }).click()
 
     await expect(addDialog).toBeHidden()
@@ -214,7 +225,7 @@ test.describe('Models inventory at 300+ scale', () => {
     await editDialog
       .getByLabel('Description')
       .fill('Updated without shrinking the large inventory.')
-    await editDialog.getByLabel('Tags').fill('rocm\nupdated')
+    await editDialog.getByRole('textbox', { name: 'Tag 2', exact: true }).fill('updated')
     await editDialog.getByRole('button', { name: 'Save', exact: true }).click()
 
     await expect(editDialog).toBeHidden()
@@ -250,7 +261,10 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
     await expect(page.getByText('model-024', { exact: true })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Next page' }).click()
+    await page
+      .getByRole('group', { name: 'models pagination' })
+      .getByRole('button', { name: 'Next page' })
+      .click()
     await expect(page.getByText(`26–50 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
     await expect(page.getByText('model-025', { exact: true })).toBeVisible()
     await expect(page.getByText('model-049', { exact: true })).toBeVisible()
@@ -261,13 +275,17 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await page.getByRole('searchbox', { name: 'Search name, ID, family, tag, or capability...' }).fill('model-299-needle')
+    await page
+      .getByRole('searchbox', { name: 'Search name, ID, family, tag, or capability...' })
+      .fill('model-299-needle')
     await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
     await expect(page.getByText('model-299-needle', { exact: true })).toBeVisible()
     await expect(page.getByText('physical/Qwen-Scale-299', { exact: true })).toBeVisible()
   })
 
-  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({ page }) => {
+  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({
+    page,
+  }) => {
     await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
@@ -283,7 +301,9 @@ test.describe('Models inventory at 300+ scale', () => {
     const editDialog = page.getByRole('dialog', { name: `Edit Model: ${DEFAULT_MODEL}` })
     await expect(editDialog).toBeVisible()
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
-    expect(await editDialog.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+    expect(await editDialog.evaluate((element) => element.contains(document.activeElement))).toBe(
+      true,
+    )
 
     await page.keyboard.press('Escape')
     await expect(editDialog).toBeHidden()
@@ -291,7 +311,9 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(viewButton).toBeFocused()
   })
 
-  test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({ page }) => {
+  test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({
+    page,
+  }) => {
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')
 
@@ -299,17 +321,24 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(page.getByLabel(`Select model ${REFERENCED_MODEL}`)).toBeDisabled()
 
     await page.getByRole('button', { name: `Delete ${DEFAULT_MODEL}` }).click()
-    await expect(page.getByText('Choose a different default model before deleting this model.')).toBeVisible()
+    await expect(
+      page.getByText('Choose a different default model before deleting this model.'),
+    ).toBeVisible()
     await expect(page.getByRole('alertdialog')).toHaveCount(0)
     expect(writes).toHaveLength(0)
 
     await page.getByRole('button', { name: `Delete ${REFERENCED_MODEL}` }).click()
-    await expect(page.getByText('Remove this model from 1 routing decision before deleting it.')).toBeVisible()
+    await expect(
+      page.getByText('Remove this model from 1 routing decision before deleting it.'),
+    ).toBeVisible()
     await expect(page.getByRole('alertdialog')).toHaveCount(0)
     expect(writes).toHaveLength(0)
 
     await page.getByLabel('Select model model-002').check()
-    await page.getByRole('button', { name: 'Next page' }).click()
+    await page
+      .getByRole('group', { name: 'models pagination' })
+      .getByRole('button', { name: 'Next page' })
+      .click()
     await page.getByLabel('Select model model-026').check()
 
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible()

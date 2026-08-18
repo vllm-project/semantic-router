@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
-import { mockAuthenticatedSession } from './support/auth';
-import { openComposerAddMenu } from './support/playground';
+import { expect, test, type Page } from '@playwright/test'
+import { mockAuthenticatedSession } from './support/auth'
+import { openComposerAddMenu } from './support/playground'
 
 const setupState = {
   setupMode: false,
@@ -10,14 +10,27 @@ const setupState = {
   hasModels: true,
   hasDecisions: true,
   canActivate: true,
-};
+}
 
-const settingsResponse = {
+const serverReadonlySettings = {
   readonlyMode: true,
+  serverReadonly: true,
+  runtimeConfigWritable: false,
+  recipeStoreWritable: false,
   setupMode: false,
   platform: '',
   envoyUrl: '',
-};
+}
+
+const writableSettings = {
+  readonlyMode: false,
+  serverReadonly: false,
+  runtimeConfigWritable: true,
+  recipeStoreWritable: true,
+  setupMode: false,
+  platform: '',
+  envoyUrl: '',
+}
 
 const openClawTeam = {
   id: 'team-alpha',
@@ -26,7 +39,7 @@ const openClawTeam = {
   role: 'Operations',
   principal: 'Safety first',
   leaderId: 'leader-1',
-};
+}
 
 const openClawWorkers = [
   {
@@ -49,13 +62,13 @@ const openClawWorkers = [
     agentPrinciples: 'Do the work',
     roleKind: 'worker',
   },
-];
+]
 
 const openClawRoom = {
   id: 'room-alpha',
   teamId: 'team-alpha',
   name: 'Planning',
-};
+}
 
 const openClawMessages = [
   {
@@ -75,7 +88,8 @@ const openClawMessages = [
     senderType: 'leader',
     senderId: 'leader-1',
     senderName: 'leader-1',
-    content: 'The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.',
+    content:
+      'The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.',
     createdAt: '2026-03-09T00:01:12Z',
   },
   {
@@ -88,7 +102,7 @@ const openClawMessages = [
     content: 'Queue pressure is normal. The issue is isolated to the deploy hook.',
     createdAt: '2026-03-09T00:01:25Z',
   },
-];
+]
 
 const openClawStatus = [
   {
@@ -107,93 +121,133 @@ const openClawStatus = [
     agentPrinciples: 'Do the work',
     createdAt: '2026-03-09T00:00:00Z',
   },
-];
+]
 
-async function mockReadonlyCommon(page: Page) {
+async function mockReadonlyCommon(page: Page, settings = serverReadonlySettings) {
   await mockAuthenticatedSession(page, {
-    settings: settingsResponse,
-  });
+    settings,
+  })
 
-  await page.route('**/api/setup/state', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(setupState) });
-  });
+  await page.route('**/api/setup/state', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(setupState),
+    })
+  })
 
-  await page.route('**/api/settings', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(settingsResponse) });
-  });
+  await page.route('**/api/settings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(settings),
+    })
+  })
 
-  await page.route('**/api/mcp/tools', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tools: [] }) });
-  });
+  await page.route('**/api/mcp/tools', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ tools: [] }),
+    })
+  })
 
-  await page.route('**/api/router/v1/models*', async route => {
+  await page.route('**/api/mcp/servers', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+  })
+
+  await page.route('**/api/router/v1/models*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         object: 'list',
-        data: [{
-          id: 'vllm-sr/auto',
-          object: 'model',
-          owned_by: 'vllm-semantic-router',
-          description: 'Intelligent Router for Mixture-of-Models',
-        }],
+        data: [
+          {
+            id: 'vllm-sr/auto',
+            object: 'model',
+            owned_by: 'vllm-semantic-router',
+            description: 'Intelligent Router for Mixture-of-Models',
+          },
+        ],
       }),
-    });
-  });
+    })
+  })
 }
 
-async function mockReadonlyOpenClaw(page: Page) {
-  await mockReadonlyCommon(page);
+async function mockReadonlyOpenClaw(page: Page, settings = serverReadonlySettings) {
+  await mockReadonlyCommon(page, settings)
 
-  await page.route('**/api/openclaw/status', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openClawStatus) });
-  });
+  await page.route('**/api/openclaw/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(openClawStatus),
+    })
+  })
 
-  await page.route('**/api/openclaw/teams', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([openClawTeam]) });
-  });
+  await page.route('**/api/openclaw/teams', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([openClawTeam]),
+    })
+  })
 
-  await page.route('**/api/openclaw/workers', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openClawWorkers) });
-  });
+  await page.route('**/api/openclaw/workers', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(openClawWorkers),
+    })
+  })
 
-  await page.route('**/api/openclaw/rooms?*', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([openClawRoom]) });
-  });
+  await page.route('**/api/openclaw/rooms?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([openClawRoom]),
+    })
+  })
 
-  await page.route('**/api/openclaw/rooms/room-alpha/messages?*', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openClawMessages) });
-  });
+  await page.route('**/api/openclaw/rooms/room-alpha/messages?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(openClawMessages),
+    })
+  })
 
-  await page.route('**/api/openclaw/rooms/room-alpha/stream', async route => {
-    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
-  });
+  await page.route('**/api/openclaw/rooms/room-alpha/stream', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
+  })
 }
 
 async function enableHireClaw(page: Page) {
-  const menu = await openComposerAddMenu(page);
-  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
-  await expect(toggle).toBeVisible();
-  await toggle.click();
-  await expect(menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i })).toBeVisible();
-  await page.keyboard.press('Escape');
+  const menu = await openComposerAddMenu(page)
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })
+  await expect(toggle).toBeVisible()
+  await toggle.click()
+  await expect(
+    menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
 }
 
 async function enterClawRoom(page: Page) {
-  const menu = await openComposerAddMenu(page);
-  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' });
-  await expect(toggle).toBeEnabled();
-  await toggle.click();
+  const menu = await openComposerAddMenu(page)
+  const toggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' })
+  await expect(toggle).toBeEnabled()
+  await toggle.click()
 }
 
 test.describe('Readonly OpenClaw', () => {
   test('normal playground chat omits claw prompt and tools in readonly mode', async ({ page }) => {
-    await mockReadonlyCommon(page);
+    await mockReadonlyCommon(page)
 
-    let capturedBody: Record<string, unknown> | null = null;
-    await page.route('**/api/router/v1/chat/completions', async route => {
-      capturedBody = route.request().postDataJSON() as Record<string, unknown>;
+    let capturedBody: Record<string, unknown> | null = null
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      capturedBody = route.request().postDataJSON() as Record<string, unknown>
       await route.fulfill({
         status: 200,
         headers: {
@@ -201,184 +255,229 @@ test.describe('Readonly OpenClaw', () => {
           'Cache-Control': 'no-cache',
         },
         body: 'data: {"choices":[{"delta":{"content":"readonly response"}}]}\n\ndata: [DONE]\n\n',
-      });
-    });
+      })
+    })
 
-    await page.goto('/playground');
-    await page.getByPlaceholder('Ask me anything...').fill('Describe the current status');
-    await page.getByTitle('Send message').click();
+    await page.goto('/playground')
+    await page.getByPlaceholder('Ask me anything...').fill('Describe the current status')
+    await page.getByTitle('Send message').click()
 
-    await expect(page.getByText('readonly response')).toBeVisible();
-    expect(capturedBody).not.toBeNull();
+    await expect(page.getByText('readonly response')).toBeVisible()
+    expect(capturedBody).not.toBeNull()
 
     const messages = Array.isArray(capturedBody?.messages)
       ? (capturedBody?.messages as Array<{ content?: string }>)
-      : [];
-    expect(messages.some(message => (message.content || '').includes('imaginative, sharply observant Claw Manager'))).toBeFalsy();
+      : []
+    expect(
+      messages.some((message) =>
+        (message.content || '').includes('imaginative, sharply observant Claw Manager'),
+      ),
+    ).toBeFalsy()
 
     const tools = Array.isArray(capturedBody?.tools)
       ? (capturedBody?.tools as Array<{ function?: { name?: string } }>)
-      : [];
-    const toolNames = tools.map(tool => tool.function?.name || '');
-    expect(toolNames.some(name => name.includes('_claw_'))).toBeFalsy();
-  });
+      : []
+    const toolNames = tools.map((tool) => tool.function?.name || '')
+    expect(toolNames.some((name) => name.includes('_claw_'))).toBeFalsy()
+  })
 
-  test('room view keeps chat enabled but disables room management controls', async ({ page }) => {
-    await mockReadonlyOpenClaw(page);
+  test('server-wide readonly disables HireClaw and keeps the ClawRoom toggle absent', async ({
+    page,
+  }) => {
+    await mockReadonlyOpenClaw(page)
 
-    await page.goto('/playground');
-    await enableHireClaw(page);
-    await enterClawRoom(page);
+    await page.goto('/playground')
+    const menu = await openComposerAddMenu(page)
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })).toBeDisabled()
+    await expect(
+      menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
+    ).toHaveCount(0)
+  })
 
-    await expect(page.getByRole('button', { name: 'New room' })).toBeDisabled();
-    await page.getByRole('button', { name: 'Open sidebar' }).click();
-    const sidebar = page.getByTestId('claw-room-sidebar');
-    await expect(sidebar).toBeVisible();
-    await expect(sidebar.getByLabel('Team')).toHaveValue('team-alpha');
-    const teamDetailsButton = page.getByTestId('claw-room-team-details-button');
-    await expect(teamDetailsButton).toBeVisible();
-    await expect(sidebar).not.toContainText('Collaboration tip:');
-    await expect(sidebar).not.toContainText('Mention hints:');
-    await expect(page.getByPlaceholder('New room name (optional)')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delete room', exact: true })).toBeDisabled();
+  test('room view keeps team details centered and chat enabled when split settings are writable', async ({
+    page,
+  }) => {
+    await mockReadonlyOpenClaw(page, writableSettings)
 
-    await teamDetailsButton.click();
+    await page.goto('/playground')
+    await enableHireClaw(page)
+    await enterClawRoom(page)
 
-    const dialog = page.getByTestId('claw-room-team-details-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('Team Alpha');
-    await expect(dialog).toContainText('Leader One');
-    await expect(dialog).toContainText('Worker A');
-    await expect(dialog.getByRole('button', { name: 'Set as leader' })).toHaveCount(0);
-    await expect(dialog).not.toContainText('@leader-1');
-    await expect(dialog).not.toContainText('Coordinate the team');
+    await expect(page.getByRole('button', { name: 'New room' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Open sidebar' }).click()
+    const sidebar = page.getByTestId('claw-room-sidebar')
+    await expect(sidebar).toBeVisible()
+    await expect(sidebar.getByLabel('Team')).toHaveValue('team-alpha')
+    const teamDetailsButton = page.getByTestId('claw-room-team-details-button')
+    await expect(teamDetailsButton).toBeVisible()
+    await expect(sidebar).not.toContainText('Collaboration tip:')
+    await expect(sidebar).not.toContainText('Mention hints:')
+    await expect(page.getByPlaceholder('New room name (optional)')).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Delete room', exact: true })).toBeEnabled()
 
-    const dialogBox = await dialog.boundingBox();
-    const viewport = page.viewportSize();
+    await teamDetailsButton.click()
 
-    expect(dialogBox).not.toBeNull();
-    expect(viewport).not.toBeNull();
+    const dialog = page.getByTestId('claw-room-team-details-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('Team Alpha')
+    await expect(dialog).toContainText('Leader One')
+    await expect(dialog).toContainText('Worker A')
+    await expect(dialog.getByRole('button', { name: 'Set as leader' })).toHaveCount(0)
+    await expect(dialog).not.toContainText('@leader-1')
+    await expect(dialog).not.toContainText('Coordinate the team')
 
-    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2;
-    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2;
+    const dialogBox = await dialog.boundingBox()
+    const viewport = page.viewportSize()
 
-    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(100);
-    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(100);
+    expect(dialogBox).not.toBeNull()
+    expect(viewport).not.toBeNull()
 
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(dialog).toHaveCount(0);
+    const dialogCenterX = dialogBox!.x + dialogBox!.width / 2
+    const dialogCenterY = dialogBox!.y + dialogBox!.height / 2
 
-    const roomInput = page.getByPlaceholder('@all to mention everyone, @leader to assign tasks, or @worker-name');
-    await expect(roomInput).toBeEnabled();
-    await roomInput.fill('hello team');
-    await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled();
-  });
+    expect(Math.abs(dialogCenterX - viewport!.width / 2)).toBeLessThan(100)
+    expect(Math.abs(dialogCenterY - viewport!.height / 2)).toBeLessThan(100)
 
-  test('room view keeps a centered transcript rail with claws left and the user right', async ({ page }) => {
-    await mockReadonlyOpenClaw(page);
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
 
-    await page.goto('/playground');
-    await enableHireClaw(page);
-    await enterClawRoom(page);
+    const roomInput = page.getByPlaceholder(
+      '@all to mention everyone, @leader to assign tasks, or @worker-name',
+    )
+    await expect(roomInput).toBeEnabled()
+    await roomInput.fill('hello team')
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+  })
 
-    const header = page.getByTestId('claw-room-header');
-    const transcript = page.getByTestId('claw-room-transcript');
-    await expect(header).toBeVisible();
-    await expect(transcript).toBeVisible();
-    await expect(page.getByText('The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.')).toBeVisible();
+  test('room view keeps a centered transcript rail with claws left and the user right', async ({
+    page,
+  }) => {
+    await mockReadonlyOpenClaw(page, writableSettings)
 
-    const headerBackground = await header.evaluate(element => window.getComputedStyle(element).backgroundColor);
-    const headerBorderBottomWidth = await header.evaluate(element => window.getComputedStyle(element).borderBottomWidth);
+    await page.goto('/playground')
+    await enableHireClaw(page)
+    await enterClawRoom(page)
 
-    expect(headerBackground).toBe('rgba(0, 0, 0, 0)');
-    expect(headerBorderBottomWidth).toBe('0px');
-    await expect(header).not.toContainText('Room ·');
+    const header = page.getByTestId('claw-room-header')
+    const transcript = page.getByTestId('claw-room-transcript')
+    await expect(header).toBeVisible()
+    await expect(transcript).toBeVisible()
+    await expect(
+      page.getByText(
+        'The blocker is the staging rollout. I am assigning Worker A to verify the queue metrics now.',
+      ),
+    ).toBeVisible()
 
-    const userMessage = transcript.locator('[data-room-message-role="user"] [data-room-message-content]').first();
-    const leaderMessage = transcript.locator('[data-room-message-role="leader"] [data-room-message-content]').first();
-    const leaderLogo = transcript.locator('[data-room-message-role="leader"] [data-room-sender-logo]').first();
+    const headerBackground = await header.evaluate(
+      (element) => window.getComputedStyle(element).backgroundColor,
+    )
+    const headerBorderBottomWidth = await header.evaluate(
+      (element) => window.getComputedStyle(element).borderBottomWidth,
+    )
 
-    await expect(userMessage).toBeVisible();
-    await expect(leaderMessage).toBeVisible();
-    await expect(leaderLogo).toBeVisible();
-    await expect(transcript.locator('[data-room-message-role="user"] [data-room-sender-logo]')).toHaveCount(0);
-    await expect(transcript.locator('img[alt*="avatar"]')).toHaveCount(0);
+    expect(headerBackground).toBe('rgba(0, 0, 0, 0)')
+    expect(headerBorderBottomWidth).toBe('0px')
+    await expect(header).not.toContainText('Room ·')
 
-    const leaderLogoWidth = await leaderLogo.evaluate(element => window.getComputedStyle(element).width);
-    const leaderLogoHeight = await leaderLogo.evaluate(element => window.getComputedStyle(element).height);
+    const userMessage = transcript
+      .locator('[data-room-message-role="user"] [data-room-message-content]')
+      .first()
+    const leaderMessage = transcript
+      .locator('[data-room-message-role="leader"] [data-room-message-content]')
+      .first()
+    const leaderLogo = transcript
+      .locator('[data-room-message-role="leader"] [data-room-sender-logo]')
+      .first()
 
-    expect(leaderLogoWidth).toBe('16px');
-    expect(leaderLogoHeight).toBe('16px');
+    await expect(userMessage).toBeVisible()
+    await expect(leaderMessage).toBeVisible()
+    await expect(leaderLogo).toBeVisible()
+    await expect(
+      transcript.locator('[data-room-message-role="user"] [data-room-sender-logo]'),
+    ).toHaveCount(0)
+    await expect(transcript.locator('img[alt*="avatar"]')).toHaveCount(0)
 
-    const transcriptBox = await transcript.boundingBox();
-    const userBox = await userMessage.boundingBox();
-    const leaderBox = await leaderMessage.boundingBox();
+    const leaderLogoWidth = await leaderLogo.evaluate(
+      (element) => window.getComputedStyle(element).width,
+    )
+    const leaderLogoHeight = await leaderLogo.evaluate(
+      (element) => window.getComputedStyle(element).height,
+    )
 
-    expect(transcriptBox).not.toBeNull();
-    expect(userBox).not.toBeNull();
-    expect(leaderBox).not.toBeNull();
+    expect(leaderLogoWidth).toBe('16px')
+    expect(leaderLogoHeight).toBe('16px')
 
-    expect(leaderBox!.x - transcriptBox!.x).toBeLessThan(transcriptBox!.width * 0.3);
-    expect(userBox!.x).toBeGreaterThan(leaderBox!.x + 80);
-    expect(userBox!.width).toBeLessThan(transcriptBox!.width * 0.8);
-  });
+    const transcriptBox = await transcript.boundingBox()
+    const userBox = await userMessage.boundingBox()
+    const leaderBox = await leaderMessage.boundingBox()
+
+    expect(transcriptBox).not.toBeNull()
+    expect(userBox).not.toBeNull()
+    expect(leaderBox).not.toBeNull()
+
+    expect(leaderBox!.x - transcriptBox!.x).toBeLessThan(transcriptBox!.width * 0.3)
+    expect(userBox!.x).toBeGreaterThan(leaderBox!.x + 80)
+    expect(userBox!.width).toBeLessThan(transcriptBox!.width * 0.8)
+  })
 
   test('room view opens the lower-left account dropdown over the full page', async ({ page }) => {
-    await mockReadonlyOpenClaw(page);
+    await mockReadonlyOpenClaw(page, writableSettings)
 
-    await page.goto('/playground');
-    await enableHireClaw(page);
-    await enterClawRoom(page);
+    await page.goto('/playground')
+    await enableHireClaw(page)
+    await enterClawRoom(page)
 
-    const accountButton = page.getByTestId('playground-account-control');
-    await expect(accountButton).toBeVisible();
-    await accountButton.click();
+    const accountButton = page.getByTestId('playground-account-control')
+    await expect(accountButton).toBeVisible()
+    await accountButton.click()
 
-    const overlay = page.getByTestId('layout-account-overlay');
-    const dialog = page.getByTestId('layout-account-dialog');
+    const overlay = page.getByTestId('layout-account-overlay')
+    const dialog = page.getByTestId('layout-account-dialog')
 
-    await expect(overlay).toBeVisible();
-    await expect(dialog).toBeVisible();
+    await expect(overlay).toBeVisible()
+    await expect(dialog).toBeVisible()
 
-    const overlayBox = await overlay.boundingBox();
-    const dialogBox = await dialog.boundingBox();
-    const viewport = page.viewportSize();
+    const overlayBox = await overlay.boundingBox()
+    const dialogBox = await dialog.boundingBox()
+    const viewport = page.viewportSize()
 
-    expect(overlayBox).not.toBeNull();
-    expect(dialogBox).not.toBeNull();
-    expect(viewport).not.toBeNull();
+    expect(overlayBox).not.toBeNull()
+    expect(dialogBox).not.toBeNull()
+    expect(viewport).not.toBeNull()
 
-    expect(Math.abs(overlayBox!.x)).toBeLessThan(2);
-    expect(Math.abs(overlayBox!.y)).toBeLessThan(2);
-    expect(Math.abs(overlayBox!.width - viewport!.width)).toBeLessThan(4);
-    expect(Math.abs(overlayBox!.height - viewport!.height)).toBeLessThan(4);
+    expect(Math.abs(overlayBox!.x)).toBeLessThan(2)
+    expect(Math.abs(overlayBox!.y)).toBeLessThan(2)
+    expect(Math.abs(overlayBox!.width - viewport!.width)).toBeLessThan(4)
+    expect(Math.abs(overlayBox!.height - viewport!.height)).toBeLessThan(4)
 
-    expect(dialogBox!.x).toBeLessThan(120);
-    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40);
-    expect(dialogBox!.width).toBeLessThanOrEqual(400);
-  });
+    expect(dialogBox!.x).toBeLessThan(120)
+    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40)
+    expect(dialogBox!.width).toBeLessThanOrEqual(400)
+  })
 
-  test('openclaw page stays browsable while hiding management and embedded dashboard entry', async ({ page }) => {
-    await mockReadonlyOpenClaw(page);
+  test('openclaw page stays browsable while hiding management and embedded dashboard entry', async ({
+    page,
+  }) => {
+    await mockReadonlyOpenClaw(page)
 
-    await page.goto('/clawos');
+    await page.goto('/clawos')
 
-    await page.getByRole('tab', { name: /Claw Team/ }).click();
-    await expect(page.getByRole('button', { name: 'New Team' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+    await page.getByRole('tab', { name: /Claw Team/ }).click()
+    await expect(page.getByRole('button', { name: 'New Team' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
 
-    await page.getByRole('tab', { name: /Claw Worker/ }).click();
-    await expect(page.getByRole('button', { name: 'New Worker' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Status' }).first()).toBeEnabled();
+    await page.getByRole('tab', { name: /Claw Worker/ }).click()
+    await expect(page.getByRole('button', { name: 'New Worker' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Status' }).first()).toBeEnabled()
 
-    await page.getByRole('tab', { name: /Claw Dashboard/ }).click();
-    await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Refresh Status' })).toBeEnabled();
-    await expect(page.locator('iframe[title*="OpenClaw Control UI"]')).toHaveCount(0);
-  });
-});
+    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
+    await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Refresh Status' })).toBeEnabled()
+    await expect(page.locator('iframe[title*="OpenClaw Control UI"]')).toHaveCount(0)
+  })
+})

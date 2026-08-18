@@ -1,154 +1,130 @@
 # Semantic Router Dashboard
 
-Unified dashboard that brings together Configuration Management, an Interactive Playground, and Real-time Monitoring & Observability. It provides a single entry point across local, Docker Compose, and Kubernetes deployments.
+The Dashboard is the authenticated control and observability UI for a Semantic
+Router deployment. It combines a React frontend with a Go backend that serves
+the SPA, stores dashboard state, and proxies Router, Envoy, Grafana,
+Prometheus, Jaeger, and Fleet Simulator endpoints.
 
-## Goals
+Use it to:
 
-- Single landing page for new/existing users
-- Embed Observability (Grafana/Prometheus) via iframes behind a single backend proxy for auth and CORS/CSP control
-- Read-only configuration viewer powered by the existing Semantic Router router apiserver
-- Environment-agnostic: consistent URLs and behavior for local dev, Compose, and K8s
+- complete first-run model and recipe setup;
+- inspect, edit, validate, deploy, and roll back Router configuration;
+- import and activate Recipe packages;
+- test routes in the Playground and inspect the selected path;
+- view topology, logs, evaluations, and monitoring tools;
+- manage security policies, ML selection workflows, MCP tools, and optional
+  OpenClaw workers when those features are enabled.
 
-## What’s already in this repo (reused)
+The Dashboard is a control plane, not an inference proxy. Applications should
+send inference requests to Envoy.
 
-- Prometheus + Grafana
-  - Docker Compose services in `deploy/docker-compose/docker-compose.yml` (Prometheus 9090, Grafana 3000)
-  - Local observability in `tools/observability/docker-compose.obs.yml` (host network)
-  - K8s manifests under `deploy/kubernetes/observability/{prometheus,grafana}`
-  - Provisioned datasource and dashboard in `tools/observability/`
-- Router metrics and API
-  - Metrics at `:9190/metrics` (Prometheus format)
-  - Router apiserver on `:8080` with endpoints like `GET /api/v1`, `GET /config/router`
+## Local development
 
-These are sufficient to embed and proxy—no need to duplicate core functionality.
+Start the frontend and backend in separate terminals from the repository root:
+
+```bash
+make dashboard-dev-frontend
+```
+
+```bash
+ROUTER_CONFIG_PATH="$PWD/config/config.yaml" \
+TARGET_ROUTER_API_URL=http://127.0.0.1:8080 \
+TARGET_ENVOY_URL=http://127.0.0.1:8899 \
+make dashboard-dev-backend
+```
+
+Open `http://127.0.0.1:3001`. Vite proxies backend requests to port `8700`.
+The Router and Envoy must be running for live config, status, and Playground
+operations.
+
+For the complete local stack, use the CLI instead:
+
+```bash
+vllm-sr serve --config config/config.yaml
+vllm-sr dashboard
+```
+
+The current installation and first-run workflow is documented in
+[`website/docs/installation/installation.md`](../website/docs/installation/installation.md).
+
+## Build and test
+
+```bash
+make dashboard-build
+make dashboard-check
+make dashboard-test-backend
+```
+
+`dashboard-check` runs frontend lint, type checking, unit tests, and the backend
+module-tidy check. `dashboard-test-backend` runs the Go test suite.
+
+## Runtime configuration
+
+The backend accepts matching command-line flags for these environment
+variables. Defaults are defined in
+[`backend/config/config.go`](backend/config/config.go).
+
+| Variable | Purpose |
+| --- | --- |
+| `DASHBOARD_PORT` | Backend listen port; default `8700`. |
+| `DASHBOARD_STATIC_DIR` | Built frontend assets. |
+| `ROUTER_CONFIG_PATH` | Canonical Router YAML read or updated by config APIs. |
+| `DASHBOARD_CONFIG_DIR` | Directory for config versions and related state. |
+| `TARGET_ROUTER_API_URL` | Router management API; default `http://localhost:8080`. |
+| `TARGET_ROUTER_METRICS_URL` | Router Prometheus endpoint. |
+| `TARGET_ENVOY_URL` | Inference endpoint used by Playground and route probes. |
+| `TARGET_GRAFANA_URL` | Optional Grafana base URL. |
+| `TARGET_PROMETHEUS_URL` | Optional Prometheus base URL. |
+| `TARGET_JAEGER_URL` | Optional Jaeger base URL. |
+| `TARGET_FLEET_SIM_URL` | Optional Fleet Simulator service URL. |
+
+Feature controls:
+
+| Variable | Purpose |
+| --- | --- |
+| `DASHBOARD_READONLY` | Hard-disable all config mutation. |
+| `DASHBOARD_RUNTIME_CONFIG_WRITABLE` | Allow mutation of the mounted runtime config surface. |
+| `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
+| `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
+| `EVALUATION_ENABLED` | Enable evaluation jobs. |
+| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
+| `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
+| `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
+| `MCP_ENABLED` | Enable MCP server and tool management. |
+| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
+
+Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
+`EVALUATION_DB_PATH`, `DASHBOARD_WORKFLOW_DB_PATH`, and
+`DASHBOARD_CONFIG_PROJECTION_DB_PATH`. Mount writable persistent storage for
+any state that must survive a container restart.
+
+## Authentication and write safety
+
+Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
+`DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
+`DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
+set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+Read-only mode and the two writable-surface flags are independent. A read-only
+ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
+the matching flag so the UI does not offer operations the runtime cannot
+persist.
+
+Some local workflows can manage containers. Do not mount a container-runtime
+socket unless users with Dashboard access are allowed to control that runtime.
+See the [security hardening guide](../website/docs/installation/security-hardening.md)
+for the deployment boundary.
 
 ## Architecture
 
-### Frontend (React + TypeScript + Vite)
-
-Modern SPA built with:
-
-- **React 18** with TypeScript for type safety
-- **Vite 5** for fast development and optimized builds
-- **React Router v6** for client-side routing
-- **CSS Modules** for scoped styling with theme support (dark/light mode)
-
-Pages:
-
-- **Landing** (`/`): Intro landing with animated terminal demo and quick links
-- **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
-- **Config** (`/config`): Real-time configuration viewer with editable panels and save support
-- **Topology** (`/topology`): Visual topology of request flow and model selection using React Flow
-- **Playground** (`/playground`): Built-in chat playground for testing
-- **ML Setup** (`/ml-setup`): 3-step wizard for ML model selection — benchmark, train, and generate deployment config
-- **Security Policy** (`/security`): RBAC-to-router integration — map roles/groups to models and rate-limit tiers, preview generated router config fragments
-
-Features:
-
-- 🌓 Dark/Light theme toggle with localStorage persistence (default: light)
-- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Router Apiserver)
-- �📱 Responsive design
-- ⚡ Fast navigation with React Router
-- 🎨 Modern UI inspired by vLLM website design
-- 🗺️ Topology visualization powered by React Flow
-
-Config editing:
-
-- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification Settings).
-- Backend supports read/write operations:
-  - `GET /api/router/config/all` returns the current config (YAML parsed and served as JSON).
-  - `POST /api/router/config/update` updates the config file on disk (writes YAML). Requires the process to have write permission to the specified config path.
-- Tools DB panel loads `/api/tools-db`, which serves `tools_db.json` from the same directory as your config file.
-- Note for containers/Kubernetes: if the config is mounted from a read-only ConfigMap, updates won’t persist. Mount a writable volume or manage config externally if you need persistence.
-
-ML Model Selection Setup (`/ml-setup`):
-
-- A 3-step guided wizard for configuring ML-based intelligent request routing:
-  - **Step 1 — Benchmark**: Upload a models YAML and queries JSONL file, then run benchmarks against your LLMs to collect performance data. Real-time progress via SSE with per-query granularity.
-  - **Step 2 — Train**: Select one or more ML algorithms (KNN, K-Means, SVM, MLP) and train classifiers on the benchmark data. Trained model files are saved to a fixed `ml-train/` directory under the ML pipeline data path. The Device selector (CPU/CUDA) is shown only when MLP is selected.
-  - **Step 3 — Configure**: Define routing decisions (name, priority, algorithm, domains, model names) and generate a deployment-ready `ml-model-selection-values.yaml`. The generated YAML follows the semantic-router config schema and can be merged into your `config.yaml` for online inference.
-- The ML pipeline data directory (`data/ml-pipeline/`) is created automatically at server startup. Subdirectories (`ml-train/`, `ml-benchmark-<id>/`, `ml-config-<id>/`) are created dynamically when each flow runs.
-- Supports two execution modes:
-  - **Subprocess mode** (default): Runs Python scripts directly via `python3` — no additional services needed.
-  - **HTTP mode**: Connects to a Python ML service sidecar (set `ML_SERVICE_URL=http://ml-service:8686`), with SSE-based progress streaming.
-
-Read-only dashboard mode:
-
-- Enable via CLI: `vllm-sr serve --readonly`
-- Or set env: `DASHBOARD_READONLY=true`
-- Effects:
-  - Frontend hides add/edit/delete actions and shows a read-only banner
-  - Backend rejects write APIs with `403 Forbidden` for:
-    - `POST /api/router/config/update`
-    - `POST /api/router/config/global/update`
-
-### Backend (Go HTTP Server)
-
-- Serves static frontend (Vite production build)
-- Reverse proxy with auth/cors/csp controls:
-  - `GET /embedded/grafana/*` → Grafana
-  - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
-  - `GET /api/router/*` → Router apiserver (`:8080`)
-  - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
-  - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (parsed from YAML)
-  - `POST /api/router/config/update` → Updates your `config.yaml` (writes YAML)
-  - `GET /api/tools-db` → Returns `tools_db.json` next to your config
-  - `GET /healthz` → Health check endpoint
-  - `POST /api/ml-pipeline/benchmark` → Start a benchmark job (multipart: models YAML + queries JSONL)
-  - `POST /api/ml-pipeline/train` → Start a training job on benchmark data
-  - `POST /api/ml-pipeline/config` → Generate deployment-ready YAML config
-  - `GET /api/ml-pipeline/jobs` → List all ML pipeline jobs
-  - `GET /api/ml-pipeline/jobs/{id}` → Get job status and output files
-  - `GET /api/ml-pipeline/stream/{id}` → SSE stream for real-time job progress
-  - `GET /api/ml-pipeline/download/{id}/{filename}` → Download job output files
-  - `GET /api/security/policy` → Get current security policy config
-  - `PUT /api/security/policy` → Update security policy, generate router config fragment, and auto-apply to router config
-  - `POST /api/security/policy/preview` → Preview generated fragment without saving
-- Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
-- SPA routing support: serves `index.html` for all non-asset routes
-- Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
-
-Smart API routing:
-
-- Requests to `/api/router/*` go to the Router API with Authorization forwarded.
-- Other `/api/*` requests (e.g., Grafana’s API) are proxied to Grafana when configured.
-
-## Directory Layout
-
-```
-dashboard/
-├── frontend/                        # React + TypeScript SPA
-│   ├── src/
-│   │   ├── components/             # Reusable components
-│   │   │   ├── Layout.tsx          # Main layout with header/nav
-│   │   │   └── Layout.module.css
-│   │   ├── pages/                  # Page components
-│   │   │   ├── LandingPage.tsx     # Welcome page with terminal demo
-│   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
-│   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
-│   │   │   ├── PlaygroundPage.tsx  # Built-in chat playground
-│   │   │   ├── MLSetupPage.tsx     # ML model selection 3-step wizard
-│   │   │   ├── SecurityPolicyPage.tsx # RBAC role-to-model & rate-limit management
-│   │   │   └── *.module.css        # Scoped styles per page
-│   │   ├── hooks/
-│   │   │   └── useMLPipeline.ts    # ML pipeline state management & API hooks
-│   │   ├── App.tsx                 # Root component with routing
-│   │   ├── main.tsx                # Entry point
-│   │   └── index.css               # Global styles & CSS variables
-│   ├── public/                     # Static assets (vllm.png)
-│   ├── package.json                # Node dependencies
-│   ├── tsconfig.json               # TypeScript configuration
-│   ├── vite.config.ts              # Vite build configuration
-│   └── index.html                  # SPA shell
-├── backend/                         # Go reverse proxy server
-│   ├── main.go                     # Proxy routes & static file server
-│   ├── handlers/mlpipeline.go      # ML pipeline HTTP handlers & SSE streaming
-│   ├── handlers/security_policy.go # Security policy API & config fragment generation
-│   ├── mlpipeline/runner.go        # ML job orchestration (benchmark, train, config gen)
-│   ├── go.mod                      # Go module (minimal dependencies)
-│   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
-├── README.md                        # This file
-└── (K8s/Compose manifests live under the repository-level `deploy/` folder)
+```text
+Browser
+  -> React SPA (dashboard/frontend)
+  -> Go API and reverse proxy (dashboard/backend)
+       -> Router management API
+       -> Envoy inference listener
+       -> optional monitoring and simulator services
+       -> local SQLite and config/Recipe storage
 ```
 
 ## Environment-agnostic configuration
@@ -464,3 +440,15 @@ spec:
 
 - The dashboard is a runtime operator/try-it surface, not docs. See repository docs for broader guides.
 - Upstream services remain untouched; UX unification happens at the proxy + SPA layer.
+- [`frontend/src/app/`](frontend/src/app/) owns routing, authentication gates,
+  and the application shell.
+- [`frontend/src/pages/`](frontend/src/pages/) owns page orchestration.
+- [`backend/router/`](backend/router/) registers public and authenticated API
+  routes.
+- [`backend/handlers/`](backend/handlers/) implements control-plane workflows.
+- [`backend/recipe/`](backend/recipe/) validates and materializes Recipe
+  packages.
+- [`wizmap/`](wizmap/) builds the embedded knowledge-map view.
+
+Keep detailed user workflows in the website and keep this README focused on
+developing and operating the Dashboard itself.

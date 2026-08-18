@@ -50,6 +50,30 @@ func TestConfiguredRuntimeConfigPathUsesEnvOverride(t *testing.T) {
 	}
 }
 
+func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), ".vllm-sr")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(stateDir, "runtime-config.stack.yaml")
+	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
+	t.Setenv("VLLM_SR_PLATFORM", "amd")
+
+	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
+	if err != nil || got != configPath {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() = %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, ".vllm-sr")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected nested runtime state directory: %v", err)
+	}
+	if !isManagedContainerConfigPath(configPath) {
+		t.Fatal("configured runtime path was not recognized as managed")
+	}
+}
+
 func TestSyncRuntimeConfigLocallyWritesInternalRuntimeConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")

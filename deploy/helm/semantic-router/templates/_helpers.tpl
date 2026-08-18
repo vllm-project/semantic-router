@@ -130,3 +130,21 @@ Resolve Jaeger OTLP endpoint for dependency-based deployments.
 {{- $serviceName := .Values.dependencies.observability.jaeger.serviceName | default (printf "%s-jaeger" .Release.Name) -}}
 {{- printf "%s:%d" $serviceName (int .Values.dependencies.observability.jaeger.otlpGrpcPort) -}}
 {{- end }}
+
+{{/*
+Resolve the Router config once so every template consumer observes the same
+atomic deployment-tooling override instead of Helm's recursive map coalescing.
+*/}}
+{{- define "semantic-router.effectiveConfig" -}}
+{{- $config := deepCopy .Values.config -}}
+{{- if and (hasKey .Values "configOverride") (ne .Values.configOverride nil) -}}
+{{-   if not (kindIs "map" .Values.configOverride) -}}
+{{-     fail "configOverride must be a non-empty mapping" -}}
+{{-   end -}}
+{{-   if eq (len .Values.configOverride) 0 -}}
+{{-     fail "configOverride must be a non-empty mapping" -}}
+{{-   end -}}
+{{-   $config = deepCopy .Values.configOverride -}}
+{{- end -}}
+{{- toYaml $config -}}
+{{- end }}

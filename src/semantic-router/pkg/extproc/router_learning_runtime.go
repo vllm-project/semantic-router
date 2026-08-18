@@ -12,12 +12,27 @@ import (
 )
 
 type routerLearningRuntime struct {
-	mu              sync.Mutex
+	leaseMu         sync.Mutex
+	leaseRefs       sync.WaitGroup
+	retired         bool
+	shared          *routerLearningSharedState
 	config          *config.RouterConfig
 	replayRecorder  *routerreplay.Recorder
 	replayRecorders map[string]*routerreplay.Recorder
+}
+
+// routerLearningSharedState survives hot reloads. Experience and idempotency
+// are process-scoped learning state, while config and recorder bindings remain
+// generation-scoped on routerLearningRuntime.
+type routerLearningSharedState struct {
+	mu              sync.Mutex
 	experience      map[string]*routerLearningModelExperience
-	idempotencyKeys map[string]time.Time
+	idempotencyKeys map[string]*outcomeIdempotencyClaim
+}
+
+type outcomeIdempotencyClaim struct {
+	done        chan struct{}
+	committedAt time.Time
 }
 
 func (rt *routerLearningRuntime) resolveOutcomeDecisionContext(outcome *routerruntime.RouterOutcome) (string, int) {
@@ -212,12 +227,60 @@ func newRouterLearningRuntime(
 	replayRecorders map[string]*routerreplay.Recorder,
 ) *routerLearningRuntime {
 	return &routerLearningRuntime{
+		shared: &routerLearningSharedState{
+			experience:      map[string]*routerLearningModelExperience{},
+			idempotencyKeys: map[string]*outcomeIdempotencyClaim{},
+		},
 		config:          cfg,
 		replayRecorder:  replayRecorder,
 		replayRecorders: replayRecorders,
-		experience:      map[string]*routerLearningModelExperience{},
-		idempotencyKeys: map[string]time.Time{},
 	}
+}
+
+func inheritRouterLearningState(previous, next *OpenAIRouter) {
+	if previous == nil || next == nil {
+		return
+	}
+	previousRuntime := previous.routerLearningRuntimeState()
+	nextRuntime := next.routerLearningRuntimeState()
+	if previousRuntime == nil || nextRuntime == nil || previousRuntime.shared == nil {
+		return
+	}
+	nextRuntime.shared = previousRuntime.shared
+}
+
+// AcquireLease keeps the runtime and its replay store alive for one
+// management request. The registry acquires this lease while it still holds
+// its read lock, so a concurrent reload cannot publish a replacement between
+// pointer lookup and reference acquisition.
+func (rt *routerLearningRuntime) AcquireLease() (func(), bool) {
+	if rt == nil {
+		return nil, false
+	}
+	rt.leaseMu.Lock()
+	if rt.retired {
+		rt.leaseMu.Unlock()
+		return nil, false
+	}
+	rt.leaseRefs.Add(1)
+	rt.leaseMu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(rt.leaseRefs.Done)
+	}, true
+}
+
+// RetireAndWait prevents new management leases and waits for requests that
+// already acquired this runtime before its replay store is closed.
+func (rt *routerLearningRuntime) RetireAndWait() {
+	if rt == nil {
+		return
+	}
+	rt.leaseMu.Lock()
+	rt.retired = true
+	rt.leaseMu.Unlock()
+	rt.leaseRefs.Wait()
 }
 
 func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
@@ -228,10 +291,6 @@ func (r *OpenAIRouter) routerLearningRuntimeState() *routerLearningRuntime {
 	defer r.routerLearningMu.Unlock()
 	if r.routerLearningRuntime == nil {
 		r.routerLearningRuntime = newRouterLearningRuntime(r.Config, r.ReplayRecorder, r.ReplayRecorders)
-	} else {
-		r.routerLearningRuntime.config = r.Config
-		r.routerLearningRuntime.replayRecorder = r.ReplayRecorder
-		r.routerLearningRuntime.replayRecorders = r.ReplayRecorders
 	}
 	return r.routerLearningRuntime
 }
@@ -246,8 +305,8 @@ func (rt *routerLearningRuntime) recordModelExperience(
 	if rt == nil || strings.TrimSpace(model) == "" {
 		return
 	}
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
 	rt.recordModelExperienceLocked(decisionName, decisionTier, model, verdict, score)
 	if strings.TrimSpace(decisionName) != "" {
 		rt.recordModelExperienceLocked("", decisionTier, model, verdict, score)
@@ -265,13 +324,13 @@ func (rt *routerLearningRuntime) recordModelExperienceLocked(
 	score float64,
 ) {
 	key := modelExperienceKey(decisionName, decisionTier, model)
-	exp := rt.experience[key]
+	exp := rt.shared.experience[key]
 	if exp == nil {
 		exp = &routerLearningModelExperience{
 			QualitySeed: 0.5,
 			SeedWeight:  2,
 		}
-		rt.experience[key] = exp
+		rt.shared.experience[key] = exp
 	}
 	switch verdict {
 	case routerLearningOutcomeGoodFit:
@@ -300,14 +359,14 @@ func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisio
 	if rt == nil || strings.TrimSpace(model) == "" {
 		return defaultRouterLearningModelExperience()
 	}
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
 	for _, key := range []string{
 		modelExperienceKey(decisionName, decisionTier, model),
 		modelExperienceKey("", decisionTier, model),
 		modelExperienceKey("", 0, model),
 	} {
-		if exp := rt.experience[key]; exp != nil {
+		if exp := rt.shared.experience[key]; exp != nil {
 			return *exp
 		}
 	}

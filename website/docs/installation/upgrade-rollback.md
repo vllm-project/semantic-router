@@ -13,21 +13,22 @@ the vLLM Semantic Router in a production environment.
 
 | Channel | Tag pattern | Updated on | Use case |
 |---------|-------------|------------|----------|
-| **Versioned** | `v0.3.0` / `0.3.0` | Tagged releases only | Production — immutable, recommended |
-| **Nightly** | `nightly-20260115` | Daily at 02:00 UTC | Pre-release testing |
+| **Versioned** | `v0.3.0` / `0.3.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
+| **Nightly** | `nightly-YYYYMMDD` | Date-stamped builds | Pre-release testing |
 | **Latest** | `latest` | Affected image changes on `main` + releases | Development only |
 
 :::tip Recommendation
-Always use a **versioned** tag in production. It is immutable — the digest
-never changes for a given version tag. Find the latest release on the
-[GitHub Releases page](https://github.com/vllm-project/semantic-router/releases).
+Use a **versioned** release in production, then record the resolved artifact
+digest. A tag is a readable release identifier; only a verified digest is an
+immutable reference. Find published releases on the [GitHub Releases
+page](https://github.com/vllm-project/semantic-router/releases).
 :::
 
 ---
 
 ## Prerequisites
 
-- `helm` ≥ 3.14 (for Helm OCI operations)
+- `helm` ≥ 3.14 when using `--reset-then-reuse-values`
 - `kubectl` configured for your target cluster
 - `pip` ≥ 22 (for Python CLI)
 - `docker` or `podman` (for direct image operations)
@@ -75,8 +76,8 @@ helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.
 
 # Upgrade to a specific version
 # --reset-then-reuse-values (Helm ≥ 3.14) resets to the new chart's defaults
-# first, then re-applies your previous overrides on top. This is safer than
-# --reuse-values alone, which breaks if the new chart adds new required values.
+# first, then re-applies your previous overrides on top. Review the resulting
+# manifests because renamed or incompatible values still require migration.
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
   --version 0.3.0 \
@@ -86,12 +87,13 @@ helm upgrade semantic-router \
   --timeout 10m
 ```
 
-:::caution Use `--reset-then-reuse-values`, not `--reuse-values`, for cross-version upgrades
-`--reuse-values` only merges your old stored values and skips new chart defaults,
-which causes template errors when a new chart version introduces new required
-values. `--reset-then-reuse-values` (Helm ≥ 3.14) resets to the new defaults
-first, then re-applies your overrides — it is always safe to use.
-If you are on Helm < 3.14, supply your configuration explicitly with `-f your-values.yaml` instead.
+:::caution Review values before every chart upgrade
+`--reuse-values` skips new chart defaults and can break when a release adds
+required values. `--reset-then-reuse-values` (Helm ≥ 3.14) starts from the new
+defaults, but it cannot migrate renamed, removed, or incompatible values. Read
+the release notes and render or diff the proposed manifests before applying
+them. If you are on Helm < 3.14, supply a reviewed values file explicitly with
+`-f your-values.yaml`.
 :::
 
 Verify after upgrade:
@@ -110,9 +112,10 @@ Find the latest version on the [GitHub Releases page](https://github.com/vllm-pr
 docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
 
-# Get the immutable digest for maximum pinning stability
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
-  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0)
+# Read the multi-architecture index digest, not a platform-specific manifest.
+DIGEST=$(docker buildx imagetools inspect \
+  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0 \
+  --format '{{.Manifest.Digest}}')
 echo "Use digest: ${DIGEST}"
 ```
 
@@ -129,11 +132,14 @@ Published versioned images for a full release:
 | `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.3.0` | CUDA local/runtime CLI image |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |
+
+Image repositories do not necessarily publish identical release channels.
+Verify the exact tag or digest in GHCR before adding a platform-specific image
+to a production manifest.
 
 ### 2c. Python CLI upgrade
 
@@ -150,17 +156,17 @@ pip install --upgrade vllm-sr
 
 ### 2d. Fleet simulator Python package upgrade
 
-`vllm-sr-sim` is a separate PyPI package with its own release cadence. Pin it
-explicitly when you depend on the simulator CLI or dashboard sidecar package
-data:
+`vllm-sr-sim` is a separate PyPI package with its own release cadence. Inspect
+the published versions, then pin one that matches your environment. Include
+`--pre` when selecting a development release:
 
 ```bash
-pip install --upgrade vllm-sr-sim==0.1.0
+python -m pip index versions --pre vllm-sr-sim
+pip install --upgrade --pre vllm-sr-sim==<published-version>
 ```
 
-Fleet simulator package releases use the independent `vllm-sr-sim-v<version>`
-tag stream and the `pypi-publish-vllm-sr-sim.yml` workflow; they are not
-published by the main `v<version>` router release tag.
+Fleet Simulator has an independent version stream. Pin its package version
+separately from the Router release.
 
 ---
 
@@ -168,8 +174,9 @@ published by the main `v<version>` router release tag.
 
 ### 3a. Helm rollback (fastest path)
 
-Helm keeps a history of every deployed revision. Rolling back requires no
-re-download and takes effect immediately.
+Helm stores the release values and manifests for each revision. A rollback
+creates a new rollout; nodes may still need to pull an older image, so wait for
+workload readiness before treating it as complete.
 
 ```bash
 # View history
@@ -186,14 +193,15 @@ helm status semantic-router -n vllm-semantic-router-system
 kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
 ```
 
-Alternatively, roll back by re-installing an older chart version:
+If Helm history is unavailable, install an older chart only with the values
+saved and tested for that release:
 
 ```bash
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
   --version 0.2.0 \
   --namespace vllm-semantic-router-system \
-  --reset-then-reuse-values \
+  -f values-0.2.0.yaml \
   --wait
 ```
 
@@ -231,29 +239,13 @@ vllm-sr --version
 
 ## 4. Version Pinning Reference
 
-### Makefile variables
-
-When building or deploying locally via `make`, override these variables to
-target a specific release instead of `latest`:
-
-```bash
-# Use a specific image tag for all docker-* targets
-make docker-build-extproc DOCKER_TAG=v0.3.0
-
-# Pull all production images at a specific version
-make docker-pull-release DOCKER_TAG=v0.3.0
-
-# Install/upgrade the Helm chart at a pinned chart version
-make helm-upgrade-version CHART_VERSION=0.3.0
-```
-
-### Helm values file (recommended for long-running environments)
+### Helm values file
 
 Create a `values-production.yaml` that explicitly pins image tags:
 
 ```yaml
 image:
-  tag: "v0.3.0"   # pin to an immutable release tag
+  tag: "v0.3.0"   # readable release tag; use a digest when immutability is required
   pullPolicy: IfNotPresent
 ```
 
@@ -271,56 +263,44 @@ helm upgrade semantic-router \
 
 ## 5. Nightly Builds
 
-Nightly images and charts are built every day at 02:00 UTC and tagged
-`nightly-YYYYMMDD`. They are intended for pre-release testing only.
+Nightly images use `nightly-YYYYMMDD`; nightly chart versions use
+`0.0.0-nightly.YYYYMMDD`. They are intended for pre-release testing only, and
+older dates may no longer be retained. Discover an available date before
+pinning it:
 
 ```bash
-# Pull the nightly image built on a specific date
-docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:nightly-20260115
+# Requires the oras CLI. Inspect both repositories because image and chart
+# retention can differ.
+oras repo tags ghcr.io/vllm-project/semantic-router/vllm-sr \
+  | grep -E '^nightly-[0-9]{8}$' | sort -V | tail
+oras repo tags ghcr.io/vllm-project/charts/semantic-router \
+  | grep -E '^0\.0\.0-nightly\.[0-9]{8}$' | sort -V | tail
+```
 
-# Install the nightly Helm chart
+Choose a date that exists in both lists, then verify the exact artifacts before
+deploying them:
+
+```bash
+export NIGHTLY_DATE=<available-YYYYMMDD>
+
+docker pull \
+  "ghcr.io/vllm-project/semantic-router/vllm-sr:nightly-${NIGHTLY_DATE}"
+
+helm show chart oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version "0.0.0-nightly.${NIGHTLY_DATE}"
+
 helm install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.0.0-nightly.20260115 \
+  --version "0.0.0-nightly.${NIGHTLY_DATE}" \
   --namespace vllm-semantic-router-system --create-namespace
 ```
 
-Nightly builds are **not** automatically promoted to a versioned release. Promotion
-happens only via a tagged release.
+Nightly builds are not automatically promoted to a versioned release. Use them
+for pre-release validation, not as an unpinned production channel.
 
 ---
 
-## 6. Promotion Policy
-
-```
-nightly-YYYYMMDD  ──→  (manual QA + CI green)  ──→  v0.3.0
-```
-
-A nightly build is promoted to a release by:
-
-1. Verifying all CI checks pass on the candidate commit.
-2. Bumping version fields in `src/vllm-sr/pyproject.toml` and `candle-binding/Cargo.toml` to the target version.
-3. Pushing a `v<version>` tag — this triggers only `release.yml`.
-4. `release.yml` validates the cross-surface version contract, then invokes the
-   canonical Docker, Helm, PyPI, crate, and operator-image publishers. The
-   GitHub Release is created only after every publisher succeeds.
-
-For dashboard images, the Docker release workflow also passes the pushed `v<version>`
-tag into the dashboard backend build. The dashboard `/api/status` response therefore
-reports the same tag-form version as the released image. Non-release Docker publish
-builds use the `src/vllm-sr/pyproject.toml` version plus PR, commit, or nightly
-metadata, for example `v0.3.0-dev.<sha>` or `v0.3.0-nightly.<date>.<sha>`.
-
-Fleet simulator package releases are promoted separately by bumping
-`src/fleet-sim/pyproject.toml` and pushing a `vllm-sr-sim-v<version>` tag,
-which triggers `pypi-publish-vllm-sr-sim.yml`.
-
-There is no automated gating from nightly → release; that decision is made by
-the release owner.
-
----
-
-## 7. Troubleshooting
+## 6. Troubleshooting
 
 ### Helm: `Error: chart not found`
 

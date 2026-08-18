@@ -14,6 +14,27 @@ spec:
       labels:
         app: semantic-router-dashboard
     spec:
+      # The production ConfigMap is intentionally immutable. Dashboard E2E
+      # exercises deployment and security-policy mutations, so stage a private
+      # copy into an emptyDir instead of misreporting the ConfigMap as writable.
+      initContainers:
+        - name: stage-dashboard-runtime-config
+          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
+          imagePullPolicy: Never
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp /config-seed/config.yaml /config-runtime/config.yaml
+              if [ -f /config-seed/tools_db.json ]; then
+                cp /config-seed/tools_db.json /config-runtime/tools_db.json
+              fi
+          volumeMounts:
+            - name: router-config-seed
+              mountPath: /config-seed
+              readOnly: true
+            - name: router-config-runtime
+              mountPath: /config-runtime
       containers:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
@@ -64,6 +85,8 @@ spec:
                   optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
+            - name: DASHBOARD_RUNTIME_CONFIG_WRITABLE
+              value: "true"
             # ML pipeline disabled in E2E — ml-training-service image is not
             # available in CI and the pipeline is not part of the dashboard contract.
             - name: ML_PIPELINE_ENABLED
@@ -89,15 +112,16 @@ spec:
             - name: http
               containerPort: 8700
           volumeMounts:
-            - name: router-config
+            - name: router-config-runtime
               mountPath: /app/config
-              readOnly: true
             - name: dashboard-data
               mountPath: /tmp/vllm-sr-dashboard
       volumes:
-        - name: router-config
+        - name: router-config-seed
           configMap:
             name: semantic-router-config
+        - name: router-config-runtime
+          emptyDir: {}
         - name: dashboard-data
           persistentVolumeClaim:
             claimName: semantic-router-dashboard-e2e-data

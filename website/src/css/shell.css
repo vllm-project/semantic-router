@@ -74,7 +74,7 @@
   margin: 0;
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1340px) {
   .navbar__items--left,
   .navbar__items--right {
     gap: 0.18rem;
@@ -377,7 +377,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: var(--site-text);
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 1339px) {
   :root {
     --site-header-height: 4.25rem;
   }
@@ -566,7 +566,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1099px) {
+@media (min-width: 640px) and (max-width: 1339px) {
   :root {
     --ifm-navbar-sidebar-width: 24rem;
   }

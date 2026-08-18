@@ -1,45 +1,88 @@
-# Knowledge routing recipe
+# Knowledge Routing Recipe Model Card
 
-This use case routes knowledge questions using a versioned KB score rather than
-hard-coding vendor or model-name policy. The included `mmlu_kb` data records
-measured domain uplift between a local 7B lane and a frontier 72B lane.
+## Overview
 
-## Policy
+Knowledge Routing uses measured domain evidence to decide whether a question
+should stay on a small local model or move to a larger frontier model. The
+included knowledge base is seeded from MMLU domain results, but the policy is
+designed to work with an organization's own benchmarks and feedback.
 
-- `escalate_72b` directly matches the audited high-uplift labels: biology,
-  business, computer science, economics, history, math, other, philosophy, and
-  psychology.
-- `keep_7b` handles lower-uplift domains through the `escalate_vs_keep` metric's
-  `no_escalation` projection.
-- This asymmetry is intentional: the selected `kb` label makes escalation
-  explainable, while the metric provides a conservative local fallback.
-- Small deterministic boundary guards cover terms such as matrix invertibility,
-  blood cells, and legal consideration where adjacent MMLU labels can be
-  semantically closer than the policy category. They correct known ambiguity;
-  they do not replace the KB score.
+## Model details
 
-MMLU is the seed dataset, not the use-case identity. Replace the built-in KB
-rows with production benchmark or feedback evidence while retaining the same
-policy shape.
+| Lane | Reference alias | Purpose |
+| --- | --- | --- |
+| Local | `local/small-7b` | Lower-cost default for domains with little measured uplift. |
+| Frontier | `cloud/frontier-72b` | Escalation lane for domains with meaningful measured uplift. |
 
-## Assets and validation
+Clients use `vllm-sr/auto`. Both aliases are examples and should be rebound to
+the models represented by the deployment's own evidence.
 
-- `config.yaml` is the runnable canonical configuration.
-- `recipe.dsl` is the equivalent routing authoring surface.
-- `probes.yaml` covers every escalation/local label family, including `other`,
-  deterministic keyword overrides, and the per-label-versus-metric boundary.
+## Intended use
+
+Use this recipe when:
+
+- model selection should be justified by benchmark or feedback data;
+- a small model handles many domains well enough;
+- frontier capacity should be reserved for domains with measurable benefit; or
+- operators need an explainable knowledge label behind each escalation.
+
+It is not suitable when the knowledge base is stale, unrelated to production
+traffic, or too small to support the routing decision.
+
+## Routing behavior
+
+| Evidence | Route | Behavior |
+| --- | --- | --- |
+| High-uplift knowledge label | `escalate_72b` | Send the request to the frontier alias. |
+| Lower-uplift or unmatched label | `keep_7b` | Keep the request on the local alias. |
+| Known semantic boundary ambiguity | Deterministic guard | Correct a small set of terms that otherwise map to a neighboring label. |
+
+The deterministic guards handle known boundary cases; they do not replace the
+knowledge-base score.
+
+## Requirements
+
+- Reachable OpenAI-compatible endpoints for the local and frontier aliases.
+- The versioned `mmlu_kb` asset referenced by [`config.yaml`](config.yaml).
+- Production benchmark or feedback data before using the policy for a
+  materially different workload.
+
+## Data handling and safety
+
+The checked-in recipe does not enable Router Replay or response caching. It
+uses a local knowledge-base asset to choose a route, then sends the request to
+one selected provider. The knowledge base contains routing evidence rather
+than user documents.
+
+Provider-side logging and retention still apply. Replace the seed knowledge
+base carefully if an organization's benchmark or feedback data is sensitive.
+
+## Quick start
 
 ```bash
 vllm-sr validate --config config/recipes/knowledge/config.yaml
-
-(cd src/semantic-router && \
-  go run ./cmd/dsl validate ../../config/recipes/knowledge/recipe.dsl)
-
-python tools/agent/scripts/router_calibration_loop.py \
-  eval \
-  --router-url http://127.0.0.1:8080 \
-  --probes config/recipes/knowledge/probes.yaml
+vllm-sr serve --config config/recipes/knowledge/config.yaml
 ```
 
-Eval does not call either backend model; it validates KB lookup, projection,
-decision, and selected alias deterministically.
+## Evaluation
+
+The probes cover each escalation and local-domain family, the fallback metric,
+and the small set of boundary guards. They validate KB lookup and route
+selection without generating model responses. See [`probes.yaml`](probes.yaml)
+and the [conformance guide](../CONFORMANCE.md).
+
+## Limitations
+
+- MMLU is only seed evidence and may not represent a production workload.
+- Benchmark uplift can change after model, prompt, or serving updates.
+- A domain label does not guarantee factual correctness.
+- The reference prices and aliases are examples, not billing or performance
+  claims.
+
+## References
+
+- [Recipe metadata](metadata.yaml)
+- [Runtime configuration](config.yaml)
+- [Routing DSL](recipe.dsl)
+- [Evaluation probes](probes.yaml)
+- [Recipe authoring and conformance](../CONFORMANCE.md)

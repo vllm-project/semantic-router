@@ -2,7 +2,9 @@
 
 ## Overview
 
-`structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. It maps to `config/fragments/signal/structure/` and is declared under `routing.signals.structure`.
+`structure` detects request-shape facts such as many explicit questions,
+ordered workflow markers, or dense constraint phrasing. Define structure rules
+under `routing.signals.structure`.
 
 This family is heuristic: it stays rule-based, but unlike `keyword` it can count, normalize, and compare typed structural features before emitting a named signal.
 
@@ -11,7 +13,7 @@ This family is heuristic: it stays rule-based, but unlike `keyword` it can count
 - Keeps request-shape routing explicit instead of hiding it inside ad hoc keyword lists.
 - Lets one detector use counts, densities, or ordered marker sequences without changing the decision DSL.
 - Produces named reusable signals that projections and decisions can consume like any other family.
-- Preserves the repo-native layering: detector thresholds stay in signals, route policy stays in decisions.
+- Keeps detector thresholds in signals and route policy in decisions.
 
 ## What Problem Does It Solve?
 
@@ -29,8 +31,6 @@ Use `structure` when:
 - you want projections to consume structural facts with `type: structure`
 
 ## Configuration
-
-Source fragment family: `config/fragments/signal/structure/`
 
 ```yaml
 routing:
@@ -147,3 +147,11 @@ Example signal meanings:
 - `constraint_dense`: count constraint markers and divide by multilingual text units to capture prompts whose requirements are unusually dense across English, Chinese, and mixed-script prompts.
 
 Use `structure` when routing depends on request form, but you still want the router contract to stay typed and declarative.
+
+## Dependencies and Limitations
+
+Structure rules inspect request text locally and require no learned model. They
+measure form rather than semantic difficulty, so calibrate their predicates on
+real prompts and combine them with learned signals when meaning matters.
+See a complete example:
+[`config/fragments/signal/structure/request-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/structure/request-shape.yaml).

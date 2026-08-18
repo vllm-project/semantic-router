@@ -11,6 +11,10 @@
 *.svg binary
 *.pdf binary
 
+# Generated wheel resources mirror config/recipes/built-in and are byte-checked by CI.
+# Keep them in source distributions, but collapse their duplicate GitHub diff.
+src/vllm-sr/cli/model_assets/** linguist-generated=true
+
 # Prebuilt CK Flash Attention shared library (ROCm/gfx942)
 onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* binary
 *.a binary

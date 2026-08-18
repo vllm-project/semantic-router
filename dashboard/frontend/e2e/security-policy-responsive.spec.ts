@@ -69,7 +69,9 @@ test.describe('Security policy responsive layout', () => {
     await expect(page.getByRole('button', { name: 'Add Tier' })).toBeVisible()
 
     const routerRoleBox = await page.getByLabel('Router Role').boundingBox()
-    const modelsBox = await page.getByLabel('Models (comma-separated)').boundingBox()
+    const modelsBox = await page
+      .getByRole('textbox', { name: 'Model reference 1', exact: true })
+      .boundingBox()
     const subjectTypeBox = await page.getByLabel('Subject type 1').boundingBox()
     const subjectNameBox = await page.getByLabel('Subject name 1').boundingBox()
 

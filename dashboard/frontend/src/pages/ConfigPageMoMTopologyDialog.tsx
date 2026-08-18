@@ -40,7 +40,7 @@ export default function ConfigPageMoMTopologyDialog({
           <div>
             <span>Mixture topology</span>
             <h2>{entrypoint.model_names.join(', ')}</h2>
-            <p>How the public model resolves into routing decisions and AMD model pools.</p>
+            <p>How the public model resolves into routing decisions and provider model pools.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close topology">
             ×

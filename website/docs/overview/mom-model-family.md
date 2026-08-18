@@ -1,203 +1,159 @@
-# What is MoM Model Family?
+---
+sidebar_position: 5
+title: Mixture of Models
+description: How virtual models turn a shared pool of independent models into stable, objective-driven AI services.
+---
 
-The **MoM (Mixture of Models) Model Family** is a curated collection of specialized, lightweight models designed for intelligent routing, content safety, and semantic understanding. These models power the core capabilities of Semantic Router, enabling fast, accurate, and privacy-preserving AI operations.
+# Mixture of Models
 
-## Overview
+A **Mixture of Models (MoM)** is a serving architecture in which several
+independently deployed models act as one system. A routing policy decides which
+model, cascade, panel, or workflow should handle each request.
 
-The MoM family consists of purpose-built models that handle specific tasks in the routing pipeline:
+The client does not need to know which physical backend won. It asks for a
+stable virtual model that represents the desired behavior.
 
-- **Classification Models**: Domain detection, PII identification, jailbreak detection
-- **Embedding Models**: Semantic similarity, caching, retrieval
-- **Safety Models**: Hallucination detection, content moderation
-- **Feedback Models**: User intent understanding, conversation analysis
-
-All MoM models are:
-
-- **Lightweight**: 33M-600M parameters for fast inference
-- **Specialized**: Fine-tuned for specific routing tasks
-- **Efficient**: Many use LoRA adapters for minimal memory footprint
-- **Open Source**: Available on HuggingFace for transparency and customization
-
-## Model Categories
-
-### 1. Classification Models
-
-#### Domain/Intent Classifier
-
-- **Model ID**: `models/mmbert32k-intent-classifier-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-intent-classifier-merged`
-- **Purpose**: Classify user queries into 14 MMLU categories (math, science, history, etc.)
-- **Architecture**: mmBERT-32K merged classifier (307M)
-- **Use Case**: Route queries to domain-specific models or experts
-
-#### PII Detector
-
-- **Model ID**: `models/mmbert32k-pii-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-pii-detector-merged`
-- **Purpose**: Detect 17 PII entity types across 35 BIO labels
-- **Architecture**: mmBERT-32K merged token classifier (307M)
-- **Use Case**: Privacy protection, compliance, data masking
-
-#### Jailbreak Detector
-
-- **Model ID**: `models/mmbert32k-jailbreak-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-jailbreak-detector-merged`
-- **Purpose**: Detect prompt injection and jailbreak attempts
-- **Architecture**: mmBERT-32K merged classifier (307M)
-- **Use Case**: Content safety, prompt security
-
-#### Feedback Detector
-
-- **Model ID**: `models/mmbert32k-feedback-detector-merged`
-- **HuggingFace**: `llm-semantic-router/mmbert32k-feedback-detector-merged`
-- **Purpose**: Classify user feedback into 4 types (satisfied, need clarification, wrong answer, want different)
-- **Architecture**: mmBERT-32K merged classifier (307M)
-- **Use Case**: Adaptive routing, conversation improvement
-
-### 2. Embedding Models
-
-#### Embedding Pro (High Quality)
-
-- **Model ID**: `models/mom-embedding-pro`
-- **HuggingFace**: `Qwen/Qwen3-Embedding-0.6B`
-- **Purpose**: High-quality embeddings with 32K context support
-- **Architecture**: Qwen3 (600M parameters)
-- **Embedding Dimension**: 1024
-- **Use Case**: Long-context semantic search, high-accuracy caching
-
-#### Embedding Flash (Balanced)
-
-- **Model ID**: `models/mom-embedding-flash`
-- **HuggingFace**: `google/embeddinggemma-300m`
-- **Purpose**: Fast embeddings with Matryoshka support
-- **Architecture**: Gemma (300M parameters)
-- **Embedding Dimension**: 768 (supports 512/256/128 via Matryoshka)
-- **Use Case**: Balanced speed/quality, multilingual support
-
-#### Embedding Ultra (Default)
-
-- **Model ID**: `models/mom-embedding-ultra`
-- **HuggingFace**: `llm-semantic-router/mmbert-embed-32k-2d-matryoshka`
-- **Purpose**: Long-context multilingual semantic similarity with 2D Matryoshka support
-- **Architecture**: mmBERT 2D Matryoshka (307M parameters)
-- **Embedding Dimension**: 768 (supports lower dimensions via Matryoshka)
-- **Use Case**: Default semantic caching, retrieval, and tools similarity
-
-### 3. Hallucination Detection Models
-
-#### Halugate Sentinel
-
-- **Model ID**: `models/mom-halugate-sentinel`
-- **HuggingFace**: `LLM-Semantic-Router/halugate-sentinel`
-- **Purpose**: First-stage hallucination screening
-- **Architecture**: BERT-base (110M)
-- **Use Case**: Fast hallucination detection, pre-filtering
-
-#### Halugate Detector
-
-- **Model ID**: `models/mom-halugate-detector`
-- **HuggingFace**: `KRLabsOrg/lettucedect-base-modernbert-en-v1`
-- **Purpose**: Accurate hallucination verification
-- **Architecture**: ModernBERT-base (149M)
-- **Context Length**: 8192 tokens
-- **Use Case**: Factual accuracy verification, grounding check
-
-#### Halugate Explainer
-
-- **Model ID**: `models/mom-halugate-explainer`
-- **HuggingFace**: `tasksource/ModernBERT-base-nli`
-- **Purpose**: Explain hallucination reasoning via NLI
-- **Architecture**: ModernBERT-base (149M)
-- **Classes**: 3 (entailment/neutral/contradiction)
-- **Use Case**: Explainable AI, hallucination analysis
-
-## Model Selection Guide
-
-### By Use Case
-
-| Use Case | Recommended Model | Why |
-|----------|------------------|-----|
-| Domain routing | mmbert32k-intent-classifier-merged | 14 MMLU categories, 32K context |
-| Privacy protection | mmbert32k-pii-detector-merged | 17 entity types, 35 BIO labels, 32K context |
-| Content safety | mmbert32k-jailbreak-detector-merged | Prompt injection detection with merged mmBERT |
-| Semantic caching | mom-embedding-ultra | Default 32K multilingual embeddings |
-| Long-context search | mom-embedding-pro | 32K context, 1024-dim |
-| Hallucination check | mom-halugate-detector | ModernBERT, 8K context |
-| User feedback | mmbert32k-feedback-detector-merged | 4 feedback types, merged mmBERT |
-
-### By Performance Requirements
-
-| Requirement | Model Tier | Examples |
-|-------------|-----------|----------|
-| Ultra-fast (&lt;10ms) | Light | mom-embedding-flash, mmbert32k-jailbreak-detector-merged |
-| Balanced (10-50ms) | Default | mom-embedding-ultra, mmbert32k-intent-classifier-merged |
-| High-quality (50-200ms) | Pro | mom-embedding-pro, mom-halugate-detector |
-
-## Configuration
-
-### Using MoM Models in Router
-
-MoM models are configured through the canonical `global.model_catalog` block, with module-level settings living under `global.model_catalog.modules`:
-
-```yaml
-global:
-  model_catalog:
-    system:
-      domain_classifier: "models/mmbert32k-intent-classifier-merged"
-      pii_classifier: "models/mmbert32k-pii-detector-merged"
-      prompt_guard: "models/mmbert32k-jailbreak-detector-merged"
-    modules:
-      classifier:
-        domain:
-          model_ref: "domain_classifier"
-          threshold: 0.6
-          use_cpu: true
-        pii:
-          model_ref: "pii_classifier"
-          threshold: 0.9
-          use_cpu: true
-      prompt_guard:
-        model_ref: "prompt_guard"
-        threshold: 0.7
-        use_cpu: true
+```mermaid
+flowchart LR
+    Client["model: vllm-sr/mom-v1-flash"] --> Virtual["Virtual model"]
+    Virtual --> Recipe["Latency-first recipe"]
+    Recipe --> Small["Efficient model"]
+    Recipe --> Vision["Vision model"]
+    Recipe --> Long["Long-context model"]
 ```
 
-### Custom System Bindings
+## MoM is not Mixture of Experts
 
-Override the built-in system-model bindings in your `config.yaml`:
+Mixture of Experts (MoE) is a model architecture: a gating mechanism activates
+parts of one checkpoint during inference. Mixture of Models is a serving-system
+architecture: independently trained and independently served models are chosen
+or coordinated at request time.
+
+MoM can combine dense models, MoE models, hosted APIs, and local models. Their
+internal architecture does not change the routing abstraction.
+
+## Three kinds of model in the system
+
+| Kind | Example | Role |
+| --- | --- | --- |
+| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the application response. |
+| **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
+| **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
+
+Router system models support the decision process; they are not themselves the
+Mixture of Models product exposed to clients.
+
+## Execution patterns
+
+### Select one model
+
+Most requests should take a direct path. Policy narrows the eligible set and an
+algorithm selects one backend by semantic fit, latency, relative cost, feedback,
+or a fixed order.
+
+### Cascade
+
+Start with an efficient model, inspect a bounded confidence or verification
+signal, and escalate only when needed. Cascades trade extra worst-case latency
+for lower average cost.
+
+### Orchestrate several models
+
+Parallel comparison, multi-round reasoning, and workflows can use several
+models before producing one response. These paths are valuable for selected
+high-accuracy tasks, not as a default for all traffic.
+
+## Virtual models and recipes
+
+An entrypoint maps one or more public model names to an isolated recipe:
 
 ```yaml
-global:
-  model_catalog:
-    system:
-      domain_classifier: "models/your-domain-classifier"
-      pii_classifier: "models/your-pii-classifier"
-      prompt_guard: "models/your-prompt-guard"
+entrypoints:
+  - model_names: ["acme/assistant-fast"]
+    recipe: fast
+
+recipes:
+  - name: fast
+    routing:
+      strategy: priority
+      decisions:
+        - name: default-fast-route
+          description: Route eligible requests through the fast model pool.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: local/small
+              use_reasoning: false
+            - model: local/vision
+              use_reasoning: false
+          algorithm:
+            type: static
 ```
 
-## Model Architecture
+In a production recipe, signals and decisions would guard modality, context,
+tools, locality, and other requirements before selection. The public model name
+does not reach the backend; it resolves to the selected provider model.
 
-### LoRA-Based Models
+See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
+for the full schema and isolation rules.
 
-Many MoM models use LoRA (Low-Rank Adaptation) for efficiency:
+## MoM V1
 
-- **Base Model**: BERT-base-uncased (110M parameters)
-- **LoRA Adapters**: &lt;1M parameters per task
-- **Memory Footprint**: ~440MB base + ~4MB per adapter
-- **Inference Speed**: Same as base model (~10-20ms on CPU)
+MoM V1 is the built-in MoM example. It exposes five public models over one
+shared pool of seven logical provider aliases:
 
-### ModernBERT Models
+| Virtual model | Objective |
+| --- | --- |
+| `vllm-sr/mom-v1-blend` | Balance quality, latency, cost, and answer recovery. |
+| `vllm-sr/mom-v1-lite` | Prefer economical direct answers. |
+| `vllm-sr/mom-v1-flash` | Prefer interactive latency while preserving capabilities. |
+| `vllm-sr/mom-v1-ultra` | Prefer accuracy and allow bounded orchestration. |
+| `vllm-sr/mom-v1-vault` | Keep traffic on the configured local pool with stricter containment. |
 
-Newer models use ModernBERT for better performance:
+MoM is a routing policy, not a checkpoint or model installer. Its reference
+backends must already be running and available under the configured aliases.
+Tool execution remains the client's responsibility, and “local” privacy still
+depends on the deployment's network, backends, logs, caches, and stores.
 
-- **Architecture**: ModernBERT-base (149M parameters)
-- **Context Length**: 8192 tokens (vs 512 for BERT)
-- **Performance**: Better accuracy on long-context tasks
-- **Use Cases**: Hallucination detection, feedback classification
+Inspect the installed Model Card and requirements:
 
-## Next Steps
+```bash
+vllm-sr model list
+vllm-sr model show vllm-sr/mom-v1-blend
+```
 
-- **[Signal-Driven Decisions](./signal-driven-decisions)** - Learn how MoM models power routing decisions
-- **[Domain](../tutorials/signal/learned/domain)** - Use mmbert32k-intent-classifier-merged for routing
-- **[PII](../tutorials/signal/learned/pii)** - Configure mmbert32k-pii-detector-merged
-- **[RAG](../tutorials/plugin/rag)** - Use MoM embedding models for route-local retrieval
+Serve one objective, or expose several over the same pool:
+
+```bash
+vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
+```
+
+To change the pool or policy, fork the asset into a user-owned configuration:
+
+```bash
+vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
+vllm-sr model validate mom-v1.yaml
+```
+
+Read the full
+[MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
+for intended use, backend roles, data handling, evaluation, and limitations.
+
+## When MoM is the wrong abstraction
+
+Use a direct model endpoint when one backend satisfies the workload and policy
+is unlikely to change. A multi-model system adds configuration, evaluation,
+observability, and operational cost. Its value should come from a clear
+capability boundary, objective, or measured routing improvement.
+
+## Next
+
+- [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  for the complete CLI and backend-binding workflow.
+- [Use Cases](use-cases) for practical patterns.
+- [Routing Pipeline](signal-driven-decisions) for policy composition.
+- [Algorithms](../tutorials/algorithm/overview) for selection and orchestration
+  choices.
