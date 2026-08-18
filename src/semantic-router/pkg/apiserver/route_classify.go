@@ -13,6 +13,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
+// Eval deliberately runs every configured signal and can exercise synthetic
+// long-context inputs. Keep its response window aligned with the calibration
+// tooling's maximum per-probe timeout without relaxing other management APIs.
+const apiEvalWriteTimeout = 20 * time.Minute
+
 // writeClassificationError maps a classification service error to an HTTP
 // status code: empty/whitespace input is a client error (400 INVALID_INPUT);
 // anything else is treated as an internal error (500 CLASSIFICATION_ERROR).
@@ -53,6 +58,9 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // This endpoint is specifically designed for evaluation scenarios where all configured signals
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
+	controller := http.NewResponseController(w)
+	_ = controller.SetWriteDeadline(time.Now().Add(apiEvalWriteTimeout))
+
 	var req services.IntentRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
