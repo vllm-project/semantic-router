@@ -1,11 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DashboardManagerLayout from '../components/DashboardManagerLayout'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
-import { filterLogs, getLogLevel, type LogEntry, type LogLevel } from './logsPageSupport'
+import {
+  describeLogsAvailability,
+  filterLogs,
+  getLogLevel,
+  type LogEntry,
+  type LogLevel,
+} from './logsPageSupport'
 import styles from './LogsPage.module.css'
 
 interface LogsResponse {
   deployment_type: string
   service: string
+  supported: boolean
   logs: LogEntry[]
   count: number
   error?: string
@@ -25,6 +33,7 @@ const LogsPage: React.FC = () => {
   const [selectedComponent, setSelectedComponent] = useState<ComponentType>('all')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [deploymentType, setDeploymentType] = useState<string>('detecting...')
+  const [supported, setSupported] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -52,6 +61,7 @@ const LogsPage: React.FC = () => {
       if (controller.signal.aborted) return
       setLogs(data.logs || [])
       setDeploymentType(data.deployment_type)
+      setSupported(data.supported)
       setError(data.error || null)
       setMessage(data.message || null)
       setLastUpdated(new Date())
@@ -111,198 +121,218 @@ const LogsPage: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <span className={styles.eyebrow}>Operations</span>
-          <h1 className={styles.title}>System Logs</h1>
-          <p className={styles.subtitle}>
-            View live output from vLLM Semantic Router services and runtime helpers.
-          </p>
+      <DashboardManagerLayout
+        eyebrow="Operate"
+        title="System Logs"
+        description="View recent, centrally redacted output retained by the bounded local runtime spool."
+        meta={[
+          { label: 'Active stream', value: activeComponentLabel },
+          { label: 'Deployment', value: formatDeploymentType(deploymentType) },
+          { label: 'Log access', value: describeLogsAvailability(supported) },
+          { label: 'Entries loaded', value: logs.length },
+        ]}
+        panelEyebrow="Diagnostics"
+        panelTitle="Runtime event stream"
+        panelDescription="Select a service, filter by severity or text, and keep the viewport stable while new events arrive."
+        pills={[
+          { label: autoRefresh ? 'Auto-refresh on' : 'Manual refresh', active: autoRefresh },
+          { label: `${filteredLogs.length} visible` },
+          {
+            label: lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for logs',
+          },
+        ]}
+      >
+        <div className={styles.summaryGrid}>
+          <article className={styles.summaryCard}>
+            <span className={styles.summaryLabel}>Deployment</span>
+            <strong className={styles.summaryValue}>{formatDeploymentType(deploymentType)}</strong>
+            <span className={styles.summaryHint}>
+              {supported === false
+                ? 'This deployment has no mounted bounded log spool.'
+                : 'Read from fixed, read-only service files with response redaction.'}
+            </span>
+          </article>
+          <article className={styles.summaryCard}>
+            <span className={styles.summaryLabel}>Selected source</span>
+            <strong className={styles.summaryValue}>{activeComponentLabel}</strong>
+            <span className={styles.summaryHint}>
+              Switch sources without changing the log viewport width.
+            </span>
+          </article>
+          <article className={styles.summaryCard}>
+            <span className={styles.summaryLabel}>Entries loaded</span>
+            <strong className={styles.summaryValue}>{logs.length}</strong>
+            <span className={styles.summaryHint}>
+              Showing the latest {lines} lines per request.
+            </span>
+          </article>
         </div>
-        <div className={styles.headerRight}>
-          <span className={styles.headerMeta}>Active stream: {activeComponentLabel}</span>
-          <span className={styles.headerMeta}>
-            Deployment: {formatDeploymentType(deploymentType)}
-          </span>
-          {lastUpdated && (
-            <span className={styles.headerMeta}>Updated: {lastUpdated.toLocaleTimeString()}</span>
-          )}
-        </div>
-      </div>
 
-      <div className={styles.summaryGrid}>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Deployment</span>
-          <strong className={styles.summaryValue}>{formatDeploymentType(deploymentType)}</strong>
-          <span className={styles.summaryHint}>Resolved from the active runtime environment.</span>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Selected source</span>
-          <strong className={styles.summaryValue}>{activeComponentLabel}</strong>
-          <span className={styles.summaryHint}>
-            Switch sources without changing the log viewport width.
-          </span>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Entries loaded</span>
-          <strong className={styles.summaryValue}>{logs.length}</strong>
-          <span className={styles.summaryHint}>Showing the latest {lines} lines per request.</span>
-        </article>
-      </div>
-
-      <section className={styles.controlPanel}>
-        <div className={styles.controlPanelHeader}>
-          <div>
-            <h2 className={styles.panelTitle}>Stream controls</h2>
-            <p className={styles.panelSubtitle}>
-              Tune source selection, tail length, and live refresh behavior.
-            </p>
+        <section className={styles.controlPanel}>
+          <div className={styles.controlPanelHeader}>
+            <div>
+              <h2 className={styles.panelTitle}>Stream controls</h2>
+              <p className={styles.panelSubtitle}>
+                Tune source selection, tail length, and live refresh behavior.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className={styles.controls}>
-          <div className={styles.serviceSelector}>
-            {COMPONENT_OPTIONS.map((option) => (
+          <div className={styles.controls}>
+            <div className={styles.serviceSelector}>
+              {COMPONENT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={`${styles.serviceButton} ${selectedComponent === option.value ? styles.active : ''}`}
+                  onClick={() => setSelectedComponent(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={styles.controlsRight}>
+              <label className={styles.filterField}>
+                <span>Search logs</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Message or service"
+                />
+              </label>
+
+              <label className={styles.filterField}>
+                <span>Level</span>
+                <select
+                  value={level}
+                  onChange={(event) => setLevel(event.target.value as LogLevel)}
+                >
+                  <option value="all">All levels</option>
+                  <option value="error">Error</option>
+                  <option value="warn">Warning</option>
+                  <option value="info">Info</option>
+                  <option value="debug">Debug</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+
+              <div className={styles.linesSelector}>
+                <label htmlFor="logs-lines">Lines</label>
+                <select
+                  id="logs-lines"
+                  value={lines}
+                  onChange={(e) => setLines(Number(e.target.value))}
+                  className={styles.linesSelect}
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
+                </select>
+              </div>
+
+              <label className={styles.toggle}>
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                />
+                <span>Auto-refresh</span>
+              </label>
+
+              <label className={styles.toggle}>
+                <input
+                  type="checkbox"
+                  checked={autoScroll}
+                  onChange={(e) => setAutoScroll(e.target.checked)}
+                />
+                <span>Auto-scroll</span>
+              </label>
+
               <button
-                key={option.value}
-                className={`${styles.serviceButton} ${selectedComponent === option.value ? styles.active : ''}`}
-                onClick={() => setSelectedComponent(option.value)}
+                onClick={() => void logsRequest.run({ allowHidden: true })}
+                className={styles.refreshButton}
               >
-                {option.label}
+                Refresh
               </button>
-            ))}
-          </div>
-
-          <div className={styles.controlsRight}>
-            <label className={styles.filterField}>
-              <span>Search logs</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Message or service"
-              />
-            </label>
-
-            <label className={styles.filterField}>
-              <span>Level</span>
-              <select value={level} onChange={(event) => setLevel(event.target.value as LogLevel)}>
-                <option value="all">All levels</option>
-                <option value="error">Error</option>
-                <option value="warn">Warning</option>
-                <option value="info">Info</option>
-                <option value="debug">Debug</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-
-            <div className={styles.linesSelector}>
-              <label htmlFor="logs-lines">Lines</label>
-              <select
-                id="logs-lines"
-                value={lines}
-                onChange={(e) => setLines(Number(e.target.value))}
-                className={styles.linesSelect}
-              >
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-                <option value={500}>500</option>
-              </select>
             </div>
-
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-              <span>Auto-refresh</span>
-            </label>
-
-            <label className={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
-              />
-              <span>Auto-scroll</span>
-            </label>
-
-            <button
-              onClick={() => void logsRequest.run({ allowHidden: true })}
-              className={styles.refreshButton}
-            >
-              Refresh
-            </button>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {error && (
-        <div className={styles.error}>
-          <span className={styles.messageLabel}>Log error</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {message && !error && (
-        <div className={styles.info}>
-          <span className={styles.messageLabel}>Notice</span>
-          <span>{message}</span>
-        </div>
-      )}
-
-      <div className={styles.logsSection}>
-        <div className={styles.logsHeader}>
-          <div className={styles.logsHeaderText}>
-            <span className={styles.logsEyebrow}>Live stream</span>
-            <span className={styles.logsTitle}>{activeComponentLabel}</span>
+        {error && (
+          <div className={styles.error}>
+            <span className={styles.messageLabel}>Log error</span>
+            <span>{error}</span>
           </div>
-          <span className={styles.logsCount} aria-live="polite">
-            {filteredLogs.length === logs.length
-              ? `${logs.length} entries`
-              : `${filteredLogs.length} of ${logs.length} entries`}
-          </span>
-        </div>
+        )}
 
-        <div ref={logsContainerRef} className={styles.logsContainer}>
-          {loading && logs.length === 0 ? (
-            <div className={styles.loadingLogs}>
-              <div className={styles.spinner}></div>
-              <span>Fetching logs...</span>
+        {message && !error && (
+          <div className={styles.info}>
+            <span className={styles.messageLabel}>Notice</span>
+            <span>{message}</span>
+          </div>
+        )}
+
+        <div className={styles.logsSection}>
+          <div className={styles.logsHeader}>
+            <div className={styles.logsHeaderText}>
+              <span className={styles.logsEyebrow}>Live stream</span>
+              <span className={styles.logsTitle}>{activeComponentLabel}</span>
             </div>
-          ) : logs.length === 0 ? (
-            <div className={styles.noLogs}>
-              <p className={styles.noLogsTitle}>No logs available</p>
-              {deploymentType === 'none' && (
+            <span className={styles.logsCount} aria-live="polite">
+              {filteredLogs.length === logs.length
+                ? `${logs.length} entries`
+                : `${filteredLogs.length} of ${logs.length} entries`}
+            </span>
+          </div>
+
+          <div ref={logsContainerRef} className={styles.logsContainer}>
+            {loading && logs.length === 0 ? (
+              <div className={styles.loadingLogs}>
+                <div className={styles.spinner}></div>
+                <span>Fetching logs...</span>
+              </div>
+            ) : supported === false ? (
+              <div className={styles.noLogs}>
+                <p className={styles.noLogsTitle}>Runtime logs unavailable</p>
                 <p className={styles.noLogsHint}>
-                  No running deployment detected. Start the router first.
+                  Start the local split runtime with vllm-sr serve to provision its bounded shared
+                  log spool.
                 </p>
-              )}
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div className={styles.noLogs}>
-              <p className={styles.noLogsTitle}>No matching logs</p>
-              <p className={styles.noLogsHint}>Change the search or level filter.</p>
-            </div>
-          ) : (
-            <div className={styles.logsList}>
-              {filteredLogs.map((log, index) => {
-                const level = getLogLevel(log.line)
-                return (
-                  <div
-                    key={`${log.service ?? 'service'}-${index}-${log.line.slice(0, 32)}`}
-                    className={`${styles.logEntry} ${level !== 'other' ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
-                  >
-                    <span className={styles.logLine}>{log.line}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className={styles.noLogs}>
+                <p className={styles.noLogsTitle}>No logs available</p>
+                {deploymentType === 'none' && (
+                  <p className={styles.noLogsHint}>
+                    No running deployment detected. Start the router first.
+                  </p>
+                )}
+              </div>
+            ) : filteredLogs.length === 0 ? (
+              <div className={styles.noLogs}>
+                <p className={styles.noLogsTitle}>No matching logs</p>
+                <p className={styles.noLogsHint}>Change the search or level filter.</p>
+              </div>
+            ) : (
+              <div className={styles.logsList}>
+                {filteredLogs.map((log, index) => {
+                  const level = getLogLevel(log.line)
+                  return (
+                    <div
+                      key={`${log.service ?? 'service'}-${index}-${log.line.slice(0, 32)}`}
+                      className={`${styles.logEntry} ${level !== 'other' ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
+                    >
+                      <span className={styles.logLine}>{log.line}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </DashboardManagerLayout>
     </div>
   )
 }

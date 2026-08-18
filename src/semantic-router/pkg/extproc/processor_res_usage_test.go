@@ -237,6 +237,18 @@ func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {
 	assert.InDelta(t, 2.0, categoryMean, 0.1)
 }
 
+func TestTokenCalibrationSkipsStructuredOrImageContextEstimate(t *testing.T) {
+	ctx := &RequestContext{
+		OriginalRequestBody:       []byte(`{"messages":[{"role":"user","content":"short"}]}`),
+		VSRContextTextBytes:       2_000,
+		VSRContextEquivalentBytes: 80_000,
+		VSRContextHasNonText:      true,
+	}
+
+	assert.Equal(t, 0, tokenCalibrationByteLen(ctx),
+		"structured/image reserves must not train the prose bytes-per-token ratio")
+}
+
 // =====================================================================
 // Helpers
 // =====================================================================

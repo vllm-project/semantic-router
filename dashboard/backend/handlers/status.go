@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -41,7 +42,7 @@ type SystemStatus struct {
 
 // StatusHandler returns the status of vLLM-SR services
 // Aligns with the vllm-sr Python CLI by using the same Docker-based detection
-func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {
+func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -49,7 +50,7 @@ func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		status := detectSystemStatus(routerAPIURL, configDir)
+		status := detectSystemStatus(routerAPIURL, configDir, credentialProvider...)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)

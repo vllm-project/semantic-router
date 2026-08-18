@@ -1,6 +1,5 @@
 import React from 'react'
-import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
-import styles from './ConfigPageManagerLayout.module.css'
+import DashboardManagerLayout from '../components/DashboardManagerLayout'
 import type { DashboardSurfaceHeroPill } from '../components/DashboardSurfaceHero'
 
 interface ConfigPageManagerLayoutProps {
@@ -28,29 +27,29 @@ export default function ConfigPageManagerLayout({
   pills,
   children,
 }: ConfigPageManagerLayoutProps) {
-  const defaultPills: DashboardSurfaceHeroPill[] = ['Models', 'Decisions', 'Signals'].map((section) => ({
-    label: section,
-    active: section === title,
-  }))
+  const defaultPills: DashboardSurfaceHeroPill[] = ['Models', 'Decisions', 'Signals'].map(
+    (section) => ({
+      label: section,
+      active: section === title,
+    }),
+  )
 
   return (
-    <section className={styles.page}>
-      <DashboardSurfaceHero
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-        meta={[
-          { label: 'Current surface', value: title },
-          { label: 'Config area', value: configArea },
-          { label: 'Scope', value: scope },
-        ]}
-        panelEyebrow={panelEyebrow}
-        panelTitle={panelTitle}
-        panelDescription={panelDescription}
-        pills={pills ?? defaultPills}
-      />
-
-      <div className={styles.body}>{children}</div>
-    </section>
+    <DashboardManagerLayout
+      eyebrow={eyebrow}
+      title={title}
+      description={description}
+      meta={[
+        { label: 'Current surface', value: title },
+        { label: 'Config area', value: configArea },
+        { label: 'Scope', value: scope },
+      ]}
+      panelEyebrow={panelEyebrow}
+      panelTitle={panelTitle}
+      panelDescription={panelDescription}
+      pills={pills ?? defaultPills}
+    >
+      {children}
+    </DashboardManagerLayout>
   )
 }

@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from 'react'
 import styles from './ClawRoomChat.module.css'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canManageOpenClaw } from '../utils/accessControl'
 import {
   createLatestOpenClawRequest,
   fetchOpenClawJSON,
@@ -52,7 +54,8 @@ const ClawRoomChat = ({
   createRoomRequestToken = 0,
   inputModeControls,
 }: ClawRoomChatProps) => {
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { user, isLoading: authLoading } = useAuth()
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
   const [rooms, setRooms] = useState<RoomEntry[]>([])
@@ -89,7 +92,8 @@ const ClawRoomChat = ({
     () => rooms.find((room) => room.id === selectedRoomId) || null,
     [rooms, selectedRoomId],
   )
-  const managementDisabled = readonlyLoading || isReadonly
+  const managementDisabled =
+    authLoading || readonlyLoading || serverReadonly || !canManageOpenClaw(user)
 
   const { memberResumeProfiles, mentionOptions, teamBriefText, workerLookup } = useMemo(
     () => buildClawRoomTeamView(selectedTeam, workers, selectedTeamId),

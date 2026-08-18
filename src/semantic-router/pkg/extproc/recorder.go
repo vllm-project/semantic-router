@@ -202,7 +202,7 @@ func buildReplayRoutingRecord(
 		DecisionPriority:  decisionPriority,
 		Category:          ctx.VSRSelectedCategory,
 		OriginalModel:     originalModel,
-		SelectedModel:     replaySelectedModel(originalModel, selectedModel),
+		SelectedModel:     replaySelectedModel(selectedModel),
 		ReasoningMode:     replayReasoningMode(ctx),
 		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
 		SelectionMethod:   ctx.VSRSelectionMethod,
@@ -280,10 +280,7 @@ func replayReasoningMode(ctx *RequestContext) string {
 	return ctx.VSRReasoningMode
 }
 
-func replaySelectedModel(originalModel string, selectedModel string) string {
-	if selectedModel == "" {
-		return originalModel
-	}
+func replaySelectedModel(selectedModel string) string {
 	return selectedModel
 }
 
@@ -398,6 +395,33 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 	}
 }
 
+func (r *OpenAIRouter) finalizeRouterReplay(
+	ctx *RequestContext,
+	state string,
+	reason string,
+) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
+		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"state":      state,
+			"error":      err.Error(),
+		})
+	}
+}
+
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
 	if ctx == nil || ctx.RouterReplayID == "" {
@@ -425,6 +449,13 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 
 	if isFinal {
+		state := routerreplay.LifecycleCompleted
+		reason := "response_complete"
+		if ctx.UpstreamStatusCode >= 400 {
+			state = routerreplay.LifecycleFailed
+			reason = "upstream_error_response"
+		}
+		r.finalizeRouterReplay(ctx, state, reason)
 		if rec, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			logging.ComponentEvent(
 				"extproc",

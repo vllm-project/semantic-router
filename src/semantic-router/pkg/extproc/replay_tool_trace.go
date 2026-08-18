@@ -14,6 +14,7 @@ const (
 	replayToolStepAssistantToolCall      = "assistant_tool_call"
 	replayToolStepClientToolResult       = "client_tool_result"
 	replayToolStepAssistantFinalResponse = "assistant_final_response"
+	replayToolStepAssistantReasoningDone = "assistant_reasoning_complete"
 
 	replayToolSourceRequest  = "request"
 	replayToolSourceResponse = "response"
@@ -370,6 +371,15 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 			Text:    content,
 			APIType: replayAPITypeChatCompletions,
 		})
+	} else if strings.TrimSpace(ctx.StreamingReasoning) != "" {
+		// Record only a terminal marker. Chain-of-thought text is deliberately
+		// excluded from replay even when the provider streamed reasoning tokens.
+		steps = append(steps, routerreplay.ToolTraceStep{
+			Type:    replayToolStepAssistantReasoningDone,
+			Source:  replayToolSourceStream,
+			Role:    "assistant",
+			APIType: replayAPITypeChatCompletions,
+		})
 	}
 
 	return newReplayToolTrace(steps)
@@ -532,6 +542,8 @@ func replayToolTraceStepLabel(stepType string) string {
 		return "Client Tool Result"
 	case replayToolStepAssistantFinalResponse:
 		return "LLM Final Response"
+	case replayToolStepAssistantReasoningDone:
+		return "LLM Reasoning Complete"
 	default:
 		return ""
 	}

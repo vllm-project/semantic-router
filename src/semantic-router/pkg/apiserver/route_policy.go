@@ -14,6 +14,8 @@ const (
 	PermConfigWrite        RoutePermission = "config.write"
 	PermSecretView         RoutePermission = "secret_view"
 	PermLearningIngest     RoutePermission = "learning.ingest"
+	PermReplayRead         RoutePermission = "replay.read"
+	PermReplayDetail       RoutePermission = "replay.detail"
 	PermDataRead           RoutePermission = "data.read"
 	PermDataWrite          RoutePermission = "data.write"
 	PermMetricsRead        RoutePermission = "metrics.read"
@@ -32,6 +34,7 @@ const (
 	SensitivityPublic      RouteSensitivity = "public"
 	SensitivityOperational RouteSensitivity = "operational"
 	SensitivityConfig      RouteSensitivity = "config"
+	SensitivityReplay      RouteSensitivity = "replay"
 	SensitivitySecretView  RouteSensitivity = "secret_view"
 	SensitivityMutation    RouteSensitivity = "mutation"
 )

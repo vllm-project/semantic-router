@@ -1,12 +1,14 @@
 # Maintainer Ops
 
-Maintainer ops is the bridge between release plans and GitHub execution state.
+Maintainer ops turns an active release plan and current GitHub state into a
+local review board. It is read-only unless a maintainer separately reviews and
+applies a proposed action.
 
 ## Why This Exists
 
-The repo has more work than a maintainer can track from memory. Release plans,
-GitHub milestones, user issues, bug reports, PR review queues, stale PRs, and
-backlog candidates all need one daily operating board.
+Release intent, architecture debt, and changing GitHub state have different
+lifecycles. The local board gives maintainers one current view without copying
+daily issue and pull-request state into versioned plans.
 
 The canonical state split is:
 
@@ -63,13 +65,55 @@ active release-plan tasks:
 - Propose missing release seed issues from the active release plan, review the
   dry-run payload, and apply only after explicit maintainer approval.
 
+## Built-in Model Catalog Releases
+
+`config/recipes/built-in/latest/` is the authoring source for the catalog that
+ships with `vllm-sr`. The package mirror under
+`src/vllm-sr/cli/model_assets/latest/` is generated; update it with
+`tools/release/sync_model_catalog.py` rather than editing it directly.
+
+Immediately before a stable `vX.Y.Z` tag, create the matching catalog snapshot:
+
+```bash
+make built-in-model-snapshot RELEASE_VERSION=X.Y.Z
+```
+
+The command creates `config/recipes/built-in/vX.Y/`, updates its release
+metadata and bundle digests, and generates the matching package resources. It
+refuses to overwrite an existing snapshot. Commit both generated trees in the
+release-preparation change.
+
+Before tagging, verify the version contract and source/package parity. Published
+snapshots are release inputs and must not be rewritten; policy changes belong
+in `latest` or a new catalog version. User-facing Model Cards should explain
+catalog versions and compatibility without reproducing these release steps.
+
+## Release Promotion
+
+Stable releases are created from an explicitly reviewed candidate; nightly
+artifacts are never promoted automatically.
+
+1. Confirm the candidate commit passes the required CI and release checks.
+2. Update the repository's version-bearing surfaces and validate their shared
+   version contract.
+3. Create the matching built-in catalog snapshot as described above.
+4. Push the reviewed `v<version>` tag to start the canonical Docker, Helm,
+   Python, crate, and Operator publishers.
+5. Verify every publisher before treating the GitHub release as complete.
+
+Fleet Simulator uses its own package version and tag stream. Keep that release
+independent from the main Router version unless a documented compatibility
+constraint requires coordinated updates.
+
 ## Commands
 
 ```bash
-python3 tools/agent/scripts/maintainer_board.py sync --milestone "v0.3 - Themis"
+python3 tools/agent/scripts/maintainer_board.py sync --milestone "MILESTONE_NAME"
 python3 tools/agent/scripts/maintainer_board.py brief
-python3 tools/agent/scripts/maintainer_board.py release-report --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --write
-python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --dry-run
+python3 tools/agent/scripts/maintainer_board.py release-report \
+  --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --write
+python3 tools/agent/scripts/maintainer_board.py create-issues \
+  --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --dry-run
 ```
 
 `sync` requires the GitHub CLI to be authenticated. `brief` and
@@ -77,20 +121,16 @@ python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan too
 release-plan tasks that do not already match an open milestone issue unless
 `--include-matched` is passed explicitly.
 
-## Daily Cron Prompt
+## Automation Prompt Template
 
 ```text
-Run semantic-router maintainer ops for v0.3. Use tools/agent/docs/maintainer-ops.md
-and the maintainer release skill. Sync GitHub issues, PRs, milestones, labels,
-review state, and CI state for the v0.3 milestone. Regenerate
+Run semantic-router maintainer ops for MILESTONE_NAME. Use
+tools/agent/docs/maintainer-ops.md and the maintainer release skill. Sync GitHub
+issues, PRs, milestones, labels, review state, and CI state. Regenerate
 .agent-harness/maintainer/current.json, today.md, milestone notes,
 release-readiness.md, and proposed-actions.json. Compare the active release
 plan with the milestone and summarize blockers, missing issues, PRs needing
 review, PRs needing rebase, close candidates, and the next coding-agent tasks.
-If the active release includes session-aware agentic routing, run the GA
-readiness report with `--allow-blockers`; the maintainer board will include the
-latest GA blocker summary in today.md and release-readiness.md, with a link to
-the generated `ga-readiness.json` for details.
 Do not mutate GitHub.
 ```
 
@@ -126,7 +166,7 @@ lifecycle.
 Manual trigger example:
 
 ```bash
-gh workflow run maintenance.yml -f task=board -f milestone=v0.4
+gh workflow run maintenance.yml -f task=board -f milestone=MILESTONE_NAME
 ```
 
 ## Apply Policy

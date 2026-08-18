@@ -4,14 +4,24 @@ import json
 import os
 import socket
 import subprocess
-from pathlib import Path
 
+from cli import container_log_io as log_io
 from cli.container_images import get_fleet_sim_container_image
+from cli.container_observability import (
+    _ensure_hidden_config_dir,
+    _render_template_copy,
+    _run_service_start,
+)
+from cli.container_observability import (
+    render_observability_template as _render_observability_template,
+)
 from cli.container_runtime import get_container_runtime
+from cli.recipe_topology_storage import validate_storage_port_isolation
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+render_observability_template = _render_observability_template
 
 
 def container_status(container_name):
@@ -46,6 +56,57 @@ def container_status(container_name):
         return "error"
 
 
+def container_status_strict(container_name: str) -> str:
+    """Return one exact state or fail when absence cannot be proven.
+
+    Activation recovery is destructive transaction work, so it must not use
+    the compatibility helper above that historically treats every inspect
+    failure as an absent container.
+    """
+
+    runtime = get_container_runtime()
+    try:
+        result = subprocess.run(
+            [
+                runtime,
+                "inspect",
+                "--format",
+                "{{.State.Status}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("managed container status inspection failed") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).lower()
+        if any(
+            marker in detail
+            for marker in (
+                "no such container",
+                "no such object",
+                "no container with name or id",
+            )
+        ):
+            return "not found"
+        raise RuntimeError("managed container status inspection failed")
+    status = result.stdout.strip().lower()
+    if status not in {
+        "created",
+        "restarting",
+        "running",
+        "removing",
+        "paused",
+        "exited",
+        "dead",
+    }:
+        raise RuntimeError("managed container status inspection is invalid")
+    return status
+
+
 def container_stop_container(container_name):
     """Stop a container."""
     runtime = get_container_runtime()
@@ -74,34 +135,34 @@ def container_remove_container(container_name):
         return False
 
 
-def container_logs(container_name, follow=False, tail=None):
-    """Stream logs from a container."""
-    runtime = get_container_runtime()
-    cmd = [runtime, "logs"]
-    if follow:
-        cmd.append("-f")
-    if tail:
-        cmd.extend(["--tail", str(tail)])
-    cmd.append(container_name)
+def container_logs(container_name, follow=False, tail=None, *, merge_output=False):
+    """Stream logs from a container and report whether the command succeeded."""
+    return log_io.stream_container_logs(
+        get_container_runtime(),
+        container_name,
+        follow=follow,
+        tail=tail,
+        merge_output=merge_output,
+        run=subprocess.run,
+        logger=log,
+    )
 
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as exc:
-        log.error(f"Failed to get logs: {exc}")
-    except KeyboardInterrupt:
-        log.info("Log streaming stopped")
+
+def container_logs_output(container_name, tail=None):
+    """Capture a bounded container log snapshot with stderr merged in order."""
+    return log_io.capture_container_logs(
+        get_container_runtime(), container_name, tail=tail, run=subprocess.run
+    )
 
 
 def container_logs_since(container_name, since_timestamp):
     """Get logs from a container since a specific timestamp."""
-    runtime = get_container_runtime()
-    cmd = [runtime, "logs", "--since", str(since_timestamp), container_name]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return (0, result.stdout, result.stderr)
-    except subprocess.CalledProcessError as exc:
-        return (exc.returncode, exc.stdout, exc.stderr)
+    return log_io.capture_container_logs_since(
+        get_container_runtime(),
+        container_name,
+        since_timestamp,
+        run=subprocess.run,
+    )
 
 
 def container_exec(container_name, command):
@@ -309,7 +370,10 @@ def container_start_grafana(
 
 
 def container_start_redis(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    reuse_existing: bool = True,
 ):
     """Start a Redis container for durable storage backends.
 
@@ -320,13 +384,13 @@ def container_start_redis(
     container_name = stack_layout.redis_container_name
     network_name = network_name or stack_layout.network_name
 
-    reuse_result = _reuse_running_storage_container(
-        container_name, "Redis", network_name
-    )
-    if reuse_result is not None:
-        return reuse_result
-
-    _replace_existing_container(container_name)
+    if reuse_existing:
+        reuse_result = _reuse_running_storage_container(
+            container_name, "Redis", network_name
+        )
+        if reuse_result is not None:
+            return reuse_result
+        _replace_existing_container(container_name)
 
     if _is_port_in_use(stack_layout.redis_port):
         return _storage_port_conflict_result(
@@ -344,14 +408,17 @@ def container_start_redis(
         "--network",
         network_name,
         "-p",
-        f"{stack_layout.redis_port}:6379",
+        f"127.0.0.1:{stack_layout.redis_port}:6379",
         "docker.io/library/redis:7-alpine",
     ]
     return _run_service_start(cmd, "Redis")
 
 
 def container_start_postgres(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    reuse_existing: bool = True,
 ):
     """Start a Postgres container for durable storage backends.
 
@@ -362,13 +429,13 @@ def container_start_postgres(
     container_name = stack_layout.postgres_container_name
     network_name = network_name or stack_layout.network_name
 
-    reuse_result = _reuse_running_storage_container(
-        container_name, "Postgres", network_name
-    )
-    if reuse_result is not None:
-        return reuse_result
-
-    _replace_existing_container(container_name)
+    if reuse_existing:
+        reuse_result = _reuse_running_storage_container(
+            container_name, "Postgres", network_name
+        )
+        if reuse_result is not None:
+            return reuse_result
+        _replace_existing_container(container_name)
 
     if _is_port_in_use(stack_layout.postgres_port):
         return _storage_port_conflict_result(
@@ -392,7 +459,7 @@ def container_start_postgres(
         "-e",
         "POSTGRES_PASSWORD=router-secret",
         "-p",
-        f"{stack_layout.postgres_port}:5432",
+        f"127.0.0.1:{stack_layout.postgres_port}:5432",
         "docker.io/library/postgres:16-alpine",
     ]
     return _run_service_start(cmd, "Postgres")
@@ -403,6 +470,8 @@ def container_start_milvus(
     stack_layout: RuntimeStackLayout | None = None,
     *,
     state_root_dir: str | None = None,
+    host_hidden_state_dir: str | None = None,
+    reuse_existing: bool = True,
 ):
     """Start a Milvus container for the semantic cache backend.
 
@@ -413,18 +482,18 @@ def container_start_milvus(
     container_name = stack_layout.milvus_container_name
     network_name = network_name or stack_layout.network_name
 
-    reuse_result = _reuse_running_storage_container(
-        container_name, "Milvus", network_name
-    )
-    if reuse_result is not None:
-        return reuse_result
-    reuse_result = _reuse_running_storage_network_alias(
-        runtime, container_name, "Milvus", network_name
-    )
-    if reuse_result is not None:
-        return reuse_result
-
-    _replace_existing_container(container_name)
+    if reuse_existing:
+        reuse_result = _reuse_running_storage_container(
+            container_name, "Milvus", network_name
+        )
+        if reuse_result is not None:
+            return reuse_result
+        reuse_result = _reuse_running_storage_network_alias(
+            runtime, container_name, "Milvus", network_name
+        )
+        if reuse_result is not None:
+            return reuse_result
+        _replace_existing_container(container_name)
 
     if _is_port_in_use(stack_layout.milvus_port):
         return _storage_port_conflict_result(
@@ -434,6 +503,11 @@ def container_start_milvus(
     config_dir = _ensure_hidden_config_dir(state_root_dir)
     milvus_data_dir = os.path.join(config_dir, "milvus-data")
     os.makedirs(milvus_data_dir, exist_ok=True)
+    mount_data_dir = milvus_data_dir
+    if host_hidden_state_dir is not None:
+        if not os.path.isabs(host_hidden_state_dir):
+            raise ValueError("Milvus host state directory must be absolute")
+        mount_data_dir = os.path.join(host_hidden_state_dir, "milvus-data")
 
     cmd = [
         runtime,
@@ -458,9 +532,9 @@ def container_start_milvus(
         "-e",
         "CLUSTER_ENABLED=false",
         "-p",
-        f"{stack_layout.milvus_port}:19530",
+        f"127.0.0.1:{stack_layout.milvus_port}:19530",
         "-v",
-        f"{os.path.abspath(milvus_data_dir)}:/var/lib/milvus:z",
+        f"{os.path.abspath(mount_data_dir)}:/var/lib/milvus:z",
         "docker.io/milvusdb/milvus:v2.3.3",
         "milvus",
         "run",
@@ -569,6 +643,17 @@ def _reuse_running_storage_container(
     """Return a success/failure tuple when a running storage container is reused."""
     status = container_status(container_name)
     if status == "running":
+        safe, detail = _storage_ports_are_loopback_only(container_name)
+        if not safe:
+            return (
+                1,
+                "",
+                (
+                    f"{label} container {container_name} has unsafe published storage "
+                    f"ports ({detail}). Preserve its data mounts and recreate it with "
+                    "127.0.0.1 bindings before serving; automatic reuse is disabled."
+                ),
+            )
         log.info(f"{label} container already running, reusing to preserve data")
         if network_name:
             return_code, stdout, stderr = container_network_connect(
@@ -580,6 +665,39 @@ def _reuse_running_storage_container(
     return None
 
 
+def _storage_ports_are_loopback_only(container_name: str) -> tuple[bool, str]:
+    runtime = get_container_runtime()
+    try:
+        result = subprocess.run(
+            [
+                runtime,
+                "inspect",
+                "--format",
+                (
+                    '{"network_mode":{{json .HostConfig.NetworkMode}},'
+                    '"publish_all_ports":{{json .HostConfig.PublishAllPorts}},'
+                    '"configured":{{json .HostConfig.PortBindings}},'
+                    '"actual":{{json .NetworkSettings.Ports}}}'
+                ),
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        inspection = json.loads(result.stdout or "")
+        validate_storage_port_isolation(inspection)
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+        ValueError,
+    ) as exc:
+        return False, f"inspection failed: {exc}"
+    return True, ""
+
+
 def _reuse_running_storage_network_alias(
     runtime: str, alias: str, label: str, network_name: str | None
 ) -> tuple[int, str, str] | None:
@@ -587,6 +705,18 @@ def _reuse_running_storage_network_alias(
     container_name = _running_container_for_network_alias(runtime, network_name, alias)
     if not container_name:
         return None
+
+    safe, detail = _storage_ports_are_loopback_only(container_name)
+    if not safe:
+        return (
+            1,
+            "",
+            (
+                f"{label} container {container_name} has unsafe published storage "
+                f"ports ({detail}). Preserve its data mounts and recreate it with "
+                "127.0.0.1 bindings before serving; automatic reuse is disabled."
+            ),
+        )
 
     log.info(
         f"{label} service already attached to {network_name} as {alias} "
@@ -663,45 +793,3 @@ def _replace_existing_container(container_name):
         log.info(f"{container_name} already exists (status: {status}), cleaning up...")
         container_stop_container(container_name)
         container_remove_container(container_name)
-
-
-def _ensure_hidden_config_dir(config_dir):
-    if config_dir is None:
-        config_dir = os.path.join(os.getcwd(), ".vllm-sr")
-    else:
-        config_dir = os.path.join(config_dir, ".vllm-sr")
-    os.makedirs(config_dir, exist_ok=True)
-    return config_dir
-
-
-def _render_template_copy(
-    source_path: str, destination_path: str, stack_layout: RuntimeStackLayout
-) -> None:
-    source = Path(source_path)
-    destination = Path(destination_path)
-    rendered = render_observability_template(source.read_text(), stack_layout)
-    destination.write_text(rendered, encoding="utf-8")
-
-
-def render_observability_template(
-    template_text: str, stack_layout: RuntimeStackLayout
-) -> str:
-    replacements = (
-        ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
-        ("vllm-sr-container", stack_layout.router_container_name),
-        ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
-        ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
-    )
-    rendered = template_text
-    for source, target in replacements:
-        rendered = rendered.replace(source, target)
-    return rendered
-
-
-def _run_service_start(cmd, service_name):
-    log.info(f"Starting {service_name} container...")
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return (0, result.stdout, result.stderr)
-    except subprocess.CalledProcessError as exc:
-        return (exc.returncode, exc.stdout, exc.stderr)

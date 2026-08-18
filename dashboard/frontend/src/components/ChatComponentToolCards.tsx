@@ -10,17 +10,14 @@ import {
   truncateHighlight,
 } from './ChatComponentTypes'
 import { OpenWebCard, WebSearchCard } from './ChatComponentWebToolCards'
-import {
-  getToolDisplayName,
-  getToolStatusLabel,
-  getToolSummary,
-} from './chatToolCardPresentation'
+import { getToolDisplayName, getToolStatusLabel, getToolSummary } from './chatToolCardPresentation'
 
 const TOOL_STATUS_CLASS_NAMES: Record<ToolCall['status'], string> = {
   pending: styles.toolStatusPending,
   running: styles.toolStatusRunning,
   completed: styles.toolStatusCompleted,
   failed: styles.toolStatusFailed,
+  skipped: styles.toolStatusSkipped,
 }
 
 function buildResultPreview(toolResult?: ToolResult) {
@@ -43,7 +40,7 @@ export const ToolCard = ({
   toolCall,
   toolResult,
   isExpanded,
-  onToggle
+  onToggle,
 }: {
   toolCall: ToolCall
   toolResult?: ToolResult
@@ -55,7 +52,8 @@ export const ToolCard = ({
   const isClawMCPToolCall = isOpenClawMCPToolName(toolName)
   const clawToolName = isClawMCPToolCall ? parsedMCPTool?.toolName || '' : ''
   const displayToolName = getToolDisplayName(clawToolName || toolName)
-  const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
+  const isClawCreateToolCall =
+    clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
   const rawArgs = toolCall.function.arguments || ''
   const parsedArgs = useMemo(() => {
     try {
@@ -67,14 +65,19 @@ export const ToolCard = ({
     }
   }, [rawArgs])
   const requestHighlights = useMemo(
-    () => (isClawCreateToolCall ? buildClawRequestHighlights(clawToolName, parsedArgs, rawArgs) : []),
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs]
+    () =>
+      isClawCreateToolCall ? buildClawRequestHighlights(clawToolName, parsedArgs, rawArgs) : [],
+    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs],
   )
   const resultHighlights = useMemo(
-    () => (isClawCreateToolCall ? buildClawResultHighlights(clawToolName, toolResult?.content, parsedArgs, rawArgs) : []),
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content]
+    () =>
+      isClawCreateToolCall
+        ? buildClawResultHighlights(clawToolName, toolResult?.content, parsedArgs, rawArgs)
+        : [],
+    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content],
   )
-  const showResultHighlights = isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
+  const showResultHighlights =
+    isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
   const statusLabel = getToolStatusLabel(toolCall.status)
   const summary = getToolSummary(clawToolName || toolName, parsedArgs, isClawMCPToolCall)
   const resultPreview = useMemo(() => buildResultPreview(toolResult), [toolResult])
@@ -143,7 +146,9 @@ export const ToolCard = ({
       </button>
       {toolCall.status === 'running' || toolCall.status === 'pending' ? (
         <div className={styles.webSearchLoading}>
-          <div className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`} />
+          <div
+            className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`}
+          />
         </div>
       ) : null}
       {isExpanded && isClawCreateToolCall ? (
@@ -152,7 +157,7 @@ export const ToolCard = ({
             <div className={styles.clawToolHighlightSection}>
               <span className={styles.clawToolHighlightHeading}>Request</span>
               <div className={styles.clawToolHighlightRows}>
-                {requestHighlights.map(item => (
+                {requestHighlights.map((item) => (
                   <div key={`request-${item.label}`} className={styles.clawToolHighlightRow}>
                     <span className={styles.clawToolHighlightKey}>{item.label}</span>
                     <span className={styles.clawToolHighlightValue}>{item.value}</span>
@@ -165,7 +170,7 @@ export const ToolCard = ({
             <div className={styles.clawToolHighlightSection}>
               <span className={styles.clawToolHighlightHeading}>Result</span>
               <div className={styles.clawToolHighlightRows}>
-                {resultHighlights.map(item => (
+                {resultHighlights.map((item) => (
                   <div key={`result-${item.label}`} className={styles.clawToolHighlightRow}>
                     <span className={styles.clawToolHighlightKey}>{item.label}</span>
                     <span className={styles.clawToolHighlightValue}>{item.value}</span>
@@ -174,7 +179,9 @@ export const ToolCard = ({
                 {toolResult?.error && (
                   <div className={styles.clawToolHighlightRow}>
                     <span className={styles.clawToolHighlightKey}>error</span>
-                    <span className={`${styles.clawToolHighlightValue} ${styles.clawToolHighlightError}`}>
+                    <span
+                      className={`${styles.clawToolHighlightValue} ${styles.clawToolHighlightError}`}
+                    >
                       {truncateHighlight(toolResult.error, 180)}
                     </span>
                   </div>
