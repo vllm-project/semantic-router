@@ -165,8 +165,11 @@
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret {
+  flex: 0 0 1.75rem;
+  justify-content: center;
   width: 1.75rem;
   min-height: 1.75rem;
+  padding: 0;
   border-radius: 0.2rem;
 }
 
@@ -176,6 +179,7 @@
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret::before,
 .site-root--docs .theme-doc-sidebar-menu .menu__link--sublist-caret::after {
+  flex: 0 0 1.25rem;
   opacity: 0.58;
   transform: scale(0.68) rotate(180deg);
 }
