@@ -12,6 +12,8 @@ from typing import Any
 from .config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contract
 from .export import file_sha256, validate_artifact_shape, write_artifact_manifest
 
+HTTP_NOT_FOUND = 404
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
@@ -35,6 +37,25 @@ def _yaml_labels(task: dict[str, Any]) -> str:
     return "\n".join(f"  {label}: {index}" for label, index in task["label2id"].items())
 
 
+def _usage_example(repository_id: str, artifact_type: str) -> str:
+    if artifact_type == "adapter":
+        return f"""```python
+from peft import AutoPeftModelForSequenceClassification
+from transformers import AutoTokenizer
+
+model_id = "{repository_id}"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoPeftModelForSequenceClassification.from_pretrained(model_id)
+```"""
+    return f"""```python
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+model_id = "{repository_id}"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForSequenceClassification.from_pretrained(model_id)
+```"""
+
+
 def build_model_card(
     task_name: str,
     artifact_type: str,
@@ -51,24 +72,7 @@ def build_model_card(
         f"{source_commit}/src/training/model_classifier/safety_classifier"
     )
     library_name = "peft" if artifact_type == "adapter" else "transformers"
-    usage = (
-        f"""```python
-from peft import AutoPeftModelForSequenceClassification
-from transformers import AutoTokenizer
-
-model_id = "{repository_id}"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoPeftModelForSequenceClassification.from_pretrained(model_id)
-```"""
-        if artifact_type == "adapter"
-        else f"""```python
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-model_id = "{repository_id}"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoModelForSequenceClassification.from_pretrained(model_id)
-```"""
-    )
+    usage = _usage_example(repository_id, artifact_type)
     return f"""---
 license: apache-2.0
 library_name: {library_name}
@@ -148,7 +152,10 @@ def _repository_exists(api: Any, repo_id: str) -> bool:
         return True
     except Exception as exc:  # huggingface_hub moved this exception across releases
         response = getattr(exc, "response", None)
-        if response is not None and getattr(response, "status_code", None) == 404:
+        if (
+            response is not None
+            and getattr(response, "status_code", None) == HTTP_NOT_FOUND
+        ):
             return False
         if exc.__class__.__name__ in {"RepositoryNotFoundError", "EntryNotFoundError"}:
             return False
@@ -174,13 +181,16 @@ def _smoke_load_remote(
     contract: dict[str, Any],
     task_name: str,
 ) -> None:
-    import torch
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    import torch  # noqa: PLC0415
+    from transformers import (  # noqa: PLC0415
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+    )
 
     task = task_contract(contract, task_name)
     tokenizer = AutoTokenizer.from_pretrained(repo_id, revision=revision)
     if artifact_type == "adapter":
-        from peft import PeftModel
+        from peft import PeftModel  # noqa: PLC0415
 
         base = contract["base_model"]
         base_model = AutoModelForSequenceClassification.from_pretrained(
@@ -215,7 +225,7 @@ def publish(
     verify_remote: bool = True,
 ) -> dict[str, str]:
     try:
-        from huggingface_hub import HfApi, snapshot_download
+        from huggingface_hub import HfApi, snapshot_download  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError("huggingface-hub is required for release") from exc
 

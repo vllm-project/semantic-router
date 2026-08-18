@@ -12,6 +12,8 @@ import math
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+BINARY_CLASS_COUNT = 2
+
 
 def _as_list(values: Any, name: str) -> list[Any]:
     """Materialize Python and array-like inputs without importing NumPy."""
@@ -27,9 +29,8 @@ def _as_list(values: Any, name: str) -> list[Any]:
 
 def _integer_vector(values: Any, name: str) -> list[int]:
     result: list[int] = []
-    for index, value in enumerate(_as_list(values, name)):
-        if hasattr(value, "item"):
-            value = value.item()
+    for index, raw_value in enumerate(_as_list(values, name)):
+        value = raw_value.item() if hasattr(raw_value, "item") else raw_value
         try:
             numeric = float(value)
             integer = int(value)
@@ -43,9 +44,8 @@ def _integer_vector(values: Any, name: str) -> list[int]:
 
 def _float_vector(values: Any, name: str) -> list[float]:
     result: list[float] = []
-    for index, value in enumerate(_as_list(values, name)):
-        if hasattr(value, "item"):
-            value = value.item()
+    for index, raw_value in enumerate(_as_list(values, name)):
+        value = raw_value.item() if hasattr(raw_value, "item") else raw_value
         try:
             score = float(value)
         except (TypeError, ValueError, OverflowError) as exc:
@@ -173,6 +173,36 @@ def _binary_curve_areas(
     return auroc, average_precision
 
 
+def _binary_inputs(
+    labels: Any,
+    predictions: Any | None,
+    unsafe_scores: Any | None,
+    threshold: float,
+) -> tuple[list[int], list[int], list[float] | None]:
+    label_values = _integer_vector(labels, "labels")
+    if any(label not in (0, 1) for label in label_values):
+        raise ValueError("binary labels must contain only 0 (safe) and 1 (unsafe)")
+
+    score_values = (
+        _float_vector(unsafe_scores, "unsafe_scores")
+        if unsafe_scores is not None
+        else None
+    )
+    if score_values is not None:
+        _validate_lengths(label_values, score_values, "unsafe_scores")
+
+    if predictions is None:
+        if score_values is None:
+            raise ValueError("predictions or unsafe_scores must be provided")
+        prediction_values = predictions_from_scores(score_values, threshold)
+    else:
+        prediction_values = _integer_vector(predictions, "predictions")
+        _validate_lengths(label_values, prediction_values, "predictions")
+        if any(prediction not in (0, 1) for prediction in prediction_values):
+            raise ValueError("binary predictions must contain only 0 and 1")
+    return label_values, prediction_values, score_values
+
+
 def binary_classification_metrics(
     labels: Any,
     predictions: Any | None = None,
@@ -185,24 +215,12 @@ def binary_classification_metrics(
     Undefined divisions use zero. AUROC and AUPRC are ``None`` when either
     class is absent. AUPRC is average precision (a step-wise PR integral).
     """
-    label_values = _integer_vector(labels, "labels")
-    if any(label not in (0, 1) for label in label_values):
-        raise ValueError("binary labels must contain only 0 (safe) and 1 (unsafe)")
-
-    score_values: list[float] | None = None
-    if unsafe_scores is not None:
-        score_values = _float_vector(unsafe_scores, "unsafe_scores")
-        _validate_lengths(label_values, score_values, "unsafe_scores")
-
-    if predictions is None:
-        if score_values is None:
-            raise ValueError("predictions or unsafe_scores must be provided")
-        prediction_values = predictions_from_scores(score_values, threshold)
-    else:
-        prediction_values = _integer_vector(predictions, "predictions")
-        _validate_lengths(label_values, prediction_values, "predictions")
-        if any(prediction not in (0, 1) for prediction in prediction_values):
-            raise ValueError("binary predictions must contain only 0 and 1")
+    label_values, prediction_values, score_values = _binary_inputs(
+        labels,
+        predictions,
+        unsafe_scores,
+        threshold,
+    )
 
     true_negative = false_positive = false_negative = true_positive = 0
     for label, prediction in zip(label_values, prediction_values, strict=True):
@@ -381,20 +399,23 @@ def _top_k_predictions(
     ]
 
 
-def multiclass_classification_metrics(
+def _multiclass_inputs(
     labels: Any,
-    predictions: Any | None = None,
-    *,
-    class_scores: Any | None = None,
-    class_names: Sequence[str] | None = None,
-    strict_single_target_mask: Any | None = None,
-) -> dict[str, Any]:
-    """Compute the complete Level-2 report, optionally with a strict subset."""
+    predictions: Any | None,
+    class_scores: Any | None,
+    class_names: Sequence[str] | None,
+) -> tuple[list[int], list[int], list[list[float]] | None, list[str], int]:
     label_values = _integer_vector(labels, "labels")
-    score_values: list[list[float]] | None = None
-    if class_scores is not None:
-        score_values = _float_matrix(class_scores, "class_scores")
+    score_values = (
+        _float_matrix(class_scores, "class_scores")
+        if class_scores is not None
+        else None
+    )
+    if score_values is not None:
         _validate_lengths(label_values, score_values, "class_scores")
+    supplied_predictions = (
+        _integer_vector(predictions, "predictions") if predictions is not None else None
+    )
 
     if class_names is not None:
         names = [str(name) for name in class_names]
@@ -405,9 +426,7 @@ def multiclass_classification_metrics(
         class_count = len(score_values[0])
         names = [str(index) for index in range(class_count)]
     else:
-        observed = label_values[:]
-        if predictions is not None:
-            observed.extend(_integer_vector(predictions, "predictions"))
+        observed = label_values + (supplied_predictions or [])
         if not observed:
             raise ValueError("class_names are required for an empty report")
         class_count = max(observed) + 1
@@ -417,18 +436,66 @@ def multiclass_classification_metrics(
         len(row) != class_count for row in score_values
     ):
         raise ValueError("class_scores width must match class_names")
-    if predictions is None:
+    if supplied_predictions is None:
         if score_values is None:
             raise ValueError("predictions or class_scores must be provided")
         prediction_values = [top[0] for top in _top_k_predictions(score_values, 1)]
     else:
-        prediction_values = _integer_vector(predictions, "predictions")
+        prediction_values = supplied_predictions
         _validate_lengths(label_values, prediction_values, "predictions")
 
     if any(not 0 <= label < class_count for label in label_values):
         raise ValueError("labels contain an ID outside the configured classes")
     if any(not 0 <= prediction < class_count for prediction in prediction_values):
         raise ValueError("predictions contain an ID outside the configured classes")
+    return label_values, prediction_values, score_values, names, class_count
+
+
+def _strict_subset_report(
+    strict_single_target_mask: Any | None,
+    label_values: list[int],
+    prediction_values: list[int],
+    score_values: list[list[float]] | None,
+    names: list[str],
+    total: int,
+) -> dict[str, Any] | None:
+    if strict_single_target_mask is None:
+        return None
+    mask = [
+        bool(value)
+        for value in _as_list(
+            strict_single_target_mask,
+            "strict_single_target_mask",
+        )
+    ]
+    _validate_lengths(label_values, mask, "strict_single_target_mask")
+    indices = [index for index, include in enumerate(mask) if include]
+    subset = multiclass_classification_metrics(
+        [label_values[index] for index in indices],
+        [prediction_values[index] for index in indices],
+        class_scores=(
+            [score_values[index] for index in indices]
+            if score_values is not None
+            else None
+        ),
+        class_names=names,
+    )
+    subset["coverage"] = _safe_divide(len(indices), total)
+    return subset
+
+
+def multiclass_classification_metrics(
+    labels: Any,
+    predictions: Any | None = None,
+    *,
+    class_scores: Any | None = None,
+    class_names: Sequence[str] | None = None,
+    strict_single_target_mask: Any | None = None,
+) -> dict[str, Any]:
+    """Compute the complete Level-2 report, optionally with a strict subset."""
+    label_values, prediction_values, score_values, names, class_count = (
+        _multiclass_inputs(labels, predictions, class_scores, class_names)
+    )
 
     confusion = [[0 for _ in range(class_count)] for _ in range(class_count)]
     for label, prediction in zip(label_values, prediction_values, strict=True):
@@ -493,36 +560,20 @@ def multiclass_classification_metrics(
                 for name, report in zip(names, reports, strict=True)
             },
         },
-        "per_class": {
-            name: report for name, report in zip(names, reports, strict=True)
-        },
+        "per_class": dict(zip(names, reports, strict=True)),
         "balanced_accuracy_definition": "mean recall over classes present in labels",
         "top2_tie_break": "descending score, then ascending class ID",
     }
 
-    if strict_single_target_mask is not None:
-        mask = [
-            bool(value)
-            for value in _as_list(
-                strict_single_target_mask, "strict_single_target_mask"
-            )
-        ]
-        _validate_lengths(label_values, mask, "strict_single_target_mask")
-        indices = [index for index, include in enumerate(mask) if include]
-        subset_labels = [label_values[index] for index in indices]
-        subset_predictions = [prediction_values[index] for index in indices]
-        subset_scores = (
-            [score_values[index] for index in indices]
-            if score_values is not None
-            else None
-        )
-        subset = multiclass_classification_metrics(
-            subset_labels,
-            subset_predictions,
-            class_scores=subset_scores,
-            class_names=names,
-        )
-        subset["coverage"] = _safe_divide(len(indices), total)
+    subset = _strict_subset_report(
+        strict_single_target_mask,
+        label_values,
+        prediction_values,
+        score_values,
+        names,
+        total,
+    )
+    if subset is not None:
         result["strict_single_target"] = subset
 
     return result
@@ -568,7 +619,7 @@ def _binary_probabilities(
         first = first.tolist()
     if isinstance(first, Iterable) and not isinstance(first, (str, bytes)):
         matrix = _float_matrix(values, "logits_or_probabilities")
-        if any(len(row) != 2 for row in matrix):
+        if any(len(row) != BINARY_CLASS_COUNT for row in matrix):
             raise ValueError("Level-1 logits must have exactly two columns")
         probabilities = probabilities_from_logits_or_probabilities(matrix)
         return probabilities, [row[1] for row in probabilities]

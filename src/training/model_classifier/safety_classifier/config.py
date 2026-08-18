@@ -8,9 +8,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-
 PACKAGE_ROOT = Path(__file__).resolve().parent
 DEFAULT_CONTRACT_PATH = PACKAGE_ROOT / "configs" / "reconstruction-v1.json"
+MODEL_MAX_LENGTH = 512
+LEVEL1_NUM_LABELS = 2
+LEVEL2_NUM_LABELS = 9
 
 
 class ContractError(ValueError):
@@ -23,6 +25,58 @@ def _require(mapping: dict[str, Any], key: str, context: str) -> Any:
     return mapping[key]
 
 
+def _validate_base_model(contract: dict[str, Any]) -> None:
+    base_model = _require(contract, "base_model", "contract")
+    for key in ("id", "revision"):
+        value = _require(base_model, key, "base_model")
+        if not isinstance(value, str) or not value:
+            raise ContractError(f"base_model.{key} must be a non-empty string")
+
+
+def _validate_datasets(contract: dict[str, Any]) -> None:
+    datasets = _require(contract, "datasets", "contract")
+    for dataset_name in ("aegis", "synthetic"):
+        dataset = _require(datasets, dataset_name, "datasets")
+        for key in ("id", "revision", "files"):
+            _require(dataset, key, f"datasets.{dataset_name}")
+
+
+def _validate_model(contract: dict[str, Any]) -> None:
+    model = _require(contract, "model", "contract")
+    if model.get("max_length") != MODEL_MAX_LENGTH:
+        raise ContractError(
+            f"reconstruction-v1 fixes model.max_length at {MODEL_MAX_LENGTH}"
+        )
+    if model.get("reference_compile") is not False:
+        raise ContractError(
+            "model.reference_compile must be false for distributed ROCm"
+        )
+    lora = _require(model, "lora", "model")
+    if lora.get("alpha") != 2 * lora.get("rank", 0):
+        raise ContractError("LoRA alpha must remain exactly twice the rank")
+    expected_modules = ["attn.Wqkv", "attn.Wo", "mlp.Wi", "mlp.Wo"]
+    if sorted(lora.get("target_modules", [])) != sorted(expected_modules):
+        raise ContractError("Unexpected ModernBERT LoRA target module set")
+
+
+def _validate_tasks(contract: dict[str, Any]) -> None:
+    tasks = _require(contract, "tasks", "contract")
+    if set(tasks) != {"level1", "level2"}:
+        raise ContractError("tasks must contain exactly level1 and level2")
+    expected_counts = {
+        "level1": (LEVEL1_NUM_LABELS, "two"),
+        "level2": (LEVEL2_NUM_LABELS, "nine"),
+    }
+    for task_name, (expected_count, count_name) in expected_counts.items():
+        task = tasks[task_name]
+        if task.get("num_labels") != expected_count:
+            raise ContractError(f"{task_name} must contain {count_name} labels")
+        label2id = _require(task, "label2id", f"tasks.{task_name}")
+        expected_ids = list(range(task["num_labels"]))
+        if sorted(label2id.values()) != expected_ids:
+            raise ContractError(f"tasks.{task_name}.label2id must be contiguous")
+
+
 def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> dict[str, Any]:
     """Load the versioned JSON contract and validate its cross-field invariants."""
     contract_path = Path(path)
@@ -31,47 +85,10 @@ def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> dict[str, Any]:
 
     if contract.get("contract_version") != 1:
         raise ContractError("Only reconstruction contract_version=1 is supported")
-
-    base_model = _require(contract, "base_model", "contract")
-    for key in ("id", "revision"):
-        value = _require(base_model, key, "base_model")
-        if not isinstance(value, str) or not value:
-            raise ContractError(f"base_model.{key} must be a non-empty string")
-
-    datasets = _require(contract, "datasets", "contract")
-    for dataset_name in ("aegis", "synthetic"):
-        dataset = _require(datasets, dataset_name, "datasets")
-        for key in ("id", "revision", "files"):
-            _require(dataset, key, f"datasets.{dataset_name}")
-
-    model = _require(contract, "model", "contract")
-    if model.get("max_length") != 512:
-        raise ContractError("reconstruction-v1 fixes model.max_length at 512")
-    if model.get("reference_compile") is not False:
-        raise ContractError(
-            "model.reference_compile must be false for distributed ROCm"
-        )
-    lora = _require(model, "lora", "model")
-    if lora.get("alpha") != 2 * lora.get("rank", 0):
-        raise ContractError("LoRA alpha must remain exactly twice the rank")
-    if sorted(lora.get("target_modules", [])) != sorted(
-        ["attn.Wqkv", "attn.Wo", "mlp.Wi", "mlp.Wo"]
-    ):
-        raise ContractError("Unexpected ModernBERT LoRA target module set")
-
-    tasks = _require(contract, "tasks", "contract")
-    if set(tasks) != {"level1", "level2"}:
-        raise ContractError("tasks must contain exactly level1 and level2")
-    if tasks["level1"].get("num_labels") != 2:
-        raise ContractError("level1 must contain two labels")
-    if tasks["level2"].get("num_labels") != 9:
-        raise ContractError("level2 must contain nine labels")
-    for task_name, task in tasks.items():
-        label2id = _require(task, "label2id", f"tasks.{task_name}")
-        expected_ids = list(range(task["num_labels"]))
-        if sorted(label2id.values()) != expected_ids:
-            raise ContractError(f"tasks.{task_name}.label2id must be contiguous")
-
+    _validate_base_model(contract)
+    _validate_datasets(contract)
+    _validate_model(contract)
+    _validate_tasks(contract)
     return contract
 
 

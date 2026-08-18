@@ -9,6 +9,7 @@ import json
 import os
 import platform
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,21 @@ from .config import (
     load_contract,
     task_contract,
 )
+
+RELEASE_WORLD_SIZE = 8
+
+
+@dataclass(frozen=True)
+class _TrainingRuntime:
+    """Resolved process-local settings shared by the training helpers."""
+
+    stack: dict[str, Any]
+    torch: Any
+    world_size: int
+    per_device_batch: int
+    gradient_accumulation: int
+    use_bf16: bool
+    output_root: Path
 
 
 def _json_default(value: Any) -> Any:
@@ -41,6 +57,14 @@ def _file_sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _write_json(path: Path, payload: Any, *, runtime_values: bool = False) -> None:
+    default = _json_default if runtime_values else None
+    path.write_text(
+        json.dumps(payload, default=default, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _source_commit() -> str | None:
@@ -88,11 +112,11 @@ def validate_materialized_data(data_dir: Path, task_name: str) -> dict[str, Any]
 
 def _load_training_stack() -> dict[str, Any]:
     try:
-        import numpy as np
-        import torch
-        from datasets import load_dataset
-        from peft import LoraConfig, TaskType, get_peft_model
-        from transformers import (
+        import numpy as np  # noqa: PLC0415
+        import torch  # noqa: PLC0415
+        from datasets import load_dataset  # noqa: PLC0415
+        from peft import LoraConfig, TaskType, get_peft_model  # noqa: PLC0415
+        from transformers import (  # noqa: PLC0415
             AutoModelForSequenceClassification,
             AutoTokenizer,
             DataCollatorWithPadding,
@@ -125,7 +149,10 @@ def _load_training_stack() -> dict[str, Any]:
 
 
 def _trainer_metrics(task_name: str):
-    from .metrics import compute_level1_metrics, compute_level2_metrics
+    from .metrics import (  # noqa: PLC0415
+        compute_level1_metrics,
+        compute_level2_metrics,
+    )
 
     def compute(eval_prediction):
         logits, labels = eval_prediction
@@ -134,6 +161,59 @@ def _trainer_metrics(task_name: str):
         return compute_level2_metrics(labels, logits)
 
     return compute
+
+
+def synchronize_best_checkpoint(trainer: Any, torch: Any, trial: Any) -> None:
+    """Make rank-local best-checkpoint state consistent after a DDP save.
+
+    Transformers 4.55 updates ``best_model_checkpoint`` only when the newly
+    created checkpoint directory is already visible. On a shared single-node
+    filesystem, non-zero ranks can perform that check before rank zero creates
+    the directory, skip the later load-best barrier, and deadlock rank zero.
+    Synchronize after the save and derive the path from the best global step on
+    every rank instead of relying on that racy existence check.
+    """
+    distributed = getattr(torch, "distributed", None)
+    is_distributed = bool(
+        distributed is not None
+        and distributed.is_available()
+        and distributed.is_initialized()
+    )
+    if is_distributed:
+        device_ids = None
+        if torch.cuda.is_available():
+            device_ids = [torch.cuda.current_device()]
+        distributed.barrier(device_ids=device_ids)
+
+    best_step = getattr(trainer.state, "best_global_step", None)
+    if not best_step:
+        return
+    checkpoint_name = f"checkpoint-{best_step}"
+    checkpoint = Path(trainer._get_output_dir(trial)) / checkpoint_name
+    if checkpoint.is_dir():
+        trainer.state.best_model_checkpoint = str(checkpoint)
+        return
+
+    resumed_checkpoint = getattr(trainer.state, "best_model_checkpoint", None)
+    if resumed_checkpoint:
+        resumed_path = Path(resumed_checkpoint)
+        if resumed_path.name == checkpoint_name and resumed_path.is_dir():
+            trainer.state.best_model_checkpoint = str(resumed_path)
+            return
+    raise FileNotFoundError(
+        f"best checkpoint is missing after synchronized save: {checkpoint}"
+    )
+
+
+def synchronized_checkpoint_trainer(base_trainer: type[Any], torch: Any) -> type[Any]:
+    """Wrap the pinned Trainer with a post-save distributed checkpoint fence."""
+
+    class SynchronizedCheckpointTrainer(base_trainer):
+        def _save_checkpoint(self, model: Any, trial: Any) -> None:
+            super()._save_checkpoint(model, trial)
+            synchronize_best_checkpoint(self, torch, trial)
+
+    return SynchronizedCheckpointTrainer
 
 
 def _tokenize_datasets(
@@ -169,7 +249,9 @@ def _tokenize_datasets(
     return datasets
 
 
-def train(args: argparse.Namespace) -> Path:
+def _load_training_inputs(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any], Path, dict[str, Any]]:
     contract = load_contract(args.contract)
     task = task_contract(contract, args.task)
     data_dir = Path(args.data_dir).resolve()
@@ -181,24 +263,36 @@ def train(args: argparse.Namespace) -> Path:
         )
     if manifest_contract_sha != contract_sha256(contract):
         raise ValueError("Prepared data contract hash does not match training contract")
-    if args.validate_only:
-        print(json.dumps(data_manifest, indent=2, sort_keys=True))
-        return data_dir / args.task
+    return contract, task, data_dir, data_manifest
 
+
+def _prepare_output_root(args: argparse.Namespace) -> Path:
+    output_root = Path(args.output_dir).resolve()
+    output_is_reusable = args.overwrite_output_dir or args.resume_from_checkpoint
+    if output_root.exists() and any(output_root.iterdir()) and not output_is_reusable:
+        raise FileExistsError(
+            f"Output directory is not empty: {output_root}. "
+            "Use --overwrite-output-dir or --resume-from-checkpoint."
+        )
+    output_root.mkdir(parents=True, exist_ok=True)
+    return output_root
+
+
+def _prepare_runtime(
+    contract: dict[str, Any], args: argparse.Namespace
+) -> _TrainingRuntime:
     stack = _load_training_stack()
     torch = stack["torch"]
-    if not torch.cuda.is_available() and not args.allow_cpu:
+    accelerator_available = torch.cuda.is_available()
+    if not accelerator_available and not args.allow_cpu:
         raise RuntimeError(
             "No accelerator detected; pass --allow-cpu only for a smoke run"
         )
-
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     if args.expected_world_size and world_size != args.expected_world_size:
         raise RuntimeError(
             f"Expected WORLD_SIZE={args.expected_world_size}, found {world_size}"
         )
-
-    training = contract["training"]
     per_device_batch, gradient_accumulation = distributed_batch_parameters(
         contract, world_size
     )
@@ -206,28 +300,27 @@ def train(args: argparse.Namespace) -> Path:
         per_device_batch = args.per_device_train_batch_size
     if args.gradient_accumulation_steps is not None:
         gradient_accumulation = args.gradient_accumulation_steps
+    stack["set_seed"](int(contract["training"]["seed"]))
+    return _TrainingRuntime(
+        stack=stack,
+        torch=torch,
+        world_size=world_size,
+        per_device_batch=per_device_batch,
+        gradient_accumulation=gradient_accumulation,
+        use_bf16=bool(accelerator_available and not args.disable_bf16),
+        output_root=_prepare_output_root(args),
+    )
 
-    seed = int(training["seed"])
-    stack["set_seed"](seed)
-    output_root = Path(args.output_dir).resolve()
-    if (
-        output_root.exists()
-        and any(output_root.iterdir())
-        and not (args.overwrite_output_dir or args.resume_from_checkpoint)
-    ):
-        raise FileExistsError(
-            f"Output directory is not empty: {output_root}. "
-            "Use --overwrite-output-dir or --resume-from-checkpoint."
-        )
-    output_root.mkdir(parents=True, exist_ok=True)
 
+def _build_model_and_tokenizer(
+    contract: dict[str, Any], task: dict[str, Any], runtime: _TrainingRuntime
+) -> tuple[Any, Any]:
+    stack = runtime.stack
     base = contract["base_model"]
+    model_config = contract["model"]
     labels = task["label2id"]
     inverse_labels = id2label(task)
-    model_config = contract["model"]
-    use_bf16 = bool(torch.cuda.is_available() and not args.disable_bf16)
-    dtype = torch.bfloat16 if use_bf16 else torch.float32
-
+    dtype = runtime.torch.bfloat16 if runtime.use_bf16 else runtime.torch.float32
     tokenizer = stack["AutoTokenizer"].from_pretrained(
         base["id"],
         revision=base["revision"],
@@ -245,7 +338,6 @@ def train(args: argparse.Namespace) -> Path:
     )
     model.config.pad_token_id = tokenizer.pad_token_id
     model.config.reference_compile = bool(model_config["reference_compile"])
-
     lora = model_config["lora"]
     peft_config = stack["LoraConfig"](
         task_type=stack["TaskType"].SEQ_CLS,
@@ -257,21 +349,26 @@ def train(args: argparse.Namespace) -> Path:
     )
     model = stack["get_peft_model"](model, peft_config)
     model.print_trainable_parameters()
+    return model, tokenizer
 
-    datasets = _tokenize_datasets(
-        stack, tokenizer, data_dir / args.task, int(model_config["max_length"])
-    )
-    trainer_output = output_root / "checkpoints"
+
+def _build_training_arguments(
+    contract: dict[str, Any],
+    task: dict[str, Any],
+    args: argparse.Namespace,
+    runtime: _TrainingRuntime,
+) -> Any:
+    training = contract["training"]
     epochs = args.num_train_epochs or float(training["epochs"])
     learning_rate = args.learning_rate or float(training["learning_rate"])
-    training_args = stack["TrainingArguments"](
-        output_dir=str(trainer_output),
+    return runtime.stack["TrainingArguments"](
+        output_dir=str(runtime.output_root / "checkpoints"),
         overwrite_output_dir=args.overwrite_output_dir,
         num_train_epochs=epochs,
         max_steps=args.max_steps,
-        per_device_train_batch_size=per_device_batch,
+        per_device_train_batch_size=runtime.per_device_batch,
         per_device_eval_batch_size=int(training["per_device_eval_batch_size"]),
-        gradient_accumulation_steps=gradient_accumulation,
+        gradient_accumulation_steps=runtime.gradient_accumulation,
         learning_rate=learning_rate,
         warmup_ratio=float(training["warmup_ratio"]),
         weight_decay=float(training["weight_decay"]),
@@ -285,20 +382,33 @@ def train(args: argparse.Namespace) -> Path:
         load_best_model_at_end=True,
         metric_for_best_model=task["selection_metric"],
         greater_is_better=True,
-        bf16=use_bf16,
+        bf16=runtime.use_bf16,
         fp16=False,
-        seed=seed,
+        seed=int(training["seed"]),
         data_seed=int(training["data_seed"]),
         dataloader_num_workers=args.dataloader_num_workers,
-        dataloader_pin_memory=torch.cuda.is_available(),
-        ddp_find_unused_parameters=False if world_size > 1 else None,
+        dataloader_pin_memory=runtime.torch.cuda.is_available(),
+        ddp_find_unused_parameters=False if runtime.world_size > 1 else None,
         report_to=[],
         run_name=f"{contract['reconstruction_name']}-{args.task}",
         save_safetensors=True,
     )
-    trainer = stack["Trainer"](
+
+
+def _build_trainer(
+    contract: dict[str, Any],
+    task: dict[str, Any],
+    args: argparse.Namespace,
+    runtime: _TrainingRuntime,
+    model: Any,
+    tokenizer: Any,
+    datasets: dict[str, Any],
+) -> Any:
+    stack = runtime.stack
+    trainer_class = synchronized_checkpoint_trainer(stack["Trainer"], runtime.torch)
+    return trainer_class(
         model=model,
-        args=training_args,
+        args=_build_training_arguments(contract, task, args, runtime),
         train_dataset=datasets["train"],
         eval_dataset=datasets["validation"],
         processing_class=tokenizer,
@@ -308,100 +418,181 @@ def train(args: argparse.Namespace) -> Path:
         compute_metrics=_trainer_metrics(args.task),
         callbacks=[
             stack["EarlyStoppingCallback"](
-                early_stopping_patience=int(training["early_stopping_patience"])
+                early_stopping_patience=int(
+                    contract["training"]["early_stopping_patience"]
+                )
             )
         ],
     )
+
+
+def _release_eligible(
+    args: argparse.Namespace, world_size: int, use_bf16: bool
+) -> bool:
+    """Return whether a run used the unmodified release training contract."""
+    return bool(
+        args.max_steps < 0
+        and args.num_train_epochs is None
+        and args.learning_rate is None
+        and args.per_device_train_batch_size is None
+        and args.gradient_accumulation_steps is None
+        and world_size == RELEASE_WORLD_SIZE
+        and use_bf16
+    )
+
+
+def _build_training_manifest(
+    contract: dict[str, Any],
+    task_name: str,
+    source_manifest_path: Path,
+    model: Any,
+    runtime: _TrainingRuntime,
+    is_release_eligible: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "task": task_name,
+        "contract_sha256": contract_sha256(contract),
+        "data_manifest_sha256": _file_sha256(source_manifest_path),
+        "source_commit": _source_commit(),
+        "base_model": contract["base_model"],
+        "taxonomy_version": contract["taxonomy_version"],
+        "world_size": runtime.world_size,
+        "global_train_batch_size": (
+            runtime.per_device_batch
+            * runtime.world_size
+            * runtime.gradient_accumulation
+        ),
+        "per_device_train_batch_size": runtime.per_device_batch,
+        "gradient_accumulation_steps": runtime.gradient_accumulation,
+        "precision": "bf16" if runtime.use_bf16 else "fp32",
+        "reference_compile": model.config.reference_compile,
+        "distributed_runtime": {
+            name: os.environ.get(name)
+            for name in (
+                "HSA_NO_SCRATCH_RECLAIM",
+                "NCCL_MAX_NCHANNELS",
+                "NCCL_P2P_DISABLE",
+            )
+        },
+        "release_eligible": is_release_eligible,
+        "python": platform.python_version(),
+        "packages": _package_versions(
+            (
+                "torch",
+                "transformers",
+                "peft",
+                "datasets",
+                "accelerate",
+                "huggingface-hub",
+                "safetensors",
+            )
+        ),
+    }
+
+
+def _write_run_receipts(
+    contract: dict[str, Any],
+    task: dict[str, Any],
+    args: argparse.Namespace,
+    runtime: _TrainingRuntime,
+    data_dir: Path,
+    data_manifest: dict[str, Any],
+    model: Any,
+    metrics: dict[str, Any],
+    adapter_dir: Path,
+) -> None:
+    inverse_labels = id2label(task)
+    _write_json(
+        adapter_dir / "label_mapping.json",
+        {
+            "label2id": task["label2id"],
+            "id2label": {str(key): value for key, value in inverse_labels.items()},
+            "taxonomy_version": contract["taxonomy_version"],
+        },
+    )
+    _write_json(runtime.output_root / "metrics.json", metrics, runtime_values=True)
+    _write_json(runtime.output_root / "data_manifest.json", data_manifest)
+    source_manifest_path = data_dir / args.task / "data_manifest.json"
+    manifest = _build_training_manifest(
+        contract,
+        args.task,
+        source_manifest_path,
+        model,
+        runtime,
+        _release_eligible(args, runtime.world_size, runtime.use_bf16),
+    )
+    _write_json(runtime.output_root / "training_manifest.json", manifest)
+    _write_json(runtime.output_root / "reconstruction_contract.json", contract)
+
+
+def _save_training_output(
+    contract: dict[str, Any],
+    task: dict[str, Any],
+    args: argparse.Namespace,
+    runtime: _TrainingRuntime,
+    data_dir: Path,
+    data_manifest: dict[str, Any],
+    model: Any,
+    tokenizer: Any,
+    trainer: Any,
+    metrics: dict[str, Any],
+) -> Path:
+    adapter_dir = runtime.output_root / "adapter"
+    trainer.save_model(str(adapter_dir))
+    trainer.save_state()
+    if trainer.is_world_process_zero():
+        tokenizer.save_pretrained(adapter_dir)
+        _write_run_receipts(
+            contract,
+            task,
+            args,
+            runtime,
+            data_dir,
+            data_manifest,
+            model,
+            metrics,
+            adapter_dir,
+        )
+    return adapter_dir
+
+
+def train(args: argparse.Namespace) -> Path:
+    contract, task, data_dir, data_manifest = _load_training_inputs(args)
+    if args.validate_only:
+        print(json.dumps(data_manifest, indent=2, sort_keys=True))
+        return data_dir / args.task
+    runtime = _prepare_runtime(contract, args)
+    model, tokenizer = _build_model_and_tokenizer(contract, task, runtime)
+    datasets = _tokenize_datasets(
+        runtime.stack,
+        tokenizer,
+        data_dir / args.task,
+        int(contract["model"]["max_length"]),
+    )
+    trainer = _build_trainer(contract, task, args, runtime, model, tokenizer, datasets)
     train_result = trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     validation_metrics = trainer.evaluate(
         datasets["validation"], metric_key_prefix="validation"
     )
     test_metrics = trainer.evaluate(datasets["test"], metric_key_prefix="test")
-
-    adapter_dir = output_root / "adapter"
-    trainer.save_model(str(adapter_dir))
-    trainer.save_state()
-    if trainer.is_world_process_zero():
-        tokenizer.save_pretrained(adapter_dir)
-        label_mapping = {
-            "label2id": labels,
-            "id2label": {str(key): value for key, value in inverse_labels.items()},
-            "taxonomy_version": contract["taxonomy_version"],
-        }
-        (adapter_dir / "label_mapping.json").write_text(
-            json.dumps(label_mapping, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        metrics = {
-            "train": train_result.metrics,
-            "validation": validation_metrics,
-            "test": test_metrics,
-        }
-        (output_root / "metrics.json").write_text(
-            json.dumps(metrics, default=_json_default, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        source_manifest_path = data_dir / args.task / "data_manifest.json"
-        (output_root / "data_manifest.json").write_text(
-            json.dumps(data_manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        release_eligible = (
-            args.max_steps < 0
-            and args.num_train_epochs is None
-            and args.learning_rate is None
-            and args.per_device_train_batch_size is None
-            and args.gradient_accumulation_steps is None
-            and world_size == 8
-            and use_bf16
-        )
-        manifest = {
-            "schema_version": 1,
-            "task": args.task,
-            "contract_sha256": contract_sha256(contract),
-            "data_manifest_sha256": _file_sha256(source_manifest_path),
-            "source_commit": _source_commit(),
-            "base_model": base,
-            "taxonomy_version": contract["taxonomy_version"],
-            "world_size": world_size,
-            "global_train_batch_size": (
-                per_device_batch * world_size * gradient_accumulation
-            ),
-            "per_device_train_batch_size": per_device_batch,
-            "gradient_accumulation_steps": gradient_accumulation,
-            "precision": "bf16" if use_bf16 else "fp32",
-            "reference_compile": model.config.reference_compile,
-            "distributed_runtime": {
-                name: os.environ.get(name)
-                for name in (
-                    "HSA_NO_SCRATCH_RECLAIM",
-                    "NCCL_MAX_NCHANNELS",
-                    "NCCL_P2P_DISABLE",
-                )
-            },
-            "release_eligible": release_eligible,
-            "python": platform.python_version(),
-            "packages": _package_versions(
-                (
-                    "torch",
-                    "transformers",
-                    "peft",
-                    "datasets",
-                    "accelerate",
-                    "huggingface-hub",
-                    "safetensors",
-                )
-            ),
-        }
-        (output_root / "training_manifest.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        (output_root / "reconstruction_contract.json").write_text(
-            json.dumps(contract, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-    return adapter_dir
+    metrics = {
+        "train": train_result.metrics,
+        "validation": validation_metrics,
+        "test": test_metrics,
+    }
+    return _save_training_output(
+        contract,
+        task,
+        args,
+        runtime,
+        data_dir,
+        data_manifest,
+        model,
+        tokenizer,
+        trainer,
+        metrics,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

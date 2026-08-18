@@ -11,8 +11,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import tempfile
 import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -21,7 +19,24 @@ from pathlib import Path
 from typing import Any
 
 if __package__:
+    from . import data_io as _data_io
     from .config import DEFAULT_CONTRACT_PATH, contract_sha256, load_contract
+    from .data_contract import (
+        AEGIS_SCHEMA,
+        AUDIT_KEYS,
+        DEFAULT_LEVEL1_PER_LABEL,
+        DEFAULT_LEVEL2_PER_LABEL,
+        DEFAULT_SEED,
+        NORMALIZATION_VERSION,
+        SPLIT_PRECEDENCE,
+        SPLIT_RANK,
+        SPLITS,
+        SYNTH_SCHEMA,
+        DataContractError,
+        DataPreparationError,
+        InsufficientClassSamplesError,
+        SchemaError,
+    )
     from .taxonomy import (
         LEVEL1_LABEL_TO_ID,
         LEVEL1_LABELS,
@@ -32,6 +47,23 @@ if __package__:
         map_synth_category,
     )
 else:  # Allow ``python path/to/data.py prepare ...``.
+    import data_io as _data_io  # type: ignore[no-redef]
+    from data_contract import (  # type: ignore[no-redef]
+        AEGIS_SCHEMA,
+        AUDIT_KEYS,
+        DEFAULT_LEVEL1_PER_LABEL,
+        DEFAULT_LEVEL2_PER_LABEL,
+        DEFAULT_SEED,
+        NORMALIZATION_VERSION,
+        SPLIT_PRECEDENCE,
+        SPLIT_RANK,
+        SPLITS,
+        SYNTH_SCHEMA,
+        DataContractError,
+        DataPreparationError,
+        InsufficientClassSamplesError,
+        SchemaError,
+    )
     from taxonomy import (  # type: ignore[no-redef]
         LEVEL1_LABEL_TO_ID,
         LEVEL1_LABELS,
@@ -45,70 +77,12 @@ else:  # Allow ``python path/to/data.py prepare ...``.
     from config import DEFAULT_CONTRACT_PATH, contract_sha256, load_contract
 
 
-SPLITS = ("train", "validation", "test")
-SPLIT_PRECEDENCE = ("test", "validation", "train")
-SPLIT_RANK = {split: rank for rank, split in enumerate(SPLIT_PRECEDENCE)}
-NORMALIZATION_VERSION = "nfkc-whitespace-casefold-v1"
-DEFAULT_SEED = 42
-DEFAULT_LEVEL1_PER_LABEL = 10_000
-DEFAULT_LEVEL2_PER_LABEL = 2_000
-SHA256_HEX_LENGTH = 64
-
-AEGIS_SCHEMA = frozenset(
-    {
-        "id",
-        "reconstruction_id_if_redacted",
-        "prompt",
-        "response",
-        "prompt_label",
-        "response_label",
-        "violated_categories",
-        "prompt_label_source",
-        "response_label_source",
-    }
-)
-SYNTH_SCHEMA = frozenset({"text", "category", "label"})
-
-_AUDIT_KEYS = (
-    "aegis_rows_seen",
-    "synthetic_rows_seen",
-    "schema_valid_rows",
-    "empty_prompt_rows",
-    "redacted_prompt_rows",
-    "level2_safe_rows_skipped",
-    "level2_no_mapped_target_rows",
-    "level2_multilabel_rows",
-    "level2_multitarget_rows",
-    "candidate_rows",
-    "unique_fingerprint_groups",
-    "label_conflict_groups",
-    "label_conflict_rows",
-    "lower_precedence_rows_dropped",
-    "same_split_duplicate_rows_dropped",
-    "deduplicated_rows",
-    "unique_rows_after_dedup",
-    "train_rows_available",
-    "train_rows_selected",
-    "train_rows_downsampled",
-    "train_rows_oversampled",
-    "emitted_rows",
-)
-
-
-class DataPreparationError(ValueError):
-    """Base error for deterministic data preparation failures."""
-
-
-class SchemaError(DataPreparationError):
-    """Raised when an input row does not match its pinned source schema."""
-
-
-class InsufficientClassSamplesError(DataPreparationError):
-    """Raised when a class cannot satisfy its sampling contract."""
-
-
-class DataContractError(DataPreparationError):
-    """Raised when the reconstruction contract disagrees with this builder."""
+load_json_array = _data_io.load_json_array
+load_jsonl = _data_io.load_jsonl
+materialize_dataset = _data_io.materialize_dataset
+_download_contract_file = _data_io.download_contract_file
+_positive_contract_int = _data_io.positive_contract_int
+_validate_data_contract = _data_io.validate_data_contract
 
 
 @dataclass(frozen=True)
@@ -205,7 +179,7 @@ def _stable_digest(*parts: object) -> str:
 
 
 def _new_audit() -> Counter[str]:
-    return Counter(dict.fromkeys(_AUDIT_KEYS, 0))
+    return Counter(dict.fromkeys(AUDIT_KEYS, 0))
 
 
 def _require_exact_schema(
@@ -635,7 +609,7 @@ def _build_dataset(
             "classes": sampling,
         },
         "splits": _split_manifest(samples, labels),
-        "audit": {key: audit[key] for key in _AUDIT_KEYS},
+        "audit": {key: audit[key] for key in AUDIT_KEYS},
         "records_sha256": _records_sha256(samples),
     }
     return DatasetBuild(task=task, samples=tuple(samples), manifest=manifest)
@@ -665,183 +639,6 @@ def build_level2_dataset(
     return _build_dataset(
         "level2", aegis_splits, synth_rows, per_label=per_label, seed=seed
     )
-
-
-def load_json_array(path: str | Path) -> list[Mapping[str, object]]:
-    """Load a JSON array without importing a dataset framework."""
-    source = Path(path)
-    with source.open(encoding="utf-8") as handle:
-        value = json.load(handle)
-    if not isinstance(value, list) or any(
-        not isinstance(row, Mapping) for row in value
-    ):
-        raise SchemaError(f"{source} must contain a JSON array of objects")
-    return value
-
-
-def load_jsonl(path: str | Path) -> list[Mapping[str, object]]:
-    """Load JSONL records without importing a dataset framework."""
-    source = Path(path)
-    rows: list[Mapping[str, object]] = []
-    with source.open(encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise SchemaError(f"Invalid JSON at {source}:{line_number}") from exc
-            if not isinstance(row, Mapping):
-                raise SchemaError(f"{source}:{line_number} must contain an object")
-            rows.append(row)
-    return rows
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _atomic_write(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_name: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb", dir=path.parent, prefix=f".{path.name}.", delete=False
-        ) as handle:
-            temporary_name = handle.name
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_name, path)
-    finally:
-        if temporary_name is not None and os.path.exists(temporary_name):
-            os.unlink(temporary_name)
-
-
-def materialize_dataset(
-    build: DatasetBuild,
-    output_dir: str | Path,
-    *,
-    provenance: Mapping[str, object] | None = None,
-) -> dict[str, Any]:
-    """Write split JSONL files and a self-auditing deterministic manifest."""
-    target = Path(output_dir)
-    files: dict[str, dict[str, object]] = {}
-    for split in SPLITS:
-        rows = build.split_samples(split)
-        payload = b"".join(
-            _canonical_json_bytes(sample.to_dict()) + b"\n" for sample in rows
-        )
-        filename = f"{split}.jsonl"
-        _atomic_write(target / filename, payload)
-        files[split] = {
-            "path": filename,
-            "rows": len(rows),
-            "sha256": hashlib.sha256(payload).hexdigest(),
-        }
-
-    manifest = json.loads(json.dumps(build.manifest))
-    manifest["files"] = files
-    if provenance is not None:
-        manifest["provenance"] = dict(provenance)
-    manifest["manifest_sha256"] = hashlib.sha256(
-        _canonical_json_bytes(manifest)
-    ).hexdigest()
-    _atomic_write(
-        target / "data_manifest.json",
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True).encode(
-            "utf-8"
-        )
-        + b"\n",
-    )
-    return manifest
-
-
-def _validate_data_contract(contract: Mapping[str, object]) -> None:
-    if contract.get("taxonomy_version") != TAXONOMY_VERSION:
-        raise DataContractError(
-            f"Contract taxonomy_version must be {TAXONOMY_VERSION!r}"
-        )
-    data = contract.get("data")
-    if not isinstance(data, Mapping):
-        raise DataContractError("Contract data must be an object")
-    expected = {
-        "input_field": "prompt",
-        "normalization": NORMALIZATION_VERSION,
-        "split_precedence": list(SPLIT_PRECEDENCE),
-        "single_label_strategy": "first-mapped-source-order",
-        "drop_redacted": True,
-        "use_refusal_splits": False,
-        "use_responses": False,
-    }
-    for key, expected_value in expected.items():
-        if data.get(key) != expected_value:
-            raise DataContractError(
-                f"Contract data.{key} must be {expected_value!r}, got {data.get(key)!r}"
-            )
-
-    tasks = contract.get("tasks")
-    if not isinstance(tasks, Mapping):
-        raise DataContractError("Contract tasks must be an object")
-    expected_labels = {
-        "level1": LEVEL1_LABEL_TO_ID,
-        "level2": LEVEL2_LABEL_TO_ID,
-    }
-    for task, label2id in expected_labels.items():
-        task_contract = tasks.get(task)
-        if not isinstance(task_contract, Mapping):
-            raise DataContractError(f"Contract tasks.{task} must be an object")
-        if task_contract.get("label2id") != label2id:
-            raise DataContractError(
-                f"Contract tasks.{task}.label2id disagrees with {TAXONOMY_VERSION}"
-            )
-
-
-def _positive_contract_int(data: Mapping[str, object], key: str) -> int:
-    value = data.get(key)
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-        raise DataContractError(f"Contract data.{key} must be a positive integer")
-    return value
-
-
-def _download_contract_file(
-    dataset: Mapping[str, object],
-    file_spec: Mapping[str, object],
-    downloader: Callable[..., str],
-) -> Path:
-    repo_id = dataset.get("id")
-    revision = dataset.get("revision")
-    filename = file_spec.get("path")
-    expected_sha256 = file_spec.get("sha256")
-    if not all(isinstance(value, str) and value for value in (repo_id, revision)):
-        raise DataContractError("Dataset id and revision must be non-empty strings")
-    if not isinstance(filename, str) or not filename:
-        raise DataContractError("Dataset file path must be a non-empty string")
-    if (
-        not isinstance(expected_sha256, str)
-        or len(expected_sha256) != SHA256_HEX_LENGTH
-    ):
-        raise DataContractError("Dataset file sha256 must be a 64-character string")
-
-    downloaded = Path(
-        downloader(
-            repo_id=repo_id,
-            filename=filename,
-            repo_type="dataset",
-            revision=revision,
-        )
-    )
-    actual_sha256 = _sha256_file(downloaded)
-    if actual_sha256 != expected_sha256:
-        raise DataPreparationError(
-            f"SHA-256 mismatch for {repo_id}/{filename}@{revision}: "
-            f"expected {expected_sha256}, got {actual_sha256}"
-        )
-    return downloaded
 
 
 def prepare_materialized_data(

@@ -79,7 +79,11 @@ The image carries conservative single-node RCCL defaults verified for the
 eight-device workflow: scratch reclaim is disabled, GPU P2P is disabled in
 favor of shared-memory collectives, and the channel count is capped at eight.
 These settings trade some collective bandwidth for bounded startup time; LoRA
-gradient communication is small relative to the frozen base model.
+gradient communication is small relative to the frozen base model. The trainer
+also fences every distributed checkpoint save before deriving the best-model
+path on each rank. This avoids a Transformers 4.55 race in which rank zero can
+enter the load-best barrier while another rank has not yet observed the newly
+created checkpoint directory.
 
 Mount the repository, a persistent Hugging Face cache, and credentials using
 the normal secret mechanism for the environment. Do not copy tokens into the

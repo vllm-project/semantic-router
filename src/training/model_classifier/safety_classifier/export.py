@@ -11,7 +11,6 @@ from typing import Any
 
 from .config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contract
 
-
 ADAPTER_REQUIRED_FILES = {
     "adapter_config.json",
     "adapter_model.safetensors",
@@ -125,6 +124,13 @@ def _representative_texts(task_name: str) -> list[str]:
     ]
 
 
+def _export_runtime(torch_module: Any, *, use_cpu: bool) -> tuple[Any, Any]:
+    use_accelerator = not use_cpu and torch_module.cuda.is_available()
+    dtype = torch_module.bfloat16 if use_accelerator else torch_module.float32
+    device = torch_module.device("cuda:0" if use_accelerator else "cpu")
+    return dtype, device
+
+
 def merge_adapter(
     run_root: str | Path,
     merged_dir: str | Path,
@@ -134,9 +140,12 @@ def merge_adapter(
 ) -> dict[str, Any]:
     """Merge LoRA weights, compare logits, and write release manifests."""
     try:
-        import torch
-        from peft import PeftModel
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        import torch  # noqa: PLC0415
+        from peft import PeftModel  # noqa: PLC0415
+        from transformers import (  # noqa: PLC0415
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
     except ImportError as exc:
         raise RuntimeError("Export dependencies are not installed") from exc
 
@@ -154,12 +163,7 @@ def merge_adapter(
     _copy_release_metadata(run_path, adapter_dir)
     validate_artifact_shape(adapter_dir, "adapter")
     base = contract["base_model"]
-    dtype = (
-        torch.float32 if use_cpu or not torch.cuda.is_available() else torch.bfloat16
-    )
-    device = torch.device(
-        "cpu" if use_cpu or not torch.cuda.is_available() else "cuda:0"
-    )
+    dtype, device = _export_runtime(torch, use_cpu=use_cpu)
     tokenizer = AutoTokenizer.from_pretrained(adapter_dir, use_fast=True)
     base_model = AutoModelForSequenceClassification.from_pretrained(
         base["id"],

@@ -10,13 +10,20 @@ from __future__ import annotations
 import argparse
 import gc
 import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 try:
     from .config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contract
+    from .evaluation_io import (
+        _label_value,
+        _prediction_record,
+        _sample_identity,
+        _strict_single_target,
+        _write_outputs,
+        read_prepared_jsonl,
+    )
     from .metrics import (
         binary_classification_metrics,
         freeze_binary_threshold,
@@ -25,7 +32,14 @@ try:
         probabilities_from_logits,
     )
 except ImportError:  # Support ``python path/to/evaluate.py``.
-    from config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contract
+    from evaluation_io import (
+        _label_value,
+        _prediction_record,
+        _sample_identity,
+        _strict_single_target,
+        _write_outputs,
+        read_prepared_jsonl,
+    )
     from metrics import (
         binary_classification_metrics,
         freeze_binary_threshold,
@@ -33,6 +47,8 @@ except ImportError:  # Support ``python path/to/evaluate.py``.
         predictions_from_scores,
         probabilities_from_logits,
     )
+
+    from config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contract
 
 
 @dataclass
@@ -82,7 +98,7 @@ def _resolve_artifact_type(
     if lowered.endswith(("-lora", "-adapter")):
         return "adapter", None
     try:
-        from peft import PeftConfig
+        from peft import PeftConfig  # noqa: PLC0415
     except ImportError:
         return "merged", None
     try:
@@ -90,6 +106,33 @@ def _resolve_artifact_type(
     except (OSError, ValueError):
         return "merged", None
     return "adapter", peft_config
+
+
+def _load_tokenizer(
+    auto_tokenizer: Any,
+    sources: tuple[tuple[str, str | None], ...],
+    *,
+    trust_remote_code: bool,
+) -> Any:
+    tokenizer_error: OSError | None = None
+    for source, revision in sources:
+        try:
+            return auto_tokenizer.from_pretrained(
+                source,
+                revision=revision,
+                trust_remote_code=trust_remote_code,
+            )
+        except OSError as exc:
+            tokenizer_error = exc
+    raise RuntimeError(
+        "unable to load a tokenizer for the evaluation artifact"
+    ) from tokenizer_error
+
+
+def _resolve_device(torch_module: Any, requested: str) -> Any:
+    if requested == "auto":
+        requested = "cuda" if torch_module.cuda.is_available() else "cpu"
+    return torch_module.device(requested)
 
 
 def load_model_bundle(
@@ -106,8 +149,11 @@ def load_model_bundle(
 ) -> ModelBundle:
     """Load an adapter or merged sequence classifier with pinned task labels."""
     try:
-        import torch
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        import torch  # noqa: PLC0415
+        from transformers import (  # noqa: PLC0415
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
     except ImportError as exc:
         raise RuntimeError(
             "evaluation requires torch and transformers; install requirements.txt"
@@ -130,7 +176,7 @@ def load_model_bundle(
     }
     if resolved_type == "adapter":
         try:
-            from peft import PeftConfig, PeftModel
+            from peft import PeftConfig, PeftModel  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError("adapter evaluation requires peft") from exc
         peft_config = probed_peft_config or PeftConfig.from_pretrained(
@@ -165,27 +211,12 @@ def load_model_bundle(
         )
         tokenizer_sources = ((model_reference, model_revision),)
 
-    tokenizer = None
-    tokenizer_error: OSError | None = None
-    for source, revision in tokenizer_sources:
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(
-                source,
-                revision=revision,
-                trust_remote_code=trust_remote_code,
-            )
-            break
-        except OSError as exc:
-            tokenizer_error = exc
-    if tokenizer is None:
-        raise RuntimeError(
-            "unable to load a tokenizer for the evaluation artifact"
-        ) from tokenizer_error
-
-    if device == "auto":
-        resolved_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        resolved_device = torch.device(device)
+    tokenizer = _load_tokenizer(
+        AutoTokenizer,
+        tokenizer_sources,
+        trust_remote_code=trust_remote_code,
+    )
+    resolved_device = _resolve_device(torch, device)
     model.to(resolved_device)
     model.eval()
     return ModelBundle(
@@ -201,7 +232,7 @@ def load_model_bundle(
 def release_model_bundle(bundle: ModelBundle) -> None:
     """Release a sequential smoke model before loading the next one."""
     try:
-        import torch
+        import torch  # noqa: PLC0415
     except ImportError:
         return
     del bundle.model
@@ -223,7 +254,7 @@ def predict_logits(
     if not texts:
         return []
     try:
-        import torch
+        import torch  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError("inference requires torch") from exc
 
@@ -248,157 +279,100 @@ def predict_logits(
     return logits
 
 
-def _row_matches(row: dict[str, Any], key: str, expected: str | None) -> bool:
-    if expected is None or key not in row:
-        return True
-    return str(row[key]) == expected
-
-
-def read_prepared_jsonl(
-    path: str | Path,
+def _validate_single_options(
+    task_name: str,
     *,
-    task_name: str | None = None,
-    split: str | None = None,
-    limit: int | None = None,
-) -> list[dict[str, Any]]:
-    """Read prepared examples while accepting the canonical text/prompt aliases."""
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be positive")
-    rows: list[dict[str, Any]] = []
-    with Path(path).open(encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"invalid JSON on line {line_number} of {path}"
-                ) from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"line {line_number} of {path} is not a JSON object")
-            if not _row_matches(row, "task", task_name) or not _row_matches(
-                row, "split", split
-            ):
-                continue
-            text = row.get("text", row.get("prompt"))
-            if not isinstance(text, str) or not text.strip():
-                raise ValueError(f"line {line_number} of {path} has no non-empty text")
-            prepared = dict(row)
-            prepared["text"] = text
-            prepared["_line_number"] = line_number
-            rows.append(prepared)
-            if limit is not None and len(rows) >= limit:
-                break
-    if not rows:
-        raise ValueError(f"no matching examples found in {path}")
-    return rows
+    threshold: float | None,
+    freeze_threshold: bool,
+) -> None:
+    if task_name not in {"level1", "level2"}:
+        raise ValueError("task_name must be level1 or level2")
+    if freeze_threshold and task_name != "level1":
+        raise ValueError("threshold freezing is only valid for level1")
+    if freeze_threshold and threshold is not None:
+        raise ValueError("choose either an explicit threshold or --freeze-threshold")
 
 
-def _label_value(row: dict[str, Any], task_name: str, label2id: dict[str, int]) -> int:
-    candidates = (
-        f"{task_name}_label_id",
-        f"{task_name}_label",
-        "label_id",
-        "label",
-    )
-    for key in candidates:
-        if key not in row:
-            continue
-        value = row[key]
-        if isinstance(value, str) and value in label2id:
-            return int(label2id[value])
-        try:
-            label_id = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"invalid {key} on JSONL line {row['_line_number']}"
-            ) from exc
-        if label_id not in label2id.values():
-            raise ValueError(f"out-of-range {key} on JSONL line {row['_line_number']}")
-        return label_id
-    raise ValueError(f"missing label on JSONL line {row['_line_number']}")
-
-
-def _strict_single_target(row: dict[str, Any]) -> bool:
-    for key in ("strict_single_target", "is_strict_single_target"):
-        if key in row:
-            return bool(row[key])
-    if "is_multitarget" in row:
-        return not bool(row["is_multitarget"])
-    for key in ("mapped_labels", "mapped_targets", "target_labels"):
-        value = row.get(key)
-        if isinstance(value, list):
-            return len(value) == 1
-    if "target_count" in row:
-        return row["target_count"] == 1
-    return False
-
-
-def _sample_identity(row: dict[str, Any], fallback_index: int) -> str:
-    for key in ("sample_id", "fingerprint", "source_id", "id", "example_id"):
-        if key in row:
-            return str(row[key])
-    return f"row-{fallback_index}"
-
-
-def _prediction_record(
-    row: dict[str, Any],
-    index: int,
-    *,
-    reference: int,
-    prediction: int,
-    scores: list[float],
+def _single_task_report(
+    task_name: str,
+    labels: list[int],
+    probabilities: list[list[float]],
+    rows: list[dict[str, Any]],
     names: list[str],
-    include_text: bool,
-) -> dict[str, Any]:
-    text = row["text"]
-    record: dict[str, Any] = {
-        "sample_id": _sample_identity(row, index),
-        "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "reference": reference,
-        "reference_label": names[reference],
-        "prediction": prediction,
-        "prediction_label": names[prediction],
-        "scores": scores,
-        "strict_single_target": _strict_single_target(row),
-    }
-    for key in ("source", "split", "source_split"):
-        if key in row:
-            record[key] = row[key]
-    if include_text:
-        record["text"] = text
-    return record
-
-
-def _write_outputs(
-    output_dir: str | Path,
-    metrics_payload: dict[str, Any],
-    predictions: list[dict[str, Any]],
-) -> tuple[Path, Path]:
-    destination = Path(output_dir)
-    destination.mkdir(parents=True, exist_ok=True)
-    metrics_path = destination / "metrics.json"
-    predictions_path = destination / "predictions.jsonl"
-    with metrics_path.open("w", encoding="utf-8") as handle:
-        json.dump(
-            metrics_payload,
-            handle,
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        handle.write("\n")
-    with predictions_path.open("w", encoding="utf-8") as handle:
-        for prediction in predictions:
-            handle.write(
-                json.dumps(
-                    prediction, ensure_ascii=False, sort_keys=True, allow_nan=False
-                )
+    *,
+    threshold: float | None,
+    freeze_threshold: bool,
+    minimum_recall: float,
+) -> tuple[list[int], dict[str, Any], dict[str, Any] | None]:
+    if task_name == "level1":
+        unsafe_scores = [row[1] for row in probabilities]
+        threshold_selection = (
+            freeze_binary_threshold(
+                labels,
+                unsafe_scores,
+                minimum_recall=minimum_recall,
             )
-            handle.write("\n")
-    return metrics_path, predictions_path
+            if freeze_threshold
+            else None
+        )
+        resolved_threshold = (
+            float(threshold_selection["threshold"])
+            if threshold_selection is not None
+            else 0.5
+            if threshold is None
+            else float(threshold)
+        )
+        predictions = predictions_from_scores(unsafe_scores, resolved_threshold)
+        report = binary_classification_metrics(
+            labels,
+            predictions,
+            unsafe_scores=unsafe_scores,
+            threshold=resolved_threshold,
+        )
+        return predictions, report, threshold_selection
+
+    predictions = [
+        max(range(len(row)), key=lambda class_id: row[class_id])
+        for row in probabilities
+    ]
+    report = multiclass_classification_metrics(
+        labels,
+        predictions,
+        class_scores=probabilities,
+        class_names=names,
+        strict_single_target_mask=[_strict_single_target(row) for row in rows],
+    )
+    return predictions, report, None
+
+
+def _single_prediction_records(
+    rows: list[dict[str, Any]],
+    labels: list[int],
+    predictions: list[int],
+    probabilities: list[list[float]],
+    names: list[str],
+    *,
+    task_name: str,
+    include_text: bool,
+) -> list[dict[str, Any]]:
+    records = [
+        _prediction_record(
+            row,
+            index,
+            reference=reference,
+            prediction=prediction,
+            scores=scores,
+            names=names,
+            include_text=include_text,
+        )
+        for index, (row, reference, prediction, scores) in enumerate(
+            zip(rows, labels, predictions, probabilities, strict=True)
+        )
+    ]
+    if task_name == "level1":
+        for record, scores in zip(records, probabilities, strict=True):
+            record["unsafe_score"] = scores[1]
+    return records
 
 
 def evaluate_model(
@@ -423,12 +397,11 @@ def evaluate_model(
     trust_remote_code: bool = False,
 ) -> dict[str, Any]:
     """Evaluate one artifact and write ``metrics.json``/``predictions.jsonl``."""
-    if task_name not in {"level1", "level2"}:
-        raise ValueError("task_name must be level1 or level2")
-    if freeze_threshold and task_name != "level1":
-        raise ValueError("threshold freezing is only valid for level1")
-    if freeze_threshold and threshold is not None:
-        raise ValueError("choose either an explicit threshold or --freeze-threshold")
+    _validate_single_options(
+        task_name,
+        threshold=threshold,
+        freeze_threshold=freeze_threshold,
+    )
 
     contract = load_contract(contract_path)
     task = task_contract(contract, task_name)
@@ -460,60 +433,25 @@ def evaluate_model(
     finally:
         release_model_bundle(bundle)
     probabilities = probabilities_from_logits(logits)
-
-    threshold_selection: dict[str, Any] | None = None
-    if task_name == "level1":
-        unsafe_scores = [row[1] for row in probabilities]
-        if freeze_threshold:
-            threshold_selection = freeze_binary_threshold(
-                labels,
-                unsafe_scores,
-                minimum_recall=minimum_recall,
-            )
-            resolved_threshold = float(threshold_selection["threshold"])
-        else:
-            resolved_threshold = 0.5 if threshold is None else float(threshold)
-        predictions = predictions_from_scores(unsafe_scores, resolved_threshold)
-        report = binary_classification_metrics(
-            labels,
-            predictions,
-            unsafe_scores=unsafe_scores,
-            threshold=resolved_threshold,
-        )
-    else:
-        predictions = [
-            max(range(len(row)), key=lambda class_id: row[class_id])
-            for row in probabilities
-        ]
-        report = multiclass_classification_metrics(
-            labels,
-            predictions,
-            class_scores=probabilities,
-            class_names=names,
-            strict_single_target_mask=[_strict_single_target(row) for row in rows],
-        )
-
-    prediction_records = [
-        _prediction_record(
-            row,
-            index,
-            reference=reference,
-            prediction=prediction,
-            scores=scores,
-            names=names,
-            include_text=include_text,
-        )
-        for index, (row, reference, prediction, scores) in enumerate(
-            zip(rows, labels, predictions, probabilities, strict=True)
-        )
-    ]
-    if task_name == "level1":
-        for record, score in zip(
-            prediction_records,
-            (row[1] for row in probabilities),
-            strict=True,
-        ):
-            record["unsafe_score"] = score
+    predictions, report, threshold_selection = _single_task_report(
+        task_name,
+        labels,
+        probabilities,
+        rows,
+        names,
+        threshold=threshold,
+        freeze_threshold=freeze_threshold,
+        minimum_recall=minimum_recall,
+    )
+    prediction_records = _single_prediction_records(
+        rows,
+        labels,
+        predictions,
+        probabilities,
+        names,
+        task_name=task_name,
+        include_text=include_text,
+    )
 
     payload = {
         "schema_version": 1,
@@ -534,84 +472,49 @@ def evaluate_model(
     return payload
 
 
-def evaluate_hierarchical(
+def _stage_probabilities(
+    model_reference: str,
+    texts: list[str],
     *,
-    level1_model: str,
-    level2_model: str,
-    data_path: str | Path,
-    output_dir: str | Path,
-    contract_path: str | Path = DEFAULT_CONTRACT_PATH,
-    level1_artifact_type: str = "auto",
-    level2_artifact_type: str = "auto",
-    level1_revision: str | None = None,
-    level2_revision: str | None = None,
-    base_model: str | None = None,
-    base_revision: str | None = None,
-    device: str = "auto",
-    batch_size: int = 16,
-    split: str | None = None,
-    limit: int | None = 8,
-    threshold: float = 0.5,
-    include_text: bool = False,
-    trust_remote_code: bool = False,
-) -> dict[str, Any]:
-    """Smoke the hierarchy: Level-2 runs only for Level-1 unsafe examples."""
-    contract = load_contract(contract_path)
-    rows = read_prepared_jsonl(data_path, split=split, limit=limit)
-    texts = [row["text"] for row in rows]
-
-    level1_bundle = load_model_bundle(
-        level1_model,
-        task_name="level1",
+    task_name: str,
+    contract: dict[str, Any],
+    artifact_type: str,
+    model_revision: str | None,
+    base_model: str | None,
+    base_revision: str | None,
+    device: str,
+    batch_size: int,
+    trust_remote_code: bool,
+) -> tuple[str, list[list[float]]]:
+    bundle = load_model_bundle(
+        model_reference,
+        task_name=task_name,
         contract=contract,
-        artifact_type=level1_artifact_type,
-        model_revision=level1_revision,
+        artifact_type=artifact_type,
+        model_revision=model_revision,
         base_model=base_model,
         base_revision=base_revision,
         device=device,
         trust_remote_code=trust_remote_code,
     )
-    resolved_level1_type = level1_bundle.artifact_type
-    level1_logits = predict_logits(level1_bundle, texts, batch_size=batch_size)
-    level1_probabilities = probabilities_from_logits(level1_logits)
-    unsafe_scores = [row[1] for row in level1_probabilities]
-    level1_predictions = predictions_from_scores(unsafe_scores, threshold)
-    release_model_bundle(level1_bundle)
+    resolved_type = bundle.artifact_type
+    try:
+        logits = predict_logits(bundle, texts, batch_size=batch_size)
+    finally:
+        release_model_bundle(bundle)
+    return resolved_type, probabilities_from_logits(logits)
 
-    unsafe_indices = [
-        index for index, prediction in enumerate(level1_predictions) if prediction == 1
-    ]
-    level2_probabilities_by_index: dict[int, list[float]] = {}
-    # A smoke must load and execute both artifacts. If Level-1 routes no input,
-    # execute Level-2 on one probe but do not treat that probe as a real route.
-    level2_inference_indices = unsafe_indices or [0]
-    level2_bundle = load_model_bundle(
-        level2_model,
-        task_name="level2",
-        contract=contract,
-        artifact_type=level2_artifact_type,
-        model_revision=level2_revision,
-        base_model=base_model,
-        base_revision=base_revision,
-        device=device,
-        trust_remote_code=trust_remote_code,
-    )
-    resolved_level2_type = level2_bundle.artifact_type
-    level2_logits = predict_logits(
-        level2_bundle,
-        [texts[index] for index in level2_inference_indices],
-        batch_size=batch_size,
-    )
-    level2_probabilities = probabilities_from_logits(level2_logits)
-    if unsafe_indices:
-        level2_probabilities_by_index = dict(
-            zip(unsafe_indices, level2_probabilities, strict=True)
-        )
-    release_model_bundle(level2_bundle)
 
-    level2_task = task_contract(contract, "level2")
-    level2_names_by_id = id2label(level2_task)
-    prediction_records: list[dict[str, Any]] = []
+def _hierarchical_prediction_records(
+    rows: list[dict[str, Any]],
+    level1_probabilities: list[list[float]],
+    level1_predictions: list[int],
+    level2_probabilities_by_index: dict[int, list[float]],
+    level2_names_by_id: dict[int, str],
+    *,
+    include_text: bool,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     for index, (row, level1_scores, level1_prediction) in enumerate(
         zip(rows, level1_probabilities, level1_predictions, strict=True)
     ):
@@ -643,10 +546,25 @@ def evaluate_hierarchical(
         }
         if include_text:
             record["text"] = row["text"]
-        prediction_records.append(record)
+        records.append(record)
+    return records
 
-    count = len(rows)
-    payload = {
+
+def _hierarchical_payload(
+    *,
+    level1_model: str,
+    level2_model: str,
+    level1_revision: str | None,
+    level2_revision: str | None,
+    resolved_level1_type: str,
+    resolved_level2_type: str,
+    data_path: str | Path,
+    split: str | None,
+    count: int,
+    routed_count: int,
+    threshold: float,
+) -> dict[str, Any]:
+    return {
         "schema_version": 1,
         "evaluation": {
             "mode": "hierarchical_smoke",
@@ -663,13 +581,106 @@ def evaluate_hierarchical(
         "metrics": {
             "smoke_passed": True,
             "examples": count,
-            "routed_to_level2": len(unsafe_indices),
-            "level2_route_rate": len(unsafe_indices) / count,
-            "level2_probe_only": not bool(unsafe_indices),
+            "routed_to_level2": routed_count,
+            "level2_route_rate": routed_count / count,
+            "level2_probe_only": routed_count == 0,
             "threshold": float(threshold),
             "threshold_comparison": "unsafe_score >= threshold",
         },
     }
+
+
+def evaluate_hierarchical(
+    *,
+    level1_model: str,
+    level2_model: str,
+    data_path: str | Path,
+    output_dir: str | Path,
+    contract_path: str | Path = DEFAULT_CONTRACT_PATH,
+    level1_artifact_type: str = "auto",
+    level2_artifact_type: str = "auto",
+    level1_revision: str | None = None,
+    level2_revision: str | None = None,
+    base_model: str | None = None,
+    base_revision: str | None = None,
+    device: str = "auto",
+    batch_size: int = 16,
+    split: str | None = None,
+    limit: int | None = 8,
+    threshold: float = 0.5,
+    include_text: bool = False,
+    trust_remote_code: bool = False,
+) -> dict[str, Any]:
+    """Smoke the hierarchy: Level-2 runs only for Level-1 unsafe examples."""
+    contract = load_contract(contract_path)
+    rows = read_prepared_jsonl(data_path, split=split, limit=limit)
+    texts = [row["text"] for row in rows]
+
+    resolved_level1_type, level1_probabilities = _stage_probabilities(
+        level1_model,
+        texts,
+        task_name="level1",
+        contract=contract,
+        artifact_type=level1_artifact_type,
+        model_revision=level1_revision,
+        base_model=base_model,
+        base_revision=base_revision,
+        device=device,
+        batch_size=batch_size,
+        trust_remote_code=trust_remote_code,
+    )
+    unsafe_scores = [row[1] for row in level1_probabilities]
+    level1_predictions = predictions_from_scores(unsafe_scores, threshold)
+
+    unsafe_indices = [
+        index for index, prediction in enumerate(level1_predictions) if prediction == 1
+    ]
+    level2_probabilities_by_index: dict[int, list[float]] = {}
+    # A smoke must load and execute both artifacts. If Level-1 routes no input,
+    # execute Level-2 on one probe but do not treat that probe as a real route.
+    level2_inference_indices = unsafe_indices or [0]
+    resolved_level2_type, level2_probabilities = _stage_probabilities(
+        level2_model,
+        [texts[index] for index in level2_inference_indices],
+        task_name="level2",
+        contract=contract,
+        artifact_type=level2_artifact_type,
+        model_revision=level2_revision,
+        base_model=base_model,
+        base_revision=base_revision,
+        device=device,
+        batch_size=batch_size,
+        trust_remote_code=trust_remote_code,
+    )
+    if unsafe_indices:
+        level2_probabilities_by_index = dict(
+            zip(unsafe_indices, level2_probabilities, strict=True)
+        )
+
+    level2_task = task_contract(contract, "level2")
+    level2_names_by_id = id2label(level2_task)
+    prediction_records = _hierarchical_prediction_records(
+        rows,
+        level1_probabilities,
+        level1_predictions,
+        level2_probabilities_by_index,
+        level2_names_by_id,
+        include_text=include_text,
+    )
+    count = len(rows)
+    payload = _hierarchical_payload(
+        level1_model=level1_model,
+        level2_model=level2_model,
+        level1_revision=level1_revision,
+        level2_revision=level2_revision,
+        resolved_level1_type=resolved_level1_type,
+        resolved_level2_type=resolved_level2_type,
+        data_path=data_path,
+        split=split,
+        count=count,
+        routed_count=len(unsafe_indices),
+        threshold=threshold,
+    )
     _write_outputs(output_dir, payload, prediction_records)
     return payload
 
