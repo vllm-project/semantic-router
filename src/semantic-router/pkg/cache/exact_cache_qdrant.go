@@ -12,6 +12,7 @@ var _ ExactCacheBackend = (*QdrantCache)(nil)
 
 // FindExact returns a deterministic Qdrant exact-response entry.
 func (c *QdrantCache) FindExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 ) (LookupResult, error) {
@@ -19,7 +20,7 @@ func (c *QdrantCache) FindExact(
 		return LookupResult{}, nil
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
-	points, err := c.client.Get(context.Background(), &qdrant.GetPoints{
+	points, err := c.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: c.collectionName,
 		Ids: []*qdrant.PointId{
 			arbitraryIDToUUID(recordID),
@@ -54,6 +55,7 @@ func (c *QdrantCache) FindExact(
 
 // AddExact writes a deterministic Qdrant exact-response entry.
 func (c *QdrantCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -64,7 +66,7 @@ func (c *QdrantCache) AddExact(
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
 	wait := true
-	_, err := c.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+	_, err := c.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: c.collectionName,
 		Wait:           &wait,
 		Points: []*qdrant.PointStruct{{

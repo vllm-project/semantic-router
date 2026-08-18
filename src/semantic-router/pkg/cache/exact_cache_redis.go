@@ -10,12 +10,15 @@ import (
 )
 
 // FindExact returns a Redis exact-response entry without embedding inference.
-func (c *RedisCache) FindExact(partition string, fingerprint string) (LookupResult, error) {
+func (c *RedisCache) FindExact(ctx context.Context, partition string, fingerprint string) (LookupResult, error) {
 	if !c.enabled || fingerprint == "" {
 		return LookupResult{}, nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	responseBody, err := c.client.Get(
-		context.Background(),
+		ctx,
 		exactCacheStorageKey(partition, fingerprint),
 	).Bytes()
 	if errors.Is(err, redis.Nil) {
@@ -33,6 +36,7 @@ func (c *RedisCache) FindExact(partition string, fingerprint string) (LookupResu
 
 // AddExact writes a Redis exact-response entry with the effective cache TTL.
 func (c *RedisCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -41,13 +45,16 @@ func (c *RedisCache) AddExact(
 	if !c.enabled || fingerprint == "" || ttlSeconds == 0 {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
 	expiration := time.Duration(0)
 	if effectiveTTL > 0 {
 		expiration = time.Duration(effectiveTTL) * time.Second
 	}
 	return c.client.Set(
-		context.Background(),
+		ctx,
 		exactCacheStorageKey(partition, fingerprint),
 		responseBody,
 		expiration,
