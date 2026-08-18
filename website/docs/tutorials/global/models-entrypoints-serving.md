@@ -215,7 +215,7 @@ Both names select the same isolated policy. Use a concrete provider model name
 only when the caller deliberately needs to bypass signals, decisions,
 algorithms, and recipe-local plugins.
 
-See [Entrypoints and Recipes](entrypoints-and-recipes) for request resolution
+See [Virtual Models](entrypoints-and-recipes) for request resolution
 and [Recipes](recipes) for policy isolation and lifecycle behavior.
 
 ## Docker and Kubernetes
@@ -259,7 +259,7 @@ vllm-sr config migrate --config old-config.yaml
 
 ## Next
 
-- [Entrypoints and Recipes](entrypoints-and-recipes) for routing semantics.
+- [Virtual Models](entrypoints-and-recipes) for routing semantics.
 - [Entrypoints](entrypoints) for naming, discovery, and validation rules.
 - [Recipes](recipes) for isolation, lifecycle APIs, and limitations.
 - [Mixture of Models](../../overview/mom-model-family) for the serving-system

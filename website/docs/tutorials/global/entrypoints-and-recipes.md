@@ -1,9 +1,9 @@
 ---
-title: Entrypoints and Recipes
+title: Virtual Models
 description: Give clients stable virtual model names backed by isolated routing policies in one Semantic Router deployment.
 ---
 
-# Entrypoints and Recipes
+# Virtual Models
 
 ## Overview
 

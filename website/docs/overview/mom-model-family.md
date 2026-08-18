@@ -96,7 +96,7 @@ In a production recipe, signals and decisions would guard modality, context,
 tools, locality, and other requirements before selection. The public model name
 does not reach the backend; it resolves to the selected provider model.
 
-See [Entrypoints and Multi-Recipe Routing](../tutorials/global/entrypoints-and-recipes)
+See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the full schema and isolation rules.
 
 ## MoM V1

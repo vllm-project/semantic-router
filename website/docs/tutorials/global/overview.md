@@ -51,7 +51,7 @@ Global configuration has five groups:
 | `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Safety, Models, and Policy](./safety-models-and-policy) |
 
 Entrypoints and named recipes are top-level objects rather than global
-settings; see [Entrypoints and Multi-Recipe Routing](./entrypoints-and-recipes).
+settings; see [Virtual Models](./entrypoints-and-recipes).
 Remote text embeddings are covered in
 [Remote Embedding Providers](./remote-embeddings).
 

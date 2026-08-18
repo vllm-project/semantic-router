@@ -236,7 +236,7 @@ See
 [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
 for built-in virtual models, CLI serving, backend binding, forking, packaging,
 and migration. See
-[Entrypoints and Multi-Recipe Routing](../tutorials/global/entrypoints-and-recipes)
+[Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
 
 ## Configuration workflows

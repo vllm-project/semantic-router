@@ -121,5 +121,5 @@ deployment-language replacement.
 - [Current configuration guide](../installation/configuration)
 - [Configuration workflows](../installation/configuration-workflows)
 - [Signals, decisions, and model selection](../overview/signal-driven-decisions)
-- [Entrypoints and recipes](../tutorials/global/entrypoints-and-recipes)
+- [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 - [Related issue #1505](https://github.com/vllm-project/semantic-router/issues/1505)

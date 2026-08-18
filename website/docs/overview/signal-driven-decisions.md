@@ -115,7 +115,7 @@ recipe signals, decisions, route-local plugins, cache, learning, and session
 routing. If a virtual entrypoint's recipe has no matching decision, the Router
 uses the configured default provider model.
 
-See [Entrypoints and Multi-Recipe Routing](../tutorials/global/entrypoints-and-recipes)
+See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete configuration contract.
 
 ## Workload, Router, and pool
