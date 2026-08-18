@@ -1,350 +1,182 @@
-# Router API Reference
+# Router API
 
-The **Router** is the data-plane HTTP surface clients usually call through
-**Envoy** (default public port **`8801`**).
+The router data plane accepts model requests through an Envoy listener. In the
+standard local stack, the listener is `http://localhost:8899`; a recipe can
+choose a different address or port under `listeners`.
 
-Use this page when you want to:
+Use the data plane for inference. Use the management API, normally bound to
+`127.0.0.1:8080`, for health checks, configuration, diagnostics, and replay
+queries. See [Router management API](./apiserver).
 
-- Send OpenAI-compatible chat or Responses requests through semantic routing
-- Understand which frontend and backend protocols are supported
-- Query **Router Replay** records after traffic has been captured
+## Supported inference paths
 
-For control-plane helpers on port **`8080`** (health, classification, config,
-outcomes), see [Router Apiserver API](./apiserver).
-
-## Ports at a glance
-
-| Surface | Default port | Purpose |
-| --- | --- | --- |
-| Envoy public ingress | `8801` | Client-facing routed HTTP APIs |
-| ExtProc gRPC | `50051` | Internal Envoy external processing hook |
-| Router apiserver | `8080` | Control and utility APIs (`/health`, `/config/router`, `/api/v1/classify/*`, …) |
-
-## Frontend API
-
-| API surface | Public path | Status | Notes |
+| Method | Path | Client format | Notes |
 | --- | --- | --- | --- |
-| OpenAI Chat Completions | `POST /v1/chat/completions` | Supported | Primary routed inference interface |
-| OpenAI Responses API | `POST /v1/responses` | Supported | Internally translated to Chat Completions |
-| OpenAI Responses API retrieval | `GET /v1/responses/{id}` | Supported | Requires Response API service/store |
-| OpenAI Responses API delete | `DELETE /v1/responses/{id}` | Supported | Requires Response API service/store |
-| OpenAI Responses API input items | `GET /v1/responses/{id}/input_items` | Supported | Requires Response API service/store |
-| OpenAI Models API | `GET /v1/models` | Supported on apiserver | Served by `:8080`; can be re-exposed through Envoy |
-| Router Replay list | `GET /v1/router_replay` | Supported when enabled | Served via ExtProc / Envoy path |
-| Router Replay detail | `GET /v1/router_replay/{id}` | Supported when enabled | Full record including bodies when captured |
-| Router Replay aggregate | `GET /v1/router_replay/aggregate` | Supported when enabled | Cost / decision / token summaries |
-| Router Replay trajectory | `GET /v1/router_replay/trajectory` | Supported when enabled | Session message timeline |
+| `POST` | `/v1/chat/completions` | OpenAI Chat Completions | Main routed inference endpoint |
+| `POST` | `/v1/responses` | OpenAI Responses | Requires the Responses service to be enabled |
+| `GET` | `/v1/responses/{id}` | OpenAI Responses | Reads a stored response |
+| `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
+| `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
+| `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
 
-## Quick start: chat completions
+Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
+available on a public inference listener.
 
-Send traffic to Envoy (`8801`), not the apiserver (`8080`).
+## Send a routed request
 
-Use model `auto` (or your recipe’s auto / MoM alias) so the router chooses a
-backend from signals and decisions.
+Use an auto-model or recipe entrypoint when you want the router to select a
+backend. Use a concrete model name when you want to bypass semantic model
+selection and target that model directly.
 
 ```bash
-curl -sS http://localhost:8801/v1/chat/completions \
+curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "auto",
     "messages": [
       {
         "role": "user",
-        "content": "Write a Python function to merge two sorted lists."
+        "content": "Write a Python function that merges two sorted lists."
       }
     ]
   }'
 ```
 
-Example OpenAI-compatible response (abbreviated; content and model id depend on
-your backends):
+The response keeps the client protocol's shape. Its model, content, token
+usage, and optional router headers depend on the selected backend and recipe.
+See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
+observability contract.
 
-```json
-{
-  "id": "chatcmpl-abc123",
-  "object": "chat.completion",
-  "created": 1722787200,
-  "model": "qwen-coder",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "def merge(a, b):\n    ..."
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 24,
-    "completion_tokens": 80,
-    "total_tokens": 104
-  }
-}
+The model names accepted by the Router come from canonical provider entries.
+`name` is the logical alias used by decisions and clients,
+`provider_model_id` is sent to the upstream provider, and
+`providers.models[].backend_refs[]` identifies the physical endpoint:
+
+```yaml
+providers:
+  models:
+    - name: local-small
+      provider_model_id: served-model
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: local-vllm
+          endpoint: model-server:8000
+          protocol: http
+          type: vllm
+          weight: 1
 ```
 
-Tips:
+Pricing is operator-supplied metadata, not a live quote. Keep it aligned with
+the provider contract when cost-aware selection or replay accounting uses it.
 
-- Explicit model names still work when you want to pin a backend.
-- With Router Replay enabled, look for replay correlation headers such as
-  `x-vsr-replay-id` (exact header set depends on config) and then query
-  `GET /v1/router_replay/{id}`.
-
-## OpenAI Responses API
+### Responses API
 
 ```bash
-curl -sS http://localhost:8801/v1/responses \
+curl -sS http://localhost:8899/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "auto",
-    "input": "Summarize the benefits of retrieval-augmented generation."
+    "input": "Summarize the trade-offs of retrieval-augmented generation."
   }'
 ```
 
-Example response (abbreviated):
+Creating, retrieving, and deleting Responses API objects requires its backing
+service and store. When Responses API support is disabled, the collection
+endpoint returns `404` and stored-object handling is unavailable. A configured
+service retains objects according to its own storage and retention settings.
 
-```json
-{
-  "id": "resp_abc123",
-  "object": "response",
-  "status": "completed",
-  "model": "base-model",
-  "output": [
-    {
-      "type": "message",
-      "role": "assistant",
-      "content": [
-        {
-          "type": "output_text",
-          "text": "RAG improves factual grounding by retrieving relevant documents before generation."
-        }
-      ]
-    }
-  ]
-}
+### Anthropic Messages
+
+```bash
+curl -sS http://localhost:8899/v1/messages \
+  -H 'Content-Type: application/json' \
+  -H 'anthropic-version: 2023-06-01' \
+  -d '{
+    "model": "auto",
+    "max_tokens": 256,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Explain semantic routing in one paragraph."
+      }
+    ]
+  }'
 ```
 
-Retrieval / delete / input-items paths require the Response API service/store:
-
-- `GET /v1/responses/{id}`
-- `DELETE /v1/responses/{id}`
-- `GET /v1/responses/{id}/input_items`
+Protocol translation is limited to fields the router supports. When a request
+crosses protocols, inspect `x-vsr-client-protocol`,
+`x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
 ## Router Replay
 
-Router Replay is a durable **flight recorder** for routing decisions. When
-enabled, each routed request can write a record (decision, selected model,
-tokens, cost, optional bodies, learning diagnostics). Listing and reading those
-records does **not** change live routing.
+Router Replay records routing decisions and selected request lifecycle data.
+It is useful for debugging, evaluation, and Router Learning, but it does not
+change routing merely because a record is read.
 
-Enable the service (example):
+Replay is disabled unless the service is enabled:
 
 ```yaml
 global:
   services:
     router_replay:
       enabled: true
-      store_backend: postgres   # or memory for local development
+      store_backend: memory
 ```
 
-`global.services.router_replay.enabled` is the router-wide default. A decision can
-opt out with a route-local `router_replay` plugin set to `enabled: false`.
+The in-memory backend is suitable for local inspection. Use a configured
+persistent backend when records must survive process restarts, and set
+retention appropriate to the data being captured.
 
-Replay HTTP APIs are served on the **Envoy / ExtProc** path (typically
-`http://localhost:8801`), not on apiserver `:8080`.
-
-### List recent records
+Replay queries go to the management API:
 
 ```bash
-curl -sS 'http://localhost:8801/v1/router_replay?limit=20'
+curl -sS 'http://localhost:8080/v1/router_replay?limit=20' \
+  -H "Authorization: Bearer ${VSR_MGMT_TOKEN}"
 ```
 
-Useful query parameters:
-
-| Param | Default | Notes |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `limit` | `20` | Max `100` |
-| `offset` | `0` | Pagination |
-| `decision` | | Filter by decision name |
-| `model` | | Filter by selected model |
-| `recipe` | | Filter by recipe |
-| `session_id` | | Filter by session |
-| `cache_status` | `all` | `cached` or `streamed` |
-| `search` | | Free-text / id search |
-| `showDetails` | `false` | Include large body fields (may fail if response is too large) |
+| `GET` | `/v1/router_replay` | List and filter records |
+| `GET` | `/v1/router_replay/{id}` | Read one record |
+| `GET` | `/v1/router_replay/aggregate` | Aggregate routing and cost metadata |
+| `GET` | `/v1/router_replay/trajectory?session_id=...` | Reconstruct one session trajectory |
 
-Example list response (summary rows omit large bodies by default):
+List and aggregate requests accept filters such as `recipe`, `decision`,
+`model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
+and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
+fields, so use it only when those fields are needed.
 
-```json
-{
-  "object": "router_replay.list",
-  "count": 1,
-  "total": 1,
-  "limit": 20,
-  "offset": 0,
-  "has_more": false,
-  "data": [
-    {
-      "id": "replay_7f3a91",
-      "timestamp": "2026-08-04T12:00:00Z",
-      "session_id": "sess_alice_42",
-      "recipe": "default",
-      "decision": "code",
-      "selected_model": "qwen-coder",
-      "original_model": "auto",
-      "from_cache": false,
-      "streaming": false,
-      "prompt_tokens": 24,
-      "completion_tokens": 80,
-      "total_tokens": 104
-    }
-  ]
-}
-```
+When bearer authentication is enabled, replay callers need `replay.read`.
+Prompt, response, tool, and other sensitive details remain redacted unless the
+principal also has `replay.detail`. Treat replay storage as potentially
+sensitive even when the API normally returns a redacted view.
 
-### Fetch one full record
+Replay lifecycle values describe what the recorder observed:
 
-```bash
-curl -sS http://localhost:8801/v1/router_replay/replay_7f3a91
-```
+- `in_progress`: no terminal response frame has been recorded yet.
+- `completed`: the response finished normally.
+- `failed`: routing or the upstream response failed.
+- `aborted`: the stream ended without a valid terminal frame, for example
+  after a disconnect or timeout.
 
-Returns the full routing record, including captured request/response bodies when
-those were stored.
+An HTTP `200` response header alone does not make a streaming record
+`completed`.
 
-### Aggregates for Insights-style dashboards
+## Which port should I use?
 
-```bash
-curl -sS 'http://localhost:8801/v1/router_replay/aggregate?decision=code'
-```
+| Task | Surface |
+| --- | --- |
+| Send model traffic | Configured Envoy listener; `8899` in the standard local stack |
+| List public models | `GET /v1/models` on the inference listener |
+| Check health or readiness | Management API on `8080` |
+| Read or change configuration | Management API on `8080` |
+| Inspect replay records | Management API on `8080` |
 
-Example response (abbreviated):
-
-```json
-{
-  "object": "router_replay.aggregate",
-  "record_count": 12,
-  "summary": {
-    "total_saved": 0.003,
-    "baseline_spend": 0.01,
-    "actual_spend": 0.007,
-    "currency": "USD"
-  },
-  "model_selection": [
-    { "name": "qwen-coder", "value": 8 },
-    { "name": "base-model", "value": 4 }
-  ],
-  "decision_distribution": [
-    { "name": "default/code", "value": 12 }
-  ]
-}
-```
-
-### Session trajectory
-
-```bash
-curl -sS 'http://localhost:8801/v1/router_replay/trajectory?session_id=sess_alice_42'
-```
-
-Returns an ordered message timeline reconstructed from replay records for that
-session id.
-
-### Link feedback to a replay id
-
-After you have a replay id, submit learning outcomes on the **apiserver**:
-
-```bash
-curl -sS http://localhost:8080/v1/router/outcomes \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "replay_id": "replay_7f3a91",
-    "source": "agent",
-    "target": "model",
-    "target_ref": "qwen-coder",
-    "verdict": "good_fit",
-    "score": 1.0
-  }'
-```
-
-See [Router Apiserver API](./apiserver#submit-a-router-learning-outcome) for the
-full outcome schema.
-
-## Backend model API
-
-These are upstream model protocols the router can target after routing. They are
-backend-facing integrations, not necessarily public client ingress paths.
-
-| Backend model API | Upstream path | Status | Notes |
-| --- | --- | --- | --- |
-| OpenAI-compatible Chat Completions | `/chat/completions` | Supported | Default family for OpenAI-compatible backends |
-| Anthropic Messages API | `/v1/messages` | Supported | Converts OpenAI-style requests (including tools); host/path from `backend_refs` |
-| vLLM Omni Chat Completions | `/chat/completions` | Supported | Omni / image-generation backends such as `vllm_omni` |
-
-Provider families with OpenAI-compatible chat-completions defaults include
-`openai`, `azure-openai`, `bedrock`, `gemini`, and `vertex-ai`.
-
-## Frontend behavior notes
-
-### OpenAI Chat Completions
-
-- Public path: `POST /v1/chat/completions`
-- Main router ingress for routed inference
-- Works with explicit model names or auto-model aliases such as `MoM` / `auto`
-
-### OpenAI Responses API
-
-- Public paths listed in the frontend table above
-- `POST /v1/responses` is translated to Chat Completions internally, then
-  translated back to Responses format
-- Retrieval and delete require the Response API service/store
-
-## Backend behavior notes
-
-### Anthropic API
-
-- Target Anthropic-backed models with `api_format: anthropic`
-- Client ingress remains OpenAI-style Chat Completions or Responses API, not a
-  public `POST /v1/messages` requirement for callers
-- The router converts upstream to Anthropic `POST /v1/messages` and converts
-  responses back to OpenAI-compatible output
-- Streaming (`stream: true`) is supported; Anthropic SSE is translated to OpenAI
-  `chat.completion.chunk` SSE, including tool-call deltas
-
-### vLLM Omni and multimodal / image generation
-
-- Supported for omni models and image-generation backends such as `vllm_omni`
-- When a modality decision resolves to an omni model:
-  - Chat Completions requests return the raw omni Chat Completions response
-  - Responses API requests are normalized into Responses output items, including
-    `image_generation_call` items when images are produced
-
-## Configuration linkage
-
-```yaml
-providers:
-  models:
-    - name: claude-sonnet
-      api_format: anthropic
-      pricing:
-        currency: USD
-        prompt_per_1m: 3.0
-        cached_input_per_1m: 0.30
-        cache_write_per_1m: 3.75
-        completion_per_1m: 15.0
-      backend_refs:
-        - base_url: https://api.anthropic.com
-          provider: anthropic
-```
-
-- Upstream targets live under `providers.models[].backend_refs[]`
-- Optional cost-aware policies use `pricing:`
-- Response API behavior is under `global.services.response_api`
-- Replay storage and enablement are under `global.services.router_replay`
-- Modality / image generation is configured through routing decisions and
-  backends such as `vllm_omni`
-
-## Related docs
-
-- [Router Apiserver API](./apiserver) — classification, config, outcomes on `:8080`
-- [Session identification](./session-identification) — how `SessionID` is derived
-- [API and observability](../tutorials/global/api-and-observability) — metrics and replay backends
-- [Memory and replay](../tutorials/learning/memory-and-replay) — learning + replay layering
+Do not expose the management port as a substitute for the public inference
+listener. Its endpoints can reveal configuration and operational data or make
+state-changing requests.

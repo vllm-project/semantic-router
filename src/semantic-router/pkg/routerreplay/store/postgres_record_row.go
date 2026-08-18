@@ -13,6 +13,7 @@ const postgresRecordSelectColumns = `
 	original_model, selected_model, reasoning_mode,
 	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 	request_body, response_body, response_status,
+	lifecycle_state, ended_at, duration_ms, terminal_reason,
 	from_cache, streaming, request_body_truncated, response_body_truncated,
 	guardrails_enabled, jailbreak_enabled, pii_enabled,
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
@@ -75,6 +76,8 @@ type postgresRecordRow struct {
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
 	recipe                       sql.NullString
+	endedAt                      sql.NullTime
+	terminalReason               sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -131,6 +134,9 @@ func preparePostgresInsertRecord(record Record) (Record, error) {
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
 	}
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
+	}
 	return record, nil
 }
 
@@ -160,6 +166,10 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.RequestBody,
 		record.record.ResponseBody,
 		record.record.ResponseStatus,
+		record.record.LifecycleState,
+		record.record.EndedAt,
+		record.record.DurationMS,
+		record.record.TerminalReason,
 		record.record.FromCache,
 		record.record.Streaming,
 		record.record.RequestBodyTruncated,
@@ -253,6 +263,10 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.RequestBody,
 		&row.record.ResponseBody,
 		&row.record.ResponseStatus,
+		&row.record.LifecycleState,
+		&row.endedAt,
+		&row.record.DurationMS,
+		&row.terminalReason,
 		&row.record.FromCache,
 		&row.record.Streaming,
 		&row.record.RequestBodyTruncated,
@@ -318,6 +332,12 @@ func (row *postgresRecordRow) decode() (Record, error) {
 	)
 	row.assignReplaySessionIdentifiers()
 	row.assignReplayRecipe()
+	if row.endedAt.Valid {
+		row.record.EndedAt = cloneTimePtr(&row.endedAt.Time)
+	}
+	if row.terminalReason.Valid {
+		row.record.TerminalReason = row.terminalReason.String
+	}
 	return row.record, nil
 }
 

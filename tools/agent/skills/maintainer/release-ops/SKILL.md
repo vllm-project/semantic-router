@@ -45,8 +45,8 @@ description: Maintainer release and milestone operating workflow. Use when a mai
 
 - `python3 tools/agent/scripts/maintainer_board.py sync --milestone "<name>"`
 - `python3 tools/agent/scripts/maintainer_board.py brief`
-- `python3 tools/agent/scripts/maintainer_board.py release-report --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --write`
-- `python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --dry-run`
+- `python3 tools/agent/scripts/maintainer_board.py release-report --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --write`
+- `python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --dry-run`
 
 ## Gotchas
 

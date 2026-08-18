@@ -1,55 +1,63 @@
-# Router Learning architecture eval — threshold profiles
+# Router Learning Evaluation Profiles
 
-Pass/fail gate for the deterministic Router Learning architecture eval
-(`bench/agentic_routing_experiment.py --learning-architecture`). Implements the
-"named reusable profiles + pass/fail thresholds" slice of #2244.
+These profiles turn the deterministic Router Learning architecture evaluation
+into a pass/fail check. Each profile defines minimum or maximum bounds for the
+metrics produced by `bench/agentic_routing_experiment.py
+--learning-architecture`.
 
-## What it does
+## Run the evaluation
 
-The `--learning-architecture` run produces a summary of routing-quality metrics
-over deterministic fixtures (session-aware / bandit / Elo / personalization
-adaptations). A **profile** declares min/max bounds per metric; the eval is
-gated against it and **exits non-zero on any breach**, so a PR or release
-pipeline fails when Router Learning routing quality, cost, cache behavior, or
-latency regresses.
-
-## Usage
+Use the default `pr` profile for the shorter gate:
 
 ```bash
-# Run + gate against the per-PR profile (default)
-python bench/agentic_routing_experiment.py --learning-architecture --profile pr --output-dir OUT
-# or:
-make bench-router-learning              # PROFILE=pr
+python3 bench/agentic_routing_experiment.py \
+  --learning-architecture \
+  --profile pr \
+  --output-dir /tmp/router-learning-eval
+```
+
+The Make target writes results to `.agent-harness/router-learning-eval`:
+
+```bash
+make bench-router-learning
 make bench-router-learning PROFILE=release
 ```
 
-Outputs in `OUT/`:
-- `learning_architecture_summary.json` — the metric summary (unchanged).
-- `learning_architecture_verdict.json` — per-metric checks + overall `passed`.
-- a human-readable PASS/FAIL verdict on stderr (for CI logs / PR comments).
+The output directory contains:
 
-Exit codes: `0` pass · `1` threshold breach · `2` misuse (`--profile` without
-`--learning-architecture`).
+- `learning_architecture_summary.json`: measured routing metrics;
+- `learning_architecture_verdict.json`: every threshold check and the overall
+  `passed` value.
 
-## Profiles
+The process exits with `0` when every threshold passes, `1` when a threshold is
+breached, and `2` when `--profile` is used without
+`--learning-architecture`.
 
-| Profile | Intent | Notable bounds |
-|---------|--------|----------------|
-| `pr` | per-PR gate | correctness/explainability/bypass = 100%; switch-rate ≤ 20%; cost savings ≥ 0%; p95 overhead ≤ 50 ms (CI-host headroom) |
-| `release` | release sign-off | same correctness ceiling; switch-rate ≤ 15%; cost savings ≥ 5%; p95 overhead ≤ 25 ms |
+## Included profiles
 
-Profiles are JSON: `{"profile": NAME, "thresholds": {METRIC: {"min": x} | {"max": y}}}`.
-`--profile` also accepts an explicit path to a custom profile JSON.
+| Profile | Intended use | Notable bounds |
+| --- | --- | --- |
+| `pr` | Fast deterministic regression check | 100% correctness, explainability, and bypass floors; switch rate at most 20%; cost savings at least 0%; p95 overhead at most 50 ms. |
+| `release` | Stricter pre-release check | The same correctness floors; switch rate at most 15%; cost savings at least 5%; p95 overhead at most 25 ms. |
 
-## Design notes
+Both profiles are calibrated to the deterministic fixtures in the architecture
+evaluation. They are regression thresholds, not service-level objectives for a
+deployed workload.
 
-- **Missing/null metrics fail closed.** A metric absent from the summary (or
-  `None`, e.g. `bypass_correctness_pct` when there are no bypass cases) is a
-  failure, so a profile can never be silently satisfied by missing data.
-- **Thresholds are calibrated to the deterministic fixtures**, which are
-  hand-built to route perfectly — hence the 100% correctness floors. The
-  operational bounds (switch-rate, cost, cache, latency) carry headroom tuned
-  to the current fixture values (see `git blame` for the baseline run).
-- **Scope (first slice of #2244):** thresholds + named profiles + CI gate on the
-  existing harness. Deferred follow-ups: live Router Replay mode, and the
-  session-scope / tool-loop / idle-reset / privacy fixture expansion.
+## Custom profiles
+
+`--profile` also accepts a JSON file path. A profile maps each metric to a
+minimum or maximum bound:
+
+```json
+{
+  "profile": "custom",
+  "thresholds": {
+    "routing_correctness_pct": {"min": 100},
+    "p95_overhead_ms": {"max": 40}
+  }
+}
+```
+
+Missing or null metrics fail the check. This prevents an incomplete evaluation
+from satisfying a profile silently.

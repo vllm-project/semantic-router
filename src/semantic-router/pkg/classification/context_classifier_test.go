@@ -55,4 +55,20 @@ func TestContextClassifier(t *testing.T) {
 		_, _, err := classifier.Classify("some text")
 		Expect(err).To(HaveOccurred())
 	})
+
+	t.Run("Request context floor selects high band", func(t *testing.T) {
+		classifier := NewContextClassifier(&mockTokenCounter{count: 2}, rules)
+		matched, count, err := classifier.ClassifyWithTokenFloor("ok", 5000)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(5000))
+		Expect(matched).To(ConsistOf("high"))
+	})
+
+	t.Run("Calibrated text estimate remains authoritative above floor", func(t *testing.T) {
+		classifier := NewContextClassifier(&mockTokenCounter{count: 5000}, rules)
+		matched, count, err := classifier.ClassifyWithTokenFloor("some text", 2)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(5000))
+		Expect(matched).To(ConsistOf("high"))
+	})
 }

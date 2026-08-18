@@ -7,6 +7,8 @@ describe('Evaluation page enterprise contracts', () => {
 
     expect(source).toContain('canWriteEvaluation')
     expect(source).toContain('canRunEvaluation')
+    expect(source).toContain('!readonlyLoading && !serverReadonly')
+    expect(source.replace(/\s+/g, ' ')).toContain('task creation, deletion, runs, and cancellation')
     expect(source).toContain('resultsLoading')
     expect(source).toContain('resultsError')
     expect(source.match(/<ConfirmDialog/g)).toHaveLength(2)

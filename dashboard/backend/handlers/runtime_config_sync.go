@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	managedContainerSourceConfigPath = "/app/config.yaml"
+	legacyManagedContainerConfigPath = "/app/config.yaml"
 	dashboardVenvPythonPath          = "/opt/vllm-sr-dashboard-venv/bin/python3"
 )
 
@@ -23,6 +23,9 @@ func configuredRuntimeConfigPath(configPath string) string {
 }
 
 func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
+	if isExplicitRuntimeConfigPath(configPath) {
+		return filepath.Clean(configPath), nil
+	}
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
 		return syncRuntimeConfigLocally(configPath)
 	}
@@ -36,7 +39,7 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 
 func syncRuntimeConfigLocally(configPath string) (string, error) {
 	targetPath := configuredRuntimeConfigPath(configPath)
-	if targetPath == filepath.Clean(configPath) && !hasRuntimeOverrideEnv() {
+	if targetPath == filepath.Clean(configPath) && (!hasRuntimeOverrideEnv() || isExplicitRuntimeConfigPath(configPath)) {
 		return targetPath, nil
 	}
 
@@ -61,23 +64,29 @@ func syncRuntimeConfigLocally(configPath string) (string, error) {
 	return parseRuntimeSyncOutput(output, targetPath), nil
 }
 
+func isExplicitRuntimeConfigPath(configPath string) bool {
+	runtimePath := strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH"))
+	return runtimePath != "" && filepath.Clean(configPath) == filepath.Clean(runtimePath)
+}
+
 func syncRuntimeConfigInManagedContainer() (string, error) {
 	containerName := managedRuntimeSyncContainerName()
 	pythonBinary := "python3"
 	if managedRuntimeUsesSplitContainers() {
 		pythonBinary = dashboardVenvPythonPath
 	}
+	managedConfigPath := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
 	output, err := execInManagedContainer(
 		containerName,
 		30*time.Second,
 		pythonBinary,
 		"-c",
-		buildRuntimeSyncPythonScript("/app", managedContainerSourceConfigPath),
+		buildRuntimeSyncPythonScript("/app", managedConfigPath),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to sync runtime config in %s: %w (output: %s)", containerName, err, strings.TrimSpace(output))
 	}
-	return parseRuntimeSyncOutput(output, configuredRuntimeConfigPath(managedContainerSourceConfigPath)), nil
+	return parseRuntimeSyncOutput(output, managedConfigPath), nil
 }
 
 func hasRuntimeOverrideEnv() bool {

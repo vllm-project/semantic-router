@@ -1,168 +1,77 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import ConfirmDialog from '../components/ConfirmDialog'
-import type { FieldConfig } from '../components/EditModal'
-import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
+import type { RecipeProbeRunPlan } from '../types/recipe'
+import { createProbePlaygroundInvocation } from '../types/playgroundInvocation'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
-import ConfigPageRecipeDecisionsEditor from './ConfigPageRecipeDecisionsEditor'
-import ConfigPageRecipePolicyEditor from './ConfigPageRecipePolicyEditor'
-import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
-import { cloneConfigData } from './configPageCanonicalization'
-import {
-  collectRecipeTargetModels,
-  countRecipeEntrypoints,
-  DEFAULT_RECIPE_NAME,
-  getRecipeByName,
-  getRecipeDeleteBlocker,
-  getRecipeNames,
-  normalizeRecipeStrategy,
-  type EntrypointFormState,
-  type RecipeFormState,
-  validateEntrypointForm,
-  validateRecipeForm,
-} from './configPageEntrypointsRecipesSupport'
-import type {
-  ConfigData,
-  EntrypointConfig,
-  NormalizedModel,
-  RecipeConfig,
-} from './configPageSupport'
-import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSupport'
+import ConfigPageMoMOverviewPanel from './ConfigPageMoMOverviewPanel'
+import ConfigPageMoMProbesPanel from './ConfigPageMoMProbesPanel'
+import ConfigPageMoMRoutingPanel from './ConfigPageMoMRoutingPanel'
+import styles from './ConfigPageMoMWorkspace.module.css'
+import type { RecipePackageCapabilities } from './configPageMoMPackagesSupport'
+import type { ConfigData, NormalizedModel } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
-import {
-  countProjectionsInProfile,
-  countSignalsInProfile,
-  type RoutingProfileLike,
-} from '../utils/routingScopes'
+import { useBuiltInModelCatalog } from './useBuiltInModelCatalog'
 
 interface ConfigPageEntrypointsRecipesSectionProps {
   config: ConfigData
   isReadonly: boolean
   models: NormalizedModel[]
+  packageCapabilities: RecipePackageCapabilities
+  refreshConfig: () => Promise<boolean>
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
 }
 
-interface PendingEntrypointDelete {
-  entrypoint: EntrypointConfig
-  index: number
-}
+type MoMView = 'overview' | 'routing' | 'probes'
 
-const cloneDecisions = (recipe: RecipeConfig): NonNullable<RecipeConfig['routing']['decisions']> =>
-  JSON.parse(JSON.stringify(recipe.routing.decisions ?? []))
-
-const cloneSignals = (recipe?: RecipeConfig): NonNullable<RecipeConfig['routing']['signals']> =>
-  JSON.parse(JSON.stringify(recipe?.routing.signals ?? {}))
+const VIEWS: Array<{ id: MoMView; label: string }> = [
+  { id: 'overview', label: 'Built-in Models' },
+  { id: 'routing', label: 'Models & Routing' },
+  { id: 'probes', label: 'Probes' },
+]
 
 export default function ConfigPageEntrypointsRecipesSection({
   config,
   isReadonly,
   models,
+  packageCapabilities,
+  refreshConfig,
   saveConfig,
   openEditModal,
   openViewModal,
 }: ConfigPageEntrypointsRecipesSectionProps) {
-  const [entrypointsSearch, setEntrypointsSearch] = useState('')
-  const [recipesSearch, setRecipesSearch] = useState('')
-  const [expandedEntrypoints, setExpandedEntrypoints] = useState<Set<string>>(new Set())
-  const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set())
-  const [entrypointPendingDelete, setEntrypointPendingDelete] =
-    useState<PendingEntrypointDelete | null>(null)
-  const [recipePendingDelete, setRecipePendingDelete] = useState<RecipeConfig | null>(null)
-  const [deletePending, setDeletePending] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [topologyTarget, setTopologyTarget] = useState<{
-    entrypoint: EntrypointConfig
-    recipe: RecipeConfig
-  } | null>(null)
+  const navigate = useNavigate()
+  const [activeView, setActiveView] = useState<MoMView>('overview')
+  const [recipeRevision, setRecipeRevision] = useState(0)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const modelCatalog = useBuiltInModelCatalog()
 
-  const entrypoints = config.entrypoints ?? []
-  const recipes = config.recipes ?? []
+  useEffect(() => {
+    const refreshRecipeViews = () => setRecipeRevision((current) => current + 1)
+    window.addEventListener('config-deployed', refreshRecipeViews)
+    return () => window.removeEventListener('config-deployed', refreshRecipeViews)
+  }, [])
 
-  const filteredEntrypoints = entrypoints.filter((entrypoint) => {
-    const query = entrypointsSearch.trim().toLowerCase()
-    return (
-      !query ||
-      entrypoint.recipe.toLowerCase().includes(query) ||
-      entrypoint.model_names.some((modelName) => modelName.toLowerCase().includes(query))
-    )
-  })
-  const filteredRecipes = recipes.filter((recipe) => {
-    const query = recipesSearch.trim().toLowerCase()
-    return (
-      !query ||
-      recipe.name.toLowerCase().includes(query) ||
-      recipe.description?.toLowerCase().includes(query) ||
-      collectRecipeTargetModels(recipe).some((modelName) => modelName.toLowerCase().includes(query))
-    )
-  })
-
-  const openEntrypointEditor = (
-    mode: 'add' | 'edit',
-    entrypoint?: EntrypointConfig,
-    originalIndex: number | null = null,
-  ) => {
-    const form: EntrypointFormState = {
-      modelNames: entrypoint?.model_names.join('\n') ?? 'vllm-sr/mom-',
-      recipe: entrypoint?.recipe ?? DEFAULT_RECIPE_NAME,
-    }
-    const fields: FieldConfig<EntrypointFormState>[] = [
-      {
-        name: 'modelNames',
-        label: 'Public model names',
-        type: 'textarea',
-        required: true,
-        placeholder: 'vllm-sr/mom-balanced-v1',
-        description: 'One virtual model ID per line. These names appear in /v1/models.',
-      },
-      {
-        name: 'recipe',
-        label: 'Routing recipe',
-        type: 'select',
-        required: true,
-        options: getRecipeNames(config),
-        description: 'Requests using any model above evaluate only this recipe.',
-      },
-    ]
-    openEditModal(
-      mode === 'add' ? 'Add Entrypoint' : 'Edit Entrypoint',
-      form,
-      fields,
-      async (data) => {
-        const normalized = validateEntrypointForm(data, config, models, originalIndex)
-        const nextConfig = cloneConfigData(config)
-        const nextEntrypoints = [...(nextConfig.entrypoints ?? [])]
-        if (originalIndex === null) nextEntrypoints.push(normalized)
-        else nextEntrypoints[originalIndex] = normalized
-        nextConfig.entrypoints = nextEntrypoints
-        await saveConfig(nextConfig)
-      },
-      mode,
-    )
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % VIEWS.length
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + VIEWS.length) % VIEWS.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = VIEWS.length - 1
+    if (nextIndex === null) return
+    event.preventDefault()
+    setActiveView(VIEWS[nextIndex].id)
+    tabRefs.current[nextIndex]?.focus()
   }
 
-  const openRecipeEditor = (mode: 'add' | 'edit', recipe?: RecipeConfig) => {
-    const originalName = recipe?.name ?? null
-    const form: RecipeFormState = {
-      name: recipe?.name ?? '',
-      description: recipe?.description ?? '',
-      strategy: normalizeRecipeStrategy(
-        recipe?.routing.strategy ?? config.global?.router?.strategy,
-      ),
-      signals: cloneSignals(recipe),
-      decisions: recipe ? cloneDecisions(recipe) : [],
-    }
-    const fields: FieldConfig<RecipeFormState>[] = [
-      {
-        name: 'name',
-        label: 'Recipe name',
-        type: 'text',
-        required: true,
-        placeholder: 'speed-first',
-        description: 'Stable internal policy identifier referenced by entrypoints.',
+  const launchProbe = (intent: 'run' | 'edit', plan: RecipeProbeRunPlan) => {
+    navigate('/playground', {
+      state: {
+        playgroundInvocation: createProbePlaygroundInvocation(intent, plan),
       },
+<<<<<<< HEAD
       {
         name: 'description',
         label: 'Description',
@@ -231,440 +140,91 @@ export default function ConfigPageEntrypointsRecipesSection({
       },
       mode,
     )
+=======
+    })
+>>>>>>> upstream/main
   }
 
-  const viewEntrypoint = (entrypoint: EntrypointConfig, index: number) => {
-    const recipe = getRecipeByName(config, entrypoint.recipe)
-    const targets = collectRecipeTargetModels(recipe)
-    openViewModal(
-      entrypoint.model_names.join(', '),
-      [
-        {
-          title: 'Entrypoint mapping',
-          fields: [
-            { label: 'Public models', value: entrypoint.model_names.join('\n'), fullWidth: true },
-            { label: 'Recipe', value: entrypoint.recipe },
-            { label: 'Recipe decisions', value: recipe?.routing.decisions?.length ?? 0 },
-            {
-              label: 'Physical targets',
-              value: targets.join('\n') || 'No target models',
-              fullWidth: true,
-            },
-          ],
-        },
-      ],
-      isReadonly ? undefined : () => openEntrypointEditor('edit', entrypoint, index),
-    )
-  }
-
-  const viewRecipe = (recipe: RecipeConfig) => {
-    const targets = collectRecipeTargetModels(recipe)
-    openViewModal(
-      recipe.name,
-      [
-        {
-          title: 'Recipe profile',
-          fields: [
-            {
-              label: 'Description',
-              value: recipe.description || 'No description',
-              fullWidth: true,
-            },
-            { label: 'Entrypoint models', value: countRecipeEntrypoints(entrypoints, recipe.name) },
-            {
-              label: 'Decision strategy',
-              value: recipe.routing.strategy ?? DEFAULT_ROUTING_STRATEGY,
-            },
-            { label: 'Decisions', value: recipe.routing.decisions?.length ?? 0 },
-            {
-              label: 'Signals',
-              value: countSignalsInProfile(recipe.routing as RoutingProfileLike).total,
-            },
-            {
-              label: 'Projections',
-              value: countProjectionsInProfile(recipe.routing as RoutingProfileLike),
-            },
-            {
-              label: 'Physical targets',
-              value: targets.join('\n') || 'No target models',
-              fullWidth: true,
-            },
-          ],
-        },
-      ],
-      isReadonly ? undefined : () => openRecipeEditor('edit', recipe),
-    )
-  }
-
-  const renderRecipeModelPool = (recipe: RecipeConfig | null) => {
-    if (!recipe) {
-      return <div className={pageStyles.poolDisclosure}>Recipe not found.</div>
-    }
-    const decisions = recipe.routing.decisions ?? []
-    return (
-      <div className={pageStyles.poolDisclosure}>
-        <div className={pageStyles.poolDisclosureHeader}>
-          <div>
-            <span className={pageStyles.metricLabel}>Mixture composition</span>
-            <strong>{recipe.name}</strong>
-          </div>
-          <span className={pageStyles.recipeBadge}>
-            {collectRecipeTargetModels(recipe).length} physical models
-          </span>
-        </div>
-        {decisions.length > 0 ? (
-          <div className={pageStyles.poolDecisionGrid}>
-            {decisions.map((decision) => (
-              <article key={decision.name} className={pageStyles.poolDecisionCard}>
-                <div className={pageStyles.poolDecisionHeader}>
-                  <strong>
-                    {formatRoutingMetadataValue('x-vsr-selected-decision', decision.name)}
-                  </strong>
-                  <span>P{decision.priority}</span>
-                </div>
-                <p>{decision.description || 'No decision description'}</p>
-                <div className={pageStyles.poolModelList}>
-                  {(decision.modelRefs ?? []).map((reference) => (
-                    <div
-                      key={`${decision.name}-${reference.model}`}
-                      className={pageStyles.poolModel}
-                    >
-                      <span className={pageStyles.poolModelDot} aria-hidden="true" />
-                      <div>
-                        <code>{reference.model}</code>
-                        <small>
-                          {reference.use_reasoning ? 'Reasoning' : 'Standard'}
-                          {reference.reasoning_effort ? ` · ${reference.reasoning_effort}` : ''}
-                          {typeof reference.weight === 'number'
-                            ? ` · weight ${reference.weight}`
-                            : ''}
-                        </small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <span className={pageStyles.muted}>No decisions configured for this recipe.</span>
-        )}
-      </div>
-    )
-  }
-
-  const confirmDeleteEntrypoint = async () => {
-    if (!entrypointPendingDelete) return
-    setDeletePending(true)
-    setDeleteError(null)
-    try {
-      const nextConfig = cloneConfigData(config)
-      nextConfig.entrypoints = (nextConfig.entrypoints ?? []).filter(
-        (_, index) => index !== entrypointPendingDelete.index,
-      )
-      await saveConfig(nextConfig)
-      setEntrypointPendingDelete(null)
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete entrypoint.')
-    } finally {
-      setDeletePending(false)
-    }
-  }
-
-  const confirmDeleteRecipe = async () => {
-    if (!recipePendingDelete) return
-    const blocker = getRecipeDeleteBlocker(config, recipePendingDelete.name)
-    if (blocker) {
-      setDeleteError(blocker)
-      return
-    }
-    setDeletePending(true)
-    setDeleteError(null)
-    try {
-      const nextConfig = cloneConfigData(config)
-      nextConfig.recipes = (nextConfig.recipes ?? []).filter(
-        (recipe) => recipe.name !== recipePendingDelete.name,
-      )
-      await saveConfig(nextConfig)
-      setRecipePendingDelete(null)
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete recipe.')
-    } finally {
-      setDeletePending(false)
-    }
+  const handleRecipeLifecycleChanged = async (): Promise<boolean> => {
+    const configRefreshed = await refreshConfig()
+    setRecipeRevision((current) => current + 1)
+    window.dispatchEvent(new CustomEvent('config-deployed'))
+    return configRefreshed
   }
 
   return (
     <ConfigPageManagerLayout
       eyebrow="Dispatch"
       title="Mixture-of-Models"
-      description="Compose branded AMD models from reusable routing recipes and purpose-built model pools."
+      description="Browse versioned built-in models, inspect deployed routing policies, and run verified offline probes."
       configArea="Multi-recipe dispatch"
-      scope="Live model namespace"
-      panelEyebrow="Your model portfolio"
-      panelTitle="Models you design and own"
-      panelDescription="Every public model is a deliberate mixture: a routing policy, a decision graph, and the AMD models behind it."
+      scope="Active Recipe"
+      panelEyebrow="Unified model workspace"
+      panelTitle="One model surface, many model paths"
+      panelDescription="Inspect installed model metadata, manage custom request-facing IDs and routing, then exercise verified requests in Playground."
       pills={[
         { label: 'Models' },
         { label: 'Decisions' },
         { label: 'Mixture-of-Models', active: true },
       ]}
     >
-      <div className={pageStyles.tablesGrid}>
-        <section className={pageStyles.portfolioPanel}>
-          <div className={pageStyles.portfolioHeader}>
-            <div>
-              <span className={pageStyles.sectionEyebrow}>Your models</span>
-              <h2>Entrypoints</h2>
-              <p>Customer-facing model IDs mapped to isolated routing recipes.</p>
-            </div>
-            <div className={pageStyles.portfolioActions}>
-              <input
-                type="search"
-                value={entrypointsSearch}
-                onChange={(event) => setEntrypointsSearch(event.target.value)}
-                placeholder="Search model or recipe"
-                aria-label="Search entrypoints"
-              />
-              {!isReadonly ? (
-                <button type="button" onClick={() => openEntrypointEditor('add')}>
-                  Add entrypoint
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className={pageStyles.portfolioList}>
-            {filteredEntrypoints.map((entrypoint) => {
-              const key = entrypoint.model_names.join('|')
-              const expanded = expandedEntrypoints.has(key)
-              const mappedRecipe = getRecipeByName(config, entrypoint.recipe)
-              const targetCount = collectRecipeTargetModels(mappedRecipe).length
-              return (
-                <article key={key} className={pageStyles.portfolioItem}>
-                  <div className={pageStyles.portfolioItemMain}>
-                    <button
-                      type="button"
-                      className={pageStyles.disclosureButton}
-                      aria-expanded={expanded}
-                      aria-label={`${expanded ? 'Collapse' : 'Expand'} ${entrypoint.model_names.join(', ')}`}
-                      onClick={() => {
-                        setExpandedEntrypoints((current) => {
-                          const next = new Set(current)
-                          if (next.has(key)) next.delete(key)
-                          else next.add(key)
-                          return next
-                        })
-                      }}
-                    >
-                      <span aria-hidden="true">{expanded ? '−' : '+'}</span>
-                    </button>
-                    <div className={pageStyles.portfolioIdentity}>
-                      {entrypoint.model_names.map((modelName) => (
-                        <code key={modelName}>{modelName}</code>
-                      ))}
-                      <span>Routes through {entrypoint.recipe}</span>
-                    </div>
-                    <div className={pageStyles.portfolioMeta}>
-                      <span>{targetCount} models</span>
-                      <span>{entrypoint.recipe}</span>
-                    </div>
-                    <div className={pageStyles.rowActions}>
-                      {mappedRecipe ? (
-                        <button
-                          type="button"
-                          onClick={() => setTopologyTarget({ entrypoint, recipe: mappedRecipe })}
-                        >
-                          Topology
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => viewEntrypoint(entrypoint, entrypoints.indexOf(entrypoint))}
-                      >
-                        View
-                      </button>
-                      {!isReadonly ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEntrypointEditor(
-                                'edit',
-                                entrypoint,
-                                entrypoints.indexOf(entrypoint),
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={pageStyles.deleteAction}
-                            onClick={() => {
-                              setDeleteError(null)
-                              setEntrypointPendingDelete({
-                                entrypoint,
-                                index: entrypoints.indexOf(entrypoint),
-                              })
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                  {expanded ? renderRecipeModelPool(mappedRecipe) : null}
-                </article>
-              )
-            })}
-            {filteredEntrypoints.length === 0 ? (
-              <div className={pageStyles.emptyState}>
-                {entrypointsSearch
-                  ? 'No entrypoints match your search.'
-                  : 'No entrypoints configured.'}
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className={pageStyles.portfolioPanel}>
-          <div className={pageStyles.portfolioHeader}>
-            <div>
-              <span className={pageStyles.sectionEyebrow}>Reusable routing</span>
-              <h2>Recipes</h2>
-              <p>Reusable decision graphs and the physical model pools behind them.</p>
-            </div>
-            <div className={pageStyles.portfolioActions}>
-              <input
-                type="search"
-                value={recipesSearch}
-                onChange={(event) => setRecipesSearch(event.target.value)}
-                placeholder="Search recipe or model"
-                aria-label="Search recipes"
-              />
-              {!isReadonly ? (
-                <button type="button" onClick={() => openRecipeEditor('add')}>
-                  Add recipe
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className={pageStyles.portfolioList}>
-            {filteredRecipes.map((recipe) => {
-              const expanded = expandedRecipes.has(recipe.name)
-              return (
-                <article key={recipe.name} className={pageStyles.portfolioItem}>
-                  <div className={pageStyles.portfolioItemMain}>
-                    <button
-                      type="button"
-                      className={pageStyles.disclosureButton}
-                      aria-expanded={expanded}
-                      aria-label={`${expanded ? 'Collapse' : 'Expand'} ${recipe.name}`}
-                      onClick={() => {
-                        setExpandedRecipes((current) => {
-                          const next = new Set(current)
-                          if (next.has(recipe.name)) next.delete(recipe.name)
-                          else next.add(recipe.name)
-                          return next
-                        })
-                      }}
-                    >
-                      <span aria-hidden="true">{expanded ? '−' : '+'}</span>
-                    </button>
-                    <div className={pageStyles.portfolioIdentity}>
-                      <strong>{recipe.name}</strong>
-                      <span>{recipe.description || 'No description'}</span>
-                    </div>
-                    <div className={pageStyles.portfolioMeta}>
-                      <span>{countRecipeEntrypoints(entrypoints, recipe.name)} public models</span>
-                      <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
-                      <span>{collectRecipeTargetModels(recipe).length} models</span>
-                    </div>
-                    <div className={pageStyles.rowActions}>
-                      <button type="button" onClick={() => viewRecipe(recipe)}>
-                        View
-                      </button>
-                      {!isReadonly ? (
-                        <>
-                          <button type="button" onClick={() => openRecipeEditor('edit', recipe)}>
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={pageStyles.deleteAction}
-                            onClick={() => {
-                              setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
-                              setRecipePendingDelete(recipe)
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                  {expanded ? renderRecipeModelPool(recipe) : null}
-                </article>
-              )
-            })}
-            {filteredRecipes.length === 0 ? (
-              <div className={pageStyles.emptyState}>
-                {recipesSearch ? 'No recipes match your search.' : 'No recipes configured.'}
-              </div>
-            ) : null}
-          </div>
-        </section>
+      <div className={styles.tabs} role="tablist" aria-label="Mixture-of-Models views">
+        {VIEWS.map((view, index) => (
+          <button
+            key={view.id}
+            ref={(element) => {
+              tabRefs.current[index] = element
+            }}
+            id={`mom-tab-${view.id}`}
+            type="button"
+            role="tab"
+            aria-selected={activeView === view.id}
+            aria-controls="mom-active-panel"
+            tabIndex={activeView === view.id ? 0 : -1}
+            className={`${styles.tab} ${activeView === view.id ? styles.activeTab : ''}`}
+            onClick={() => setActiveView(view.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
+          >
+            {view.label}
+          </button>
+        ))}
       </div>
 
-      {topologyTarget ? (
-        <ConfigPageMoMTopologyDialog
-          entrypoint={topologyTarget.entrypoint}
-          recipe={topologyTarget.recipe}
-          onClose={() => setTopologyTarget(null)}
-        />
-      ) : null}
-
-      <ConfirmDialog
-        isOpen={entrypointPendingDelete !== null}
-        title="Delete entrypoint mapping?"
-        description="Remove these public model IDs from the router model catalog."
-        eyebrow="Public model namespace change"
-        confirmLabel="Delete entrypoint"
-        pending={deletePending}
-        details={deleteError ? <span role="alert">{deleteError}</span> : undefined}
-        onCancel={() => {
-          if (deletePending) return
-          setEntrypointPendingDelete(null)
-          setDeleteError(null)
-        }}
-        onConfirm={confirmDeleteEntrypoint}
-      />
-
-      <ConfirmDialog
-        isOpen={recipePendingDelete !== null}
-        title={`Delete recipe “${recipePendingDelete?.name ?? ''}”?`}
-        description="Delete this named routing profile and all of its decisions."
-        eyebrow="Destructive routing change"
-        confirmLabel="Delete recipe"
-        confirmationText={recipePendingDelete?.name}
-        pending={deletePending}
-        details={
-          <div className={pageStyles.deleteDetails}>
-            <span>
-              {collectRecipeTargetModels(recipePendingDelete).length} physical target models
-            </span>
-            <span>{recipePendingDelete?.routing.decisions?.length ?? 0} recipe decisions</span>
-            {deleteError ? <span role="alert">{deleteError}</span> : null}
-          </div>
-        }
-        onCancel={() => {
-          if (deletePending) return
-          setRecipePendingDelete(null)
-          setDeleteError(null)
-        }}
-        onConfirm={confirmDeleteRecipe}
-      />
+      <div
+        id="mom-active-panel"
+        className={styles.tabPanel}
+        role="tabpanel"
+        aria-labelledby={`mom-tab-${activeView}`}
+      >
+        {activeView === 'overview' ? (
+          <ConfigPageMoMOverviewPanel
+            catalog={modelCatalog.catalog}
+            catalogLoading={modelCatalog.loading}
+            catalogError={modelCatalog.error}
+            onCatalogRetry={modelCatalog.retry}
+            packageCapabilities={packageCapabilities}
+            recipeRevision={recipeRevision}
+            onRecipeLifecycleChanged={handleRecipeLifecycleChanged}
+          />
+        ) : null}
+        {activeView === 'routing' ? (
+          <ConfigPageMoMRoutingPanel
+            config={config}
+            isReadonly={isReadonly}
+            models={models}
+            saveConfig={saveConfig}
+            openEditModal={openEditModal}
+            openViewModal={openViewModal}
+            catalog={modelCatalog.catalog}
+            catalogLoading={modelCatalog.loading}
+            catalogError={modelCatalog.error}
+            onCatalogRetry={modelCatalog.retry}
+          />
+        ) : null}
+        {activeView === 'probes' ? (
+          <ConfigPageMoMProbesPanel onLaunch={launchProbe} recipeRevision={recipeRevision} />
+        ) : null}
+      </div>
     </ConfigPageManagerLayout>
   )
 }

@@ -1,34 +1,7 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
 import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
-
-export interface FieldSchema {
-  key: string
-  label: string
-  type:
-    | 'string'
-    | 'number'
-    | 'boolean'
-    | 'string[]'
-    | 'number[]'
-    | 'string[][]'
-    | 'select'
-    | 'object'
-    | 'object[]'
-    | 'key-value'
-    | 'rule'
-  options?: string[]
-  required?: boolean
-  placeholder?: string
-  description?: string
-  min?: number
-  fields?: FieldSchema[]
-  addLabel?: string
-  emptyLabel?: string
-  itemLabel?: string
-  itemLabelKey?: string
-  keyLabel?: string
-  valueLabel?: string
-}
+import type { FieldSchema } from './dslSchemaTypes'
+export type { FieldSchema } from './dslSchemaTypes'
 
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
@@ -653,6 +626,13 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           description: 'Run semantic tool selection from the global tools database',
         },
         {
+          key: 'strip_tool_history',
+          label: 'Strip Tool History',
+          type: 'boolean',
+          description:
+            'With mode none, remove prior tool calls and results from the provider-bound body',
+        },
+        {
           key: 'allow_tools',
           label: 'Allow Tools',
           type: 'string[]',
@@ -663,6 +643,48 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           label: 'Block Tools',
           type: 'string[]',
           placeholder: 'Tool name to block',
+        },
+        {
+          key: 'strategy',
+          label: 'Retrieval Strategy',
+          type: 'string',
+          placeholder: 'default',
+        },
+        {
+          key: 'dynamic_retrieval',
+          label: 'Dynamic Retrieval',
+          type: 'object',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            {
+              key: 'strategy',
+              label: 'Strategy',
+              type: 'select',
+              options: ['semantic_only', 'hybrid_history'],
+            },
+            { key: 'history_window', label: 'History Window', type: 'number' },
+            {
+              key: 'weights',
+              label: 'Weights',
+              type: 'object',
+              fields: [
+                { key: 'semantic', label: 'Semantic', type: 'number' },
+                { key: 'history', label: 'History', type: 'number' },
+                { key: 'decision_prior', label: 'Decision Prior', type: 'number' },
+                { key: 'repetition_penalty', label: 'Repetition Penalty', type: 'number' },
+              ],
+            },
+            {
+              key: 'min_history_confidence',
+              label: 'Minimum History Confidence',
+              type: 'number',
+            },
+            {
+              key: 'fallback_on_low_confidence',
+              label: 'Fallback on Low Confidence',
+              type: 'boolean',
+            },
+          ],
         },
       ]
     case 'tool_selection':

@@ -246,6 +246,9 @@ func pluginFieldsTools(p *config.DecisionPlugin) map[string]Value {
 	if len(cfg.BlockTools) > 0 {
 		fields["block_tools"] = stringsToArray(cfg.BlockTools)
 	}
+	if cfg.StripToolHistory {
+		fields["strip_tool_history"] = BoolValue{V: true}
+	}
 	if cfg.DynamicRetrieval != nil {
 		fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)
 	}

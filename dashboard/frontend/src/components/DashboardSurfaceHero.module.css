@@ -237,6 +237,81 @@
   gap: 0.75rem;
 }
 
+.heroCompact {
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.heroCompact .brandBadge {
+  display: none;
+}
+
+.heroCompact .title {
+  margin-top: 0.4rem;
+  font-size: clamp(1.65rem, 2vw, 1.9rem);
+  line-height: 1.1;
+}
+
+.heroCompact .description {
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
+
+.heroCompact .metaRow {
+  gap: 0.55rem;
+  margin-top: 0.7rem;
+}
+
+.heroCompact .metaCard {
+  padding: 0.5rem 0.7rem;
+}
+
+.heroCompact .metaValue {
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.heroCompact .heroPanel {
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.heroCompact .panelTop {
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.heroCompact .logoFrame {
+  width: 42px;
+  height: 42px;
+}
+
+.heroCompact .panelLogo {
+  width: 22px;
+  height: 22px;
+}
+
+.heroCompact .panelTitle {
+  margin-top: 0.15rem;
+}
+
+.heroCompact .panelDescription {
+  display: none;
+}
+
+.heroCompact .panelPills {
+  gap: 0.35rem;
+}
+
+.heroCompact .panelPill {
+  min-height: 28px;
+  padding: 0.25rem 0.55rem;
+}
+
+.heroCompact .panelFooter {
+  gap: 0.45rem;
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
