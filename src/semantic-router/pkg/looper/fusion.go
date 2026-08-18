@@ -184,20 +184,7 @@ func (l *FusionLooper) executeFusionPanel(
 	successful := result.Successful()
 
 	if result.Err != nil {
-		if result.TimedOut {
-			if len(successful) > 0 && cfg.OnError != config.FusionOnErrorFail {
-				failed = append(failed, FusionFailedModel{Model: "panel", Error: result.Err.Error()})
-				return successful, failed, result.Err
-			}
-			return nil, failed, result.Err
-		}
-		// Fail-fast triggered: discard partial successes too, matching the
-		// prior collector's fail branch exactly.
-		failedModel := "panel"
-		if len(failed) > 0 {
-			failedModel = failed[len(failed)-1].Model
-		}
-		return nil, failed, fmt.Errorf("fusion panel model %q failed: %w", failedModel, result.Err)
+		return fusionPanelErrorResult(result, successful, failed, cfg)
 	}
 	if result.QuorumMet {
 		logFusionQuorum(len(successful), len(cfg.AnalysisModels))
@@ -207,6 +194,31 @@ func (l *FusionLooper) executeFusionPanel(
 		return nil, failed, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
 	}
 	return successful, failed, nil
+}
+
+// fusionPanelErrorResult handles executeFusionPanel's result.Err != nil case:
+// a timeout that may still carry usable partial successes, or a fail-fast
+// abort that discards partial successes.
+func fusionPanelErrorResult(
+	result *PanelResult,
+	successful []*ModelResponse,
+	failed []FusionFailedModel,
+	cfg fusionExecutionConfig,
+) ([]*ModelResponse, []FusionFailedModel, error) {
+	if result.TimedOut {
+		if len(successful) > 0 && cfg.OnError != config.FusionOnErrorFail {
+			failed = append(failed, FusionFailedModel{Model: "panel", Error: result.Err.Error()})
+			return successful, failed, result.Err
+		}
+		return nil, failed, result.Err
+	}
+	// Fail-fast triggered: discard partial successes too, matching the
+	// prior collector's fail branch exactly.
+	failedModel := "panel"
+	if len(failed) > 0 {
+		failedModel = failed[len(failed)-1].Model
+	}
+	return nil, failed, fmt.Errorf("fusion panel model %q failed: %w", failedModel, result.Err)
 }
 
 func fusionFailedModels(attempts []PanelAttempt) []FusionFailedModel {

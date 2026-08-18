@@ -246,24 +246,7 @@ func collectPanelResults(
 				continue
 			}
 			remaining--
-			attempt := classifyPanelAttempt(raw)
-			attempts[raw.index] = attempt
-
-			if countsTowardQuorum(attempt) {
-				successCount++
-			}
-			if successCount >= minSuccessful {
-				result.QuorumMet = true
-				if policy.CancelOnReturn {
-					cancel()
-				}
-				return result
-			}
-			if attempt.Outcome == PanelOutcomeFailed && policy.FailFast {
-				if policy.CancelOnReturn {
-					cancel()
-				}
-				result.Err = attempt.Err
+			if recordPanelAttempt(raw, attempts, result, &successCount, minSuccessful, countsTowardQuorum, policy, cancel) {
 				return result
 			}
 		case <-execCtx.Done():
@@ -276,6 +259,42 @@ func collectPanelResults(
 		}
 	}
 	return result
+}
+
+// recordPanelAttempt classifies one raw panel result into attempts, updates
+// the running success count, and reports whether collectPanelResults should
+// return now (quorum met, or a failure tripped fail-fast).
+func recordPanelAttempt(
+	raw panelRawResult,
+	attempts []PanelAttempt,
+	result *PanelResult,
+	successCount *int,
+	minSuccessful int,
+	countsTowardQuorum func(PanelAttempt) bool,
+	policy PanelPolicy,
+	cancel context.CancelFunc,
+) bool {
+	attempt := classifyPanelAttempt(raw)
+	attempts[raw.index] = attempt
+
+	if countsTowardQuorum(attempt) {
+		*successCount++
+	}
+	if *successCount >= minSuccessful {
+		result.QuorumMet = true
+		if policy.CancelOnReturn {
+			cancel()
+		}
+		return true
+	}
+	if attempt.Outcome == PanelOutcomeFailed && policy.FailFast {
+		if policy.CancelOnReturn {
+			cancel()
+		}
+		result.Err = attempt.Err
+		return true
+	}
+	return false
 }
 
 func classifyPanelAttempt(raw panelRawResult) PanelAttempt {
