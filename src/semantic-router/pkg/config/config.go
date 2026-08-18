@@ -52,6 +52,26 @@ const (
 	PromptGuardProtocolHTTPClassify = "http_classify"
 )
 
+// PromptGuardConfig.OnError values, selecting what a classifier-backend
+// failure (e.g. an unreachable http_chat/http_classify endpoint) does to the
+// jailbreak rule that failed to evaluate. Named after the same on_error
+// vocabulary already used elsewhere in this package (fusion/remom/workflows/
+// confidence configs): "skip" tolerates the failure and continues, "fail"
+// propagates it into the rule's own result instead of silently continuing.
+const (
+	// PromptGuardOnErrorSkip preserves the historical behavior: a classify
+	// error is logged and the affected content is treated as not matching
+	// this rule, so other content/rules still evaluate normally. This is the
+	// default when OnError is unset.
+	PromptGuardOnErrorSkip = "skip"
+	// PromptGuardOnErrorFail treats a classify error as if the rule matched
+	// at maximum confidence - fail-closed, because an inference failure
+	// means the content could not be verified safe. Without this, an
+	// unreachable classifier endpoint looks identical to a genuinely clean
+	// request (see @adaamko's review on #2760).
+	PromptGuardOnErrorFail = "fail"
+)
+
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword      = "keyword"

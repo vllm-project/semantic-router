@@ -2306,6 +2306,10 @@ global:
         variant: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         positive_labels: [jailbreak]
+        # skip (default) tolerates a classifier-backend failure and treats the
+        # affected content as not matching; fail treats it as a match instead,
+        # since an inference failure means the content could not be verified safe.
+        on_error: skip
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is

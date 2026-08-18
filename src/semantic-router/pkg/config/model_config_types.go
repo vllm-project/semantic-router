@@ -155,6 +155,11 @@ type PromptGuardConfig struct {
 	// exclusive with Variant. Requires an external model configured with
 	// model_role="guardrail".
 	Protocol string `yaml:"protocol,omitempty"`
+
+	// OnError selects what a classifier-backend failure does to the rule
+	// that failed to evaluate: PromptGuardOnErrorSkip (default) or
+	// PromptGuardOnErrorFail. See the constants' doc comments.
+	OnError string `yaml:"on_error,omitempty"`
 }
 
 type FeedbackDetectorConfig struct {
