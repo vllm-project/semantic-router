@@ -232,8 +232,10 @@ that recipe's policy.
 If no decision matches, the recipe uses `providers.defaults.default_model`.
 The virtual entrypoint name never reaches a backend.
 
-See [Models and Recipes](models-and-recipes) for built-in virtual models,
-forking, packaging, import, and migration. See
+See
+[Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+for built-in virtual models, CLI serving, backend binding, forking, packaging,
+and migration. See
 [Entrypoints and Multi-Recipe Routing](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
 

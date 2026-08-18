@@ -131,3 +131,5 @@ or move every entrypoint that refers to it. See the
 
 Browse the
 [complete recipe examples and their Model Cards](https://github.com/vllm-project/semantic-router/tree/main/config/recipes).
+For the catalog, CLI, backend binding, and serving workflow, start with
+[Models, Entrypoints, and Serving](models-entrypoints-serving).

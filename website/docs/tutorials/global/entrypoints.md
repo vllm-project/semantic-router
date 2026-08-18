@@ -93,4 +93,6 @@ An entrypoint is a policy selector, not a security boundary. Recipes share the
 Router process and configured infrastructure; use network, compute, and storage
 isolation when tenants require stronger separation.
 
-Next, [define the recipe](recipes) that owns the selected policy.
+Start with [Models, Entrypoints, and Serving](models-entrypoints-serving) for
+the end-to-end CLI workflow, or continue to [Recipes](recipes) for the policy
+owned by an entrypoint.

@@ -151,6 +151,8 @@ capability boundary, objective, or measured routing improvement.
 
 ## Next
 
+- [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  for the complete CLI and backend-binding workflow.
 - [Use Cases](use-cases) for practical patterns.
 - [Routing Pipeline](signal-driven-decisions) for policy composition.
 - [Algorithms](../tutorials/algorithm/overview) for selection and orchestration

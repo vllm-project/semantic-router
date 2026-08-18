@@ -108,5 +108,5 @@ Continue with:
   validation rules.
 - [Recipes](recipes) for policy isolation, shared infrastructure, lifecycle
   APIs, and limitations.
-- [Models and Recipes](../../installation/models-and-recipes) for the built-in
-  catalog, Model Cards, forking, and packaging workflows.
+- [Models, Entrypoints, and Serving](models-entrypoints-serving) for the
+  end-to-end catalog, CLI, backend binding, serving, and operations workflow.

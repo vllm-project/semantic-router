@@ -130,6 +130,8 @@ vllm-sr config migrate --config old-config.yaml
   gateway options.
 - [Configuration](configuration) for canonical YAML, recipes, and environment
   bindings.
+- [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  for built-in models, backend binding, and the complete CLI workflow.
 - [Why Semantic Routing](../overview/goals) for the design goals.
 - [Routing Pipeline](../overview/signal-driven-decisions) for signals,
   decisions, algorithms, and plugins.

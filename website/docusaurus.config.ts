@@ -169,6 +169,10 @@ const config: Config = {
             to: '/docs/installation/',
           },
           {
+            from: '/docs/installation/models-and-recipes',
+            to: '/docs/tutorials/global/models-entrypoints-serving',
+          },
+          {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },

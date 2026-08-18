@@ -109,8 +109,9 @@ This is a provider fragment, not a complete Router config. Add the matching
 model card and route to your existing recipe, or configure the endpoint in the
 Dashboard. The `provider_model_id` must match a model returned by vLLM's
 `/v1/models` endpoint. See [Configuration](configuration) for a complete
-minimal document and [Models and Recipes](models-and-recipes) for backend
-binding and routing policy.
+minimal document and
+[Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+for backend binding and routing policy.
 
 The example publishes port `8000` on the host for direct testing. Restrict that
 port with host networking controls, or use private service discovery in a

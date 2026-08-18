@@ -46,9 +46,10 @@ const sidebars: SidebarsConfig = {
           label: 'Entrypoints',
           link: {
             type: 'doc',
-            id: 'tutorials/global/entrypoints-and-recipes',
+            id: 'tutorials/global/models-entrypoints-serving',
           },
           items: [
+            'tutorials/global/entrypoints-and-recipes',
             'tutorials/global/entrypoints',
             'tutorials/global/recipes',
           ],
@@ -232,7 +233,6 @@ const sidebars: SidebarsConfig = {
           },
           items: [
             'installation/configuration-workflows',
-            'installation/models-and-recipes',
           ],
         },
         {
