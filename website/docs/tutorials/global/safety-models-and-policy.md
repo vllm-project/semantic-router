@@ -1,83 +1,81 @@
-# Safety, Models, and Policy
+# Safety Models and Shared Policy
 
 ## Overview
 
-This page covers the shared runtime model and policy blocks inside `global:`.
-
-These settings define shared safety behavior, shared runtime model settings, and router-wide policy defaults.
-
-## Key Advantages
-
-- Keeps shared policy separate from route-local safety plugins.
-- Centralizes built-in classifier and embedding model overrides.
-- Makes authz, ratelimit, and selection defaults consistent.
-- Gives the router one place to override system model bindings.
+`global.model_catalog` declares shared model assets and the modules that
+use them. `global.services.authz` and `global.services.ratelimit` declare shared
+identity and rate policy. Route-specific thresholds and actions still belong in
+signals, decisions, and plugins.
 
 ## What Problem Does It Solve?
 
-The router depends on shared runtime models and shared policy defaults that are not tied to one route. If those settings are scattered across routes, the resulting behavior is hard to reason about and hard to change safely.
+Jailbreak, PII, domain, fact-check, hallucination, and feedback capabilities
+reuse model runtimes across routes. Defining those dependencies once keeps
+route policy small and makes local versus remote processing visible.
 
-These `global:` blocks solve that by collecting shared model and policy overrides in one layer.
+## Key Advantages
+
+- Reuses one model runtime across many route-local safety rules.
+- Makes local and remote processing choices explicit.
+- Separates shared identity/rate services from decision policy.
 
 ## When to Use
 
-Use these blocks when:
-
-- built-in safety and classification models need shared runtime settings
-- signal or algorithm layers depend on shared embedding or external model settings
-- authz or rate limits should apply router-wide
-- one system capability should bind to a different internal model
+Override these settings when you need a different system model, execution
+backend, threshold baseline, identity source, or rate-limit provider. Keep the
+defaults when the bundled local models and policies meet your requirements.
 
 ## Configuration
 
-### Prompt Guard Backend
+### Local prompt guard
 
-Jailbreak detection selects a backend via two mutually exclusive fields - set at most one:
-
-- `prompt_guard.variant` picks a local Candle-backed model:
-  - `candle`: the in-process Candle model (LoRA/BERT auto-detect, falling back to ModernBERT).
-  - `mmbert32k`: the in-process mmBERT-32K model (32K context, YaRN RoPE, multilingual).
-- `prompt_guard.protocol` picks a remote HTTP backend, requiring an `external_models` entry with `model_role: guardrail`:
-  - `http_chat`: an external model called through a generative chat-completion prompt (Qwen3Guard-style).
-  - `http_classify`: an external sequence-classifier endpoint speaking the widely-used HuggingFace text-classification pipeline contract - `POST {endpoint}/classify` with `{"inputs": "<text>"}`, returning every label's score, not just the top prediction. This lets a self-hosted classifier (wrapped by an existing `transformers` pipeline, or a Text Embeddings Inference deployment) plug in without disguising it as a chat completion.
+`variant` selects the local Candle-backed implementation. `mmbert32k` is the
+canonical default; choose `candle` explicitly when that is the intended model.
 
 ```yaml
 global:
   model_catalog:
     modules:
       prompt_guard:
-        protocol: http_classify
-        jailbreak_mapping_path: models/custom-classifier/jailbreak_type_mapping.json
-        positive_labels: [INJECTION]   # this model's positive class isn't named "jailbreak"
+        enabled: true
+        variant: mmbert32k
         threshold: 0.7
-      classifier:
-        domain:
-          model_ref: domain_classifier
-          threshold: 0.5
-          use_mmbert_32k: true
-    external:
-      - model_role: guardrail
-        llm_endpoint:
-          address: 127.0.0.1
-          port: 8811
-        llm_model_name: my-custom-classifier
 ```
 
-Notes:
+### Remote prompt guard
 
-- Setting both `variant` and `protocol` fails config validation - `variant` selects a local model, `protocol` selects a remote one.
-- `positive_labels` (optional): the `jailbreak_mapping` label(s) that count as unsafe, for models whose positive class isn't literally `jailbreak` (e.g. `INJECTION`, `malicious`). Multiple labels are summed when computing `risk_score`. Unset defaults to the single label `jailbreak`. If configured, at least one entry must exist in the loaded `jailbreak_mapping`'s labels or the router fails to start - a misconfigured label can no longer silently mean "never detected."
-- `http_classify` response labels are matched against `jailbreak_mapping` by name, not by array position (the server is free to order them however it likes, e.g. sorted by score). Its default timeout is 5s (lightweight forward pass); `http_chat`'s default stays at 30s (generative call). Both are overridable via the external model's `timeout_seconds`.
-- `http_chat` is restricted to this binary guardrail use case; it isn't offered for N-way classifiers (`classifier.domain`, `complexity`) since a generative model can't reliably produce a calibrated multi-class distribution.
-- Breaking change: the legacy `use_modernbert`, `use_mmbert_32k`, and `use_vllm` boolean flags are removed, and the single `backend` field from an earlier revision of this feature is split into `variant`/`protocol`. Migrate `use_mmbert_32k: true` to `variant: mmbert32k`, and `use_vllm: true` (plus its `external_models` entry) to `protocol: http_chat`.
-- **When both `variant` and `protocol` are unset, the effective default is `variant: mmbert32k`, not `candle`.** A config built directly in code without going through canonical default resolution falls back to `candle` when both are empty. Canonical resolution (the path the dashboard, canonical export, and any config that doesn't set every field explicitly all go through) starts from a baseline where `variant` is already set to `mmbert32k`, matching the bundled `mmbert32k-jailbreak-detector-merged` model it also defaults `model_id` to - so simply deleting `use_mmbert_32k: false` (or `use_modernbert: false`) without adding anything in its place does **not** get you `candle`. If you were relying on the plain Candle backend, set `variant: candle` explicitly.
+Use `protocol` instead of `variant` for a remote guardrail. The two fields are
+mutually exclusive. A remote guardrail also requires an entry under
+`global.model_catalog.external` with `model_role: guardrail`.
 
-### Hallucination Detector Backend
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        protocol: http_classify
+        threshold: 0.7
+        positive_labels: [INJECTION]
+    external:
+      - name: guardrail-service
+        model_role: guardrail
+        llm_endpoint:
+          address: guardrail.example.com
+          port: 443
+          protocol: https
+        llm_model_name: prompt-guard
+        llm_timeout_seconds: 5
+```
 
-The hallucination detector supports two backends via `hallucination_mitigation.detector.backend`:
+`http_classify` expects the Router's supported classification contract;
+`http_chat` uses a chat-completions prompt. Both send request text to the
+configured service.
 
-- `candle` (default): the in-process Candle token classifier. Used when `backend` is unset or `candle`.
-- `endpoint`: a generative span detector served behind any OpenAI-compatible server (for example, vLLM). One structured `json_schema` call returns typed spans and an optional explanation.
+### Hallucination mitigation
+
+The local detector uses `backend: candle`. An OpenAI-compatible remote detector
+uses `backend: endpoint` with an absolute endpoint and model ID.
 
 ```yaml
 global:
@@ -86,53 +84,18 @@ global:
       hallucination_mitigation:
         enabled: true
         detector:
-          backend: endpoint                     # default: candle
-          endpoint: http://127.0.0.1:8077/v1    # required for endpoint; absolute http(s) URL
+          backend: endpoint
+          endpoint: https://hallucination.example.com/v1
           model_id: KRLabsOrg/lettucedect-v2-qwen-2b
-          include_explanation: true             # request per-span explanations
+          include_explanation: true
 ```
 
-Notes:
+The endpoint path does not provide the local NLI explainer used by some
+cross-response checks. Configure route-local failure behavior accordingly.
 
-- The `endpoint` backend requires an absolute `http(s)` endpoint and a `model_id`; the config is rejected at load time otherwise. An unknown `backend` value is rejected rather than silently falling back to `candle`.
-- The endpoint backend does not ship a local NLI explainer, so panel-mode fusion grounding (which needs NLI) gracefully skips under its `on_error` policy. NLI readiness (`/classify/nli`) stays reported as unavailable for this backend.
-- If the endpoint is unreachable or returns a malformed response, detection fails open: the response passes through and the failure is recorded on the detection-error path rather than as a clean verdict.
+### System model bindings
 
-### Embedding and External Models
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/mom-embedding-ultra
-        use_cpu: true
-```
-
-### Authz and Rate Limit
-
-```yaml
-global:
-  services:
-    authz:
-      enabled: true
-    ratelimit:
-      enabled: true
-```
-
-### Model Selection and Looper Defaults
-
-```yaml
-global:
-  router:
-    model_selection:
-      enabled: true
-  integrations:
-    looper:
-      enabled: true
-```
-
-### System Models
+Signals and plugins resolve stable capability names through this catalog:
 
 ```yaml
 global:
@@ -140,4 +103,51 @@ global:
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      hallucination_detector: models/mom-halugate-detector
+      hallucination_explainer: models/mom-halugate-explainer
+      feedback_detector: models/mmbert32k-feedback-detector-merged
 ```
+
+### Identity and rate limiting
+
+```yaml
+global:
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-user-id
+        user_groups_header: x-user-groups
+      providers:
+        - type: header-injection
+          headers:
+            openai: x-user-openai-key
+    ratelimit:
+      fail_open: false
+      providers:
+        - type: local-limiter
+          rules:
+            - name: premium-per-minute
+              match:
+                group: premium
+              requests_per_unit: 120
+              unit: minute
+```
+
+Only trust identity headers set or sanitized by an authenticated upstream.
+`fail_open: true` trades availability for weaker enforcement and should be a
+deliberate policy choice.
+
+## Data and Security
+
+- Local model variants keep inference in the Router process. Remote modules
+  send the text they classify to their configured endpoints.
+- Detector output is probabilistic. Calibrate thresholds on your corpus and
+  keep least-privilege tool, provider, and storage controls in place.
+- Store endpoint credentials in environment variables or Secrets. Do not place
+  them in route descriptions or model IDs.
+- See the
+  [complete configuration example](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+  for all available model and policy groups.

@@ -10,6 +10,7 @@ import {
 } from '../components/evaluation'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
 import styles from './EvaluationPage.module.css'
 
@@ -22,8 +23,10 @@ interface TabState {
 
 export function EvaluationPage() {
   const { user } = useAuth()
-  const canWrite = canWriteEvaluation(user)
-  const canRun = canRunEvaluation(user)
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
+  const evaluationMutationsAllowed = !readonlyLoading && !serverReadonly
+  const canWrite = evaluationMutationsAllowed && canWriteEvaluation(user)
+  const canRun = evaluationMutationsAllowed && canRunEvaluation(user)
   const { tasks, loading: tasksLoading, error: tasksError, refresh: refreshTasks } = useTasks(true)
   const {
     loading: mutationLoading,
@@ -45,9 +48,7 @@ export function EvaluationPage() {
     loading: resultsLoading,
     error: resultsError,
     refresh: refreshResults,
-  } = useResults(
-    tabState.active === 'report' ? tabState.selectedTaskId : null,
-  )
+  } = useResults(tabState.active === 'report' ? tabState.selectedTaskId : null)
 
   useEffect(() => {
     if (!canWrite && tabState.active === 'create') {
@@ -167,9 +168,18 @@ export function EvaluationPage() {
       {mutationError && (
         <div className={styles.errorBanner}>
           <span>{mutationError}</span>
-          <button type="button" onClick={clearError}>Dismiss</button>
+          <button type="button" onClick={clearError}>
+            Dismiss
+          </button>
         </div>
       )}
+
+      {!readonlyLoading && serverReadonly ? (
+        <div className={styles.readonlyBanner} role="status">
+          Evaluation history remains available, but the server-wide read-only policy disables task
+          creation, deletion, runs, and cancellation.
+        </div>
+      ) : null}
 
       {tabState.active === 'progress' && tabState.selectedTaskId && (
         <div className={styles.progressView}>
@@ -195,8 +205,8 @@ export function EvaluationPage() {
         </div>
       )}
 
-      {tabState.active === 'report' && (
-        selectedResults ? (
+      {tabState.active === 'report' &&
+        (selectedResults ? (
           <ReportViewer results={selectedResults} onBack={handleBackFromReport} />
         ) : (
           <div className={styles.progressView}>
@@ -221,8 +231,7 @@ export function EvaluationPage() {
               ) : null}
             </div>
           </div>
-        )
-      )}
+        ))}
 
       {tabState.active !== 'progress' && tabState.active !== 'report' && (
         <>

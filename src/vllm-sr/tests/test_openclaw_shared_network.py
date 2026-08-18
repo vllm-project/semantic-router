@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from cli import (
     container_cli,
+    container_openclaw_support,
     container_services,
     container_start,
     core,
@@ -14,6 +15,11 @@ from cli.runtime_stack import resolve_runtime_stack
 @pytest.fixture(autouse=True)
 def _split_runtime_topology(monkeypatch):
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
+    monkeypatch.setattr(
+        container_openclaw_support,
+        "_runtime_socket_is_group_safe",
+        lambda _path: True,
+    )
 
 
 def _capture_run_commands(monkeypatch):
@@ -163,6 +169,10 @@ def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_
     assert socket_mount_index < image_index
     assert docker_mount_index < image_index
     assert runtime_env_index < image_index
+    assert dashboard_cmd[dashboard_cmd.index("--entrypoint") + 1] == "/bin/sh"
+    assert dashboard_cmd[image_index + 1] == "-c"
+    assert "/app/entrypoint.sh" in dashboard_cmd[image_index + 1 :]
+    assert "/app/start-dashboard.sh" in dashboard_cmd[image_index + 1 :]
 
 
 def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
@@ -198,6 +208,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
     assert rc == 0
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
     assert "OPENCLAW_CONTAINER_RUNTIME=/usr/local/bin/docker" in dashboard_cmd
+    assert "OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" not in dashboard_cmd
     assert f"{docker_bin}:/usr/local/bin/docker:ro" in dashboard_cmd
 
 
@@ -396,12 +407,17 @@ def test_container_start_vllm_sr_keeps_source_config_mount_with_runtime_override
     assert rc == 0
     router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
-    assert f"{source_config_path}:/app/config.yaml:z" in router_cmd
+    assert f"{source_config_path}:/app/source-config.yaml:ro,z" in router_cmd
+    assert not any("/app/config.yaml" in token for token in router_cmd)
+    assert f"{runtime_dir}:/app/.vllm-sr:z" in router_cmd
     assert (
         f"{workspace_dir / '.vllm-sr' / 'envoy.yaml'}:/etc/envoy/envoy.yaml:z"
         in envoy_cmd
     )
     assert "VLLM_SR_RUNTIME_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" in router_cmd
+    assert "VLLM_SR_SOURCE_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" in router_cmd
+    assert "VLLM_SR_STATE_ROOT_DIR=/app" in router_cmd
+    assert "VLLM_SR_CONFIG_BASE_DIR=/app" in router_cmd
     assert (
         "VLLM_SR_RUNTIME_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" not in envoy_cmd
     )

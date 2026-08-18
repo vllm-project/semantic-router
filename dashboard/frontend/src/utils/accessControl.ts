@@ -91,15 +91,18 @@ export function canAccessDashboardPath(
   if (normalizedPath.startsWith('/topology')) {
     return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
+  if (normalizedPath.startsWith('/status')) {
+    return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
+  }
   if (
-    normalizedPath.startsWith('/status') ||
+    normalizedPath.startsWith('/plugins') ||
     normalizedPath.startsWith('/response-cache') ||
     normalizedPath.startsWith('/context-compression') ||
     normalizedPath.startsWith('/logs') ||
     normalizedPath.startsWith('/monitoring') ||
     normalizedPath.startsWith('/tracing')
   ) {
-    return canAccessWithPermission(user, LOGS_READ_PERMISSION, READ_CAPABLE_ROLES)
+    return canAccessWithPermission(user, LOGS_READ_PERMISSION)
   }
   if (normalizedPath.startsWith('/insights')) {
     return canAccessWithPermission(user, REPLAY_READ_PERMISSION, READ_CAPABLE_ROLES)

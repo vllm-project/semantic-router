@@ -4,14 +4,13 @@ import { DataTable, type Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
+import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
+import { TABLE_COLUMN_WIDTH, type NormalizedModel } from './configPageSupport'
+import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
-  TABLE_COLUMN_WIDTH,
-  type NormalizedModel,
-} from './configPageSupport'
-import type {
-  ModelEndpointFilter,
-  ModelRoleFilter,
-} from './configPageModelInventory'
+  modelLiveVerificationState,
+  type ModelLiveVerificationState,
+} from './useModelLiveVerification'
 
 interface ConfigPageModelInventoryPanelProps {
   models: NormalizedModel[]
@@ -44,6 +43,9 @@ interface ConfigPageModelInventoryPanelProps {
   onToggleExpand: (model: NormalizedModel) => void
   renderExpandedRow: (model: NormalizedModel) => ReactNode
   getDeleteBlocker: (modelName: string) => string | null
+  liveVerificationStates: ReadonlyMap<string, ModelLiveVerificationState>
+  onVerifyModel: (modelName: string) => void
+  canVerifyModels: boolean
 }
 
 export default function ConfigPageModelInventoryPanel({
@@ -77,6 +79,9 @@ export default function ConfigPageModelInventoryPanel({
   onToggleExpand,
   renderExpandedRow,
   getDeleteBlocker,
+  liveVerificationStates,
+  onVerifyModel,
+  canVerifyModels,
 }: ConfigPageModelInventoryPanelProps) {
   const columns: Column<NormalizedModel>[] = [
     {
@@ -86,8 +91,12 @@ export default function ConfigPageModelInventoryPanel({
       render: (row) => (
         <div className={styles.modelIdentity}>
           <div className={styles.modelIdentityPrimary}>
-            <span className={styles.modelName} title={row.name}>{row.name}</span>
-            {row.name === defaultModel ? <span className={styles.defaultBadge}>Default</span> : null}
+            <span className={styles.modelName} title={row.name}>
+              {row.name}
+            </span>
+            {row.name === defaultModel ? (
+              <span className={styles.defaultBadge}>Default</span>
+            ) : null}
           </div>
           <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
             {row.provider_model_id || row.name}
@@ -106,7 +115,9 @@ export default function ConfigPageModelInventoryPanel({
           <span className={styles.referenceBadge}>
             {references} {references === 1 ? 'decision' : 'decisions'}
           </span>
-        ) : <span className={styles.unusedLabel}>Unused</span>
+        ) : (
+          <span className={styles.unusedLabel}>Unused</span>
+        )
       },
     },
     {
@@ -114,9 +125,12 @@ export default function ConfigPageModelInventoryPanel({
       header: 'Reasoning Family',
       width: TABLE_COLUMN_WIDTH.medium,
       sortable: true,
-      render: (row) => row.reasoning_family ? (
-        <span className={configStyles.tableMetaBadge}>{row.reasoning_family}</span>
-      ) : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>,
+      render: (row) =>
+        row.reasoning_family ? (
+          <span className={configStyles.tableMetaBadge}>{row.reasoning_family}</span>
+        ) : (
+          <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+        ),
     },
     {
       key: 'endpoints',
@@ -131,6 +145,20 @@ export default function ConfigPageModelInventoryPanel({
           </span>
         )
       },
+    },
+    {
+      key: 'live_verification',
+      header: 'Live Verification',
+      width: '240px',
+      render: (row) => (
+        <ConfigPageModelLiveVerification
+          model={row.name}
+          hasBackend={Boolean(row.endpoints?.some((endpoint) => endpoint.endpoint.trim()))}
+          allowed={canVerifyModels}
+          state={modelLiveVerificationState(liveVerificationStates, row.name)}
+          onVerify={() => onVerifyModel(row.name)}
+        />
+      ),
     },
     {
       key: 'pricing',
@@ -166,15 +194,25 @@ export default function ConfigPageModelInventoryPanel({
       <div className={styles.inventoryToolbar} aria-label="Model inventory filters">
         <label className={styles.filterControl}>
           <span>Reasoning family</span>
-          <select value={reasoningFamilyFilter} onChange={(event) => onReasoningFamilyFilterChange(event.target.value)}>
+          <select
+            value={reasoningFamilyFilter}
+            onChange={(event) => onReasoningFamilyFilterChange(event.target.value)}
+          >
             <option value="all">All families</option>
             <option value="__unassigned__">Unassigned</option>
-            {reasoningFamilyOptions.map((family) => <option key={family} value={family}>{family}</option>)}
+            {reasoningFamilyOptions.map((family) => (
+              <option key={family} value={family}>
+                {family}
+              </option>
+            ))}
           </select>
         </label>
         <label className={styles.filterControl}>
           <span>Endpoint state</span>
-          <select value={endpointFilter} onChange={(event) => onEndpointFilterChange(event.target.value as ModelEndpointFilter)}>
+          <select
+            value={endpointFilter}
+            onChange={(event) => onEndpointFilterChange(event.target.value as ModelEndpointFilter)}
+          >
             <option value="all">All endpoints</option>
             <option value="configured">Configured</option>
             <option value="missing">Missing</option>
@@ -182,7 +220,10 @@ export default function ConfigPageModelInventoryPanel({
         </label>
         <label className={styles.filterControl}>
           <span>Routing role</span>
-          <select value={roleFilter} onChange={(event) => onRoleFilterChange(event.target.value as ModelRoleFilter)}>
+          <select
+            value={roleFilter}
+            onChange={(event) => onRoleFilterChange(event.target.value as ModelRoleFilter)}
+          >
             <option value="all">All roles</option>
             <option value="default">Default model</option>
             <option value="standard">Standard model</option>
@@ -206,7 +247,11 @@ export default function ConfigPageModelInventoryPanel({
             <span>Selection is preserved while paging and filtering.</span>
           </div>
           <div className={styles.bulkActions}>
-            <button type="button" className={styles.clearSelectionButton} onClick={onClearSelection}>
+            <button
+              type="button"
+              className={styles.clearSelectionButton}
+              onClick={onClearSelection}
+            >
               Clear selection
             </button>
             <button type="button" className={styles.bulkDeleteButton} onClick={onDeleteSelected}>
@@ -219,7 +264,13 @@ export default function ConfigPageModelInventoryPanel({
       {operationError ? (
         <div className={styles.operationError} role="alert">
           <span>{operationError}</span>
-          <button type="button" onClick={onDismissOperationError} aria-label="Dismiss model operation error">Dismiss</button>
+          <button
+            type="button"
+            onClick={onDismissOperationError}
+            aria-label="Dismiss model operation error"
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
 
@@ -234,7 +285,9 @@ export default function ConfigPageModelInventoryPanel({
         renderExpandedRow={renderExpandedRow}
         isRowExpanded={(row) => expandedModels.has(row.name)}
         onToggleExpand={onToggleExpand}
-        emptyMessage={filtersActive ? 'No models match the current search and filters' : 'No models configured'}
+        emptyMessage={
+          filtersActive ? 'No models match the current search and filters' : 'No models configured'
+        }
         className={configStyles.managerTable}
         readonly={isReadonly}
         pagination={{
@@ -243,12 +296,16 @@ export default function ConfigPageModelInventoryPanel({
           itemLabel: 'models',
           resetKey: `${modelsSearch}|${reasoningFamilyFilter}|${endpointFilter}|${roleFilter}`,
         }}
-        selection={isReadonly ? undefined : {
-          selectedKeys: selectedModelKeys,
-          onChange: onSelectedModelKeysChange,
-          isRowDisabled: (row) => Boolean(getDeleteBlocker(row.name)),
-          label: 'model',
-        }}
+        selection={
+          isReadonly
+            ? undefined
+            : {
+                selectedKeys: selectedModelKeys,
+                onChange: onSelectedModelKeysChange,
+                isRowDisabled: (row) => Boolean(getDeleteBlocker(row.name)),
+                label: 'model',
+              }
+        }
       />
     </>
   )

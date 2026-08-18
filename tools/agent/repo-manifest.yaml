@@ -139,14 +139,7 @@ docs:
 - tools/agent/docs/skill-catalog.md
 - tools/agent/docs/testing-strategy.md
 - tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
-- tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md
-- tools/agent/docs/plans/pl-0034-fusion-api.md
-- tools/agent/docs/plans/pl-0035-router-flow-workflows.md
-- tools/agent/docs/plans/pl-0036-router-learning-followups.md
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
-- tools/agent/docs/plans/pl-0038-entrypoints-recipes.md
-- tools/agent/docs/plans/pl-0039-domain-ci-architecture.md
-- tools/agent/docs/plans/pl-0040-recipe-conformance-ci.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -285,30 +278,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
     steward: agent-contract
     freshness: update at the start and end of each architecture scorecard ratchet loop and after each completed loop task
-  - path: tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md
-    steward: agent-contract
-    freshness: update when this canonical harness document changes materially
-  - path: tools/agent/docs/plans/pl-0034-fusion-api.md
-    steward: router-core
-    freshness: update while Fusion API implementation and AMD regression work is active
-  - path: tools/agent/docs/plans/pl-0035-router-flow-workflows.md
-    steward: router-core
-    freshness: update while Router Flow implementation, eval, and AMD validation work is active
-  - path: tools/agent/docs/plans/pl-0036-router-learning-followups.md
-    steward: router-core
-    freshness: update while Router Learning follow-up implementation, eval, and AMD validation work is active
   - path: tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
-  - path: tools/agent/docs/plans/pl-0038-entrypoints-recipes.md
-    steward: router-core
-    freshness: update while entrypoints and multi-recipe routing implementation is active
-  - path: tools/agent/docs/plans/pl-0039-domain-ci-architecture.md
-    steward: agent-contract
-    freshness: update after each domain CI architecture implementation and validation loop
-  - path: tools/agent/docs/plans/pl-0040-recipe-conformance-ci.md
-    steward: router-core
-    freshness: update after each recipe conformance implementation and validation loop
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially

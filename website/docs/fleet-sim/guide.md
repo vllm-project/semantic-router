@@ -1,28 +1,19 @@
 ---
-title: Guide Assets
+title: Printable Guide
 ---
 
-# Fleet Sim Guide Assets
+# Printable guide
 
-This page exposes the printable guide and source assets that accompany the
-maintained Fleet Sim web docs.
-
-## Guide Assets
+The web pages in this section are the current Fleet Sim documentation. A PDF
+snapshot and its source are also available for offline review:
 
 - [Guide PDF](pathname:///files/fleet-sim/fleet-sim.pdf)
-- [Guide TeX source](pathname:///files/fleet-sim/fleet-sim.tex)
-- [Guide bibliography](pathname:///files/fleet-sim/refs.bib)
+- [TeX source](pathname:///files/fleet-sim/fleet-sim.tex)
+- [Bibliography](pathname:///files/fleet-sim/refs.bib)
 
-## When to use which format
+Use the web documentation when checking current commands, supported workflows,
+or model boundaries. The printable guide may lag code and should not be used as
+the sole source for CLI flags or built-in constants.
 
-- Use the docs pages in this `Fleet Sim` section for the maintained web-native reference.
-- Use the PDF when you want a single offline snapshot for review or sharing.
-- Use the TeX and bibliography files when you need to adapt or cite the guide material.
-- The rendered guide is attributed to the `vLLM Semantic Router Team`.
-
-## Preferred reading path
-
-- [Overview](./overview.md)
-- [Getting started](./getting-started.md)
-- [Dashboard integration](./dashboard-integration.md)
-- [Capacity planning scenarios](./use-cases.md)
+For a first study, read [Getting started](./getting-started), then choose a
+workflow from [Capacity planning](./use-cases).

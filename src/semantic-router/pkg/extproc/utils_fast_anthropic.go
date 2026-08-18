@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 // extractContentFastAnthropic mirrors extractContentFast for the Anthropic
@@ -35,6 +37,11 @@ func extractContentFastAnthropic(body []byte) (*FastExtractResult, error) {
 	if err := extractMetadataFast(body, r); err != nil {
 		return nil, err
 	}
+	contextEstimate := classification.EstimateAnthropicRequestContext(body)
+	r.ContextTokenFloor = contextEstimate.TokenFloor
+	r.ContextTextBytes = contextEstimate.TextBytes
+	r.ContextEquivalentBytes = contextEstimate.EquivalentBytes
+	r.ContextHasNonText = contextEstimate.HasNonText
 
 	if system := gjson.GetBytes(body, "system"); system.Exists() {
 		consumeFastExtractAnthropicSystem(system, r)

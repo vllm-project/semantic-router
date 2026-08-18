@@ -155,11 +155,11 @@ Preferences become concrete when they are published as model identities. One MoM
 
 | Model identity | Contract |
 | --- | --- |
+| `vllm-sr/mom-v1-blend` | Balance quality, latency, cost, and recovery across the configured model pool |
+| `vllm-sr/mom-v1-lite` | Minimize cost above a quality floor |
 | `vllm-sr/mom-v1-flash` | Minimize expected latency |
-| `vllm-sr/mom-v1-light` | Minimize cost above a quality floor |
 | `vllm-sr/mom-v1-ultra` | Maximize quality within a declared budget |
-| `vllm-sr/mom-v1-halu` | Require grounding checks and fail-closed fallback |
-| `vllm-sr/mom-v1-secu` | Enforce jailbreak and PII policy before execution |
+| `vllm-sr/mom-v1-vault` | Keep sensitive traffic on the configured private model pool |
 
 Each name is a versioned model contract, not a router preset. The application chooses the behavior it needs; vLLM-SR selects and coordinates the models that deliver it while preserving hard privacy, residency, authorization, and safety constraints.
 

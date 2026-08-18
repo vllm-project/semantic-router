@@ -23,6 +23,10 @@ from recipe_conformance_report import (
     render_coverage_markdown,
     render_tag_acceptance_markdown,
 )
+from recipe_metadata_schema import (
+    load_recipe_metadata_document,
+    validate_recipe_metadata_schema,
+)
 from router_calibration_manifest import Probe, load_probe_manifest
 from router_calibration_report import render_markdown_summary
 from router_calibration_support import evaluate_probes, write_json
@@ -31,17 +35,45 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RECIPE_ROOT = REPO_ROOT / "config" / "recipes"
 DEFAULT_REPORT_ROOT = REPO_ROOT / ".agent-harness" / "recipe-conformance"
 REQUIRED_RECIPE_FILES = frozenset(
-    {"README.md", "config.yaml", "probes.yaml", "recipe.dsl"}
+    {"README.md", "config.yaml", "metadata.yaml", "probes.yaml", "recipe.dsl"}
+)
+REQUIRED_MODEL_CARD_HEADINGS = (
+    "## Overview",
+    "## Model details",
+    "## Intended use",
+    "## Routing behavior",
+    "## Requirements",
+    "## Data handling and safety",
+    "## Quick start",
+    "## Evaluation",
+    "## Limitations",
+    "## References",
 )
 RUNTIME_RECIPE_DIRECTORIES = frozenset({".vllm-sr"})
+RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in"})
 DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto", "auto")
 DEFAULT_AUTO_MODEL_NAME = "MoM"
+
+
+@dataclass(frozen=True)
+class RecipeIdentity:
+    schema_version: str
+    id: str
+    name: str
+    version: str
+    description: str
+    authors: tuple[dict[str, str], ...]
+    license: str
+    tags: tuple[str, ...]
+    links: dict[str, str]
 
 
 @dataclass(frozen=True)
 class RecipeInventory:
     name: str
     directory: str
+    metadata: str
+    identity: RecipeIdentity
     config: str
     dsl: str
     probes: str
@@ -71,7 +103,11 @@ class ProbeReferenceContext:
 def discover_recipe_directories(root: Path) -> list[Path]:
     if not root.is_dir():
         raise FileNotFoundError(f"recipe catalog does not exist: {root}")
-    recipes = sorted(path for path in root.iterdir() if path.is_dir())
+    recipes = sorted(
+        path
+        for path in root.iterdir()
+        if path.is_dir() and path.name not in RECIPE_CATALOG_DIRECTORIES
+    )
     if not recipes:
         raise ValueError(f"recipe catalog contains no recipe directories: {root}")
     return recipes
@@ -89,8 +125,32 @@ def validate_recipe_directory(path: Path) -> None:
     extra = sorted(catalog_entries - REQUIRED_RECIPE_FILES)
     if missing or extra:
         raise ValueError(
-            f"{path}: recipe files differ from the four-file contract; "
+            f"{path}: recipe files differ from the five-file contract; "
             f"missing={missing}, extra={extra}"
+        )
+
+
+def validate_recipe_model_card(path: Path) -> None:
+    readme_path = path / "README.md"
+    lines = readme_path.read_text(encoding="utf-8").splitlines()
+    title = lines[0].strip() if lines else ""
+    if not title.startswith("# ") or not title.endswith(" Model Card"):
+        raise ValueError(
+            f"{readme_path}: recipe README title must end with 'Model Card'"
+        )
+
+    headings = [line.strip() for line in lines if line.startswith("## ")]
+    missing = [
+        heading for heading in REQUIRED_MODEL_CARD_HEADINGS if heading not in headings
+    ]
+    if missing:
+        raise ValueError(
+            f"{readme_path}: Model Card is missing required sections: {missing}"
+        )
+    positions = [headings.index(heading) for heading in REQUIRED_MODEL_CARD_HEADINGS]
+    if positions != sorted(positions):
+        raise ValueError(
+            f"{readme_path}: Model Card sections must follow the documented order"
         )
 
 
@@ -99,6 +159,28 @@ def load_yaml_mapping(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise TypeError(f"{path} must contain a YAML mapping")
     return data
+
+
+def load_recipe_identity(path: Path, directory_name: str) -> RecipeIdentity:
+    metadata = load_recipe_metadata_document(path.read_text(encoding="utf-8"))
+    validate_recipe_metadata_schema(metadata, path)
+    recipe_id = str(metadata["id"])
+    if recipe_id != directory_name:
+        raise ValueError(
+            f"{path}: metadata id must match directory {directory_name!r}, "
+            f"got {recipe_id!r}"
+        )
+    return RecipeIdentity(
+        schema_version=str(metadata["schema_version"]),
+        id=recipe_id,
+        name=str(metadata["name"]),
+        version=str(metadata["version"]),
+        description=str(metadata["description"]),
+        authors=tuple(dict(author) for author in metadata["authors"]),
+        license=str(metadata["license"]),
+        tags=tuple(str(tag) for tag in metadata["tags"]),
+        links={str(key): str(value) for key, value in metadata["links"].items()},
+    )
 
 
 def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -343,9 +425,12 @@ def _assert_probe_coverage(context: ProbeReferenceContext) -> None:
 
 def build_recipe_inventory(path: Path) -> RecipeInventory:
     validate_recipe_directory(path)
+    validate_recipe_model_card(path)
+    metadata_path = path / "metadata.yaml"
     config_path = path / "config.yaml"
     dsl_path = path / "recipe.dsl"
     probes_path = path / "probes.yaml"
+    identity = load_recipe_identity(metadata_path, path.name)
     config = load_yaml_mapping(config_path)
     manifest, probes = load_probe_manifest(probes_path)
     probes = bind_default_entrypoints(config, probes)
@@ -354,8 +439,9 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
             f"{probes_path}: manifest name must match directory {path.name!r}"
         )
     assets = _mapping(manifest.get("routing_assets"))
-    expected_yaml = f"config/recipes/{path.name}/config.yaml"
-    expected_dsl = f"config/recipes/{path.name}/recipe.dsl"
+    recipe_directory = path.relative_to(REPO_ROOT).as_posix()
+    expected_yaml = f"{recipe_directory}/config.yaml"
+    expected_dsl = f"{recipe_directory}/recipe.dsl"
     if assets.get("yaml") != expected_yaml or assets.get("dsl") != expected_dsl:
         raise ValueError(
             f"{probes_path}: routing_assets must be "
@@ -412,6 +498,8 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
     return RecipeInventory(
         name=path.name,
         directory=str(path.relative_to(REPO_ROOT)),
+        metadata=str(metadata_path.relative_to(REPO_ROOT)),
+        identity=identity,
         config=str(config_path.relative_to(REPO_ROOT)),
         dsl=str(dsl_path.relative_to(REPO_ROOT)),
         probes=str(probes_path.relative_to(REPO_ROOT)),
@@ -516,7 +604,8 @@ def write_github_output(path: Path, name: str, value: str) -> None:
 
 def command_static(args: argparse.Namespace) -> int:
     inventory = discover_inventory(args.recipes_root)
-    validate_catalog_readme(args.recipes_root, inventory)
+    if not args.skip_catalog_readme:
+        validate_catalog_readme(args.recipes_root, inventory)
     payload = coverage_payload(inventory)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write_json(args.output_dir / "inventory.json", payload)
@@ -606,6 +695,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=DEFAULT_REPORT_ROOT,
+    )
+    parser.add_argument(
+        "--skip-catalog-readme",
+        action="store_true",
+        help="validate a versioned built-in root whose catalog.yaml owns discovery",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

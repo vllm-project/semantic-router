@@ -25,35 +25,15 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	var reasoningDecision entropy.ReasoningDecision
 	var selectedModel string
 
-	// Check if there's content to evaluate
-	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
-		!hasEnvelopeRoutingFacts(history) {
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	// Focused callers may invoke this method without the normal pre-routing
-	// stage. Resolve here as an idempotent guard so the isolation boundary is
-	// never dependent on call order.
-	if !ctx.Routing.IsResolved() {
-		r.resolveEntrypointForRequest(originalModel, ctx)
-	}
-	if ctx.Routing.SelectedRecipe() == nil {
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
-	}
-
-	// Check if decisions are configured in any routing profile; the flat
-	// Decisions field only carries the default recipe's.
-	if !r.Config.HasRoutingDecisions() {
-		if r.requestModelActsAsAuto(originalModel) {
-			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, "", nil
+	if fallbackModel, stop := r.prepareDecisionEvaluation(originalModel, history, ctx); stop {
+		return "", 0.0, entropy.ReasoningDecision{}, fallbackModel, nil
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
 	signalInput.requestFacts.Context = ctx.TraceContext
 	ctx.VSRConversationFacts = signalInput.conversationFacts
+	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
+		signalInput.requestFacts.ContextHasNonText
 	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
@@ -76,6 +56,35 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		ctx,
 	)
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, err
+}
+
+func (r *OpenAIRouter) prepareDecisionEvaluation(
+	originalModel string,
+	history signalConversationHistory,
+	ctx *RequestContext,
+) (string, bool) {
+	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
+		!hasEnvelopeRoutingFacts(history) {
+		return "", true
+	}
+
+	// Focused callers may invoke decision evaluation without the normal
+	// pre-routing stage. Resolve idempotently so isolation never depends on
+	// call order.
+	if !ctx.Routing.IsResolved() {
+		r.resolveEntrypointForRequest(originalModel, ctx)
+	}
+	if ctx.Routing.SelectedRecipe() == nil {
+		return "", true
+	}
+	if r.Config.HasRoutingDecisions() {
+		return "", false
+	}
+	if r.requestModelActsAsAuto(originalModel) {
+		logging.Warnf("No decisions configured, using default model")
+		return r.Config.DefaultModel, true
+	}
+	return "", true
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig, ctx *RequestContext) selection.Selector {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	modelinventory "github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 )
 
@@ -16,18 +17,12 @@ type (
 	RouterModelsSystem  = modelinventory.SystemInfo
 )
 
-func fetchRouterModelsInfo(routerAPIURL string) *RouterModelsInfo {
+func fetchRouterModelsInfo(routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
 	if routerAPIURL == "" {
 		return nil
 	}
 
-	req, err := http.NewRequest(http.MethodGet, strings.TrimSuffix(routerAPIURL, "/")+"/info/models", nil)
-	if err != nil {
-		return nil
-	}
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := routerManagementGET(strings.TrimSuffix(routerAPIURL, "/")+"/info/models", 2*time.Second, credentialProvider...)
 	if err != nil {
 		return nil
 	}

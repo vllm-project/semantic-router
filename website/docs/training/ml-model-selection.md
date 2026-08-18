@@ -1,748 +1,228 @@
+---
+title: ML-Based Model Selection
+sidebar_label: ML Model Selection
+---
+
 # ML-Based Model Selection
 
-This document covers the configuration and experimental results for ML-based model selection techniques implemented in the Semantic Router.
-
-## Overview
-
-ML-based model selection uses machine learning algorithms to intelligently route queries to the most appropriate LLM based on query characteristics and historical performance data. This approach provides significant improvements over random or single-model routing strategies.
-
-### Supported Algorithms
+ML-based selection learns which model in a decision's candidate pool is most
+appropriate for a request. It is useful when historical evaluation data carries
+more information than a fixed priority order or a small set of hand-written
+rules.
 
-| Algorithm | Description | Best For |
-|-----------|-------------|----------|
-| **KNN** (K-Nearest Neighbors) | Quality-weighted voting among similar queries | High accuracy, diverse query types |
-| **KMeans** | Cluster-based routing with efficiency optimization | Fast inference, balanced workloads |
-| **SVM** (Support Vector Machine) | RBF kernel decision boundaries | Clear domain separation |
-| **MLP** (Multi-Layer Perceptron) | Neural network with GPU acceleration | High-throughput, GPU-enabled environments |
+The selector runs after a routing decision has matched. It can choose only from
+that decision's `modelRefs`; it does not discover, deploy, or authenticate
+provider models.
 
-### Reference Papers
+## Available selectors
 
-- [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) - Query-level fusion via LLM routers
-- [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631) - Performance-efficiency optimized routing
-
-## Dashboard GUI Setup
-
-The **Semantic Router Dashboard** includes a guided 3-step wizard for the full ML model selection pipeline. This is the easiest way to get started — no CLI required.
-
-### Accessing the Wizard
-
-Navigate to `http://localhost:8700/ml-setup` (or your dashboard URL).
-
-### Step 1: Benchmark
-
-Upload your **models YAML** (listing your LLM endpoints) and a **queries JSONL** file (test queries with ground truth). Configure concurrency and max tokens, then click **Run Benchmark**. Progress streams in real-time with per-query granularity.
-
-### Step 2: Train
-
-Select one or more algorithms:
-
-| Algorithm | GPU Required | Notes |
-|-----------|-------------|-------|
-| KNN | No | CPU-only (scikit-learn) |
-| K-Means | No | CPU-only (scikit-learn) |
-| SVM | No | CPU-only (scikit-learn) |
-| MLP | Optional | PyTorch — Device selector (CPU/CUDA) appears when selected |
-
-Adjust hyperparameters via the **Advanced Settings** panel, then click **Train Models**. Trained model files (`knn_model.json`, `kmeans_model.json`, etc.) are saved to a fixed `ml-train/` directory.
-
-### Step 3: Generate Config
-
-Define routing decisions — each with a name, priority, algorithm, domain conditions, and target model names. Click **Generate Config** to produce a deployment-ready `ml-model-selection-values.yaml`.
-
-The generated YAML follows the semantic-router config schema. Merge `global.router.model_selection` and `routing.decisions` into your main `config.yaml`, or use it as a standalone config file for the router.
-
-### Example Generated Config
-
-```yaml
-config:
-  global:
-    router:
-      strategy: priority
-      model_selection:
-        enabled: true
-        ml:
-          models_path: /data/ml-pipeline/ml-train
-          model_type: qwen3
-          embedding_dim: 1024
-          knn:
-            k: 5
-            pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
-  routing:
-    decisions:
-      - name: math-decision
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: math
-        algorithm:
-          type: knn
-        modelRefs:
-          - model: llama3.2:3b
-            use_reasoning: false
-```
-
-## Configuration
-
-### Basic Configuration
-
-Enable ML-based model selection in your `config.yaml`:
-
-```yaml
-global:
-  router:
-    model_selection:
-      enabled: true
-      ml:
-        models_path: ".cache/ml-models"  # Path to trained model files
-        # Must match the embedding model used to train the selector artifacts.
-        model_type: qwen3
-        embedding_dim: 1024
-  stores:
-    semantic_cache:
-      embedding_model: mmbert  # uses models/mom-embedding-ultra by default
-```
-
-### Per-Decision Algorithm Selection
-
-Use `routing.decisions[].algorithm.type` to choose which trained ML selector a decision should use. Shared selector tuning belongs under `global.router.model_selection.ml`, not under the decision itself.
-
-`model_type` and `embedding_dim` select the embedding feature space used by the
-ML selectors. Other selection algorithms and embedding consumers continue to
-use the default semantic embedding configuration. If `model_type` is omitted,
-ML selectors also use the default embedding provider for backward compatibility.
-
-```yaml
-global:
-  router:
-    model_selection:
-      enabled: true
-      ml:
-        models_path: ".cache/ml-models"
-        knn:
-          k: 5
-        svm:
-          kernel: "rbf"
-          gamma: 1.0
-        kmeans:
-          num_clusters: 8
-        mlp:
-          device: "cuda"
-routing:
-  decisions:
-  # Math queries - use KNN for quality-weighted selection
-    - name: "math_decision"
-      description: "Mathematics and quantitative reasoning"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "math"
-      algorithm:
-        type: "knn"
-      modelRefs:
-        - model: "llama-3.2-1b"
-        - model: "llama-3.2-3b"
-        - model: "mistral-7b"
-
-  # Coding queries - use SVM for clear boundaries
-    - name: "code_decision"
-      description: "Programming and software development"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "computer science"
-      algorithm:
-        type: "svm"
-      modelRefs:
-        - model: "codellama-7b"
-        - model: "llama-3.2-3b"
-        - model: "mistral-7b"
-
-  # General queries - use KMeans for efficiency
-    - name: "general_decision"
-      description: "General knowledge queries"
-      priority: 50
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "other"
-      algorithm:
-        type: "kmeans"
-      modelRefs:
-        - model: "llama-3.2-1b"
-        - model: "llama-3.2-3b"
-        - model: "mistral-7b"
-
-  # High-throughput queries - use MLP with GPU acceleration
-    - name: "gpu_accelerated_decision"
-      description: "High-volume inference with GPU"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "engineering"
-      algorithm:
-        type: "mlp"
-      modelRefs:
-        - model: "llama-3.2-1b"
-        - model: "llama-3.2-3b"
-        - model: "mistral-7b"
-        - model: "codellama-7b"
-```
-
-### Algorithm Parameters
-
-#### KNN Parameters
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        knn:
-          k: 5  # Number of neighbors (default: 5)
-```
-
-#### KMeans Parameters
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        kmeans:
-          num_clusters: 8  # Number of clusters (default: 8)
-```
-
-#### SVM Parameters
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        svm:
-          kernel: "rbf"   # Kernel type: rbf, linear (default: rbf)
-          gamma: 1.0      # RBF kernel gamma (default: 1.0)
-```
-
-#### MLP Parameters
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        mlp:
-          device: "cuda"  # Device: cpu, cuda, metal (default: cpu)
-```
-
-The MLP (Multi-Layer Perceptron) algorithm uses a neural network classifier with GPU acceleration via the [Candle](https://github.com/huggingface/candle) Rust framework. It provides high-throughput inference suitable for production deployments with GPU resources.
-
-**Device Options:**
-
-| Device | Description | Requirements |
-|--------|-------------|--------------|
-| `cpu` | CPU inference (default) | No special hardware |
-| `cuda` | NVIDIA GPU acceleration | CUDA-capable GPU, CUDA toolkit |
-| `metal` | Apple Silicon GPU | macOS with M1/M2/M3 chip |
-
-## Experimental Results
-
-### Benchmark Setup
-
-- **Test queries**: 109 queries across multiple domains
-- **Models evaluated**: 4 LLMs (codellama-7b, llama-3.2-1b, llama-3.2-3b, mistral-7b)
-- **Embedding model**: Qwen3-Embedding-0.6B (1024 dimensions)
-- **Validation data**: Real benchmark queries with ground truth performance scores
-
-### Performance Comparison
-
-| Strategy | Avg Quality | Avg Latency | Best Model % |
-|----------|-------------|-------------|--------------|
-| **Oracle (best possible)** | 0.495 | 10.57s | 100.0% |
-| **KMEANS Selection** | 0.252 | 20.23s | 23.9% |
-| Always llama-3.2-3b | 0.242 | 25.08s | 15.6% |
-| **SVM Selection** | 0.233 | 25.83s | 14.7% |
-| Always mistral-7b | 0.215 | 70.08s | 13.8% |
-| Always llama-3.2-1b | 0.212 | 3.65s | 26.6% |
-| **KNN Selection** | 0.196 | 36.62s | 13.8% |
-| Random Selection | 0.174 | 40.12s | 9.2% |
-| Always codellama-7b | 0.161 | 53.78s | 4.6% |
-
-### ML Routing Benefit Over Random Selection
-
-| Algorithm | Quality Improvement | Best Model Selection |
-|-----------|---------------------|---------------------|
-| **KMEANS** | **+45.5%** | 2.6x more often |
-| **SVM** | **+34.4%** | 1.6x more often |
-| **KNN** | **+13.1%** | 1.5x more often |
-
-### Key Findings
-
-1. **All ML methods outperform random selection** - Significant quality improvements across all algorithms
-2. **KMEANS provides best quality** - 45% improvement over random with good latency
-3. **SVM offers balanced performance** - 34% improvement with clear decision boundaries
-4. **KNN provides diverse model selection** - Uses all available models based on query similarity
-5. **MLP enables GPU acceleration** - Neural network inference with CUDA/Metal support for high-throughput
-
-### MLP GPU Acceleration
-
-The MLP algorithm leverages the [Candle](https://github.com/huggingface/candle) Rust framework for GPU-accelerated inference:
-
-| Device | Inference Latency | Throughput |
-|--------|------------------|------------|
-| CPU | ~5-10ms | ~100-200 QPS |
-| CUDA (NVIDIA) | ~0.5-1ms | ~1000+ QPS |
-| Metal (Apple) | ~1-2ms | ~500+ QPS |
-
-**When to use MLP:**
-
-- High-volume production deployments with GPU resources
-- Latency-sensitive applications requiring sub-millisecond inference
-- Environments where model selection overhead must be minimized
-
-## Architecture
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                         ONLINE INFERENCE                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Request (model="auto")                                             │
-│       ↓                                                             │
-│  Generate Query Embedding (Qwen3, 1024-dim)                         │
-│       ↓                                                             │
-│  Add Category One-Hot (14-dim) → 1038-dim feature vector            │
-│       ↓                                                             │
-│  Decision Engine → Match decision by domain                         │
-│       ↓                                                             │
-│  Load ML Selector (KNN/KMeans/SVM/MLP from JSON)                    │
-│       ↓                                                             │
-│  Run Inference → Select best model                                  │
-│       ↓                                                             │
-│  Route to selected LLM endpoint                                     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## Training Your Own Models
-
-**Offline Training vs Online Inference:**
-
-- **Offline Training**: Done in **Python** using scikit-learn for KNN, KMeans, SVM, and PyTorch for MLP
-- **Online Inference**: Done in **Rust** using [Linfa](https://github.com/rust-ml/linfa) for KNN/KMeans/SVM via `ml-binding` and [Candle](https://github.com/huggingface/candle) for MLP via `candle-binding`
-
-This separation allows for flexible training with Python's rich ML ecosystem while maintaining high-performance inference in production with Rust.
-
-### Prerequisites
+| Selector | How it chooses | Consider it when |
+|----------|----------------|------------------|
+| [KNN](/docs/tutorials/algorithm/selection/knn) | Combines recorded quality and speed across similar queries | Similar requests tend to favor the same model and traceability matters |
+| [KMeans](/docs/tutorials/algorithm/selection/kmeans) | Maps a request to a learned cluster | The workload forms stable clusters and lookup cost matters |
+| [SVM](/docs/tutorials/algorithm/selection/svm) | Uses a learned decision boundary | Candidate models separate cleanly in feature space |
+| [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector and can operate its runtime dependency |
+
+There is no universally best selector. Compare each candidate against simple
+baselines such as a fixed default, random choice, and the best single model on
+the same held-out dataset.
+
+## Before you train
+
+You need:
+
+- two or more OpenAI-compatible model endpoints
+- representative queries and ground-truth answers or another defensible scoring
+  method
+- enough repeated coverage to evaluate each candidate model across important
+  workload slices
+- an embedding model that is identical during training and online inference
+- a plan for secrets, rate limits, cost, and retention of model responses
+
+Benchmarking sends every selected query to multiple provider endpoints and
+stores their responses, quality scores, and latency. Treat the output as
+sensitive when prompts or responses contain user data.
+
+## Dashboard workflow
+
+Open `/ml-setup` in the Dashboard to run the guided workflow:
+
+1. Upload a model-endpoint YAML file and a query JSONL file.
+2. Benchmark the candidate models.
+3. Train one or more selectors.
+4. Define decisions and download a configuration fragment.
+
+The Benchmark and Train steps produce data and model artifacts under the
+Dashboard's ML data directory.
+
+:::caution Current configuration export
+
+The generated `ml-model-selection-values.yaml` is a migration fragment, not a
+standalone canonical Router configuration. Its `config.model_selection`,
+`config.strategy`, and `config.decisions` fields must be reviewed and mapped to
+`global.router.model_selection`, `global.router.strategy`, and
+`routing.decisions` in a complete config. Add the required listeners and
+providers, then run `vllm-sr validate --config ...` before deployment.
+
+:::
+
+## Command-line workflow
+
+### 1. Install the training dependencies
 
 ```bash
 cd src/training/model_selection/ml_model_selection
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-### Option 1: Download Pretrained Models
+### 2. Prepare evaluation queries
 
-```bash
-python download_model.py \
-  --output-dir ../../../.cache/ml-models \
-  --repo-id abdallah1008/semantic-router-ml-models
-```
-
-### Option 2: Train Using Pre-Benchmarked Data from HuggingFace
-
-We provide ready-to-use benchmark data on HuggingFace that you can use directly for training:
-
-**HuggingFace Dataset:** [abdallah1008/ml-selection-benchmark-data](https://huggingface.co/datasets/abdallah1008/ml-selection-benchmark-data)
-
-| File | Description |
-|------|-------------|
-| `benchmark_training_data.jsonl` | Pre-benchmarked data with 4 models (codellama-7b, llama-3.2-1b, llama-3.2-3b, mistral-7b) |
-| `validation_benchmark_with_gt.jsonl` | Validation data with ground truth for testing |
-
-```bash
-# Download benchmark data
-huggingface-cli download abdallah1008/ml-selection-benchmark-data \
-  --repo-type dataset \
-  --local-dir .cache/ml-models
-
-# Train directly using the pre-benchmarked data
-python train.py \
-  --data-file .cache/ml-models/benchmark_training_data.jsonl \
-  --output-dir models/
-```
-
-This is the fastest way to get started - no need to run your own LLM benchmarks!
-
-### Option 3: Train with Your Own Data
-
-#### Step 1: Prepare Input Data (JSONL Format)
-
-Create a JSONL file with your queries. Each line must contain `query` and `category` fields:
+Use one JSON object per line. `ground_truth` is required to score model output;
+`category` is optional but useful for sliced evaluation.
 
 ```jsonl
-{"query": "What is the derivative of x^2?", "category": "math", "ground_truth": "2x"}
-{"query": "Write a Python function to sort a list", "category": "computer science", "ground_truth": "def sort(lst): return sorted(lst)"}
-{"query": "Explain photosynthesis", "category": "biology", "ground_truth": "Process where plants convert sunlight to energy"}
-{"query": "What are the legal requirements for a contract?", "category": "law"}
+{"query":"What is the derivative of x^2?","ground_truth":"2x","category":"math","metric":"MATH"}
+{"query":"Which city is the capital of France?","ground_truth":"B","category":"other","metric":"em_mc","choices":"A) London B) Paris C) Berlin D) Rome"}
 ```
 
-**Required fields:**
+Choose a metric that matches the task. The benchmark supports exact/containment
+matching, multiple-choice extraction, GSM8K and MATH answer extraction, text F1,
+and code evaluation. Inspect the benchmark output rather than assuming one
+metric is suitable for every domain.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `query` | string | The input query text |
-| `category` | string | Domain category (see [VSR Categories](#vsr-categories)) |
-| `ground_truth` | string | Expected answer (required for calculating performance/quality scores) |
+### 3. Describe the candidate endpoints
 
-**Recommended fields (for accurate performance scoring):**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `metric` | string | Evaluation method - determines how performance is calculated |
-| `choices` | string | For multiple choice questions - signals MC evaluation |
-
-**Optional fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `task_name` | string | Task identifier for logging/tracking (e.g., "mmlu", "gsm8k") |
-
-**Important: Metric Field**
-
-Without `metric`, the benchmark uses **CEM (Conditional Exact Match)** as default, which may not accurately score:
-
-- Math problems (use `metric: "GSM8K"` or `metric: "MATH"`)
-- Multiple choice (use `metric: "em_mc"` or include `choices`)
-- Code generation (use `metric: "code_eval"`)
-
-For best results, always specify the appropriate `metric` for your question type.
-
-**Multiple Choice Questions**
-
-For multiple choice questions, include `choices` (can be the options as string) and set `ground_truth` to the correct letter:
-
-```jsonl
-{"query": "What is the capital of France?\nA) London\nB) Paris\nC) Berlin\nD) Rome", "category": "other", "ground_truth": "B", "choices": "London,Paris,Berlin,Rome"}
-```
-
-The benchmark script:
-
-1. Detects multiple choice via `choices` field or `metric: "em_mc"`
-2. Extracts the answer letter (A/B/C/D) from the model's response
-3. Compares against `ground_truth` (the correct letter)
-
-**Evaluation Metrics**
-
-The `metric` field controls how performance is calculated:
-
-| Metric | Description | Example ground_truth |
-|--------|-------------|----------------------|
-| `em_mc` | Multiple choice - extract letter | `"B"` |
-| `GSM8K` | Math - extract number after `####` | `"explanation #### 42"` |
-| `MATH` | LaTeX math - extract from `\boxed{}` | `"\\boxed{2x+1}"` |
-| `f1_score` | Text overlap F1 score | `"Paris is the capital"` |
-| `code_eval` | Run code assertions | `"['assert func(1)==2']"` |
-| (default) | CEM - containment match | `"Paris"` |
-
-**Ground Truth is Required for Training**
-
-The `ground_truth` field is essential for training ML model selection. Without it, the system cannot calculate which model performed better on each query. The training process compares each LLM's response against `ground_truth` to compute performance scores.
-
-#### Step 2: Configure Your LLM Endpoints (models.yaml)
-
-Create a `models.yaml` file to configure your LLM endpoints with authentication:
+Keep credentials in environment variables. Do not write literal API keys into
+the YAML file.
 
 ```yaml
 models:
-  # Local Ollama model (no auth required)
-  - name: llama-3.2-1b
-    endpoint: http://localhost:11434/v1
-
-  - name: llama-3.2-3b
-    endpoint: http://localhost:11434/v1
-
-  # OpenAI with API key from environment variable
-  - name: gpt-4
-    endpoint: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-    max_tokens: 2048
-    temperature: 0.0
-
-  # HuggingFace with token
-  - name: mistral-7b-hf
-    endpoint: https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2
-    api_key: ${HF_TOKEN}
-    headers:
-      Authorization: "Bearer ${HF_TOKEN}"
-
-  # Custom API with Bearer token
-  - name: custom-llm
-    endpoint: https://api.custom.com/v1
-    api_key: ${CUSTOM_API_KEY}
-    headers:
-      Authorization: "Bearer ${CUSTOM_API_KEY}"
-      X-Custom-Header: "value"
-    max_tokens: 1024
-    temperature: 0.1
-
-  # vLLM self-hosted
-  - name: codellama-7b
-    endpoint: http://vllm-server:8000/v1
-    # No auth needed for local vLLM
+  - name: local-small
+    endpoint: http://localhost:8000/v1
+  - name: hosted-model
+    endpoint: https://provider.example/v1
+    api_key: ${PROVIDER_API_KEY}
 ```
 
-#### Step 3: Run Benchmark
-
-The benchmark script sends each query to all configured LLMs and measures:
-
-**Performance (Quality Score 0-1):**
-
-| Query Type | Scoring Method |
-|------------|----------------|
-| **Multiple Choice** (A/B/C/D) | Exact match of selected option vs `ground_truth` |
-| **Numeric/Math** | Parse and compare numbers (tolerance-based) |
-| **Text/Code** | F1 score between model response and `ground_truth` |
-| **Exact Match** | Binary 1.0 if exact match, 0.0 otherwise |
-
-**Latency (Response Time):**
-
-- Measured from request sent to response received (in seconds)
-- Includes network latency + model inference time
-- Used for efficiency weighting: `speed_factor = 1 / (1 + latency)`
-
-**Output Format:**
-
-The benchmark generates JSONL with one record per (query, model) pair:
-
-```jsonl
-{"query": "What is 2+2?", "category": "math", "model_name": "llama-3.2-1b", "response": "4", "ground_truth": "4", "performance": 1.0, "response_time": 0.523}
-{"query": "What is 2+2?", "category": "math", "model_name": "llama-3.2-3b", "response": "The answer is 4", "ground_truth": "4", "performance": 0.85, "response_time": 1.234}
-{"query": "What is 2+2?", "category": "math", "model_name": "mistral-7b", "response": "2+2=4", "ground_truth": "4", "performance": 0.92, "response_time": 2.156}
-```
-
-**Run Benchmark:**
+### 4. Benchmark every candidate
 
 ```bash
-# Using model config file (recommended)
 python benchmark.py \
-  --queries your_queries.jsonl \
+  --queries queries.jsonl \
   --model-config models.yaml \
-  --output benchmark_output.jsonl \
-  --concurrency 4 \
-  --limit 500  # Optional: limit number of queries for testing
-
-# Or using simple model list (all same endpoint)
-python benchmark.py \
-  --queries your_queries.jsonl \
-  --models llama-3.2-1b,llama-3.2-3b,mistral-7b \
-  --endpoint http://localhost:11434/v1 \
-  --output benchmark_output.jsonl
+  --output benchmark-output.jsonl \
+  --concurrency 4
 ```
 
-**benchmark.py Parameters:**
+Start with low concurrency. Increase it only after confirming that every
+endpoint can sustain the request rate and that provider rate limits are not
+distorting latency measurements.
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--queries` | (required) | Path to input JSONL file with queries |
-| `--model-config` | None | Path to models.yaml with endpoint configs |
-| `--models` | None | Comma-separated model names (alternative to --model-config) |
-| `--endpoint` | `http://localhost:8000/v1` | API endpoint (used with --models) |
-| `--output` | `benchmark_output.jsonl` | Output file path |
-| `--concurrency` | `4` | Number of parallel requests to LLMs |
-| `--limit` | None | Limit number of queries to process |
-| `--max-tokens` | `1024` | Maximum tokens in LLM response |
-| `--temperature` | `0.0` | Temperature for generation (0.0 = deterministic) |
-
-**Concurrency Parameter**
-
-The `--concurrency` parameter controls how many requests are sent to LLMs in parallel:
-
-- **Higher values** (8-16): Faster benchmarking, but may overwhelm local models
-- **Lower values** (1-2): Slower but safer for resource-constrained environments
-- **Recommended**: Start with 4, increase if your LLM server can handle more
-
-For Ollama on a single GPU, use `--concurrency 2-4`. For cloud APIs (OpenAI, HuggingFace), you can use `--concurrency 8-16`.
-
-#### Step 4: Train ML Models
+### 5. Train selectors
 
 ```bash
 python train.py \
-  --data-file benchmark_output.jsonl \
-  --output-dir models/
+  --data-file benchmark-output.jsonl \
+  --output-dir models
 ```
 
-### train.py Parameters
+By default the script trains KNN, KMeans, SVM, and MLP artifacts. Use
+`--algorithm knn|kmeans|svm|mlp` to train one selector, or `--skip-mlp` when the
+PyTorch dependency is unavailable. Training accepts `cpu`, `cuda`, or `mps`.
+The current Router decision factory runs the loaded MLP artifact on CPU; its
+`device` field is accepted for compatibility but is not wired to selection.
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--data-file` | (required) | Path to JSONL benchmark data |
-| `--output-dir` | `models/` | Directory to save trained model JSON files |
-| `--embedding-model` | `qwen3` | Embedding model: `qwen3`, `gte`, `mpnet`, `e5`, `bge` |
-| `--cache-dir` | `.cache/` | Cache directory for embeddings |
-| `--knn-k` | `5` | Number of neighbors for KNN |
-| `--kmeans-clusters` | `8` | Number of clusters for KMeans |
-| `--svm-kernel` | `rbf` | SVM kernel: `rbf`, `linear` |
-| `--svm-gamma` | `1.0` | SVM gamma for RBF kernel |
-| `--mlp-hidden-dims` | `512,256` | MLP hidden layer dimensions |
-| `--mlp-dropout` | `0.1` | MLP dropout rate |
-| `--mlp-epochs` | `100` | MLP training epochs |
-| `--mlp-lr` | `0.001` | MLP learning rate |
-| `--quality-weight` | `0.9` | Quality vs speed weight (0=speed, 1=quality) |
-| `--batch-size` | `32` | Batch size for embedding generation |
-| `--device` | `cpu` | Device: `cpu`, `cuda`, `mps` |
-| `--limit` | None | Limit number of training samples |
+The output directory contains JSON artifacts such as `knn_model.json`,
+`kmeans_model.json`, `svm_model.json`, and `mlp_model.json`. Their contents are
+specific to the benchmarked model names, embedding model, and feature layout.
 
-**Examples:**
+### 6. Configure the Router
+
+Merge the selector settings into a complete canonical config. This example is a
+fragment; the full file still needs listeners, providers, and any signals used
+by the decision.
+
+```yaml
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: /models/selection
+        model_type: qwen3
+        embedding_dim: 1024
+        knn:
+          k: 5
+          pretrained_path: /models/selection/knn_model.json
+
+routing:
+  decisions:
+    - name: math
+      description: Route math requests with the trained KNN selector.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: math
+      algorithm:
+        type: knn
+      modelRefs:
+        - model: local-small
+        - model: hosted-model
+```
+
+The configured `model_type` and `embedding_dim` select the embedding feature
+space used by the ML selectors and must match the training artifacts. Other
+selection algorithms and embedding consumers continue to use the default
+semantic embedding configuration. If `model_type` is omitted, ML selectors also
+use that default for backward compatibility. Model names in `modelRefs` must
+match the names recorded in the benchmark data and the configured provider
+aliases.
 
 ```bash
-# Train with custom KNN k value
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --knn-k 7
-
-# Train with limited samples (for testing)
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --limit 1000
-
-# Train with GPU acceleration
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --device cuda \
-  --batch-size 64
-
-# Train with custom algorithm parameters
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --knn-k 10 \
-  --kmeans-clusters 12 \
-  --svm-kernel rbf \
-  --svm-gamma 0.5 \
-  --quality-weight 0.85
-
-# Train MLP with custom architecture
-python train.py \
-  --data-file benchmark.jsonl \
-  --output-dir models/ \
-  --mlp-hidden-dims 1024,512,256 \
-  --mlp-dropout 0.2 \
-  --mlp-epochs 150 \
-  --mlp-lr 0.0005 \
-  --device cuda
+vllm-sr validate --config config.yaml
 ```
 
-### VSR Categories
+## Evaluate before rollout
 
-The system supports 14 domain categories. Use exact names (with spaces, not underscores):
+Use a held-out dataset that was not used to fit or tune the selector. Report:
 
-```text
-biology, business, chemistry, computer science, economics, engineering,
-health, history, law, math, other, philosophy, physics, psychology
-```
+- answer-quality metric by workload slice
+- selected-model distribution
+- end-to-end latency and provider cost
+- regret relative to an oracle that picks the best evaluated response
+- comparison with fixed-default, best-single-model, and random baselines
+- failures, timeouts, and excluded samples
 
-### Validate Trained Models
+Publish the dataset revision, source commit, model revisions, embedding model,
+hardware, command, and raw report with any headline result. Percentages or QPS
+without that provenance do not describe expected production performance.
 
-Run the Go validation script to verify ML routing benefit:
+## Common problems
 
-```bash
-cd src/training/model_selection/ml_model_selection
+### Artifact not found
 
-# Set library paths (WSL/Linux)
-export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
+Check `models_path` and each `pretrained_path` from inside the Router runtime,
+not only on the host. Mount or package the files at the same paths used by the
+configuration.
 
-# Run validation
-go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
-```
+### Embedding dimension mismatch
 
-## Model Files
+Use the same embedding model and feature layout for training and inference, and
+set `embedding_dim` to the exported artifact's dimension.
 
-The trained models are stored as JSON files:
+### Poor held-out quality
 
-| File | Algorithm | Size |
-|------|-----------|------|
-| `knn_model.json` | K-Nearest Neighbors | ~2-10 MB |
-| `kmeans_model.json` | KMeans Clustering | ~50 KB |
-| `svm_model.json` | Support Vector Machine | ~1-5 MB |
-| `mlp_model.json` | Multi-Layer Perceptron | ~1-10 MB |
+Confirm that model names and labels match, inspect class and domain coverage,
+look for train/test leakage, and compare against simple baselines. More complex
+selectors do not compensate for unrepresentative benchmark data.
 
-These files are downloaded from HuggingFace or generated during training:
+## References
 
-- **Models**: [abdallah1008/semantic-router-ml-models](https://huggingface.co/abdallah1008/semantic-router-ml-models)
-- **Benchmark Data**: [abdallah1008/ml-selection-benchmark-data](https://huggingface.co/datasets/abdallah1008/ml-selection-benchmark-data)
-
-## Best Practices
-
-### Algorithm Selection Guide
-
-| Use Case | Recommended Algorithm | Reason |
-|----------|----------------------|--------|
-| **Quality-critical tasks** | KNN (k=5) | Quality-weighted voting provides best accuracy |
-| **High-throughput systems** | KMeans | Fast cluster lookup, good latency |
-| **Domain-specific routing** | SVM | Clear decision boundaries between domains |
-| **GPU-enabled environments** | MLP | Neural network with CUDA/Metal acceleration |
-| **General purpose** | KMEANS | Best balance of quality and speed |
-
-### Hyperparameter Tuning
-
-1. **KNN k value**: Start with k=5, increase for smoother decisions
-2. **KMeans clusters**: Match to number of distinct query patterns (8-16 typical)
-3. **SVM gamma**: Use 1.0 for normalized embeddings, adjust based on data spread
-4. **MLP architecture**: Start with 512,256 hidden dims; increase for complex datasets
-
-### Feature Vector Composition
-
-The ML models use a 1038-dimensional feature vector:
-
-- **1024 dimensions**: Qwen3 semantic embedding
-- **14 dimensions**: Category one-hot encoding (VSR domain categories)
-
-```text
-Feature Vector = [embedding(1024)] ⊕ [category_one_hot(14)]
-```
-
-## Troubleshooting
-
-### Models Not Loading
-
-```text
-Error: pretrained model not found
-```
-
-Download models from HuggingFace:
-
-```bash
-cd src/training/model_selection/ml_model_selection
-python download_model.py --output-dir ../../../.cache/ml-models
-```
-
-### Low Selection Accuracy
-
-1. Ensure embedding model matches training (Qwen3-Embedding-0.6B)
-2. Verify category classification is working
-3. Check that model names in config match training data
-
-### Dimension Mismatch
-
-```text
-Error: embedding dimension mismatch
-```
-
-Ensure you're using the same embedding model for training and inference (Qwen3 produces 1024 dimensions).
-
-## Next Steps
-
-- [Training Overview](/docs/training/training-overview) - General training documentation
-- [Model Performance Evaluation](/docs/training/model-performance-eval) - Detailed performance metrics
+- [Training Router Models](./training-overview)
+- [Model Performance Evaluation](./model-performance-eval)
+- [Training source and complete CLI options](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection/ml_model_selection)
+- [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540)
+- [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631)

@@ -16,6 +16,17 @@ import (
 type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
+
+	// ContextTokenFloor and the related scalar fields carry the content-free,
+	// request-envelope estimate used by the context signal. They account for
+	// prompt-bearing request components that are intentionally absent from the
+	// semantic signal text, such as prior user turns, tool schemas/results, and
+	// image reserves. ContextTextBytes remains separate so non-text equivalent
+	// bytes can never train the prose token calibrator.
+	ContextTokenFloor      int
+	ContextTextBytes       int
+	ContextEquivalentBytes int
+	ContextHasNonText      bool
 }
 
 func (c *Classifier) evaluateMetadataSignal(

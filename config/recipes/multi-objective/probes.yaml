@@ -37,7 +37,7 @@ coverage:
     multi_turn: 100.0
 decisions:
   - id: balanced_standard
-    model: vllm-sr/mom-balanced-v1
+    model: vllm-sr/mom-v1-blend
     expected_recipe: balanced
     expected_decision: unified_balance_route
     expected_algorithm: multi_factor
@@ -91,7 +91,7 @@ decisions:
         tags: [recipe:balanced, language:en, stress:conflict, direct]
 
   - id: balanced_deliberate
-    model: vllm-sr/mom-balanced-v1
+    model: vllm-sr/mom-v1-blend
     expected_recipe: balanced
     expected_decision: unified_balance_deliberate_route
     expected_algorithm: multi_factor
@@ -164,7 +164,7 @@ decisions:
         tags: [recipe:balanced, language:en, signal:complexity, projection]
 
   - id: balanced_recovery
-    model: vllm-sr/mom-balanced-v1
+    model: vllm-sr/mom-v1-blend
     expected_recipe: balanced
     expected_decision: unified_balance_recovery
     expected_algorithm: multi_factor
@@ -213,7 +213,7 @@ decisions:
         tags: [recipe:balanced, language:en, signal:user-feedback, shape:multi-turn]
 
   - id: speed_interactive
-    model: vllm-sr/mom-flash-v1
+    model: vllm-sr/mom-v1-flash
     expected_recipe: speed-first
     expected_decision: unified_speed_first_route
     expected_algorithm: multi_factor
@@ -241,7 +241,7 @@ decisions:
         tags: [recipe:speed-first, language:de, class:negative, direct]
 
   - id: speed_heavy
-    model: vllm-sr/mom-flash-v1
+    model: vllm-sr/mom-v1-flash
     expected_recipe: speed-first
     expected_decision: unified_speed_heavy_route
     expected_algorithm: latency_aware
@@ -284,7 +284,7 @@ decisions:
         tags: [recipe:speed-first, language:en, signal:structure, projection]
 
   - id: cost_direct
-    model: vllm-sr/mom-economy-v1
+    model: vllm-sr/mom-v1-lite
     expected_recipe: cost-first
     expected_decision: unified_cost_first_route
     expected_algorithm: multi_factor
@@ -312,7 +312,7 @@ decisions:
         tags: [recipe:cost-first, language:de, class:negative, direct]
 
   - id: cost_reasoning
-    model: vllm-sr/mom-economy-v1
+    model: vllm-sr/mom-v1-lite
     expected_recipe: cost-first
     expected_decision: unified_cost_local_reasoning
     expected_algorithm: multi_factor
@@ -355,7 +355,7 @@ decisions:
         tags: [recipe:cost-first, language:en, signal:structure, projection]
 
   - id: frontier_direct
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_direct
     expected_algorithm: multi_factor
@@ -430,7 +430,7 @@ decisions:
         tags: [recipe:accuracy-first, language:ja, class:negative, direct]
 
   - id: frontier_tool_result_synthesis
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_tool_result_synthesis
     expected_algorithm: static
@@ -457,7 +457,7 @@ decisions:
         tags: [recipe:accuracy-first, language:en, shape:tool-loop, direct]
 
   - id: frontier_verified
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_verified_answer
     expected_algorithm: confidence
@@ -486,7 +486,7 @@ decisions:
         tags: [recipe:accuracy-first, language:en, signal:keyword, looper:confidence]
 
   - id: frontier_remom
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_remom
     expected_algorithm: remom
@@ -554,7 +554,7 @@ decisions:
         tags: [recipe:accuracy-first, language:en, signal:complexity, looper:remom]
 
   - id: frontier_fusion
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_fusion
     expected_algorithm: fusion
@@ -591,7 +591,7 @@ decisions:
         tags: [recipe:accuracy-first, language:de, signal:keyword, looper:fusion]
 
   - id: frontier_workflow
-    model: vllm-sr/mom-frontier-v1
+    model: vllm-sr/mom-v1-ultra
     expected_recipe: accuracy-first
     expected_decision: unified_frontier_workflow
     expected_algorithm: workflows
@@ -652,7 +652,7 @@ decisions:
         tags: [recipe:accuracy-first, language:en, signal:conversation, shape:tools]
 
   - id: privacy_default
-    model: vllm-sr/mom-private-v1
+    model: vllm-sr/mom-v1-vault
     expected_recipe: privacy-first
     expected_decision: unified_privacy_local_default
     expected_algorithm: static
@@ -684,7 +684,7 @@ decisions:
         tags: [recipe:privacy-first, language:de, class:negative, direct]
 
   - id: privacy_sensitive
-    model: vllm-sr/mom-private-v1
+    model: vllm-sr/mom-v1-vault
     expected_recipe: privacy-first
     expected_decision: unified_privacy_sensitive_route
     expected_algorithm: static
@@ -729,7 +729,7 @@ decisions:
         tags: [recipe:privacy-first, language:en, signal:pii, stress:long-input, sensitive]
 
   - id: privacy_containment
-    model: vllm-sr/mom-private-v1
+    model: vllm-sr/mom-v1-vault
     expected_recipe: privacy-first
     expected_decision: unified_privacy_security_containment
     expected_algorithm: static

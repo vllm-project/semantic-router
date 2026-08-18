@@ -126,7 +126,7 @@ describe_package_selection() {
 
   case "$REQUESTED_CHANNEL" in
     dev)
-      printf 'vllm-sr (--pre, latest development release)\n'
+      printf 'vllm-sr (--pre; prereleases allowed)\n'
       ;;
     stable)
       printf 'vllm-sr (latest stable release)\n'
@@ -204,7 +204,8 @@ Options:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --channel stable|dev     Package channel to install when --pip-spec is not
-                           set. Default: dev
+                           set. The dev channel allows prereleases, but pip may
+                           still choose a newer stable version. Default: dev
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
@@ -636,7 +637,7 @@ install_requested_package() {
   case "$REQUESTED_CHANNEL" in
     dev)
       run_quiet_step \
-        "Installing latest development vLLM Semantic Router release" \
+        "Installing vLLM Semantic Router with prereleases allowed" \
         "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr
       ;;
     stable)

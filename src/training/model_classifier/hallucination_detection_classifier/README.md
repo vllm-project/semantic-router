@@ -1,4 +1,7 @@
-# Standalone Hallucination Detection Training
+# Hallucination-Span Classifier Training
+
+This standalone pipeline trains a token classifier over a context-and-answer
+pair. Each answer token is labelled as supported or hallucinated.
 
 ## Install
 
@@ -6,52 +9,42 @@
 pip install -r requirements.txt
 ```
 
-## Quick Start (Docker)
-
-```bash
-# Run full training pipeline with 32K ModernBERT
-./run_training.sh
-```
-
 ## Prepare Data
 
-```bash
-# Option 1: Use existing local files
-python prepare_data.py \
-    --ragtruth-path /path/to/ragtruth_data.json \
-    --dart-path /path/to/dart_spans.json \
-    --e2e-path /path/to/e2e_spans.json \
-    --output-dir ./data
+Provide RAGTruth and, optionally, DART or E2E augmentation files:
 
-# Option 2: Download DART/E2E from HuggingFace
+```bash
 python prepare_data.py \
-    --ragtruth-path /path/to/ragtruth_data.json \
-    --download-augmentation \
-    --output-dir ./data
+  --ragtruth-path /path/to/ragtruth_data.json \
+  --dart-path /path/to/dart_spans.json \
+  --e2e-path /path/to/e2e_spans.json \
+  --output-dir data
 ```
+
+`--download-augmentation` can download supported DART/E2E inputs instead of
+using local paths. Review dataset licenses and the generated train/dev/test
+counts before training.
 
 ## Train
 
 ```bash
 python finetune.py \
-    --train-path ./data/train.json \
-    --dev-path ./data/dev.json \
-    --test-path ./data/test.json \
-    --output-dir ./output/haldetect-32k \
-    --batch-size 8 \
-    --learning-rate 1e-5 \
-    --epochs 6
+  --train-path data/train.json \
+  --dev-path data/dev.json \
+  --test-path data/test.json \
+  --output-dir output/haldetect-32k \
+  --batch-size 8 \
+  --learning-rate 1e-5 \
+  --epochs 6
 ```
 
-## Inference
+`run_training.sh` wraps preparation and training in the environment expected by
+the script. Read it before use so its paths and downloads match your machine.
 
-```python
-from transformers import AutoModelForTokenClassification, AutoTokenizer
+## Evaluate the Right Boundary
 
-model = AutoModelForTokenClassification.from_pretrained("./output/haldetect-32k")
-tokenizer = AutoTokenizer.from_pretrained("./output/haldetect-32k")
-
-inputs = tokenizer(context, answer, return_tensors="pt", truncation="only_first", max_length=8192)
-outputs = model(**inputs)
-predictions = outputs.logits.argmax(dim=-1)  # 0=supported, 1=hallucinated
-```
+Token metrics alone do not establish answer-level reliability. Report
+token- and span-level precision/recall, performance by answer length and domain,
+the context truncation policy, and examples of unsupported spans the model
+misses. A trained checkpoint is not automatically loaded by semantic-router;
+runtime integration and configuration must be validated separately.

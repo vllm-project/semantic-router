@@ -89,6 +89,12 @@ config:
     router:
       strategy: priority
     services:
+      management_api:
+        auth:
+          mode: bearer
+          tokens:
+            - env: VSR_E2E_REPLAY_MANAGEMENT_TOKEN
+              role: viewer
       response_api:
         enabled: true
         store_backend: memory
@@ -156,3 +162,6 @@ resources:
   requests:
     cpu: 500m
     memory: 2Gi
+extraEnv:
+  - name: VSR_E2E_REPLAY_MANAGEMENT_TOKEN
+    value: router-replay-e2e-viewer-token

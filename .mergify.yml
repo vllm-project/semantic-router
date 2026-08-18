@@ -47,6 +47,8 @@ queue_rules:
 
 merge_queue:
   max_parallel_checks: 1
+  queued_label: null
+  dequeued_label: null
 
 pull_request_rules:
   - name: queue approved pull requests

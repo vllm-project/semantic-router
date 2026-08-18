@@ -29,6 +29,7 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.runtime_stack import RuntimeStackLayout
+from cli.terminal import echo, fields, heading, progress, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -194,19 +195,25 @@ def maybe_finish_setup_mode(
     _wait_for_setup_dashboard(dashboard_container)
     ensure_runtime_container_not_exited(dashboard_container, phase="during setup mode")
 
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router setup mode is running!")
-    log.info("")
-    log.info("Next steps:")
-    log.info(f"  - Open {stack_layout.dashboard_url}")
-    log.info("  - Configure your first model in the dashboard")
-    log.info("  - Activate a runnable config to enable routing")
+    success("vLLM Semantic Router setup mode is running")
+    echo()
+    heading("Next steps")
+    fields(
+        (
+            ("Dashboard", stack_layout.dashboard_url),
+            ("Configure", "Add your first model in the dashboard"),
+            ("Activate", "Activate a runnable config to enable routing"),
+        )
+    )
     _log_runtime_commands(dashboard_disabled=False, fleet_sim_enabled=False)
-    log.info("=" * 60)
     return True
 
 
-def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
+def wait_for_router_health(
+    stack_layout: RuntimeStackLayout,
+    management_port: int = DEFAULT_API_PORT,
+    readiness_token_env: str | None = None,
+) -> None:
     """Block until the router readiness endpoint responds or the timeout elapses."""
     log.info("Waiting for Router to become ready...")
     log.info(f"Health check timeout: {HEALTH_CHECK_TIMEOUT}s")
@@ -234,7 +241,7 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
 
         return_code, _stdout, _stderr = container_exec(
             router_container,
-            ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/ready"],
+            _router_readiness_command(management_port, readiness_token_env),
         )
         if return_code == 0:
             elapsed = int(time.time() - start_time)
@@ -256,6 +263,40 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
     log.info("Showing full container logs:")
     container_logs(router_container, follow=False, tail=100)
     raise SystemExit(1)
+
+
+def _router_readiness_command(
+    management_port: int, readiness_token_env: str | None
+) -> list[str]:
+    endpoint = f"http://localhost:{management_port}/ready"
+    if readiness_token_env is None:
+        return ["curl", "-f", "-s", endpoint]
+    script = (
+        'set -eu; token="$(printenv "$1")"; test -n "$token"; '
+        "printf 'Authorization: Bearer %s\\n' \"$token\" | "
+        'curl -f -s -H @- "$2"'
+    )
+    return ["sh", "-c", script, "vllm-sr-readiness", readiness_token_env, endpoint]
+
+
+def wait_and_verify_runtime(
+    stack_layout: RuntimeStackLayout,
+    dashboard_disabled: bool,
+    management_port: int = DEFAULT_API_PORT,
+    readiness_token_env: str | None = None,
+) -> None:
+    """Wait for readiness and verify every required runtime container."""
+    wait_for_router_health(
+        stack_layout,
+        management_port=management_port,
+        readiness_token_env=readiness_token_env,
+    )
+    for service in ("router", "envoy"):
+        ensure_runtime_container_not_exited(
+            stack_layout.service_container_name(service)
+        )
+    if not dashboard_disabled:
+        ensure_runtime_container_not_exited(stack_layout.dashboard_container_name)
 
 
 def ensure_runtime_container_not_exited(
@@ -334,36 +375,44 @@ def log_runtime_summary(
     started_backends: set[str] | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router is running!")
-    log.info("")
-    log.info("Endpoints:")
+    success("vLLM Semantic Router is running")
+    echo()
+    heading("Endpoints")
+    endpoints = []
     if not dashboard_disabled:
-        log.info(f"  - Dashboard: {stack_layout.dashboard_url}")
+        endpoints.append(("Dashboard", stack_layout.dashboard_url))
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
         if isinstance(port, int):
             port += stack_layout.port_offset
-        log.info(f"  - {name}: http://localhost:{port}")
-    log.info(f"  - Metrics: {stack_layout.metrics_url}")
+        endpoints.append((name, f"http://localhost:{port}"))
+    endpoints.append(("Metrics", stack_layout.metrics_url))
     if fleet_sim_enabled:
-        log.info(f"  - Fleet Sim: {stack_layout.fleet_sim_url}")
+        endpoints.append(("Fleet Sim", stack_layout.fleet_sim_url))
+    fields(endpoints)
 
     if started_backends:
-        log.info("")
-        log.info("Storage:")
+        storage = []
         if "redis" in started_backends:
-            log.info(f"  - Redis: {stack_layout.redis_url}")
+            storage.append(("Redis", stack_layout.redis_url))
         if "postgres" in started_backends:
-            log.info(f"  - Postgres: {stack_layout.postgres_url}")
+            storage.append(("Postgres", stack_layout.postgres_url))
+        if storage:
+            echo()
+            heading("Storage")
+            fields(storage)
 
     if enable_observability:
-        log.info("")
-        log.info("Observability:")
-        log.info(f"  - Jaeger UI: {stack_layout.jaeger_ui_url}")
-        log.info(f"  - Grafana: {stack_layout.grafana_url} (admin/admin)")
-        log.info(f"  - Prometheus: {stack_layout.prometheus_url}")
+        echo()
+        heading("Observability")
+        fields(
+            (
+                ("Jaeger UI", stack_layout.jaeger_ui_url),
+                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
+                ("Prometheus", stack_layout.prometheus_url),
+            )
+        )
 
     _log_runtime_commands(dashboard_disabled, fleet_sim_enabled)
     _print_curl_example(listeners, stack_layout)
@@ -406,21 +455,34 @@ def _print_matching_lines(text: str) -> None:
         return
     for line in text.strip().split("\n"):
         if line.strip() and "caller" in line.lower():
-            print(f"  {line}")
+            progress(f"  {line}")
 
 
 def _log_runtime_commands(dashboard_disabled: bool, fleet_sim_enabled: bool) -> None:
-    log.info("")
-    log.info("Commands:")
+    commands = []
     if not dashboard_disabled:
-        log.info("  - vllm-sr dashboard              Open dashboard in browser")
+        commands.append(("Dashboard", "vllm-sr dashboard"))
     if fleet_sim_enabled:
-        log.info("  - vllm-sr logs <envoy|router|dashboard|simulator> [-f]")
-        log.info("  - vllm-sr status [envoy|router|dashboard|simulator|all]")
+        commands.extend(
+            (
+                ("Logs", "vllm-sr logs <envoy|router|dashboard|simulator> [-f]"),
+                (
+                    "Status",
+                    "vllm-sr status [envoy|router|dashboard|simulator|all]",
+                ),
+            )
+        )
     else:
-        log.info("  - vllm-sr logs <envoy|router|dashboard> [-f]")
-        log.info("  - vllm-sr status [envoy|router|dashboard|all]")
-    log.info("  - vllm-sr stop")
+        commands.extend(
+            (
+                ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
+                ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
+            )
+        )
+    commands.append(("Stop", "vllm-sr stop"))
+    echo()
+    heading("Commands")
+    fields(commands)
 
 
 def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
@@ -430,15 +492,13 @@ def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
     if isinstance(first_port, int):
         first_port += stack_layout.port_offset
 
-    print()
-    print("Test with curl:")
-    print()
-    print(f"curl -v http://localhost:{first_port}/v1/chat/completions \\")
-    print('  -H "Content-Type: application/json" \\')
-    print("  -d '{")
-    print('    "model": "vllm-sr/auto",')
-    print('    "messages": [')
-    print('      {"role": "user", "content": "What is the derivative of x^2?"}')
-    print("    ]")
-    print("  }'")
-    print()
+    echo()
+    heading("Try it")
+    echo(f"  curl -v http://localhost:{first_port}/v1/chat/completions \\")
+    echo('    -H "Content-Type: application/json" \\')
+    echo("    -d '{")
+    echo('      "model": "vllm-sr/auto",')
+    echo('      "messages": [')
+    echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
+    echo("      ]")
+    echo("    }'")

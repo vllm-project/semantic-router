@@ -292,7 +292,7 @@
 /* ------------------------------------------------------------------ *
  * Responsive
  *
- * shell.css hides `.navbar__items--right` below 1100px, which would hide the
+ * shell.css hides `.navbar__items--right` below 1340px, which would hide the
  * search control on every tablet and phone. Restore the container — and only
  * the container — so search stays reachable; the README treats mobile as
  * first class. Everything else in that group stays hidden as before.
@@ -318,7 +318,7 @@
   }
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 1339px) {
   .navbar__inner .navbar__items--right {
     display: flex;
     align-items: center;

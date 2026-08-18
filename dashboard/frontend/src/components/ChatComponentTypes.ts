@@ -8,12 +8,15 @@ export const GREETING_LINES = [
   'Make preference executable.',
   'Compose heterogeneous LLMs.',
   'Execute the right model path.',
-  'What should we solve next?'
+  'What should we solve next?',
 ]
 
-export const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-export const generateConversationId = () => `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-export const generatePlaygroundTaskId = () => `task-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+export const generateMessageId = () =>
+  `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+export const generateConversationId = () =>
+  `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+export const generatePlaygroundTaskId = () =>
+  `task-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 export const CLAW_MODE_STORAGE_KEY = 'sr:playground:claw-mode'
 export const PLAYGROUND_QUEUE_STORAGE_KEY = 'sr:playground:queue'
 export const CLAW_MODE_SYSTEM_PROMPT_LINES = [
@@ -24,7 +27,7 @@ export const CLAW_MODE_SYSTEM_PROMPT_LINES = [
   '1) Act like a real recruiter: understand the mission, hiring gaps, reporting structure, collaboration needs, and success criteria before recommending talent.',
   '2) For worker creation, present a shortlist of 2-3 candidates by default before any mutating tool call. Each candidate should include: English first-name identity, role/specialty, recruiter-style fit note, vibe/collaboration style, pressure behavior, and team-fit/reporting pattern.',
   '3) Worker names should usually be plausible English first names that feel memorable and recruiter-grade. Avoid bot labels, fantasy handles, emoji-only names, and generic titles such as Worker A, Analyst Bot, Operator-1, Helper, Assistant, or pure role titles.',
-  "4) If the user already provides a worker name, respect it unless they explicitly ask for alternatives or a rename.",
+  '4) If the user already provides a worker name, respect it unless they explicitly ask for alternatives or a rename.',
   "5) Other descriptive fields (such as role/vibe/principles/descriptions) should follow the user's language preference inferred from the conversation, but worker names should stay in English unless the user explicitly requests another convention.",
   '6) Vibe must feel like a specific human collaboration style: include temperament, communication rhythm, emotional tone, and how the worker reacts under pressure. Avoid bland labels like calm, professional, helpful, or smart unless made concrete.',
   '7) Principles must read like team-aware operating rules, not empty slogans. They MUST explicitly include team mission, leader coordination, teammate expectations, escalation boundaries, and how this worker collaborates day to day.',
@@ -54,12 +57,24 @@ export interface ReMoMRoundResponse {
 
 export type SearchResult = WebSearchResult
 
+export interface InlineMessageImage {
+  src: string
+  alt: string
+}
+
+export interface MessagePresentation {
+  content: string
+  images?: InlineMessageImage[]
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   attachments?: PlaygroundAttachmentSummary[]
   playgroundAttachments?: PlaygroundAttachment[]
+  requestContent?: unknown
+  images?: InlineMessageImage[]
   timestamp: Date
   isStreaming?: boolean
   headers?: Record<string, string>
@@ -80,6 +95,7 @@ export interface PlaygroundTaskRequestOptions {
   enableClawMode: boolean
   enableWebSearch: boolean
   model: string
+  executeToolCalls?: boolean
 }
 
 export interface PlaygroundTask {
@@ -89,6 +105,9 @@ export interface PlaygroundTask {
   attachments?: PlaygroundAttachment[]
   createdAt: number
   requestOptions: PlaygroundTaskRequestOptions
+  exactRequest?: Record<string, unknown>
+  appendPromptMessage?: boolean
+  displayMessage?: MessagePresentation
 }
 
 interface ClawHighlightField {
@@ -127,7 +146,7 @@ const extractFromRawArgs = (rawArgs: string, key: string): string => {
 const firstFieldValue = (
   source: Record<string, unknown> | null,
   keys: string[],
-  rawArgs = ''
+  rawArgs = '',
 ): string => {
   for (const key of keys) {
     const value = toFieldString(source?.[key])
@@ -151,7 +170,7 @@ const toHighlightFields = (pairs: Array<[string, string]>): ClawHighlightField[]
 export const buildClawRequestHighlights = (
   clawToolName: string,
   parsedArgs: Record<string, unknown> | null,
-  rawArgs: string
+  rawArgs: string,
 ): Array<{ label: string; value: string }> => {
   if (clawToolName === 'claw_create_team') {
     return toHighlightFields([
@@ -178,7 +197,7 @@ export const buildClawResultHighlights = (
   clawToolName: string,
   resultContent: unknown,
   parsedArgs: Record<string, unknown> | null,
-  rawArgs: string
+  rawArgs: string,
 ): Array<{ label: string; value: string }> => {
   const result = asRecord(resultContent)
 
@@ -194,10 +213,29 @@ export const buildClawResultHighlights = (
   if (clawToolName === 'claw_create_worker') {
     const identity = asRecord(result?.identity)
     return toHighlightFields([
-      ['name', firstFieldValue(identity, ['name']) || firstFieldValue(result, ['agentName', 'name']) || firstFieldValue(parsedArgs, ['name'], rawArgs)],
-      ['vibe', firstFieldValue(identity, ['vibe']) || firstFieldValue(result, ['agentVibe']) || firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
-      ['role', firstFieldValue(identity, ['role']) || firstFieldValue(result, ['agentRole']) || firstFieldValue(parsedArgs, ['role'], rawArgs)],
-      ['team', firstFieldValue(result, ['teamName', 'teamId']) || firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs)],
+      [
+        'name',
+        firstFieldValue(identity, ['name']) ||
+          firstFieldValue(result, ['agentName', 'name']) ||
+          firstFieldValue(parsedArgs, ['name'], rawArgs),
+      ],
+      [
+        'vibe',
+        firstFieldValue(identity, ['vibe']) ||
+          firstFieldValue(result, ['agentVibe']) ||
+          firstFieldValue(parsedArgs, ['vibe'], rawArgs),
+      ],
+      [
+        'role',
+        firstFieldValue(identity, ['role']) ||
+          firstFieldValue(result, ['agentRole']) ||
+          firstFieldValue(parsedArgs, ['role'], rawArgs),
+      ],
+      [
+        'team',
+        firstFieldValue(result, ['teamName', 'teamId']) ||
+          firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs),
+      ],
       ['container', firstFieldValue(result, ['containerName'])],
       ['message', firstFieldValue(result, ['message'])],
     ])
