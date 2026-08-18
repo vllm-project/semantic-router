@@ -19,6 +19,7 @@ class ContractTest(unittest.TestCase):
             contract["base_model"]["revision"],
             "72a23a6640489471eb4ff7ad3ec5bc80af8a27de",
         )
+        self.assertIs(contract["model"]["reference_compile"], False)
 
     def test_eight_gpu_batch_matches_historical_global_batch(self):
         contract = load_contract()

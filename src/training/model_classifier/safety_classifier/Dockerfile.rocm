@@ -2,7 +2,10 @@ FROM rocm/pytorch:rocm7.2_ubuntu22.04_py3.11_pytorch_release_2.10.0@sha256:8ea1a
 
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1 \
-    TOKENIZERS_PARALLELISM=false
+    TOKENIZERS_PARALLELISM=false \
+    HSA_NO_SCRATCH_RECLAIM=1 \
+    NCCL_MAX_NCHANNELS=8 \
+    NCCL_P2P_DISABLE=1
 
 WORKDIR /workspace/semantic-router
 

@@ -47,6 +47,10 @@ def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> dict[str, Any]:
     model = _require(contract, "model", "contract")
     if model.get("max_length") != 512:
         raise ContractError("reconstruction-v1 fixes model.max_length at 512")
+    if model.get("reference_compile") is not False:
+        raise ContractError(
+            "model.reference_compile must be false for distributed ROCm"
+        )
     lora = _require(model, "lora", "model")
     if lora.get("alpha") != 2 * lora.get("rank", 0):
         raise ContractError("LoRA alpha must remain exactly twice the rank")

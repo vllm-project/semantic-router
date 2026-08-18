@@ -244,6 +244,7 @@ def train(args: argparse.Namespace) -> Path:
         torch_dtype=dtype,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
+    model.config.reference_compile = bool(model_config["reference_compile"])
 
     lora = model_config["lora"]
     peft_config = stack["LoraConfig"](
@@ -318,8 +319,9 @@ def train(args: argparse.Namespace) -> Path:
     test_metrics = trainer.evaluate(datasets["test"], metric_key_prefix="test")
 
     adapter_dir = output_root / "adapter"
+    trainer.save_model(str(adapter_dir))
+    trainer.save_state()
     if trainer.is_world_process_zero():
-        trainer.save_model(str(adapter_dir))
         tokenizer.save_pretrained(adapter_dir)
         label_mapping = {
             "label2id": labels,
@@ -368,6 +370,15 @@ def train(args: argparse.Namespace) -> Path:
             "per_device_train_batch_size": per_device_batch,
             "gradient_accumulation_steps": gradient_accumulation,
             "precision": "bf16" if use_bf16 else "fp32",
+            "reference_compile": model.config.reference_compile,
+            "distributed_runtime": {
+                name: os.environ.get(name)
+                for name in (
+                    "HSA_NO_SCRATCH_RECLAIM",
+                    "NCCL_MAX_NCHANNELS",
+                    "NCCL_P2P_DISABLE",
+                )
+            },
             "release_eligible": release_eligible,
             "python": platform.python_version(),
             "packages": _package_versions(
@@ -390,7 +401,6 @@ def train(args: argparse.Namespace) -> Path:
             json.dumps(contract, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        trainer.save_state()
     return adapter_dir
 
 

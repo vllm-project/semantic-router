@@ -24,6 +24,8 @@ The machine-readable source of truth is
 - prompt-only normalization, de-duplication, split precedence, and sampling;
 - the `legacy-9-v1` source-taxonomy crosswalk;
 - max length 512;
+- disabled ModernBERT reference compilation so distributed ranks do not each
+  create a large TorchInductor worker pool;
 - LoRA rank 32, alpha 64, dropout 0.1, and the four ModernBERT target modules;
 - global batch 64, 10 epochs, AdamW, linear warmup, and all random seeds;
 - distinct adapter and merged release repositories.
@@ -72,6 +74,12 @@ docker build \
   -f src/training/model_classifier/safety_classifier/Dockerfile.rocm \
   -t semantic-router-mmbert32k-safety:reconstruction-v1 .
 ```
+
+The image carries conservative single-node RCCL defaults verified for the
+eight-device workflow: scratch reclaim is disabled, GPU P2P is disabled in
+favor of shared-memory collectives, and the channel count is capped at eight.
+These settings trade some collective bandwidth for bounded startup time; LoRA
+gradient communication is small relative to the frozen base model.
 
 Mount the repository, a persistent Hugging Face cache, and credentials using
 the normal secret mechanism for the environment. Do not copy tokens into the

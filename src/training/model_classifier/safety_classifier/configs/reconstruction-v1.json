@@ -55,6 +55,7 @@
   "model": {
     "architecture": "ModernBertForSequenceClassification",
     "max_length": 512,
+    "reference_compile": false,
     "lora": {
       "rank": 32,
       "alpha": 64,
