@@ -90,6 +90,12 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
+		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
+			return
+		}
+		defer release()
 
 		// Read existing config so runtime rollback can restore the previous file if needed.
 		existingData, err := os.ReadFile(configPath)
@@ -193,6 +199,12 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
+			return
+		}
+		defer release()
 
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {

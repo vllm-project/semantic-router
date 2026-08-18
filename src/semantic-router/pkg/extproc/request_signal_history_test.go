@@ -263,6 +263,10 @@ func TestSignalConversationHistoryFromFastExtract_PreservesToolTransitionNames(t
 		AssistantToolCallCount: 2,
 		ToolResultCount:        2,
 		AssistantToolNames:     []string{"read_file", "run_tests"},
+		ContextTokenFloor:      16_384,
+		ContextTextBytes:       128,
+		ContextEquivalentBytes: 65_536,
+		ContextHasNonText:      true,
 	}
 
 	history := signalConversationHistoryFromFastExtract(fast)
@@ -271,6 +275,10 @@ func TestSignalConversationHistoryFromFastExtract_PreservesToolTransitionNames(t
 	assert.Equal(t, []string{"run_tests"}, transition.RecentToolNames)
 	assert.Equal(t, 2, transition.UserMessageCount)
 	assert.Equal(t, 2, transition.ToolResultCount)
+	assert.Equal(t, 16_384, history.contextTokenFloor)
+	assert.Equal(t, 128, history.contextTextBytes)
+	assert.Equal(t, 65_536, history.contextEquivalentBytes)
+	assert.True(t, history.contextHasNonText)
 
 	fast.AssistantToolNames[1] = "mutated"
 	assert.Equal(t, []string{"run_tests"}, transition.RecentToolNames)

@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 // handleRequestBodyDispatch routes body messages to the correct handler.
@@ -69,18 +70,20 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) (retErr error) {
 	logging.Debugf("Processing at stage [init]")
+	var ctx *RequestContext
 
 	// Recover from any panic (including OOM kills surfaced as runtime panics from
 	// CGO inference calls) so a single bad request cannot take down the gRPC server.
 	defer func() {
 		if rec := recover(); rec != nil {
+			r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "processor_panic")
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
 	}()
 
 	// Initialize request context
-	ctx := &RequestContext{
+	ctx = &RequestContext{
 		Headers:      make(map[string]string),
 		TraceContext: stream.Context(),
 	}
@@ -92,6 +95,8 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		}
 
 		if err := r.handleProcessRequest(stream, req, ctx); err != nil {
+			state, reason := replayLifecycleForProcessError(err)
+			r.finalizeRouterReplay(ctx, state, reason)
 			return err
 		}
 	}
@@ -106,6 +111,9 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		inflight.End(ctx.RequestModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
+
+	state, reason := replayLifecycleForReceiveError(err)
+	r.finalizeRouterReplay(ctx, state, reason)
 
 	if errors.Is(err, io.EOF) {
 		logging.Debugf("Stream ended gracefully")
@@ -122,6 +130,29 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 
 	logging.Errorf("Error receiving request: %v", err)
 	return err
+}
+
+func replayLifecycleForProcessError(err error) (string, string) {
+	if errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled {
+		return routerreplay.LifecycleAborted, "request_canceled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return routerreplay.LifecycleAborted, "request_deadline_exceeded"
+	}
+	return routerreplay.LifecycleFailed, "request_processing_failed"
+}
+
+func replayLifecycleForReceiveError(err error) (string, string) {
+	if errors.Is(err, io.EOF) {
+		return routerreplay.LifecycleAborted, "stream_ended_before_terminal_response"
+	}
+	if errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled {
+		return routerreplay.LifecycleAborted, "client_canceled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return routerreplay.LifecycleAborted, "deadline_exceeded"
+	}
+	return routerreplay.LifecycleFailed, "extproc_receive_failed"
 }
 
 func handleProcessStatusError(ctx *RequestContext, err error) bool {

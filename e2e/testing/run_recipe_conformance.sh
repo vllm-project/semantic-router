@@ -62,7 +62,8 @@ for recipe in "${recipe_names[@]}"; do
 
   echo "=== recipe conformance: ${recipe} ==="
   cleanup
-  if ! VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" \
+  if ! POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-router-secret}" \
+    VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" \
     vllm-sr serve \
       --image-pull-policy ifnotpresent \
       --minimal \

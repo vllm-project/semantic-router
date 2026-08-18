@@ -100,6 +100,7 @@ func RequiredPermission(method, path string) string {
 		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
+		recipePermission,
 		fleetSimPermission,
 		featurePermission,
 	} {
@@ -113,6 +114,39 @@ func RequiredPermission(method, path string) string {
 	}
 
 	return ""
+}
+
+func recipePermission(_ string, path string) (string, bool) {
+	path = strings.TrimRight(path, "/")
+	if matchesRoute(path, "/api/recipe/import") {
+		return PermConfigWrite, true
+	}
+	if matchesAnyRoute(path, "/api/recipe/activate", "/api/recipe/deactivate") {
+		return PermConfigDeploy, true
+	}
+	if matchesRoute(path, "/api/recipe/packages") {
+		return PermConfigRead, true
+	}
+	if path == "/api/recipe" || matchesRoute(path, "/api/recipe/probes") {
+		if strings.HasSuffix(path, "/validate") {
+			return PermTopologyRead, true
+		}
+		return PermConfigRead, true
+	}
+	return "", false
+}
+
+func matchesAnyRoute(path string, bases ...string) bool {
+	for _, base := range bases {
+		if matchesRoute(path, base) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesRoute(path, base string) bool {
+	return path == base || strings.HasPrefix(path, base+"/")
 }
 
 func adminPermission(method, path string) (string, bool) {
@@ -151,6 +185,20 @@ func settingsPermission(method, path string) (string, bool) {
 
 func routerPermission(method, path string) (string, bool) {
 	switch {
+	case path == "/api/models/catalog":
+		return PermConfigRead, true
+	case path == "/api/models/verify":
+		return PermEvalRun, true
+	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
+		return PermFeedbackSubmit, true
+	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
+		return PermReplayRead, true
+	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
+		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
+	case path == "/api/router/api/v1/context-compression/preview":
+		return PermConfigRead, true
+	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
+		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
 	case path == "/api/router/config/deploy",
 		path == "/api/router/config/deploy/preview",
 		path == "/api/router/config/rollback":
@@ -204,7 +252,9 @@ func readOrManagePermission(method, readPermission, managePermission string) str
 
 func observabilityPermission(_ string, path string) (string, bool) {
 	switch {
-	case strings.HasPrefix(path, "/api/status"), strings.HasPrefix(path, "/api/logs"):
+	case strings.HasPrefix(path, "/api/status"):
+		return PermTopologyRead, true
+	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true

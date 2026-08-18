@@ -164,16 +164,12 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 
 		ensureSetupGlobalDefaults(candidate)
 
-		if !deployMu.TryLock() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error":   "deploy_in_progress",
-				"message": "Another config operation is in progress. Please try again.",
-			})
+		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
 			return
 		}
-		defer deployMu.Unlock()
+		defer release()
 
 		yamlData, err := marshalYAMLBytes(candidate.CanonicalConfig)
 		if err != nil {

@@ -10,6 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+const builtInRecipeCatalogDirectory = "built-in"
+
 func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
 	entries, err := os.ReadDir(root)
@@ -18,6 +20,9 @@ func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			continue
+		}
+		if entry.Name() == builtInRecipeCatalogDirectory {
 			continue
 		}
 		t.Run(entry.Name(), func(t *testing.T) {

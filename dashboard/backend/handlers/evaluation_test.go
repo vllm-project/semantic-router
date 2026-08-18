@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,31 @@ func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
 	t.Helper()
 	return newTestEvaluationHarness(t).handler
+}
+
+func TestEvaluationMutationsHonorServerReadonly(t *testing.T) {
+	t.Parallel()
+	handler := &EvaluationHandler{readonlyMode: true}
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{name: "create", method: http.MethodPost, path: "/api/evaluation/tasks", handler: handler.CreateTaskHandler()},
+		{name: "delete", method: http.MethodDelete, path: "/api/evaluation/tasks/task-1", handler: handler.DeleteTaskHandler()},
+		{name: "run", method: http.MethodPost, path: "/api/evaluation/run", handler: handler.RunTaskHandler()},
+		{name: "cancel", method: http.MethodPost, path: "/api/evaluation/cancel/task-1", handler: handler.CancelTaskHandler()},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			test.handler.ServeHTTP(recorder, httptest.NewRequest(test.method, test.path, nil))
+			if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"error":"readonly_mode"`) {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
 }
 
 func TestCreateTaskHandler_MoMWithAccuracyReturns201(t *testing.T) {

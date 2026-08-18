@@ -336,9 +336,9 @@ ROUTE hard_math {
   MODEL "qwen2.5-math:72b" (reasoning = true, effort = "high"),
         "deepseek-r1:70b" (reasoning = true)
   ALGORITHM confidence {
-    confidence_method: "logprob"
+    confidence_method: "avg_logprob"
     threshold: 0.85
-    on_error: "fallback"
+    on_error: "skip"
   }
 }
 

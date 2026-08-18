@@ -255,9 +255,18 @@ func HandleUpdateSecurityPolicy(w http.ResponseWriter, r *http.Request) {
 
 	policy.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	fragment := GenerateRouterFragment(&policy)
+	var release func()
+	if securityPolicyConfigPath != "" {
+		var lockErr error
+		release, lockErr = beginOrdinaryRuntimeConfigMutation(securityPolicyConfigDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
+			return
+		}
+		defer release()
+	}
 	saveSecurityPolicy(&policy)
-
-	applied := applySecurityFragment(fragment)
+	applied := securityPolicyConfigPath != "" && applySecurityFragmentLocked(fragment)
 
 	msg := "Security policy updated and applied to router config."
 	if !applied {

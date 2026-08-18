@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import base64
+import binascii
+import hashlib
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from router_calibration_image import (
+    IMAGE_FIXTURE_MEDIA_TYPES,
+    validate_image_fixture_payload,
+)
 
 PADDING_PLACEMENTS = frozenset({"before", "after", "around"})
 PROBE_SCHEMA_VERSION = "v1"
 MATCH_MODES = frozenset({"contains", "exact"})
 MAX_PROBE_REPEAT = 10_000
+MAX_GENERATED_TEXT_BYTES = 10 << 20
+MAX_IMAGE_FIXTURE_BYTES = 4 << 20
+MAX_IMAGE_FIXTURE_NAME_LENGTH = 128
+MAX_IMAGE_FIXTURE_DESCRIPTION_LENGTH = 512
+FIXTURE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 TOP_LEVEL_FIELDS = frozenset(
     {
@@ -21,6 +35,7 @@ TOP_LEVEL_FIELDS = frozenset(
         "evaluation",
         "acceptance",
         "coverage",
+        "fixtures",
         "decisions",
     }
 )
@@ -51,17 +66,26 @@ VARIANT_FIELDS = frozenset(
     {
         "id",
         "query",
+        "display_prompt",
+        "playground",
         "messages",
         "tools",
         "repeat",
         "padding",
+        "generated_text",
         "tags",
         "notes",
         "expected_signals",
     }
 )
 PADDING_FIELDS = frozenset({"text", "repeat", "placement"})
+GENERATED_TEXT_FIELDS = frozenset(
+    {"message_index", "content_index", "target_text_bytes", "character"}
+)
+PLAYGROUND_FIELDS = frozenset({"enabled", "reason"})
 ROBUSTNESS_FIELDS = frozenset({"min_pass_rate"})
+FIXTURES_FIELDS = frozenset({"images"})
+IMAGE_FIXTURE_FIELDS = frozenset({"description", "media_type", "data_base64", "sha256"})
 
 
 @dataclass(frozen=True)
@@ -69,6 +93,32 @@ class ProbePadding:
     text: str
     repeat: int
     placement: str
+
+
+@dataclass(frozen=True)
+class ProbeGeneratedText:
+    """Declarative text inserted into one message content array at request time."""
+
+    message_index: int
+    content_index: int
+    target_text_bytes: int
+    character: str = "x"
+
+
+@dataclass(frozen=True)
+class ProbeImageFixture:
+    name: str
+    description: str
+    media_type: str
+    data_base64: str = field(repr=False)
+    sha256: str
+    bytes: int
+
+
+@dataclass(frozen=True)
+class ProbePlaygroundPolicy:
+    enabled: bool
+    reason: str | None = None
 
 
 @dataclass
@@ -87,13 +137,19 @@ class Probe:
     forbidden_signals: tuple[tuple[str, str], ...] = ()
     signal_match: str = "contains"
     query: str | None = None
+    display_prompt: str | None = None
+    playground: ProbePlaygroundPolicy = ProbePlaygroundPolicy(enabled=True)
     repeat: int = 1
     padding: ProbePadding | None = None
+    generated_text: ProbeGeneratedText | None = None
     messages: tuple[dict[str, Any], ...] = ()
     tools: tuple[dict[str, Any], ...] = ()
     expected_alias: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] = ()
+    image_fixtures: dict[str, ProbeImageFixture] = field(
+        default_factory=dict, repr=False
+    )
 
 
 @dataclass(frozen=True)
@@ -113,7 +169,12 @@ class DecisionDefaults:
     notes: str | None
 
 
-def load_grouped_probes(raw_decisions: list[Any], manifest_path: Path) -> list[Probe]:
+def load_grouped_probes(
+    raw_decisions: list[Any],
+    manifest_path: Path,
+    image_fixtures: dict[str, ProbeImageFixture] | None = None,
+) -> list[Probe]:
+    image_fixtures = image_fixtures or {}
     probes: list[Probe] = []
     decision_ids: set[str] = set()
     probe_ids: set[str] = set()
@@ -131,6 +192,7 @@ def load_grouped_probes(raw_decisions: list[Any], manifest_path: Path) -> list[P
                 defaults,
                 manifest_path,
                 index,
+                image_fixtures,
             )
             if probe.probe_id in probe_ids:
                 raise ValueError(
@@ -212,6 +274,7 @@ def _load_variant(
     defaults: DecisionDefaults,
     manifest_path: Path,
     decision_index: int,
+    image_fixtures: dict[str, ProbeImageFixture],
 ) -> Probe:
     if not isinstance(raw_variant, dict):
         raise TypeError(
@@ -227,6 +290,21 @@ def _load_variant(
             f"{label} must include a non-empty id and exactly one of query or messages"
         )
     probe_id = f"{defaults.decision_id}:{variant_id}"
+    display_prompt = _optional_string(raw_variant.get("display_prompt"))
+    playground = _normalize_playground_policy(
+        raw_variant.get("playground"), defaults.decision_id, variant_id
+    )
+    if not playground.enabled and display_prompt is None:
+        raise ValueError(
+            f"{probe_id} display_prompt is required when Playground is disabled"
+        )
+    generated_text = _normalize_generated_text(
+        raw_variant.get("generated_text"),
+        defaults.decision_id,
+        variant_id,
+        messages,
+    )
+    _validate_image_fixture_references(messages, image_fixtures, label)
     return Probe(
         decision_id=defaults.decision_id,
         variant_id=variant_id,
@@ -246,18 +324,134 @@ def _load_variant(
         forbidden_signals=defaults.forbidden_signals,
         signal_match=defaults.signal_match,
         query=query or None,
+        display_prompt=display_prompt,
+        playground=playground,
         repeat=_normalize_repeat(
             raw_variant.get("repeat"), defaults.decision_id, variant_id
         ),
         padding=_normalize_padding(
             raw_variant.get("padding"), defaults.decision_id, variant_id
         ),
+        generated_text=generated_text,
         messages=messages,
         tools=_normalize_objects(raw_variant.get("tools"), "tools"),
         expected_alias=defaults.expected_alias,
         notes=_optional_string(raw_variant.get("notes")) or defaults.notes,
         tags=_normalize_tags(raw_variant.get("tags")),
+        image_fixtures=image_fixtures,
     )
+
+
+def normalize_image_fixtures(
+    raw_fixtures: Any, manifest_path: Path
+) -> dict[str, ProbeImageFixture]:
+    if raw_fixtures is None:
+        return {}
+    label = f"{manifest_path} fixtures"
+    if not isinstance(raw_fixtures, dict):
+        raise TypeError(f"{label} must be a mapping")
+    reject_unknown_fields(raw_fixtures, FIXTURES_FIELDS, label)
+    raw_images = raw_fixtures.get("images")
+    if not isinstance(raw_images, dict) or not raw_images:
+        raise ValueError(f"{label}.images must be a non-empty mapping")
+    return {
+        str(raw_name): _normalize_image_fixture(raw_name, raw_fixture, label)
+        for raw_name, raw_fixture in raw_images.items()
+    }
+
+
+def _normalize_image_fixture(
+    raw_name: Any,
+    raw_fixture: Any,
+    fixtures_label: str,
+) -> ProbeImageFixture:
+    name = str(raw_name)
+    label = f"{fixtures_label}.images.{name}"
+    if len(name) > MAX_IMAGE_FIXTURE_NAME_LENGTH or not FIXTURE_NAME_PATTERN.fullmatch(
+        name
+    ):
+        raise ValueError(f"{label} has an invalid fixture name")
+    if not isinstance(raw_fixture, dict):
+        raise TypeError(f"{label} must be a mapping")
+    reject_unknown_fields(raw_fixture, IMAGE_FIXTURE_FIELDS, label)
+    description = str(raw_fixture.get("description") or "").strip()
+    if not description or len(description) > MAX_IMAGE_FIXTURE_DESCRIPTION_LENGTH:
+        raise ValueError(
+            f"{label}.description must contain between 1 and "
+            f"{MAX_IMAGE_FIXTURE_DESCRIPTION_LENGTH} characters"
+        )
+    media_type = str(raw_fixture.get("media_type") or "").strip().lower()
+    if media_type not in IMAGE_FIXTURE_MEDIA_TYPES:
+        supported = ", ".join(sorted(IMAGE_FIXTURE_MEDIA_TYPES))
+        raise ValueError(f"{label}.media_type must be one of: {supported}")
+    raw_data = raw_fixture.get("data_base64")
+    if not isinstance(raw_data, str) or not raw_data.strip():
+        raise ValueError(f"{label}.data_base64 is required")
+    data_base64 = "".join(raw_data.split())
+    try:
+        decoded = base64.b64decode(data_base64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError(f"{label}.data_base64 is invalid") from exc
+    if base64.b64encode(decoded).decode("ascii") != data_base64:
+        raise ValueError(f"{label}.data_base64 must use canonical padding")
+    if not decoded or len(decoded) > MAX_IMAGE_FIXTURE_BYTES:
+        raise ValueError(
+            f"{label}.data_base64 must decode to between 1 and "
+            f"{MAX_IMAGE_FIXTURE_BYTES} bytes"
+        )
+    actual_sha256 = f"sha256:{hashlib.sha256(decoded).hexdigest()}"
+    expected_sha256 = str(raw_fixture.get("sha256") or "").strip().lower()
+    if expected_sha256 != actual_sha256:
+        raise ValueError(
+            f"{label}.sha256 mismatch: expected {expected_sha256!r}, "
+            f"actual {actual_sha256!r}"
+        )
+    validate_image_fixture_payload(decoded, media_type, label)
+    return ProbeImageFixture(
+        name=name,
+        description=description,
+        media_type=media_type,
+        data_base64=data_base64,
+        sha256=actual_sha256,
+        bytes=len(decoded),
+    )
+
+
+def _validate_image_fixture_references(
+    messages: tuple[dict[str, Any], ...],
+    fixtures: dict[str, ProbeImageFixture],
+    variant_label: str,
+) -> None:
+    for message_index, message in enumerate(messages):
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for content_index, item in enumerate(content):
+            if not isinstance(item, dict):
+                continue
+            label = (
+                f"{variant_label}.messages[{message_index}].content[{content_index}]"
+            )
+            raw_type = item.get("type")
+            item_type = str(raw_type or "").strip().lower()
+            if item_type in {"image_url", "input_image"}:
+                raise ValueError(
+                    f"{label} must use a declared image_fixture instead of an "
+                    "inline or remote image"
+                )
+            if item_type != "image_fixture":
+                continue
+            if raw_type != "image_fixture":
+                raise ValueError(f"{label}.type must be exactly 'image_fixture'")
+            reject_unknown_fields(item, frozenset({"type", "fixture"}), label)
+            fixture_name = item.get("fixture")
+            if not isinstance(fixture_name, str) or not fixture_name.strip():
+                raise TypeError(f"{label}.fixture must be a non-empty string")
+            fixture_name = fixture_name.strip()
+            if fixture_name not in fixtures:
+                raise ValueError(
+                    f"{label}.fixture references unknown image fixture {fixture_name!r}"
+                )
 
 
 def reject_unknown_fields(
@@ -279,6 +473,24 @@ def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:
     if len(normalized) != len(set(normalized)):
         raise ValueError("tags must not contain duplicates")
     return tuple(normalized)
+
+
+def _normalize_playground_policy(
+    raw_policy: Any, decision_id: str, variant_id: str
+) -> ProbePlaygroundPolicy:
+    if raw_policy is None:
+        return ProbePlaygroundPolicy(enabled=True)
+    label = f"{decision_id}:{variant_id} playground"
+    if not isinstance(raw_policy, dict):
+        raise TypeError(f"{label} must be a mapping")
+    reject_unknown_fields(raw_policy, PLAYGROUND_FIELDS, label)
+    enabled = raw_policy.get("enabled")
+    if not isinstance(enabled, bool):
+        raise TypeError(f"{label}.enabled must be a boolean")
+    reason = _optional_string(raw_policy.get("reason"))
+    if not enabled and reason is None:
+        raise ValueError(f"{label}.reason is required when disabled")
+    return ProbePlaygroundPolicy(enabled=enabled, reason=reason)
 
 
 def _normalize_match_mode(raw_mode: Any, label: str) -> str:
@@ -366,6 +578,104 @@ def _normalize_padding(
             f"{decision_id}:{variant_id} padding.placement must be one of: {supported}"
         )
     return ProbePadding(text=text, repeat=repeat, placement=placement)
+
+
+def _normalize_generated_text(
+    raw_generated_text: Any,
+    decision_id: str,
+    variant_id: str,
+    messages: tuple[dict[str, Any], ...],
+) -> ProbeGeneratedText | None:
+    if raw_generated_text is None:
+        return None
+    label = f"{decision_id}:{variant_id} generated_text"
+    if not isinstance(raw_generated_text, dict):
+        raise TypeError(f"{label} must be a mapping")
+    reject_unknown_fields(raw_generated_text, GENERATED_TEXT_FIELDS, label)
+    if not messages:
+        raise ValueError(f"{label} requires a messages probe")
+
+    message_index = _required_non_negative_int(
+        raw_generated_text.get("message_index"), f"{label}.message_index"
+    )
+    content_index = _required_non_negative_int(
+        raw_generated_text.get("content_index"), f"{label}.content_index"
+    )
+    target_text_bytes = _required_positive_int(
+        raw_generated_text.get("target_text_bytes"),
+        f"{label}.target_text_bytes",
+    )
+    if target_text_bytes > MAX_GENERATED_TEXT_BYTES:
+        raise ValueError(
+            f"{label}.target_text_bytes must not exceed {MAX_GENERATED_TEXT_BYTES}"
+        )
+    character = raw_generated_text.get("character", "x")
+    if (
+        not isinstance(character, str)
+        or len(character) != 1
+        or not character.isascii()
+        or not character.isprintable()
+    ):
+        raise ValueError(f"{label}.character must be one printable ASCII character")
+    if message_index >= len(messages):
+        raise ValueError(
+            f"{label}.message_index must reference one of {len(messages)} messages"
+        )
+    content = messages[message_index].get("content")
+    if not isinstance(content, list):
+        raise ValueError(f"{label} requires the selected message content to be a list")
+    if content_index > len(content):
+        raise ValueError(f"{label}.content_index must be between 0 and {len(content)}")
+    existing_text_bytes = message_content_text_bytes(content)
+    if target_text_bytes <= existing_text_bytes:
+        raise ValueError(
+            f"{label}.target_text_bytes must exceed the selected message's "
+            f"{existing_text_bytes} explicit text bytes"
+        )
+    return ProbeGeneratedText(
+        message_index=message_index,
+        content_index=content_index,
+        target_text_bytes=target_text_bytes,
+        character=character,
+    )
+
+
+def _required_non_negative_int(value: Any, label: str) -> int:
+    parsed = _required_int(value, label)
+    if parsed < 0:
+        raise ValueError(f"{label} must be non-negative")
+    return parsed
+
+
+def _required_positive_int(value: Any, label: str) -> int:
+    parsed = _required_int(value, label)
+    if parsed < 1:
+        raise ValueError(f"{label} must be positive")
+    return parsed
+
+
+def _required_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{label} must be an integer")
+    return value
+
+
+def message_content_text_bytes(content: list[Any]) -> int:
+    """Count UTF-8 bytes in text-bearing message content parts."""
+    total = 0
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        raw_kind = item.get("type")
+        if raw_kind is not None and not isinstance(raw_kind, str):
+            continue
+        kind = str(raw_kind or "").strip().lower()
+        if kind not in ("", "text", "input_text", "output_text"):
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            total += len(text.encode("utf-8"))
+    return total
 
 
 def _normalize_objects(raw_items: Any, label: str) -> tuple[dict[str, Any], ...]:

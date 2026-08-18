@@ -4,10 +4,8 @@ import sys
 
 from cli.config_contract import iter_routing_profiles
 from cli.parser import ConfigParseError, parse_user_config
-from cli.utils import get_logger
+from cli.terminal import echo, error, fields, heading, success
 from cli.validator import print_validation_errors, validate_user_config
-
-log = get_logger(__name__)
 
 _SIGNAL_SUMMARY_FIELDS = (
     ("Keyword signals", "keywords"),
@@ -128,46 +126,42 @@ def validate_command(config_path: str):
     Args:
         config_path: Path to user config.yaml
     """
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router - Validate Configuration")
-    log.info("=" * 60)
-    log.info(f"Validating: {config_path}")
-    log.info("")
-
     # Parse config
     try:
-        user_config = parse_user_config(config_path)
+        user_config = parse_user_config(config_path, log_summary=False)
     except ConfigParseError as e:
-        log.error("\n❌ Configuration parsing failed:")
-        log.error(f"{e}")
+        error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
     # Validate config
-    errors = validate_user_config(user_config)
+    errors = validate_user_config(user_config, log_summary=False)
 
     if errors:
         print_validation_errors(errors)
         sys.exit(1)
 
-    log.info("=" * 60)
-    log.info("Configuration is valid!")
-    log.info("=" * 60)
-    log.info("\nConfiguration summary:")
-    log.info(f"  Version: {user_config.version}")
-    log.info(f"  Listeners: {len(user_config.listeners)}")
+    success("Configuration is valid")
+    heading("Configuration summary")
+    fields(
+        (
+            ("Path", config_path),
+            ("Version", user_config.version),
+            ("Listeners", len(user_config.listeners)),
+        )
+    )
 
     routing_profiles = list(iter_routing_profiles(user_config))
     signal_lines = _aggregate_signal_summary_lines(routing_profiles)
     if signal_lines:
         for line in signal_lines:
-            log.info(line)
+            echo(line)
     else:
-        log.info(
+        echo(
             "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
         )
 
     for line in _aggregate_projection_summary_lines(routing_profiles):
-        log.info(line)
+        echo(line)
 
     default_decisions = len(user_config.decisions)
     recipe_decisions = sum(
@@ -178,16 +172,15 @@ def validate_command(config_path: str):
     all_decisions = [
         decision for _, profile in routing_profiles for decision in profile.decisions
     ]
-    log.info(f"  Entrypoints: {len(user_config.entrypoints)}")
-    log.info(f"  Recipes: {len(user_config.recipes)}")
-    log.info(
+    echo(f"  Entrypoints: {len(user_config.entrypoints)}")
+    echo(f"  Recipes: {len(user_config.recipes)}")
+    echo(
         f"  Decisions: {len(all_decisions)} total "
         f"({default_decisions} default, {recipe_decisions} recipe-owned)"
     )
 
     for line in _plugin_summary_lines(all_decisions):
-        log.info(line)
+        echo(line)
 
-    log.info(f"  Models: {len(user_config.providers.models)}")
-    log.info(f"  Default model: {user_config.providers.default_model}")
-    log.info("")
+    echo(f"  Models: {len(user_config.providers.models)}")
+    echo(f"  Default model: {user_config.providers.default_model}")

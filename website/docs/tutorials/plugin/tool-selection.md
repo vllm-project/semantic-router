@@ -8,8 +8,6 @@ It supports two modes:
 - `add`: retrieve tools from a tools database
 - `filter`: filter tools that are already present in the incoming request
 
-It aligns to fragments under `config/fragments/plugin/tool-selection/`.
-
 ## Key Advantages
 
 - Separates route decision logic from tool retrieval/filter behavior.
@@ -28,25 +26,34 @@ Different routes need different tool-selection behavior. Some routes should add 
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: tool_selection
-  configuration:
-    enabled: true
-    mode: filter
-    relevance_threshold: 0.55
-    preserve_count: 2
+plugins:
+  - type: tool_selection
+    configuration:
+      enabled: true
+      mode: filter
+      relevance_threshold: 0.25
+      preserve_count: 2
 ```
 
 For add mode:
 
 ```yaml
-plugin:
-  type: tool_selection
-  configuration:
-    enabled: true
-    mode: add
-    top_k: 5
+plugins:
+  - type: tool_selection
+    configuration:
+      enabled: true
+      mode: add
+      tools_db_path: config/tools_db.json
+      top_k: 5
+      similarity_threshold: 0.35
 ```
+
+`add` mode requires a populated tool database; `filter` mode only considers
+tools already supplied by the caller. Semantic relevance is not authorization,
+so enforce tool permissions separately. See complete examples:
+[`add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/add-from-database.yaml)
+and
+[`filter-request-tools.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/filter-request-tools.yaml).
