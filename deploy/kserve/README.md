@@ -105,6 +105,10 @@ oc apply -f peerauthentication.yaml -n $NAMESPACE
 oc apply -f deployment.yaml -n $NAMESPACE
 oc apply -f service.yaml -n $NAMESPACE
 oc apply -f route.yaml -n $NAMESPACE
+
+# Optional: expose the management / classify-api listener (#2463)
+# oc apply -f service-management.yaml -n $NAMESPACE
+# oc apply -f route-management.yaml -n $NAMESPACE
 ```
 
 ### Step 4: Wait for Ready

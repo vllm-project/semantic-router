@@ -65,7 +65,7 @@ service:
     targetPort: 50051
     # -- gRPC protocol
     protocol: TCP
-  # HTTP API service port
+  # HTTP API service port (management / classify-api listener)
   api:
     # -- HTTP API port number
     port: 8080
@@ -83,6 +83,13 @@ service:
     targetPort: 9190
     # -- Metrics protocol
     protocol: TCP
+# Management API exposure policy (#2463 Phase 4).
+# In-cluster clients (dashboard, e2e) always reach the dedicated
+# ClusterIP Service named {{ fullname }}-management.
+# When expose is true, classify-api is ALSO advertised on the primary Service
+# (useful for LoadBalancer / NodePort external access).
+managementApi:
+  expose: false
 # Ingress configuration
 ingress:
   # -- Enable ingress

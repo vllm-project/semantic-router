@@ -12,6 +12,31 @@ spec:
     targetPort: {{ .Values.service.grpc.targetPort }}
     protocol: {{ .Values.service.grpc.protocol }}
     name: grpc
+  {{- $mgmt := .Values.managementApi | default dict }}
+  {{- if $mgmt.expose }}
+  - port: {{ .Values.service.api.port }}
+    targetPort: {{ .Values.service.api.targetPort }}
+    protocol: {{ .Values.service.api.protocol }}
+    name: classify-api
+  {{- end }}
+  selector:
+    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+---
+# Dedicated ClusterIP for the management / classify-api listener (#2463 Phase 4).
+# Always created so in-cluster clients (dashboard) and explicit port-forwards
+# keep working when the primary Service omits classify-api by default.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-management
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    service: management
+spec:
+  type: ClusterIP
+  ports:
   - port: {{ .Values.service.api.port }}
     targetPort: {{ .Values.service.api.targetPort }}
     protocol: {{ .Values.service.api.protocol }}

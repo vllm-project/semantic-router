@@ -328,7 +328,7 @@ class K8sBackend:
         log.info("Port forwarding (access locally):")
         log.info(
             f"  kubectl port-forward -n {self.namespace} "
-            f"svc/{self.release_name} 8080:8080"
+            f"svc/{self.release_name}-management 8080:8080"
         )
         log.info("=" * 60)
 

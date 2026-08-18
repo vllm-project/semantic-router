@@ -63,6 +63,9 @@ Examples:
     # Start router with debug logs
     vllm-sr serve --log-level debug
 
+    # Publish management API (:8080) to localhost for curl/eval/rag
+    vllm-sr serve --publish-management-api
+
     # AMD ROCm image, device passthrough, and router internal GPU defaults
     vllm-sr serve --platform amd
 

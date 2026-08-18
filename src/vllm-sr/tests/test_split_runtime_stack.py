@@ -566,6 +566,45 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "50251:50051" in router_cmd
     assert "9390:9190" in router_cmd
     assert "8900:8700" in dashboard_cmd
+    # Management API stays docker-network-only unless explicitly published (#2463).
+    assert "8280:8080" not in router_cmd
+
+
+def test_container_start_vllm_sr_publishes_management_api_when_enabled(
+    tmp_path, monkeypatch
+):
+    """Opt-in host publish maps host api_port → container :8080 (#2463 Phase 4)."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "test-image",
+            "envoy": "test-image",
+            "dashboard": "test-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "200")
+
+    rc, _, _ = container_cli.container_start_vllm_sr(
+        str(config_path),
+        {"VLLM_SR_PUBLISH_MANAGEMENT_API": "true"},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name=None,
+        openclaw_network_name=None,
+        minimal=False,
+    )
+
+    assert rc == 0
+    router_cmd = _find_container_run_cmd(captured, "audit-a-vllm-sr-router-container")
     assert "8280:8080" in router_cmd
 
 

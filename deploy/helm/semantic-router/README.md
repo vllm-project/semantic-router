@@ -316,6 +316,7 @@ the locked chart dependencies.
 | service.api.port | int | `8080` | HTTP API port number |
 | service.api.protocol | string | `"TCP"` | HTTP API protocol |
 | service.api.targetPort | int | `8080` | HTTP API target port |
+| managementApi.expose | bool | `false` | When true, also advertise classify-api on the primary Service (LoadBalancer/NodePort). In-cluster access always uses the dedicated `*-management` ClusterIP Service. |
 | service.grpc.port | int | `50051` | gRPC port number |
 | service.grpc.protocol | string | `"TCP"` | gRPC protocol |
 | service.grpc.targetPort | int | `50051` | gRPC target port |

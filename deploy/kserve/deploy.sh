@@ -677,24 +677,36 @@ echo "=================================================="
 echo ""
 echo "Routes:"
 echo "  ENVOY_ROUTE: https://$ROUTE_URL"
-echo "  API_ROUTE:   https://$API_ROUTE_URL"
+if [ -n "$API_ROUTE_URL" ]; then
+  echo "  API_ROUTE:   https://$API_ROUTE_URL"
+else
+  echo "  API_ROUTE:   (not deployed; apply service-management.yaml + route-management.yaml to expose :8080)"
+fi
 echo ""
 echo "Validate deployment:"
 echo ""
-echo "# 1. Test health endpoint"
-echo "curl -sk https://$API_ROUTE_URL/health"
-echo ""
-echo "# 2. Test classifier API"
-echo "curl -sk -X POST https://$API_ROUTE_URL/api/v1/classify/intent \\"
-echo "  -H \"Content-Type: application/json\" \\"
-echo "  -d '{\"text\": \"What is machine learning?\"}'"
-echo ""
-echo "# 3. Test chat completions (auto-routing)"
+if [ -n "$API_ROUTE_URL" ]; then
+  echo "# 1. Test health endpoint"
+  echo "curl -sk https://$API_ROUTE_URL/health"
+  echo ""
+  echo "# 2. Test classifier API"
+  echo "curl -sk -X POST https://$API_ROUTE_URL/api/v1/classify/intent \\"
+  echo "  -H \"Content-Type: application/json\" \\"
+  echo "  -d '{\"text\": \"What is machine learning?\"}'"
+  echo ""
+  echo "# 3. Test chat completions (auto-routing)"
+else
+  echo "# 1. Test chat completions (auto-routing)"
+fi
 echo "curl -sk -X POST https://$ROUTE_URL/v1/chat/completions \\"
 echo "  -H \"Content-Type: application/json\" \\"
 echo "  -d '{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}]}'"
 echo ""
-echo "# 4. View logs"
+if [ -n "$API_ROUTE_URL" ]; then
+  echo "# 4. View logs"
+else
+  echo "# 2. View logs"
+fi
 echo "oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f"
 echo ""
 echo "For more information, see: $SCRIPT_DIR/README.md"

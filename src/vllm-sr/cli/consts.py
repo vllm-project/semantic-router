@@ -49,6 +49,11 @@ DEFAULT_METRICS_PORT = 9190
 DEFAULT_FLEET_SIM_PORT = 8810
 DEFAULT_MILVUS_PORT = 19530
 
+# When set to "true", vllm-sr serve publishes host:<api_port>→container:8080
+# so laptop tools can reach the management API. Default is unset/false: the
+# management listener stays reachable only on the docker network (#2463 Phase 4).
+PUBLISH_MANAGEMENT_API_ENV = "VLLM_SR_PUBLISH_MANAGEMENT_API"
+
 # Health check
 HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)
 HEALTH_CHECK_INTERVAL = 2
