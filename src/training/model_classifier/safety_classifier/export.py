@@ -126,9 +126,11 @@ def _representative_texts(task_name: str) -> list[str]:
 
 def _export_runtime(torch_module: Any, *, use_cpu: bool) -> tuple[Any, Any]:
     use_accelerator = not use_cpu and torch_module.cuda.is_available()
-    dtype = torch_module.bfloat16 if use_accelerator else torch_module.float32
     device = torch_module.device("cuda:0" if use_accelerator else "cpu")
-    return dtype, device
+    # Merge the LoRA delta into FP32 weights even when an accelerator is
+    # available. Direct BF16 merging quantizes the delta and can materially
+    # change logits relative to the unmerged adapter.
+    return torch_module.float32, device
 
 
 def merge_adapter(
@@ -174,6 +176,10 @@ def merge_adapter(
         problem_type="single_label_classification",
         torch_dtype=dtype,
     )
+    # ModernBERT enables reference torch.compile opportunistically. Export
+    # changes the module graph during merge_and_unload, so keep both parity
+    # forwards eager and deterministic.
+    base_model.config.reference_compile = False
     adapter_model = PeftModel.from_pretrained(base_model, adapter_dir)
     adapter_model.to(device).eval()
     inputs = tokenizer(

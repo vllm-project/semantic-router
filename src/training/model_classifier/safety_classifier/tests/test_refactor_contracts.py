@@ -25,7 +25,6 @@ class _FakeCuda:
 
 class _FakeTorch:
     float32 = "float32"
-    bfloat16 = "bfloat16"
 
     def __init__(self, available: bool) -> None:
         self.cuda = _FakeCuda(available)
@@ -79,10 +78,10 @@ class RefactorContractTest(unittest.TestCase):
         self.assertNotIn("text", record)
         json.dumps(record, allow_nan=False)
 
-    def test_export_runtime_preserves_cpu_and_accelerator_choices(self) -> None:
+    def test_export_runtime_uses_fp32_on_cpu_and_accelerator(self) -> None:
         self.assertEqual(
             _export_runtime(_FakeTorch(available=True), use_cpu=False),
-            ("bfloat16", "cuda:0"),
+            ("float32", "cuda:0"),
         )
         self.assertEqual(
             _export_runtime(_FakeTorch(available=True), use_cpu=True),
