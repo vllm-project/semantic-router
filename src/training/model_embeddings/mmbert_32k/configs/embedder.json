@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "family": "embedder",
+  "source_commit": "3bc41e1322ee5a53e08d18eb940855dec53c1539",
+  "artifact": {
+    "repo_id": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+    "revision": "c544097d7603b10c546560e8be5d7fe0965a7909"
+  },
+  "data_sources": {
+    "bge_m3": {
+      "repo_id": "Shitao/bge-m3-data",
+      "revision": "a69db8b86e9c1767d193ee0de95e5c4001a71eae"
+    },
+    "all_nli": {
+      "repo_id": "sentence-transformers/all-nli",
+      "revision": "d482672c8e74ce18da116f430137434ba2e52fab"
+    },
+    "stsb": {
+      "repo_id": "sentence-transformers/stsb",
+      "revision": "ab7a5ac0e35aa22088bdcf23e7fd99b220e53308"
+    }
+  },
+  "train_arguments": {
+    "model_name": "llm-semantic-router/mmbert-32k-yarn",
+    "model_revision": "72a23a6640489471eb4ff7ad3ec5bc80af8a27de",
+    "train_data": "${MMBERT32K_BGE_DATA}",
+    "output_dir": "${MMBERT32K_EMBEDDER_OUTPUT}",
+    "max_seq_length": 32768,
+    "use_nli": true,
+    "nli_revision": "d482672c8e74ce18da116f430137434ba2e52fab",
+    "stsb_revision": "ab7a5ac0e35aa22088bdcf23e7fd99b220e53308",
+    "max_samples_per_file": 50000,
+    "max_nli_samples": 500000,
+    "epochs": 1,
+    "batch_size": 16,
+    "gradient_accumulation_steps": 2,
+    "learning_rate": 2e-05,
+    "warmup_ratio": 0.1,
+    "bf16": true,
+    "num_workers": 4,
+    "use_adaptive_layer": true,
+    "use_matryoshka": true,
+    "matryoshka_dims": [768, 512, 256, 128, 64],
+    "eval_steps": 500,
+    "save_steps": 500,
+    "logging_steps": 50,
+    "seed": 42
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/semantic-router/Model-training",
+    "branch": "main",
+    "commit": "3bc41e1322ee5a53e08d18eb940855dec53c1539"
+  },
+  "imports": [
+    {
+      "family": "foundation",
+      "source": "scripts/train.py",
+      "source_blob": "a8ef9416fb4ce6e6374e5d92f5fefb4dd27221e0",
+      "destination": "foundation.py"
+    },
+    {
+      "family": "foundation-data",
+      "source": "scripts/prepare_dataset.py",
+      "source_blob": "7feef3045b9a733d14228436b6c78993eb402a3e",
+      "destination": "foundation_data.py"
+    },
+    {
+      "family": "embedder",
+      "source": "scripts/train_bge_style.py",
+      "source_blob": "41e60e17ca960718dd1b71a23a86992128b9ed61",
+      "destination": "embedder.py"
+    },
+    {
+      "family": "reranker",
+      "source": "scripts/train_rerank.py",
+      "source_blob": "36951a954bf2be62ea4d6536fecfd3ce0aad6d5c",
+      "destination": "reranker.py"
+    }
+  ],
+  "normalization": [
+    "Added immutable Hugging Face revisions to model and dataset loads.",
+    "Moved machine-specific paths, caches, images, and outputs into environment-backed JSON configs.",
+    "Pinned public Python dependencies and a public ROCm validation image digest.",
+    "Kept one trainer implementation per artifact family and retained the foundation data-preparation helper.",
+    "Made local JSONL traversal and trainer seeds deterministic without changing the upstream objectives.",
+    "Replaced the ineffective post-load rotary buffer patch with config-first Transformers 4.57.6 YaRN and fail-closed per-layer validation.",
+    "Reconstructed the reported 30,774-sequence CC-100 input with source-order streaming, strong ETag and Content-Length checks, replay-verified consumed-prefix hashes, stable language quotas, explicit document separators, fixed-size Arrow shards, and a canonical integrity manifest.",
+    "Added pre-training manifest and Arrow validation, canonical training receipts, bounded document/writer contracts, and correct final partial gradient-accumulation flushing.",
+    "Recorded that the loader revision covers loader code rather than remote CC-100 objects, required an explicit acknowledgement that the CC-100 dataset license is unknown, retained the Common Crawl terms URL in the manifest and receipt, and blocked publication pending external data-governance review."
+  ]
+}

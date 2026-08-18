@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "family": "reranker",
+  "source_commit": "3bc41e1322ee5a53e08d18eb940855dec53c1539",
+  "artifact": {
+    "repo_id": "llm-semantic-router/mmbert-rerank-32k-2d-matryoshka",
+    "revision": "8022697d37c2602f06eff94cd6d83bb9f6ab1001"
+  },
+  "data_source": {
+    "repo_id": "Shitao/bge-m3-data",
+    "revision": "a69db8b86e9c1767d193ee0de95e5c4001a71eae",
+    "reported_training_pairs": 1569864
+  },
+  "train_arguments": {
+    "model_name": "llm-semantic-router/mmbert-32k-yarn",
+    "model_revision": "72a23a6640489471eb4ff7ad3ec5bc80af8a27de",
+    "train_data": "${MMBERT32K_BGE_DATA}",
+    "output_dir": "${MMBERT32K_RERANKER_OUTPUT}",
+    "use_2d_matryoshka": true,
+    "layer_indices": [3, 6, 11, 22],
+    "dim_indices": [768, 512, 256, 128, 64],
+    "pooling_strategy": "cls",
+    "max_length": 32768,
+    "negatives_per_query": 3,
+    "epochs": 1,
+    "batch_size": 16,
+    "gradient_accumulation_steps": 2,
+    "learning_rate": 2e-05,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "max_grad_norm": 1.0,
+    "use_flash_attn": true,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "num_workers": 4,
+    "logging_steps": 100,
+    "save_steps": 5000,
+    "seed": 42
+  }
+}
