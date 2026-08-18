@@ -72,7 +72,7 @@
 .maintainer,
 .steering {
   border-color: var(--site-accent);
-  color: #087ac5;
+  color: var(--site-accent-strong);
 }
 
 .emeritus {
@@ -127,7 +127,7 @@
 
 .links a:hover {
   border-color: var(--site-accent);
-  color: #087ac5;
+  color: var(--site-accent-strong);
 }
 
 @media (max-width: 640px) {

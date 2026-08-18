@@ -16,8 +16,11 @@ import click
 import requests
 
 from cli.commands.common import exit_with_logged_error
+from cli.commands.eval_rendering import render_eval_summary
 from cli.commands.recipe_learning import recipe_learning
 from cli.consts import DEFAULT_API_PORT
+from cli.terminal import echo
+from cli.url_display import redact_url
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -99,7 +102,7 @@ def _prompt_to_messages(prompt: str) -> list[dict[str, Any]]:
     return [{"role": "user", "content": prompt}]
 
 
-def _format_error_response(resp: Any) -> str:
+def _format_error_response(resp: Any, request_url: str | None = None) -> str:
     """Extract a clean error message from a non-200 router response.
 
     The router returns structured JSON errors:
@@ -120,7 +123,7 @@ def _format_error_response(resp: Any) -> str:
         pass
     content_type = getattr(resp, "headers", {}).get("Content-Type", "")
     if resp.status_code == _HTTP_FORBIDDEN and "text/html" in content_type:
-        url = getattr(resp, "url", "the endpoint")
+        url = redact_url(getattr(resp, "url", request_url or "the endpoint"))
         return (
             f"Router returned 403 from {url}. "
             "This looks like a proxy or gateway — check that --endpoint points directly "
@@ -361,6 +364,7 @@ def eval(
         messages = _prompt_to_messages(prompt or "")
 
     url = _normalize_endpoint(endpoint or "")
+    display_url = redact_url(url)
 
     req = EvalRequest(messages=messages, model=(model or "").strip() or None)
 
@@ -368,17 +372,18 @@ def eval(
         resp = requests.post(url, json=req.to_json(), timeout=timeout)
     except requests.ConnectionError as exc:
         raise ValueError(
-            f"Router is not running at {url}. Start the router with 'vllm-sr serve' and retry."
+            f"Router is not running at {display_url}. "
+            "Start the router with 'vllm-sr serve' and retry."
         ) from exc
     except requests.Timeout as exc:
         raise ValueError(
-            f"Request to {url} timed out after {timeout}s. Is the router healthy?"
+            f"Request to {display_url} timed out after {timeout}s. Is the router healthy?"
         ) from exc
     except requests.RequestException as exc:
-        raise ValueError(f"Failed to call router eval endpoint {url}: {exc}") from exc
+        raise ValueError(f"Failed to call router eval endpoint {display_url}") from exc
 
     if resp.status_code != requests.codes.ok:
-        raise ValueError(_format_error_response(resp))
+        raise ValueError(_format_error_response(resp, display_url))
 
     try:
         payload = resp.json()
@@ -386,10 +391,10 @@ def eval(
         raise ValueError(f"Router returned non-JSON response: {resp.text}") from exc
 
     if output_json:
-        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        echo(json.dumps(payload, indent=2, ensure_ascii=False))
         return
 
-    click.echo(_summarize_response(payload))
+    render_eval_summary(_summarize_response(payload))
 
 
 eval.add_command(recipe_learning)

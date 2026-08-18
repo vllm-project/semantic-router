@@ -1,0 +1,344 @@
+.panel {
+  overflow: hidden;
+  border: 1px solid var(--graphite-border, #2d333b);
+  border-radius: 12px;
+  background: #101012;
+}
+
+.header,
+.versionHeader,
+.modelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header {
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header h2,
+.header p,
+.versionHeader h3,
+.modelCard p,
+.roleCard p {
+  margin: 0;
+}
+
+.header h2 {
+  margin-top: 4px;
+  color: var(--graphite-text, #f0f3f6);
+  font-size: 1.06rem;
+}
+
+.header p {
+  max-width: 760px;
+  margin-top: 6px;
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.eyebrow,
+.poolLabel {
+  color: #ff8d91;
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.total,
+.channel,
+.badges span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.total,
+.channel {
+  background: rgba(255, 255, 255, 0.06);
+  color: #c8ccd2;
+}
+
+.versionList {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.versionCard {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.versionHeader {
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.versionHeader > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.versionHeader h3 {
+  color: var(--graphite-text, #f0f3f6);
+  font-size: 0.92rem;
+}
+
+.versionFacts,
+.modelFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+}
+
+.versionFacts > div,
+.modelFacts > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.versionFacts dt,
+.modelFacts dt {
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.61rem;
+}
+
+.versionFacts dd,
+.modelFacts dd {
+  margin: 0;
+  color: #c8ccd2;
+  font-size: 0.67rem;
+}
+
+.versionFacts code {
+  font-size: 0.64rem;
+}
+
+.modelGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.modelCard {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: #18181b;
+}
+
+.modelCard[data-compatible='false'] {
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.modelHeader > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.modelName {
+  color: var(--graphite-text, #f0f3f6);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.modelHeader code,
+.recommendedPool code {
+  overflow: hidden;
+  color: #c8ccd2;
+  font-size: 0.64rem;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.defaultBadge,
+.enabledBadge {
+  background: rgba(255, 255, 255, 0.06);
+  color: #c8ccd2;
+}
+
+.verifiedBadge {
+  background: rgba(75, 214, 139, 0.11);
+  color: #8ce9b7;
+}
+
+.warningBadge {
+  background: rgba(251, 191, 36, 0.1);
+  color: #f7cc63;
+}
+
+.modelCard > p,
+.roleCard p {
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.modelFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.modelFacts > div {
+  padding: 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.traits,
+.recommendedPool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.traits span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #c8ccd2;
+  font-size: 0.62rem;
+}
+
+.roles summary {
+  width: max-content;
+  cursor: pointer;
+  color: #c8ccd2;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.roleGrid {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.roleCard {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.roleCard > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.roleCard strong {
+  color: var(--graphite-text, #f0f3f6);
+  font-size: 0.7rem;
+}
+
+.roleCard > div:first-child span {
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.6rem;
+}
+
+.poolLabel {
+  font-size: 0.56rem;
+}
+
+.forkHint {
+  display: grid;
+  gap: 5px;
+  margin: 0 18px 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.forkHint strong {
+  color: var(--graphite-text, #f0f3f6);
+  font-size: 0.73rem;
+}
+
+.forkHint span {
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.asyncState {
+  display: flex;
+  min-height: 170px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px;
+  color: var(--graphite-text-muted, #9da7b3);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.asyncState strong {
+  color: var(--graphite-text, #f0f3f6);
+}
+
+.asyncState button {
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--graphite-text, #f0f3f6);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .versionHeader,
+  .modelHeader,
+  .roleCard > div:first-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .versionFacts,
+  .modelFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .modelGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .badges {
+    justify-content: flex-start;
+  }
+}

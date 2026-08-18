@@ -101,7 +101,7 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 		return
 	}
 
-	response, err := s.classificationSvc.CheckSecurity(req)
+	response, err := s.classificationSvc.CheckSecurity(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
 		return

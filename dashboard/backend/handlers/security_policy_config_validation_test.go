@@ -77,7 +77,7 @@ func TestApplySecurityFragmentRejectsInvalidMergedConfigBeforeWrite(t *testing.T
 		},
 	})
 
-	if applySecurityFragment(fragment) {
+	if applied, _ := applySecurityFragment(fragment); applied {
 		t.Fatal("expected invalid merged config to be rejected")
 	}
 

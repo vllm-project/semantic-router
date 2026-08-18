@@ -1,0 +1,2557 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  router:
+    auto_model_names: []
+  services:
+    router_replay:
+      enabled: true
+      store_backend: redis
+      ttl_seconds: 604800
+      async_writes: false
+      redis:
+        address: redis:6379
+        db: 2
+        key_prefix: "mom-v1:router-replay:"
+    observability:
+      # This self-contained Recipe does not assume an OTLP collector exists.
+      # Deployments that provision one may explicitly enable tracing in their
+      # realized runtime config.
+      tracing:
+        enabled: false
+    management_api:
+      bind_address: 0.0.0.0
+      port: 8080
+      remote_exposure: true
+      auth:
+        mode: bearer
+        tokens:
+          - env: VLLM_SR_DASHBOARD_RECIPE_TOKEN
+            role: dashboard_control_plane
+        roles:
+          dashboard_control_plane:
+            - cache.invalidate
+            - cache.manage
+            - cache.read
+            - classify.invoke
+            - compression.manage
+            - compression.preview
+            - compression.read
+            - config.read
+            - config.write
+            - learning.ingest
+            - ready.read
+            - replay.detail
+            - replay.read
+  integrations:
+    looper:
+      # Multi-call algorithms must re-enter through Envoy rather than the
+      # Router container's loopback interface or an undeclared DNS alias.
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1200
+
+providers:
+  defaults:
+    default_model: local/qwen3.5-9b
+    default_reasoning_effort: medium
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      effort:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      mistral:
+        type: top_level_reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: local/qwen3.5-9b
+      provider_model_id: local/qwen3.5-9b
+      api_format: openai
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.02
+        completion_per_1m: 0.08
+        cached_input_per_1m: 0.005
+      backend_refs:
+        - name: qwen35-9b-node-a
+          endpoint: qwen9:8107
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/qwen3.6-35b
+      provider_model_id: local/qwen3.6-35b
+      api_format: openai
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.08
+        completion_per_1m: 0.32
+        cached_input_per_1m: 0.02
+      backend_refs:
+        - name: qwen36-35b-node-a
+          endpoint: qwen36:8106
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/step-3.7-flash
+      provider_model_id: local/step-3.7-flash
+      api_format: openai
+      reasoning_family: effort
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.4
+        completion_per_1m: 1.6
+        cached_input_per_1m: 0.1
+      backend_refs:
+        - name: step37-node-a
+          endpoint: step37:8101
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/qwen3.5-122b
+      provider_model_id: local/qwen3.5-122b
+      api_format: openai
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.35
+        completion_per_1m: 1.4
+        cached_input_per_1m: 0.0875
+      backend_refs:
+        - name: qwen35-122b-node-a
+          endpoint: qwen122:8102
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/mistral-small-4
+      provider_model_id: local/mistral-small-4
+      api_format: openai
+      reasoning_family: mistral
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.3
+        completion_per_1m: 1.2
+        cached_input_per_1m: 0.075
+      backend_refs:
+        - name: mistral-small-4-node-a
+          endpoint: mistral119:8103
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/gpt-oss-120b
+      provider_model_id: local/gpt-oss-120b
+      api_format: openai
+      reasoning_family: effort
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.2
+        completion_per_1m: 0.8
+        cached_input_per_1m: 0.05
+      backend_refs:
+        - name: gpt-oss-120b-node-a
+          endpoint: gptoss120:8104
+          protocol: http
+          type: vllm
+          weight: 1
+    - name: local/glm-5.2
+      provider_model_id: local/glm-5.2
+      api_format: openai
+      reasoning_family: effort
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.2
+        completion_per_1m: 4.8
+        cached_input_per_1m: 0.3
+      backend_refs:
+        - name: glm-5-2-node-b
+          endpoint: glm52:8202
+          protocol: http
+          type: vllm
+          weight: 1
+
+routing:
+  strategy: priority
+  modelCards:
+    - name: local/qwen3.5-9b
+      param_size: 9B
+      context_window_size: 262144
+      description: Economy dense tier for efficient long-context text and tool traffic.
+      capabilities: [chat, reasoning, tools, structured-output, long-context]
+      quality_score: 0.76
+      modality: ar
+      tags: [tier:economy, precision:bf16, tp:1, node:node-a]
+    - name: local/qwen3.6-35b
+      param_size: 35B-A3B
+      context_window_size: 262144
+      description: Fast sparse tier for long-context reasoning, code, and vision.
+      capabilities: [chat, reasoning, code, tools, vision, multimodal, structured-output, long-context]
+      quality_score: 0.86
+      modality: ar
+      tags: [tier:fast, precision:fp8, tp:1, node:node-a]
+    - name: local/step-3.7-flash
+      param_size: 198B-A11B
+      context_window_size: 65536
+      description: Frontier flash tier with multimodal understanding enabled.
+      capabilities: [chat, reasoning, tools, vision, multimodal]
+      quality_score: 0.93
+      modality: ar
+      tags: [tier:frontier-flash, precision:fp8, tp:2, node:node-a]
+    - name: local/qwen3.5-122b
+      param_size: 122B-A10B
+      context_window_size: 131072
+      description: Accuracy-first sparse tier for synthesis and review.
+      capabilities: [chat, reasoning, code, tools, vision, multimodal, long-context]
+      quality_score: 0.92
+      modality: ar
+      tags: [tier:frontier, precision:fp8, tp:1, node:node-a]
+    - name: local/mistral-small-4
+      param_size: 119B
+      context_window_size: 131072
+      description: Provider-diverse tier for independent analysis and code review.
+      capabilities: [chat, reasoning, code, tools, vision, multimodal, long-context]
+      quality_score: 0.91
+      modality: ar
+      tags: [tier:frontier, precision:fp8, tp:2, node:node-a]
+    - name: local/gpt-oss-120b
+      param_size: 120B
+      context_window_size: 131072
+      description: Open-weight reasoning tier used for isolated local handling.
+      capabilities: [chat, reasoning, code, tools]
+      quality_score: 0.9
+      modality: ar
+      tags: [tier:private, precision:mxfp4, tp:1, node:node-a]
+    - name: local/glm-5.2
+      param_size: 743B-A39B
+      context_window_size: 524288
+      description: Text-only frontier tier for high-accuracy synthesis and long-context reasoning.
+      capabilities: [chat, reasoning, code, tools, structured-output, long-context]
+      quality_score: 0.97
+      modality: ar
+      tags: [tier:frontier, precision:fp8, tp:8, node:node-b, text-only]
+
+entrypoints:
+  - model_names: [vllm-sr/mom-v1-blend]
+    recipe: balance
+  - model_names: [vllm-sr/mom-v1-lite]
+    recipe: cost
+  - model_names: [vllm-sr/mom-v1-flash]
+    recipe: speed
+  - model_names: [vllm-sr/mom-v1-ultra]
+    recipe: accuracy
+  - model_names: [vllm-sr/mom-v1-vault]
+    recipe: vault
+
+recipes:
+  - name: balance
+    description: A balanced model optimized across quality, speed, and cost.
+    routing:
+      signals:
+        keywords:
+          - name: balance_simple_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - quick answer
+              - answer briefly
+              - one sentence
+              - concise summary
+              - 简单回答
+              - 简要说明
+              - 简短回答
+              - respuesta breve
+              - réponse brève
+              - 簡潔に答えて
+              - kurz antworten
+              - resposta breve
+              - 짧게 답해
+              - إجابة مختصرة
+              - संक्षिप्त उत्तर
+              - краткий ответ
+          - name: balance_concise_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - concise and direct
+              - brief and direct
+              - 简洁直接
+              - 简短直接
+              - breve y directa
+              - brève et directe
+              - 簡潔で直接的
+              - kurz und direkt
+              - breve e direta
+              - 간결하고 직접적으로
+              - موجز ومباشر
+              - संक्षिप्त और सीधा
+              - кратко и прямо
+          - name: balance_reasoning_opt_out_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - do not analyze
+              - don't analyze
+              - without analysis
+              - 不要分析
+              - 无需分析
+              - no analices
+              - sans analyse
+              - 分析しない
+              - nicht analysieren
+              - sem análise
+              - 분석하지 마
+              - دون تحليل
+              - विश्लेषण मत करो
+              - без анализа
+          - name: balance_deliberate_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - analyze the tradeoffs
+              - from first principles
+              - root cause
+              - reason step by step
+              - compare the alternatives carefully
+              - 分析取舍
+              - 第一性原理
+              - 根因分析
+              - 逐步推理
+              - analizar las ventajas y desventajas
+              - causa raíz
+              - analyser les compromis
+              - cause racine
+              - トレードオフを分析
+              - 根本原因
+              - kompromisse analysieren
+              - ursache analysieren
+              - analisar as compensações
+              - causa raiz
+              - 트레이드오프를 분석
+              - 근본 원인
+              - حلل المفاضلات
+              - السبب الجذري
+              - समझौतों का विश्लेषण
+              - मूल कारण
+              - проанализируй компромиссы
+              - первопричина
+          - name: balance_verification_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - verify the answer
+              - cite sources
+              - fact-check
+              - check the evidence
+              - 核实答案
+              - 引用来源
+              - verificar la respuesta
+              - citer les sources
+              - 答えを検証
+              - quellen zitieren
+              - verificar a resposta
+              - 답변을 검증
+              - تحقق من الإجابة
+              - उत्तर सत्यापित करें
+              - проверь ответ
+          - name: balance_correction_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - that's wrong
+              - wrong answer
+              - please correct the answer
+              - try again
+              - 回答错了
+              - 请纠正答案
+              - la respuesta es incorrecta
+              - corrige la respuesta
+              - la réponse est incorrecte
+              - corrige la réponse
+              - 回答が間違っています
+              - bitte korrigiere die antwort
+              - a resposta está errada
+              - 답변이 틀렸습니다
+              - الإجابة خاطئة
+              - उत्तर गलत है
+              - ответ неверный
+        fact_check:
+          - name: balance_needs_fact_check
+            description: Detect claims that benefit from evidence-backed verification.
+        user_feedbacks:
+          - name: balance_user_reports_incorrect_answer
+            description: Detect explicit correction or dissatisfaction with the previous answer.
+        reasks:
+          - name: balance_repeated_question
+            description: Detect an immediate semantic repeat after an unsatisfactory answer.
+            threshold: 0.8
+            lookback_turns: 1
+        language:
+          - {name: en, threshold: 0.5, description: English-language request.}
+          - {name: zh, threshold: 0.5, description: Chinese-language request.}
+          - {name: es, threshold: 0.5, description: Spanish-language request.}
+          - {name: fr, threshold: 0.5, description: French-language request.}
+          - {name: ja, threshold: 0.5, description: Japanese-language request.}
+          - {name: de, threshold: 0.5, description: German-language request.}
+          - {name: pt, threshold: 0.5, description: Portuguese-language request.}
+          - {name: ko, threshold: 0.5, description: Korean-language request.}
+          - {name: ar, threshold: 0.5, description: Arabic-language request.}
+          - {name: hi, threshold: 0.5, description: Hindi-language request.}
+          - {name: ru, threshold: 0.5, description: Russian-language request.}
+        context:
+          - name: balance_context_from_30k_to_60k
+            min_tokens: "30001"
+            max_tokens: "60000"
+            description: The 30K-60K text/tool band preserves output, system, and tool reserve on 65K-capable backends.
+          - name: balance_context_from_60k_to_120k
+            min_tokens: "60001"
+            max_tokens: "120000"
+            description: The 60K-120K text/tool band preserves reserve on 128K-capable backends.
+          - name: balance_context_from_120k_to_240k
+            min_tokens: "120001"
+            max_tokens: "240000"
+            description: The 120K-240K text/tool band preserves reserve on the two declared native-262K backends.
+          - name: balance_exceeds_240k_context
+            min_tokens: "240001"
+            max_tokens: "2147483647"
+            description: Inputs beyond 240K require a capability-preserving terminal lane.
+        conversation:
+          - name: balance_has_images
+            description: Request contains at least one image content part.
+            feature:
+              type: exists
+              source:
+                type: image_content
+          - name: balance_has_tools
+            description: Request declares at least one callable tool.
+            feature:
+              type: count
+              source:
+                type: tool_definition
+            predicate:
+              gte: 1
+          - name: balance_multi_turn
+            description: Multi-turn conversations benefit from a small synthesis allowance.
+            feature:
+              type: count
+              source:
+                type: message
+                role: user
+            predicate:
+              gte: 2
+        structure:
+          - name: balance_constraint_dense
+            description: Detect a dense set of explicit output or correctness constraints.
+            feature:
+              type: density
+              source:
+                type: keyword_set
+                keywords: [must, exactly, at least, at most, without, 必须, 严格, 至少, 不超过]
+            predicate:
+              gt: 0.08
+        complexity:
+          - name: balance_difficulty
+            threshold: 0.08
+            description: Semantic boundary between direct requests and synthesis-heavy work.
+            easy:
+              candidates:
+                - Give a short definition of a common term.
+                - Summarize one paragraph in a single sentence.
+                - Explain a basic concept with one example.
+            hard:
+              candidates:
+                - Analyze a production failure from several competing root causes.
+                - Design a distributed system and justify its consistency tradeoffs.
+                - Synthesize conflicting evidence into a defensible recommendation.
+                - 分析复杂生产故障中的多个竞争性根因并提出可靠方案。
+                - Analiza varias causas raíz y sintetiza una recomendación defendible.
+                - حلّل عدة أسباب جذرية متنافسة وقدّم توصية قابلة للدفاع.
+      projections:
+        scores:
+          - name: balance_reasoning_effort_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: balance_simple_request_phrases, weight: -0.35, value_source: confidence}
+              - {type: keyword, name: balance_concise_request_phrases, weight: -0.1, value_source: confidence}
+              - {type: keyword, name: balance_reasoning_opt_out_phrases, weight: -1.0, value_source: confidence}
+              - {type: keyword, name: balance_deliberate_request_phrases, weight: 0.85, value_source: confidence}
+              - {type: keyword, name: balance_verification_request_phrases, weight: 0.45, value_source: confidence}
+              - {type: fact_check, name: balance_needs_fact_check, weight: 0.45}
+              - {type: structure, name: balance_constraint_dense, weight: 0.45}
+              - {type: complexity, name: 'balance_difficulty:hard', weight: 0.4}
+              - {type: complexity, name: 'balance_difficulty:easy', weight: -0.05}
+              - {type: conversation, name: balance_multi_turn, weight: 0.08}
+              - {type: language, name: en, weight: 0.02}
+              - {type: language, name: zh, weight: 0.02}
+              - {type: language, name: es, weight: 0.02}
+              - {type: language, name: fr, weight: 0.02}
+              - {type: language, name: ja, weight: 0.02}
+              - {type: language, name: de, weight: 0.02}
+              - {type: language, name: pt, weight: 0.02}
+              - {type: language, name: ko, weight: 0.02}
+              - {type: language, name: ar, weight: 0.02}
+              - {type: language, name: hi, weight: 0.02}
+              - {type: language, name: ru, weight: 0.02}
+          - name: balance_answer_recovery_score
+            method: weighted_sum
+            inputs:
+              - {type: user_feedback, name: balance_user_reports_incorrect_answer, weight: 0.65}
+              - {type: keyword, name: balance_correction_request_phrases, weight: 0.5, value_source: confidence}
+              - {type: reask, name: balance_repeated_question, weight: 0.4, value_source: confidence}
+        mappings:
+          - name: balance_reasoning_effort_band
+            source: balance_reasoning_effort_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 10}
+            outputs:
+              - {name: balance_direct_workload, lt: 0.3}
+              - {name: balance_deliberate_workload, gte: 0.3}
+          - name: balance_answer_recovery_band
+            source: balance_answer_recovery_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 12}
+            outputs:
+              - {name: balance_no_recovery_needed, lt: 0.35}
+              - {name: balance_needs_recovery, gte: 0.35}
+      decisions:
+        - name: balance_over_240k_image_guard
+          description: Keep image input beyond the conservative 240K boundary on Qwen36 so vLLM rejects true native-262K overflow instead of misrouting to text-only GLM.
+          priority: 900
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: balance_exceeds_240k_context
+              - type: conversation
+                name: balance_has_images
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_over_240k_text_guard
+          description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
+          priority: 850
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: balance_exceeds_240k_context
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_text_from_120k_to_240k
+          description: Balance text and tool traffic in the 120K-240K band across the two declared native-262K backends.
+          priority: 800
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: balance_context_from_120k_to_240k
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_images
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.55
+                latency: 0.15
+                cost: 0.15
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_text_from_60k_to_120k
+          description: Balance text and tool traffic in the 60K-120K band across native-262K backends and compatible strong 128K backends.
+          priority: 750
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: balance_context_from_60k_to_120k
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_images
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.55
+                latency: 0.15
+                cost: 0.15
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_text_from_30k_to_60k
+          description: Balance text and tool traffic in the 30K-60K band across native-262K backends and compatible strong shorter-context backends.
+          priority: 700
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: balance_context_from_30k_to_60k
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_images
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.55
+                latency: 0.15
+                cost: 0.15
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_image_tools
+          description: Keep image-and-tool requests through 240K on the declared native-262K multimodal backend.
+          priority: 500
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: balance_has_images
+              - type: conversation
+                name: balance_has_tools
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: balance_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_image
+          description: Keep image requests through 240K on the declared native-262K multimodal backend.
+          priority: 450
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: balance_has_images
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_tools
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: balance_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_tools
+          description: Route short tool requests only to tool-capable standard candidates.
+          priority: 400
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: balance_has_tools
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: balance_has_images
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+            - model: local/qwen3.5-122b
+              use_reasoning: false
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.4
+                latency: 0.2
+                cost: 0.25
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_answer_recovery
+          description: Rebuild an answer after explicit dissatisfaction or an immediate semantic re-ask, without bypassing capability guards.
+          priority: 300
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: balance_needs_recovery
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.65
+                latency: 0.1
+                cost: 0.1
+                load: 0.15
+              on_no_candidates: first
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit.
+        - name: balance_deliberate
+          description: Balance semantically difficult, constrained, or verification-heavy work across strong reasoning candidates.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: balance_deliberate_workload
+          modelRefs:
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.55
+                latency: 0.15
+                cost: 0.15
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+        - name: balance_standard
+          description: Balance ordinary work across economical and capable candidates.
+          priority: 10
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+            - model: local/qwen3.5-122b
+              use_reasoning: false
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                quality: 0.4
+                latency: 0.2
+                cost: 0.25
+                load: 0.15
+              on_no_candidates: cheapest
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+      strategy: priority
+
+  - name: speed
+    description: A speed-first model for low-latency, real-time experiences.
+    routing:
+      signals:
+        keywords:
+          - name: speed_heavy_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - deep analysis
+              - detailed architecture
+              - comprehensive review
+              - multi-step plan
+              - 深入分析
+              - 详细架构
+              - 全面审查
+              - análisis profundo
+              - architecture détaillée
+              - 詳細なアーキテクチャ
+              - gründliche analyse
+              - análise aprofundada
+              - 심층 분석
+              - تحليل متعمق
+              - गहन विश्लेषण
+              - глубокий анализ
+        embeddings:
+          - name: speed_heavy_intent
+            threshold: 0.77
+            aggregation_method: max
+            candidates:
+              - Produce a comprehensive architecture and analyze several failure modes.
+              - 对复杂迁移做深入分析并给出详细架构。
+              - Realiza un análisis profundo y una arquitectura detallada.
+              - Produis une analyse approfondie et une architecture détaillée.
+              - 複雑な移行を深く分析し、詳細なアーキテクチャを示してください。
+              - Erstelle eine gründliche Analyse und detaillierte Architektur.
+              - Faça uma análise aprofundada e uma arquitetura detalhada.
+              - 복잡한 마이그레이션을 심층 분석하고 상세 아키텍처를 제시하세요.
+              - قدّم تحليلاً متعمقاً وبنية مفصلة.
+              - गहन विश्लेषण और विस्तृत आर्किटेक्चर प्रस्तुत करें।
+              - Проведи глубокий анализ и предложи подробную архитектуру.
+        context:
+          - name: speed_context_from_30k_to_60k
+            min_tokens: "30001"
+            max_tokens: "60000"
+            description: The 30K-60K band records conservative context use within the native-262K latency pool.
+          - name: speed_context_from_60k_to_120k
+            min_tokens: "60001"
+            max_tokens: "120000"
+            description: The 60K-120K band records conservative context use within the native-262K latency pool.
+          - name: speed_context_from_120k_to_240k
+            min_tokens: "120001"
+            max_tokens: "240000"
+            description: The 120K-240K band preserves output, system, tool, and image reserve on native-262K backends.
+          - name: speed_exceeds_240k_context
+            min_tokens: "240001"
+            max_tokens: "2147483647"
+            description: Inputs beyond 240K require a capability-preserving terminal lane.
+        conversation:
+          - name: speed_has_images
+            description: Request contains at least one image content part.
+            feature:
+              type: exists
+              source:
+                type: image_content
+          - name: speed_has_tools
+            description: Request declares at least one callable tool.
+            feature:
+              type: count
+              source:
+                type: tool_definition
+            predicate:
+              gte: 1
+        structure:
+          - name: speed_ordered_workflow
+            description: Detect prompts that explicitly require an ordered workflow.
+            feature:
+              type: sequence
+              source:
+                type: sequence
+                sequences:
+                  - [first, then]
+                  - [first, next, finally]
+                  - [首先, 然后]
+                  - [先, 再]
+                  - [primero, luego]
+                  - [d'abord, puis]
+                  - [zuerst, dann]
+                  - [primeiro, depois]
+                  - [まず, 次に]
+                  - [먼저, 다음]
+                  - [أولاً, ثم]
+                  - [पहले, फिर]
+                  - [сначала, затем]
+          - name: speed_constraint_dense
+            description: Detect exact output contracts that benefit from the stronger fast lane.
+            feature:
+              type: density
+              source:
+                type: keyword_set
+                keywords: [must, exactly, at least, at most, JSON, schema, 必须, 严格, 至少, 不超过, debe, exactement, muss, deve, 厳密, 반드시, يجب, अनिवार्य, строго]
+            predicate:
+              gt: 0.08
+        complexity:
+          - name: speed_complexity
+            threshold: 0.1
+            description: Semantic boundary between interactive work and heavier latency-sensitive synthesis.
+            easy:
+              candidates:
+                - Define a familiar term in one sentence.
+                - Rewrite a short sentence clearly.
+                - Give one direct factual answer.
+            hard:
+              candidates:
+                - Design a multi-region architecture and analyze competing failure modes.
+                - Review a complex migration plan with several operational constraints.
+                - 综合多项约束设计分布式系统并分析故障模式。
+                - صمم نظاماً موزعاً مع تحليل عدة أنماط للفشل.
+      projections:
+        scores:
+          - name: speed_workload_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: speed_heavy_request_phrases, weight: 0.6, value_source: confidence}
+              - {type: embedding, name: speed_heavy_intent, weight: 0.55, value_source: confidence}
+              - {type: context, name: speed_context_from_30k_to_60k, weight: 0.15}
+              - {type: context, name: speed_context_from_60k_to_120k, weight: 0.15}
+              - {type: context, name: speed_context_from_120k_to_240k, weight: 0.15}
+              - {type: structure, name: speed_ordered_workflow, weight: 0.3}
+              - {type: structure, name: speed_constraint_dense, weight: 0.25}
+              - {type: complexity, name: 'speed_complexity:hard', weight: 0.35}
+              - {type: complexity, name: 'speed_complexity:easy', weight: -0.1}
+        mappings:
+          - name: speed_workload_band
+            source: speed_workload_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 10}
+            outputs:
+              - {name: speed_interactive, lt: 0.35}
+              - {name: speed_heavy_workload_required, gte: 0.35}
+      decisions:
+        - name: speed_over_240k_image_guard
+          description: Keep image input beyond the conservative 240K boundary on Qwen36 so vLLM rejects true native-262K overflow instead of misrouting to text-only GLM.
+          priority: 900
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: speed_exceeds_240k_context
+              - type: conversation
+                name: speed_has_images
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_over_240k_text_guard
+          description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
+          priority: 850
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: speed_exceeds_240k_context
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: speed_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_image_tools
+          description: Keep image-and-tool requests through 240K on the declared native-262K low-latency backend.
+          priority: 500
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: speed_has_images
+              - type: conversation
+                name: speed_has_tools
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: speed_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_image
+          description: Keep image requests through 240K on the declared native-262K low-latency backend.
+          priority: 450
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: speed_has_images
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: speed_has_tools
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: speed_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_tools
+          description: Route tool requests through 240K across the two declared native-262K low-latency candidates.
+          priority: 400
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: speed_has_tools
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: speed_has_images
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: latency_aware
+            latency_aware:
+              tpot_percentile: 90
+              ttft_percentile: 90
+              description: Minimize observed first-token and generation latency within the native-262K tool-capable pool.
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_heavy_workload
+          description: Use live TTFT and TPOT percentiles across native-262K candidates for semantically heavier low-latency work.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: speed_heavy_workload_required
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: latency_aware
+            latency_aware:
+              tpot_percentile: 90
+              ttft_percentile: 90
+              description: Minimize observed first-token and generation latency for heavier requests.
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+        - name: speed_interactive
+          description: Choose the fastest healthy candidate for interactive text requests using latency and load.
+          priority: 10
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: multi_factor
+            multi_factor:
+              weights:
+                latency: 0.85
+                load: 0.15
+              latency_percentile: 90
+              on_no_candidates: first
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+      strategy: priority
+
+  - name: cost
+    description: A cost-first model for efficient, high-volume workloads.
+    routing:
+      signals:
+        keywords:
+          - name: cost_reasoning_opt_out_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - do not analyze
+              - don't analyze
+              - without analysis
+              - 不要分析
+              - 无需分析
+              - no analices
+              - sans analyse
+              - 分析しない
+              - nicht analysieren
+              - sem análise
+              - 분석하지 마
+              - دون تحليل
+              - विश्लेषण मत करो
+              - без анализа
+          - name: cost_reasoning_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - reason step by step
+              - analyze the tradeoffs
+              - root cause
+              - design a system
+              - prove that
+              - 逐步推理
+              - 分析取舍
+              - 根因分析
+              - 复杂根因
+              - 逐步比较
+              - 设计系统
+              - razona paso a paso
+              - analyser les compromis
+              - 段階的に推論
+              - system entwerfen
+              - raciocine passo a passo
+              - 단계별로 추론
+              - فكر خطوة بخطوة
+              - चरण दर चरण तर्क
+              - рассуждай пошагово
+        embeddings:
+          - name: cost_reasoning_intent
+            threshold: 0.78
+            aggregation_method: max
+            candidates:
+              - Analyze a difficult root cause and reason through several tradeoffs.
+              - 分析复杂根因并逐步比较多个方案的取舍。
+              - Analiza una causa raíz difícil y compara varias alternativas.
+              - Analyse une cause racine complexe et compare plusieurs compromis.
+              - 複雑な根本原因を分析し、複数の選択肢を段階的に比較してください。
+              - Analysiere eine schwierige Ursache und mehrere Kompromisse.
+              - Analise uma causa raiz difícil e compare várias alternativas. # codespell:ignore analise
+              - 복잡한 근본 원인을 분석하고 여러 대안을 단계별로 비교하세요.
+              - حلّل سبباً جذرياً معقداً وقارن عدة بدائل.
+              - जटिल मूल कारण का विश्लेषण करें और कई विकल्पों की तुलना करें।
+              - Проанализируй сложную первопричину и сравни несколько вариантов.
+        context:
+          - name: cost_context_from_30k_to_60k
+            min_tokens: "30001"
+            max_tokens: "60000"
+            description: The 30K-60K band records conservative context usage within the declared native-262K economy lane.
+          - name: cost_context_from_60k_to_120k
+            min_tokens: "60001"
+            max_tokens: "120000"
+            description: The 60K-120K band records conservative context usage within the declared native-262K economy lane.
+          - name: cost_context_from_120k_to_240k
+            min_tokens: "120001"
+            max_tokens: "240000"
+            description: The 120K-240K band preserves output, system, tool, and image reserve on native-262K backends.
+          - name: cost_exceeds_240k_context
+            min_tokens: "240001"
+            max_tokens: "2147483647"
+            description: Inputs beyond 240K require a capability-preserving terminal lane.
+        conversation:
+          - name: cost_has_images
+            description: Request contains at least one image content part.
+            feature:
+              type: exists
+              source:
+                type: image_content
+        structure:
+          - name: cost_ordered_workflow
+            description: Detect multi-stage requests that justify bounded local reasoning.
+            feature:
+              type: sequence
+              source:
+                type: sequence
+                sequences:
+                  - [first, then]
+                  - [first, next, finally]
+                  - [首先, 然后]
+                  - [先, 再]
+                  - [primero, luego]
+                  - [d'abord, puis]
+                  - [zuerst, dann]
+                  - [primeiro, depois]
+                  - [まず, 次に]
+                  - [먼저, 다음]
+                  - [أولاً, ثم]
+                  - [पहले, फिर]
+                  - [сначала, затем]
+          - name: cost_constraint_dense
+            description: Detect dense output contracts that require careful local reasoning.
+            feature:
+              type: density
+              source:
+                type: keyword_set
+                keywords: [must, exactly, at least, at most, JSON, schema, 必须, 严格, 至少, 不超过, debe, exactement, muss, deve, 厳密, 반드시, يجب, अनिवार्य, строго]
+            predicate:
+              gt: 0.08
+        complexity:
+          - name: cost_complexity
+            threshold: 0.1
+            description: Semantic boundary for spending bounded reasoning compute on the economy model.
+            easy:
+              candidates:
+                - Rewrite one sentence more clearly.
+                - Summarize a short meeting note.
+                - Define one common concept.
+            hard:
+              candidates:
+                - Diagnose a production failure with several competing causes and constraints.
+                - Design a distributed system and justify its operational tradeoffs.
+                - 诊断具有多个竞争性原因和约束的生产故障。
+                - حلّل فشلاً إنتاجياً مع عدة أسباب وقيود متنافسة.
+      projections:
+        scores:
+          - name: cost_bounded_reasoning_need_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: cost_reasoning_opt_out_phrases, weight: -1.5, value_source: confidence}
+              - {type: keyword, name: cost_reasoning_request_phrases, weight: 0.6, value_source: confidence}
+              - {type: embedding, name: cost_reasoning_intent, weight: 0.55, value_source: confidence}
+              - {type: context, name: cost_context_from_30k_to_60k, weight: 0.15}
+              - {type: context, name: cost_context_from_60k_to_120k, weight: 0.15}
+              - {type: context, name: cost_context_from_120k_to_240k, weight: 0.15}
+              - {type: structure, name: cost_ordered_workflow, weight: 0.3}
+              - {type: structure, name: cost_constraint_dense, weight: 0.25}
+              - {type: complexity, name: 'cost_complexity:hard', weight: 0.35}
+              - {type: complexity, name: 'cost_complexity:easy', weight: -0.1}
+        mappings:
+          - name: cost_reasoning_need_band
+            source: cost_bounded_reasoning_need_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 10}
+            outputs:
+              - {name: cost_allows_direct_economy, lt: 0.35}
+              - {name: cost_requires_bounded_reasoning, gte: 0.35}
+      decisions:
+        - name: cost_over_240k_image_guard
+          description: Keep image input beyond the conservative 240K boundary on Qwen36 so vLLM enforces true native-262K overflow.
+          priority: 900
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: cost_exceeds_240k_context
+              - type: conversation
+                name: cost_has_images
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+        - name: cost_over_240k_text_guard
+          description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
+          priority: 850
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: cost_exceeds_240k_context
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: cost_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+        - name: cost_image
+          description: Keep image and image-with-tool requests through 240K on the declared native-262K multimodal backend.
+          priority: 500
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: cost_has_images
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: cost_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+        - name: cost_bounded_reasoning
+          description: Spend bounded reasoning compute on the economy model only when semantic workload warrants it.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: cost_requires_bounded_reasoning
+              - operator: NOT
+                conditions:
+                  - type: keyword
+                    name: cost_reasoning_opt_out_phrases
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: true
+              reasoning_effort: medium
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+        - name: cost_direct_economy
+          description: Route ordinary text and tool traffic through 240K to the economy model without reasoning.
+          priority: 10
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+      strategy: priority
+
+  - name: accuracy
+    description: An accuracy-first model for complex reasoning and high-quality results.
+    routing:
+      signals:
+        keywords:
+          - name: accuracy_workflow_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - break this into independent workstreams
+              - investigate, plan, and implement
+              - use tools to gather evidence and execute
+              - 分解为独立工作流
+              - 调查、规划并实现
+              - investigar, planificar e implementar
+              - enquêter, planifier et implémenter
+              - 調査、計画、実装
+              - untersuchen, planen und implementieren
+              - investigar, planejar e implementar
+              - 조사하고 계획하고 구현
+              - التحقيق والتخطيط والتنفيذ
+              - जाँच, योजना और कार्यान्वयन
+              - исследовать, спланировать и реализовать
+          - name: accuracy_expert_fusion_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - independent expert opinions
+              - compare competing hypotheses
+              - adversarial debate and verdict
+              - 比较多个假设并得出结论
+              - 独立专家意见
+              - comparar hipótesis contrapuestas
+              - comparer des hypothèses concurrentes
+              - 複数の仮説を比較
+              - konkurrierende hypothesen vergleichen
+              - comparar hipóteses concorrentes
+              - 경쟁 가설을 비교
+              - قارن الفرضيات المتنافسة
+              - प्रतिस्पर्धी परिकल्पनाओं की तुलना
+              - сравнить конкурирующие гипотезы
+          - name: accuracy_verification_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - verify this factual answer with confidence
+              - fact-check and escalate if uncertain
+              - 核实事实并在不确定时升级
+              - verificar los hechos y escalar si hay dudas
+              - vérifier les faits et escalader en cas de doute
+              - 事実を検証し不確かな場合はエスカレーション
+              - fakten prüfen und bei unsicherheit eskalieren
+              - verificar os fatos e escalar se houver incerteza
+              - 사실을 검증하고 불확실하면 에스컬레이션
+              - تحقق من الحقائق وصعّد عند عدم اليقين
+              - तथ्यों की जाँच करें और अनिश्चित होने पर बढ़ाएँ
+              - проверить факты и эскалировать при неуверенности
+          - name: accuracy_multi_round_exploration_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - '\bexplor(e|ing) multiple reasoning paths recursively\b'
+              - '\bsearch(ing)? several hypotheses over multiple rounds\b'
+              - 多轮探索多个推理路径
+              - explorar varias rutas de razonamiento
+              - explorer plusieurs chemins de raisonnement
+              - 複数の推論経路を探索
+              - mehrere denkwege untersuchen
+              - explorar vários caminhos de raciocínio
+              - 여러 추론 경로를 탐색
+              - استكشف عدة مسارات للاستدلال
+              - कई तर्क पथों का अन्वेषण
+              - исследовать несколько путей рассуждения
+        embeddings:
+          - name: accuracy_dynamic_workflow_intent
+            threshold: 0.78
+            aggregation_method: max
+            candidates:
+              - Investigate the repository, implement the fix, run validation, and iterate until it works.
+              - 调查代码库、实现修复、验证结果并迭代到完成。
+              - Investiga el repositorio, implementa la solución y valida los cambios.
+              - Enquête sur le dépôt, implémente la correction et valide le résultat. # codespell:ignore valide
+              - リポジトリを調査し、修正を実装して検証してください。
+              - Untersuche das Repository, implementiere die Korrektur und validiere sie. # codespell:ignore sie
+              - Investigue o repositório, implemente a correção e valide o resultado. # codespell:ignore implemente,valide
+              - 저장소를 조사하고 수정 사항을 구현한 뒤 결과를 검증하세요.
+              - افحص المستودع ونفّذ الإصلاح وتحقق من النتيجة.
+              - रिपॉज़िटरी की जाँच करें, सुधार लागू करें और परिणाम सत्यापित करें।
+              - Исследуй репозиторий, реализуй исправление и проверь результат.
+          - name: accuracy_expert_fusion_intent
+            threshold: 0.79
+            aggregation_method: max
+            candidates:
+              - Ask independent experts to solve the problem and synthesize the most reliable conclusion.
+              - 汇总多个独立专家观点，解决分歧并得出可靠结论。
+              - Compara análisis independientes y sintetiza la conclusión más fiable.
+              - Compare des analyses indépendantes et synthétise la conclusion la plus fiable.
+              - 複数の独立した分析を比較し、最も信頼できる結論を統合してください。
+              - Vergleiche unabhängige Analysen und synthetisiere die zuverlässigste Schlussfolgerung.
+              - Compare análises independentes e sintetize a conclusão mais confiável.
+              - 독립적인 분석을 비교하고 가장 신뢰할 수 있는 결론을 종합하세요.
+              - قارن تحليلات مستقلة واستخلص النتيجة الأكثر موثوقية.
+              - स्वतंत्र विश्लेषणों की तुलना कर सबसे विश्वसनीय निष्कर्ष निकालें।
+              - Сравни независимые анализы и синтезируй самый надёжный вывод.
+          - name: accuracy_verification_intent
+            threshold: 0.79
+            aggregation_method: max
+            candidates:
+              - Verify every factual claim against evidence and escalate when confidence is insufficient.
+              - 用证据核实每个事实，在置信度不足时升级。
+              - Verifica cada afirmación con evidencia y escala si la confianza es insuficiente.
+              - Vérifie chaque affirmation avec des preuves et escalade si la confiance est insuffisante.
+              - 各事実を証拠で検証し、確信が足りなければエスカレーションしてください。
+              - Prüfe jede Tatsachenbehauptung anhand von Belegen und eskaliere bei Unsicherheit.
+              - Verifique cada afirmação com evidências e escale se a confiança for insuficiente.
+              - 모든 사실 주장을 증거로 검증하고 확신이 부족하면 에스컬레이션하세요.
+              - تحقّق من كل ادعاء واقعي بالأدلة وصعّد عند ضعف الثقة.
+              - प्रत्येक तथ्यात्मक दावे को प्रमाण से जाँचें और भरोसा कम हो तो बढ़ाएँ।
+              - Проверь каждое фактическое утверждение по доказательствам и эскалируй при низкой уверенности.
+          - name: accuracy_multi_round_exploration_intent
+            threshold: 0.78
+            aggregation_method: max
+            candidates:
+              - Explore several reasoning paths and synthesize the strongest rigorous solution.
+              - 从多个推理路径探索难题并综合最严谨的答案。
+              - Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.
+              - Explore plusieurs chemins de raisonnement et synthétise la solution la plus rigoureuse.
+              - 複数の推論経路を探索し、最も厳密な解答を統合してください。
+              - Untersuche mehrere Denkwege und synthetisiere die strengste Lösung.
+              - Explore vários caminhos de raciocínio e sintetize a solução mais rigorosa.
+              - 여러 추론 경로를 탐색하고 가장 엄밀한 해답을 종합하세요.
+              - استكشف عدة مسارات للاستدلال وادمج الحل الأكثر صرامة.
+              - कई तर्क पथों का अन्वेषण कर सबसे कठोर समाधान का संश्लेषण करें।
+              - Исследуй несколько путей рассуждения и синтезируй самое строгое решение.
+        fact_check:
+          - name: accuracy_needs_fact_check
+            description: Detect claims that benefit from evidence-backed verification.
+        language:
+          - {name: en, threshold: 0.5, description: English-language request.}
+          - {name: zh, threshold: 0.5, description: Chinese-language request.}
+          - {name: es, threshold: 0.5, description: Spanish-language request.}
+          - {name: fr, threshold: 0.5, description: French-language request.}
+          - {name: ja, threshold: 0.5, description: Japanese-language request.}
+          - {name: de, threshold: 0.5, description: German-language request.}
+          - {name: pt, threshold: 0.5, description: Portuguese-language request.}
+          - {name: ko, threshold: 0.5, description: Korean-language request.}
+          - {name: ar, threshold: 0.5, description: Arabic-language request.}
+          - {name: hi, threshold: 0.5, description: Hindi-language request.}
+          - {name: ru, threshold: 0.5, description: Russian-language request.}
+        conversation:
+          - name: accuracy_has_images
+            description: Request contains at least one image content part.
+            feature:
+              type: exists
+              source:
+                type: image_content
+          - name: accuracy_multiple_tools_available
+            description: Requests with two or more tools can support bounded workflow decomposition.
+            feature:
+              type: count
+              source:
+                type: tool_definition
+            predicate:
+              gte: 2
+          - name: accuracy_active_tool_loop
+            description: Detect a request actively continuing a client-owned tool loop, including an outstanding assistant tool call.
+            feature:
+              type: exists
+              source:
+                type: active_tool_loop
+          - name: accuracy_has_tool_result
+            description: Detect at least one completed client tool result that can be synthesized.
+            feature:
+              type: count
+              source:
+                type: assistant_tool_cycle
+            predicate:
+              gte: 1
+        context:
+          - name: accuracy_at_least_16k_context
+            min_tokens: 16K
+            max_tokens: "2147483647"
+            description: Long text and tool requests stay on GLM; its own 512K contract enforces terminal overflow.
+          - name: accuracy_context_from_120k_to_240k
+            min_tokens: "120001"
+            max_tokens: "240000"
+            description: The 120K-240K image band preserves reserve on the declared native-262K Qwen36 backend.
+          - name: accuracy_exceeds_240k_context
+            min_tokens: "240001"
+            max_tokens: "2147483647"
+            description: Inputs beyond 240K require a modality-preserving terminal lane.
+        structure:
+          - name: accuracy_ordered_workflow
+            description: Detect prompts that explicitly describe a multi-stage workflow.
+            feature:
+              type: sequence
+              source:
+                type: sequence
+                sequences:
+                  - [first, then]
+                  - [first, next, finally]
+                  - [首先, 然后]
+                  - [先, 再]
+                  - [primero, luego]
+                  - [d'abord, puis]
+                  - [zuerst, dann]
+                  - [primeiro, depois]
+                  - [まず, 次に]
+                  - [먼저, 다음]
+                  - [أولاً, ثم]
+                  - [पहले, फिर]
+                  - [сначала, затем]
+          - name: accuracy_constraint_dense
+            description: Detect dense correctness and structured-output constraints.
+            feature:
+              type: density
+              source:
+                type: keyword_set
+                keywords: [must, exactly, at least, at most, verify, JSON, schema, 必须, 严格, 至少, 不超过, debe, exactement, muss, deve, 厳密, 반드시, يجب, अनिवार्य, строго]
+            predicate:
+              gt: 0.08
+          - name: accuracy_direct_reference
+            description: Detect requests that quote orchestration vocabulary only to define, translate, or briefly explain it.
+            feature:
+              type: exists
+              source:
+                type: regex
+                pattern: >-
+                  (?i)(\b(define|translate|explain)\b.{0,48}\b(phrase|term|expression)\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(defina|traduza|explique).{0,48}(frase|expressão|ter(?:mo))|(정의|번역|설명).{0,16}(문구|표현|용어|“|「)|(عرّف|ترجم|اشرح).{0,32}(العبارة|التعبير|المصطلح)|(परिभाषित|अनुवाद|समझाइए).{0,32}(वाक्यांश|अभिव्यक्ति|शब्द)|(определи|переведи|объясни).{0,48}(фразу|выражение|термин)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))
+        complexity:
+          - name: accuracy_complexity
+            threshold: 0.15
+            description: Semantic boundary for tasks that merit bounded multi-round reasoning.
+            easy:
+              candidates:
+                - Explain a familiar concept in plain language.
+                - Summarize a short paragraph.
+                - Answer a direct factual question.
+            hard:
+              candidates:
+                - Prove a difficult result by exploring multiple possible derivations.
+                - Diagnose a complex distributed-system failure with incomplete evidence.
+                - Synthesize competing scientific explanations into a rigorous conclusion.
+                - 从多个推理路径证明困难结论并综合最严谨答案。
+                - استكشف اشتقاقات متعددة وأثبت نتيجة صعبة بدقة.
+      projections:
+        scores:
+          - name: accuracy_dynamic_workflow_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: accuracy_workflow_request_phrases, weight: 0.7, value_source: confidence}
+              - {type: embedding, name: accuracy_dynamic_workflow_intent, weight: 0.55, value_source: confidence}
+              - {type: conversation, name: accuracy_multiple_tools_available, weight: 0.1}
+              - {type: conversation, name: accuracy_active_tool_loop, weight: 0.1}
+              - {type: structure, name: accuracy_ordered_workflow, weight: 0.25}
+              - {type: structure, name: accuracy_direct_reference, weight: -0.9}
+          - name: accuracy_expert_fusion_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: accuracy_expert_fusion_request_phrases, weight: 0.7, value_source: confidence}
+              - {type: embedding, name: accuracy_expert_fusion_intent, weight: 0.55, value_source: confidence}
+              - {type: structure, name: accuracy_constraint_dense, weight: 0.1}
+              - {type: structure, name: accuracy_direct_reference, weight: -0.9}
+          - name: accuracy_verification_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: accuracy_verification_request_phrases, weight: 0.45, value_source: confidence}
+              - {type: embedding, name: accuracy_verification_intent, weight: 0.55, value_source: confidence}
+              - {type: fact_check, name: accuracy_needs_fact_check, weight: 0.6}
+              - {type: structure, name: accuracy_constraint_dense, weight: 0.1}
+              - {type: structure, name: accuracy_direct_reference, weight: -0.5}
+          - name: accuracy_multi_round_exploration_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: accuracy_multi_round_exploration_phrases, weight: 0.45, value_source: confidence}
+              - {type: embedding, name: accuracy_multi_round_exploration_intent, weight: 0.35, value_source: confidence}
+              - {type: structure, name: accuracy_ordered_workflow, weight: 0.15}
+              - {type: structure, name: accuracy_constraint_dense, weight: 0.1}
+              - {type: complexity, name: 'accuracy_complexity:hard', weight: 0.35}
+              - {type: complexity, name: 'accuracy_complexity:easy', weight: -0.1}
+              - {type: structure, name: accuracy_direct_reference, weight: -0.65}
+              - {type: language, name: en, weight: 0.02}
+              - {type: language, name: zh, weight: 0.02}
+              - {type: language, name: es, weight: 0.02}
+              - {type: language, name: fr, weight: 0.02}
+              - {type: language, name: ja, weight: 0.02}
+              - {type: language, name: de, weight: 0.02}
+              - {type: language, name: pt, weight: 0.02}
+              - {type: language, name: ko, weight: 0.02}
+              - {type: language, name: ar, weight: 0.02}
+              - {type: language, name: hi, weight: 0.02}
+              - {type: language, name: ru, weight: 0.02}
+        mappings:
+          - name: accuracy_dynamic_workflow_band
+            source: accuracy_dynamic_workflow_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 12}
+            outputs:
+              - {name: accuracy_direct_without_workflow, lt: 0.5}
+              - {name: accuracy_requires_dynamic_workflow, gte: 0.5}
+          - name: accuracy_expert_fusion_band
+            source: accuracy_expert_fusion_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 12}
+            outputs:
+              - {name: accuracy_direct_without_expert_fusion, lt: 0.5}
+              - {name: accuracy_requires_expert_fusion, gte: 0.5}
+          - name: accuracy_verification_band
+            source: accuracy_verification_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 12}
+            outputs:
+              - {name: accuracy_direct_without_confidence_escalation, lt: 0.45}
+              - {name: accuracy_requires_confidence_escalation, gte: 0.45}
+          - name: accuracy_multi_round_exploration_band
+            source: accuracy_multi_round_exploration_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 10}
+            outputs:
+              - {name: accuracy_direct_single_pass, lt: 0.35}
+              - {name: accuracy_requires_multi_round_exploration, gte: 0.35}
+      decisions:
+        - name: accuracy_image_tool_result_synthesis
+          description: Synthesize an existing image-tool result on the native-262K multimodal lane without starting another tool or multi-model loop.
+          priority: 950
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: accuracy_active_tool_loop
+              - type: conversation
+                name: accuracy_has_tool_result
+              - type: conversation
+                name: accuracy_has_images
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied image and tool result directly, verify key claims, and do not call another tool.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+        - name: accuracy_text_tool_result_synthesis
+          description: Synthesize an existing text-tool result on the native-524K frontier lane without starting another tool or multi-model loop.
+          priority: 925
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: accuracy_active_tool_loop
+              - type: conversation
+                name: accuracy_has_tool_result
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied tool result directly, verify key claims, and do not call another tool.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+        - name: accuracy_over_240k_image_guard
+          description: Keep image input beyond the conservative 240K boundary on Qwen36 so vLLM enforces true native-262K overflow.
+          priority: 900
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: accuracy_exceeds_240k_context
+              - type: conversation
+                name: accuracy_has_images
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_active_tool_loop
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_over_240k_text_guard
+          description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
+          priority: 850
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: accuracy_exceeds_240k_context
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_image_from_120k_to_240k
+          description: Route image requests in the 120K-240K band to the declared native-262K Qwen36 backend.
+          priority: 800
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: accuracy_context_from_120k_to_240k
+              - type: conversation
+                name: accuracy_has_images
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_active_tool_loop
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_image_through_120k
+          description: Route image requests through the conservative 120K boundary to the strongest 128K image-capable accuracy model.
+          priority: 600
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: accuracy_has_images
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_active_tool_loop
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: accuracy_context_from_120k_to_240k
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: accuracy_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: medium
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_long_context_or_direct_reference
+          description: Keep long text/tool inputs and quoted orchestration references on one frontier backend.
+          priority: 550
+          rules:
+            operator: OR
+            conditions:
+              - type: context
+                name: accuracy_at_least_16k_context
+              - type: structure
+                name: accuracy_direct_reference
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_dynamic_workflow
+          description: Decompose semantically explicit investigate-plan-execute work into a bounded dynamic workflow.
+          priority: 500
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: accuracy_requires_dynamic_workflow
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: accuracy_active_tool_loop
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: accuracy_workflow_request_phrases
+                  - type: embedding
+                    name: accuracy_dynamic_workflow_intent
+                  - type: structure
+                    name: accuracy_ordered_workflow
+          modelRefs:
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/qwen3.5-122b
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/qwen3.6-35b
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: workflows
+            workflows:
+              mode: dynamic
+              template: micro_agent
+              planner:
+                model: local/qwen3.6-35b
+                max_completion_tokens: 2048
+              final:
+                model: local/glm-5.2
+              max_steps: 4
+              max_parallel: 3
+              min_successful_responses: 2
+              max_completion_tokens: 2048
+              round_timeout_seconds: 120
+              include_intermediate_responses: false
+              on_error: skip
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_expert_fusion
+          description: Ask provider-diverse experts and synthesize with the largest frontier model.
+          priority: 450
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: accuracy_requires_expert_fusion
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: accuracy_expert_fusion_request_phrases
+                  - type: embedding
+                    name: accuracy_expert_fusion_intent
+          modelRefs:
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/gpt-oss-120b
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: high
+          algorithm:
+            type: fusion
+            fusion:
+              model: local/glm-5.2
+              analysis_models:
+                - local/step-3.7-flash
+                - local/mistral-small-4
+                - local/gpt-oss-120b
+              max_concurrent: 3
+              min_successful_responses: 2
+              max_completion_tokens: 2048
+              round_timeout_seconds: 180
+              include_analysis: false
+              include_intermediate_responses: false
+              on_error: skip
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_confidence_escalation
+          description: Start fast and escalate only when average token confidence is insufficient.
+          priority: 400
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: accuracy_requires_confidence_escalation
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: accuracy_verification_request_phrases
+                  - type: embedding
+                    name: accuracy_verification_intent
+                  - type: fact_check
+                    name: accuracy_needs_fact_check
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: medium
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: confidence
+            confidence:
+              confidence_method: avg_logprob
+              threshold: 0.72
+              escalation_order: declared
+              on_error: skip
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_multi_round_exploration
+          description: Run bounded multi-round exploration only for explicit search intent.
+          priority: 350
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: accuracy_requires_multi_round_exploration
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: accuracy_multi_round_exploration_phrases
+                  - type: embedding
+                    name: accuracy_multi_round_exploration_intent
+          modelRefs:
+            - model: local/step-3.7-flash
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/mistral-small-4
+              use_reasoning: true
+              reasoning_effort: high
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: remom
+            remom:
+              breadth_schedule: [3, 2]
+              model_distribution: round_robin
+              temperature: 0.6
+              include_reasoning: true
+              compaction_strategy: last_n_tokens
+              compaction_tokens: 8000
+              synthesis_model: local/glm-5.2
+              max_concurrent: 3
+              max_completion_tokens: 2048
+              min_successful_responses: 2
+              max_responses_per_round: 3
+              round_timeout_seconds: 180
+              include_intermediate_responses: false
+              on_error: skip
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+        - name: accuracy_direct
+          description: Use the largest frontier model directly when fan-out has no explicit benefit.
+          priority: 10
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+      strategy: priority
+
+  - name: vault
+    description: A privacy-first model for sensitive workloads and protected data boundaries.
+    routing:
+      signals:
+        keywords:
+          - name: vault_attack_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - '\bignore previous instructions\b'
+              - '\breveal the system prompt\b'
+              - '\bexfiltrate credentials\b'
+              - '\bbypass the safety policy\b'
+              - 忽略之前的指令
+              - 泄露系统提示词
+              - 导出凭据
+              - 绕过安全策略
+              - ignora las instrucciones anteriores
+              - extraer credenciales
+              - ignorer les instructions précédentes
+              - exfiltrer les identifiants
+              - 以前の指示を無視
+              - 認証情報を流出
+              - vorherige anweisungen ignorieren
+              - zugangsdaten exfiltrieren
+              - ignore as instruções anteriores
+              - exfiltrar credenciais
+              - 이전 지시를 무시
+              - 자격 증명 유출
+              - تجاهل التعليمات السابقة
+              - سرّب بيانات الاعتماد
+              - पिछले निर्देशों को अनदेखा करें
+              - क्रेडेंशियल निकालें
+              - игнорируй предыдущие инструкции
+              - извлеки учётные данные
+          - name: vault_sensitive_request_phrases
+            operator: OR
+            method: regex
+            case_sensitive: false
+            keywords:
+              - '\blocal processing only\b'
+              - '\bdo not send (this|it) to the cloud\b'
+              - '\bconfidential handling\b'
+              - '\binternal use only\b'
+              - '\bprivate repositor(y|ies)\b' # codespell:ignore repositor
+              - '\bproprietary code\b'
+              - '\b\d{3}-\d{2}-\d{4}\b'
+              - 本地处理
+              - 不要发到云端
+              - 机密处理
+              - 仅供内部使用
+              - 私有仓库
+              - 内部文档
+              - solo procesamiento local
+              - no enviar a la nube
+              - repositorio privado
+              - traitement local uniquement
+              - ne pas envoyer au cloud
+              - dépôt privé
+              - ローカル処理のみ
+              - クラウドに送信しない
+              - プライベートリポジトリ
+              - nur lokale verarbeitung
+              - nicht in die cloud senden
+              - privates repository
+              - processamento local apenas
+              - não enviar para a nuvem
+              - repositório privado
+              - 로컬 처리만
+              - 클라우드로 보내지 마
+              - 비공개 저장소
+              - المعالجة المحلية فقط
+              - لا ترسل إلى السحابة
+              - مستودع خاص
+              - केवल स्थानीय प्रसंस्करण
+              - क्लाउड पर न भेजें
+              - निजी रिपॉज़िटरी
+              - только локальная обработка
+              - не отправлять в облако
+              - частный репозиторий
+              - '\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'
+              - '\b(ssn|social security number|credit card|passport number)\b'
+              - (身份证|邮箱|护照号码|银行卡号)
+              - (número de seguridad social|correo electrónico|pasaporte)
+              - (numéro de sécurité sociale|adresse e-mail|passeport)
+              - (マイナンバー|メールアドレス|パスポート番号)
+              - (sozialversicherungsnummer|e-mail-adresse|reisepassnummer)
+              - (número de segurança social|endereço de e-mail|passaporte)
+              - (주민등록번호|이메일 주소|여권 번호)
+              - (رقم الهوية|البريد الإلكتروني|رقم جواز السفر)
+              - (आधार नंबर|ईमेल पता|पासपोर्ट नंबर)
+              - (номер паспорта|адрес электронной почты|снилс)
+        pii:
+          - name: vault_detects_pii
+            threshold: 0.7
+            description: Detect personally identifiable information that must remain locally contained.
+        jailbreak:
+          - name: vault_detects_jailbreak
+            method: classifier
+            threshold: 0.45
+            description: Detect suspicious prompts that require local containment.
+        kb:
+          - name: vault_privacy_policy
+            kb: privacy_kb
+            target:
+              kind: group
+              value: privacy_policy
+            match: best
+        context:
+          - name: vault_context_from_120k_to_240k
+            min_tokens: "120001"
+            max_tokens: "240000"
+            description: The 120K-240K band preserves reserve on the declared native-262K Qwen36 backend.
+          - name: vault_exceeds_240k_context
+            min_tokens: "240001"
+            max_tokens: "2147483647"
+            description: Inputs beyond 240K require a capability-preserving terminal lane.
+        conversation:
+          - name: vault_has_images
+            description: Request contains at least one image content part.
+            feature:
+              type: exists
+              source:
+                type: image_content
+          - name: vault_has_tools
+            description: Request declares one or more client tools that must be stripped.
+            feature:
+              type: count
+              source:
+                type: tool_definition
+            predicate:
+              gte: 1
+      projections:
+        scores:
+          - name: vault_risk_score
+            method: weighted_sum
+            inputs:
+              - {type: keyword, name: vault_sensitive_request_phrases, weight: 0.75, value_source: confidence}
+              - {type: pii, name: vault_detects_pii, weight: 0.9}
+              - {type: jailbreak, name: vault_detects_jailbreak, weight: 0.9}
+              - {type: keyword, name: vault_attack_request_phrases, weight: 0.9, value_source: confidence}
+              - {type: kb, name: vault_privacy_policy, weight: 0.45}
+        mappings:
+          - name: vault_risk_band
+            source: vault_risk_score
+            method: threshold_bands
+            calibration: {method: sigmoid_distance, slope: 12}
+            outputs:
+              - {name: vault_standard_risk, lt: 0.35}
+              - {name: vault_sensitive_risk, gte: 0.35}
+      decisions:
+        - name: vault_over_240k_image_guard
+          description: Keep image input beyond the conservative 240K boundary on local Qwen36 so vLLM enforces true native-262K overflow.
+          priority: 900
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: vault_exceeds_240k_context
+              - type: conversation
+                name: vault_has_images
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_over_240k_text_guard
+          description: Keep text and tool requests beyond 240K on local GLM with client tools and prior tool history stripped.
+          priority: 850
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: vault_exceeds_240k_context
+              - operator: NOT
+                conditions:
+                  - type: conversation
+                    name: vault_has_images
+          modelRefs:
+            - model: local/glm-5.2
+              use_reasoning: true
+              reasoning_effort: max
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_request_from_120k_to_240k
+          description: Keep every request in the 120K-240K band on local Qwen36 with client tools and prior tool history stripped.
+          priority: 800
+          rules:
+            operator: OR
+            conditions:
+              - type: context
+                name: vault_context_from_120k_to_240k
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_image
+          description: Keep image and image-with-tool requests through the conservative 120K boundary on a local image backend with every client tool disabled.
+          priority: 600
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: vault_has_images
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: vault_context_from_120k_to_240k
+              - operator: NOT
+                conditions:
+                  - type: context
+                    name: vault_exceeds_240k_context
+          modelRefs:
+            - model: local/qwen3.5-122b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_security_containment
+          description: Keep suspicious requests local and strip every client tool.
+          priority: 300
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: vault_attack_request_phrases
+              - type: jailbreak
+                name: vault_detects_jailbreak
+          modelRefs:
+            - model: local/gpt-oss-120b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_tools_blocked
+          description: Keep tool-bearing requests local and strip all client tool definitions.
+          priority: 250
+          rules:
+            operator: OR
+            conditions:
+              - type: conversation
+                name: vault_has_tools
+          modelRefs:
+            - model: local/gpt-oss-120b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_sensitive
+          description: Escalate PII, private-domain, and explicit local-only work to a stronger local minimization lane with tools disabled.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: projection
+                name: vault_sensitive_risk
+          modelRefs:
+            - model: local/qwen3.6-35b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential. Minimize data use, do not reproduce secrets verbatim, and return only fields necessary to answer the request.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+        - name: vault_private_default
+          description: Fail closed to the economical local backend with client tools disabled when no stronger privacy signal matches.
+          priority: 10
+          modelRefs:
+            - model: local/qwen3.5-9b
+              use_reasoning: false
+          algorithm:
+            type: static
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                mode: insert
+                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+            - type: tools
+              configuration:
+                enabled: true
+                mode: none
+                strip_tool_history: true
+            - type: router_replay
+              configuration:
+                enabled: false
+      strategy: priority

@@ -112,18 +112,18 @@ func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query 
 	historyText := formatHistoryForPrompt(history)
 	userPrompt := fmt.Sprintf("History:\n%s\n\nQuery: %s\n\nRewritten query:", historyText, query)
 
-	logging.Debugf("Memory: query rewrite: original=%q, history_len=%d", truncateForLog(query, 80), len(history))
+	logging.Debugf("Memory: query rewrite: original=%s, history_len=%d", logging.ContentDescriptor(query), len(history))
 
 	rewrittenQuery, err := callLLMForQueryRewrite(ctx, resolved, userPrompt)
 	if err != nil {
-		logging.Errorf("Memory: Query rewriting failed, using original: %v", err)
+		logging.Errorf("Memory: Query rewriting failed, using original (error_class=%T)", err)
 		return query, nil
 	}
 
 	rewrittenQuery = strings.TrimSpace(rewrittenQuery)
 	rewrittenQuery = strings.Trim(rewrittenQuery, "\"'")
 
-	logging.Debugf("Memory: query rewrite: result=%q", truncateForLog(rewrittenQuery, 80))
+	logging.Debugf("Memory: query rewrite: result=%s", logging.ContentDescriptor(rewrittenQuery))
 
 	return rewrittenQuery, nil
 }
@@ -144,13 +144,6 @@ func formatHistoryForPrompt(history []ConversationMessage) string {
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-func truncateForLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 // ResolveQueryRewriteConfig resolves the LLM endpoint configuration for query rewriting.
@@ -231,8 +224,7 @@ func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, us
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("LLM returned status %d: %s", resp.StatusCode, truncateForLog(string(body), 200))
+		return "", fmt.Errorf("LLM returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)

@@ -9,21 +9,25 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
 type dashboardProxySet struct {
 	envoy         *httputil.ReverseProxy
-	routerAPI     *httputil.ReverseProxy
 	grafanaStatic *httputil.ReverseProxy
 	jaegerAPI     *httputil.ReverseProxy
 	jaegerStatic  *httputil.ReverseProxy
 }
 
-func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvider ...routerauth.CredentialProvider) {
+	var provider routerauth.CredentialProvider
+	if len(credentialProvider) > 0 {
+		provider = credentialProvider[0]
+	}
 	proxies := dashboardProxySet{
 		envoy: configureEnvoyProxy(cfg),
 	}
-	proxies.routerAPI = registerRouterAPIProxy(mux, cfg, proxies.envoy)
+	registerRouterAPIProxy(mux, cfg, proxies.envoy, provider)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
 	registerFleetSimRoutes(mux, cfg)
@@ -43,7 +47,20 @@ func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
 	if err != nil {
 		log.Fatalf("envoy proxy error: %v", err)
 	}
-	attachRouterReplayResponseRedaction(envoyProxy)
+	originalDirector := envoyProxy.Director
+	envoyProxy.Director = func(request *http.Request) {
+		originalDirector(request)
+		routerauth.StripBrowserCredentials(request)
+		target, targetErr := resolveDynamicEnvoyTarget(cfg.EnvoyURL, cfg.AbsConfigPath)
+		if targetErr != nil {
+			request.URL.Scheme = ""
+			request.URL.Host = ""
+			return
+		}
+		request.URL.Scheme = target.Scheme
+		request.URL.Host = target.Host
+		request.Host = target.Host
+	}
 	log.Printf("Envoy proxy configured: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	return envoyProxy
 }
@@ -52,35 +69,102 @@ func registerRouterAPIProxy(
 	mux *http.ServeMux,
 	cfg *config.Config,
 	envoyProxy *httputil.ReverseProxy,
+	credentialProvider routerauth.CredentialProvider,
 ) *httputil.ReverseProxy {
 	if cfg.RouterAPIURL == "" {
 		return nil
 	}
 
+	// Authorization is forwarded only after the dedicated handler below has
+	// stripped the browser identity and installed the managed Router identity.
 	routerAPIProxy, err := proxy.NewReverseProxy(cfg.RouterAPIURL, "/api/router", true)
 	if err != nil {
 		log.Fatalf("router API proxy error: %v", err)
 	}
+	attachRouterReplayResponseRedaction(routerAPIProxy)
 
 	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
-		if cfg.ReadonlyMode &&
-			(strings.HasPrefix(r.URL.Path, "/api/router/api/v1/response-cache/") ||
-				strings.HasPrefix(r.URL.Path, "/api/router/api/v1/context-compression/")) &&
-			r.Method != http.MethodGet {
-			http.Error(w, "dashboard is read-only", http.StatusForbidden)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
-			http.NotFound(w, r)
-			return
-		}
-		if routeRouterTrafficToEnvoy(w, r, envoyProxy) {
-			return
-		}
-		routerAPIProxy.ServeHTTP(w, r)
+		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, credentialProvider)
 	})
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	return routerAPIProxy
+}
+
+func serveRouterAPIProxy(
+	w http.ResponseWriter,
+	r *http.Request,
+	cfg *config.Config,
+	envoyProxy, routerAPIProxy *httputil.ReverseProxy,
+	credentialProvider routerauth.CredentialProvider,
+) {
+	if cfg.ReadonlyMode && isReadonlyRouterMutation(r) {
+		http.Error(w, "dashboard is read-only", http.StatusForbidden)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
+		http.NotFound(w, r)
+		return
+	}
+	if routeRouterTrafficToEnvoy(w, r, envoyProxy) || middleware.HandleCORSPreflight(w, r) {
+		return
+	}
+	if !routerManagementProxyRouteAllowed(r.Method, r.URL.Path) {
+		writeDisallowedRouterManagementResponse(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+		// Let the proxy transport negotiate decompression so replay JSON can
+		// be redacted safely for read-only Dashboard principals.
+		r.Header.Del("Accept-Encoding")
+	}
+	if err := routerauth.RewriteAuthorization(r, credentialProvider); err != nil {
+		http.Error(w, "Router management credential is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	routerAPIProxy.ServeHTTP(w, r)
+}
+
+func isReadonlyRouterMutation(r *http.Request) bool {
+	return r.Method != http.MethodGet &&
+		(strings.HasPrefix(r.URL.Path, "/api/router/api/v1/response-cache/") ||
+			strings.HasPrefix(r.URL.Path, "/api/router/api/v1/context-compression/"))
+}
+
+func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Router management mutation is not exposed by the Dashboard", http.StatusForbidden)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func routerManagementProxyRouteAllowed(method, path string) bool {
+	if method == http.MethodGet &&
+		(path == "/api/router/v1/router_replay" || strings.HasPrefix(path, "/api/router/v1/router_replay/")) {
+		return true
+	}
+	switch path {
+	case "/api/router/v1/models":
+		return method == http.MethodGet || method == http.MethodHead
+	case "/api/router/v1/router/outcomes":
+		return method == http.MethodPost
+	case "/api/router/api/v1/response-cache/capabilities",
+		"/api/router/api/v1/response-cache/health",
+		"/api/router/api/v1/response-cache/stats",
+		"/api/router/api/v1/response-cache/audit",
+		"/api/router/api/v1/context-compression/capabilities",
+		"/api/router/api/v1/context-compression/health",
+		"/api/router/api/v1/context-compression/stats":
+		return method == http.MethodGet || method == http.MethodHead
+	case "/api/router/api/v1/response-cache/test",
+		"/api/router/api/v1/response-cache/invalidate",
+		"/api/router/api/v1/response-cache/flush",
+		"/api/router/api/v1/context-compression/preview",
+		"/api/router/api/v1/context-compression/recovery/invalidate":
+		return method == http.MethodPost
+	default:
+		return false
+	}
 }
 
 func routeRouterTrafficToEnvoy(
@@ -95,17 +179,6 @@ func routeRouterTrafficToEnvoy(
 	if strings.HasPrefix(r.URL.Path, "/api/router/v1/chat/completions") {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
 		log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
-		if middleware.HandleCORSPreflight(w, r) {
-			return true
-		}
-		envoyProxy.ServeHTTP(w, r)
-		return true
-	}
-	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
-		// Let the proxy transport negotiate decompression so replay JSON can be redacted safely.
-		r.Header.Del("Accept-Encoding")
-		log.Printf("Proxying router_replay to Envoy: %s %s", r.Method, r.URL.Path)
 		if middleware.HandleCORSPreflight(w, r) {
 			return true
 		}
@@ -243,11 +316,6 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 
 		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
 
-		if strings.HasPrefix(r.URL.Path, "/api/router/") && proxies.routerAPI != nil {
-			log.Printf("Routing to Router API: %s", r.URL.Path)
-			proxies.routerAPI.ServeHTTP(w, r)
-			return
-		}
 		if proxies.jaegerAPI != nil && isJaegerAPIPath(r.URL.Path) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			proxies.jaegerAPI.ServeHTTP(w, r)

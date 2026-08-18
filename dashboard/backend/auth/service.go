@@ -55,6 +55,15 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 	return &Service{store: store, jwtSecret: []byte(secret), ttlDuration: time.Duration(ttlHours) * time.Hour}
 }
 
+// AddAuditLog records one authenticated control-plane action without exposing
+// the underlying auth store to other dashboard packages.
+func (s *Service) AddAuditLog(ctx context.Context, entry AuditLog) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store.AddAuditLog(ctx, entry)
+}
+
 // SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
 func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
 

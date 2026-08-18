@@ -44,8 +44,8 @@ func (c *Classifier) classifyModality(text string, detectionConfig *config.Modal
 func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
 	result, err := candle_binding.ClassifyMmBert32KModality(text)
 	if err == nil {
-		logging.Debugf("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %.80s",
-			result.Modality, result.Confidence, text)
+		logging.Debugf("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %s",
+			result.Modality, result.Confidence, logging.ContentDescriptor(text))
 		return ModalityClassificationResult{
 			Modality:   result.Modality,
 			Confidence: result.Confidence,
@@ -81,13 +81,17 @@ func (c *Classifier) classifyModalityByKeyword(text string, cfg *config.Modality
 	if len(cfg.BothKeywords) > 0 {
 		for _, kw := range cfg.BothKeywords {
 			if strings.Contains(lowerContent, strings.ToLower(kw)) {
-				logging.Debugf("[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %.80s", kw, text)
+				logging.Debugf(
+					"[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %s",
+					kw,
+					logging.ContentDescriptor(text),
+				)
 				return ModalityClassificationResult{Modality: "BOTH", Confidence: 0.75, Method: "keyword"}
 			}
 		}
 	}
 
-	logging.Debugf("[ModalitySignal] Keyword: DIFFUSION detected for: %.80s", text)
+	logging.Debugf("[ModalitySignal] Keyword: DIFFUSION detected for: %s", logging.ContentDescriptor(text))
 	return ModalityClassificationResult{Modality: "DIFFUSION", Confidence: 0.8, Method: "keyword"}
 }
 
@@ -98,8 +102,8 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 
 	classifierResult, err := candle_binding.ClassifyMmBert32KModality(text)
 	if err == nil && classifierResult.Confidence >= confThreshold {
-		logging.Debugf("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %.80s",
-			classifierResult.Modality, classifierResult.Confidence, confThreshold, text)
+		logging.Debugf("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %s",
+			classifierResult.Modality, classifierResult.Confidence, confThreshold, logging.ContentDescriptor(text))
 		return ModalityClassificationResult{
 			Modality:   classifierResult.Modality,
 			Confidence: classifierResult.Confidence,
@@ -110,8 +114,8 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 	if err == nil {
 		keywordResult := c.classifyModalityByKeyword(text, cfg)
 		if classifierResult.Modality == keywordResult.Modality {
-			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword=%.3f) for: %.80s",
-				classifierResult.Modality, classifierResult.Confidence, keywordResult.Confidence, text)
+			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword=%.3f) for: %s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Confidence, logging.ContentDescriptor(text))
 			return ModalityClassificationResult{
 				Modality:   classifierResult.Modality,
 				Confidence: (classifierResult.Confidence + keywordResult.Confidence) / 2,
@@ -121,8 +125,8 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 
 		lowerThreshold := confThreshold * cfg.GetLowerThresholdRatio()
 		if classifierResult.Confidence >= lowerThreshold {
-			logging.Infof("[ModalitySignal] Hybrid(classifier-preferred): %s (classifier=%.3f vs keyword=%s) for: %.80s",
-				classifierResult.Modality, classifierResult.Confidence, keywordResult.Modality, text)
+			logging.Infof("[ModalitySignal] Hybrid(classifier-preferred): %s (classifier=%.3f vs keyword=%s) for: %s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Modality, logging.ContentDescriptor(text))
 			return ModalityClassificationResult{
 				Modality:   classifierResult.Modality,
 				Confidence: classifierResult.Confidence,
@@ -130,8 +134,8 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 			}
 		}
 
-		logging.Debugf("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %.80s",
-			keywordResult.Modality, classifierResult.Modality, classifierResult.Confidence, text)
+		logging.Debugf("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %s",
+			keywordResult.Modality, classifierResult.Modality, classifierResult.Confidence, logging.ContentDescriptor(text))
 		return ModalityClassificationResult{
 			Modality:   keywordResult.Modality,
 			Confidence: keywordResult.Confidence,

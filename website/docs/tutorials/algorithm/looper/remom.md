@@ -2,9 +2,8 @@
 
 ## Overview
 
-`remom` is a **looper** algorithm for breadth-controlled multi-model orchestration with intelligent synthesis. It performs multi-round parallel reasoning and synthesizes the best answer from all responses.
-
-It aligns to `config/fragments/algorithm/looper/remom.yaml`.
+`remom` runs several candidate models across bounded rounds and synthesizes
+their responses into one answer.
 
 The runtime also supports a direct ReMoM model slug through
 `global.integrations.looper.remom.model_names`. The built-in default is
@@ -66,7 +65,7 @@ flowchart TD
 | `weighted` | Distribute calls proportional to model weights in `modelRefs` |
 | `equal` | Distribute calls equally across all candidate models |
 | `round_robin` | Cycle through candidate models in configured order |
-| `first_only` | All calls go to the first (highest-weight) model |
+| `first_only` | All calls go to the first declared model |
 
 ## What Problem Does It Solve?
 
@@ -107,6 +106,8 @@ Configure a ReMoM decision:
 routing:
   decisions:
     - name: reasoning_panel
+      description: Combine a bounded reasoning panel into one answer.
+      priority: 100
       output_contract: Preserve any explicit output format exactly.
       output_contract_spec:
         type: reference_selection
@@ -137,7 +138,7 @@ prompt-text heuristics. Extraction defaults to exact `content` matching; use
 `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 
-Algorithm-only fragment:
+Minimal algorithm configuration:
 
 ```yaml
 algorithm:
@@ -179,3 +180,9 @@ algorithm:
 | `include_intermediate_responses` | bool | `true` | Include intermediate responses in output |
 | `max_responses_per_round` | int | — | Maximum responses to keep per round |
 | `on_error` | string | `skip` | Behavior on failure: `skip` or `fail` |
+
+Each round shares request-derived and intermediate text with its assigned
+models, and the synthesis model receives the collected results. Bound breadth,
+completion tokens, concurrency, and timeouts before production use. See a
+complete example:
+[`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml).

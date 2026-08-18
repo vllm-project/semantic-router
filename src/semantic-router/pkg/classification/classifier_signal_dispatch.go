@@ -28,7 +28,52 @@ func (c *Classifier) buildSignalDispatchers(
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
 ) []signalDispatch {
-	dispatchers := []signalDispatch{
+	dispatchers := c.buildPrimarySignalDispatchers(
+		results,
+		mu,
+		textForSignal,
+		currentUserText,
+		priorUserMessages,
+		hasPriorAssistantReply,
+		imgArg,
+		imgCache,
+	)
+	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
+		results,
+		mu,
+		textForSignal,
+		contextText,
+		currentUserText,
+		imgArg,
+		imgCache,
+		requestFacts,
+	)...)
+	return append(
+		dispatchers,
+		c.buildPolicySignalDispatchers(
+			results,
+			mu,
+			textForSignal,
+			priorUserMessages,
+			nonUserMessages,
+			convFacts,
+			requestFacts,
+			usedSignals,
+		)...,
+	)
+}
+
+func (c *Classifier) buildPrimarySignalDispatchers(
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	currentUserText string,
+	priorUserMessages []string,
+	hasPriorAssistantReply bool,
+	imgArg string,
+	imgCache *requestImageEmbeddingCache,
+) []signalDispatch {
+	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
 			func() { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
@@ -70,9 +115,30 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypeLanguage, "Language",
 			func() { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
 		},
+	}
+}
+
+func (c *Classifier) buildRequestFactSignalDispatchers(
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	contextText string,
+	currentUserText string,
+	imgArg string,
+	imgCache *requestImageEmbeddingCache,
+	requestFacts RequestFacts,
+) []signalDispatch {
+	return []signalDispatch{
 		{
 			config.SignalTypeContext, "Context",
-			func() { c.evaluateContextSignal(results, mu, contextText) },
+			func() {
+				c.evaluateContextSignal(
+					results,
+					mu,
+					contextText,
+					requestFacts.ContextTokenFloor,
+				)
+			},
 		},
 		{
 			config.SignalTypeStructure, "Structure",
@@ -96,19 +162,6 @@ func (c *Classifier) buildSignalDispatchers(
 			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
 		},
 	}
-	return append(
-		dispatchers,
-		c.buildPolicySignalDispatchers(
-			results,
-			mu,
-			textForSignal,
-			priorUserMessages,
-			nonUserMessages,
-			convFacts,
-			requestFacts,
-			usedSignals,
-		)...,
-	)
 }
 
 func (c *Classifier) evaluateBoundedReaskSignal(

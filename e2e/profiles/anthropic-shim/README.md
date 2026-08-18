@@ -39,5 +39,5 @@ Run this profile when adding or validating tests for:
 ## Running the profile
 
 ```bash
-make e2e-test PROFILE=anthropic-shim
+make e2e-test E2E_PROFILE=anthropic-shim
 ```

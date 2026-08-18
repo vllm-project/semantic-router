@@ -74,7 +74,7 @@
   margin: 0;
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1340px) {
   .navbar__items--left,
   .navbar__items--right {
     gap: 0.18rem;
@@ -92,11 +92,6 @@
 
 .navbar__link {
   color: #d4d4d8;
-}
-
-.dropdown__link,
-.menu__link {
-  color: var(--site-text);
 }
 
 .navbar__link,
@@ -193,7 +188,7 @@ html[data-route-kind="blog"] .nav-docs-only {
 .menu {
   border: 1px solid var(--site-border);
   border-radius: 1.1rem;
-  background: rgba(251, 252, 254, 0.96);
+  background: var(--site-dropdown-bg);
   box-shadow: var(--site-shadow-soft);
   padding: 0.5rem;
   backdrop-filter: blur(18px);
@@ -204,12 +199,112 @@ html[data-route-kind="blog"] .nav-docs-only {
   border-radius: 0.8rem;
   padding: 0.8rem 0.95rem;
   font-size: 0.84rem;
+  color: var(--site-text);
 }
 
 .dropdown__link:hover,
 .menu__link:hover,
 .menu__link--active {
-  background: rgba(17, 17, 17, 0.06);
+  background: var(--site-menu-hover);
+}
+
+/*
+ * Color mode toggle — extreme right of the navbar.
+ *
+ * The literals below are deliberate, not missed tokens: navbar and footer are
+ * dark chrome in *both* modes (tokens.css sets their backgrounds on `:root`
+ * only). They mirror the zinc values already used for `.navbar__toggle`, so
+ * don't "fix" them to `--site-*`.
+ */
+.navbar .navbar-color-mode-toggle,
+.navbar-sidebar__brand .navbar-color-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.3rem;
+  height: 2.3rem;
+  margin-left: 0.45rem;
+}
+
+.navbar .navbar-color-mode-toggle button,
+.navbar-sidebar__brand .navbar-color-mode-toggle button {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  background: #18181b;
+  color: #fafafa;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.navbar .navbar-color-mode-toggle button:hover,
+.navbar .navbar-color-mode-toggle button:focus-visible,
+.navbar-sidebar__brand .navbar-color-mode-toggle button:hover,
+.navbar-sidebar__brand .navbar-color-mode-toggle button:focus-visible {
+  border-color: var(--site-accent);
+  background: #27272a;
+  color: #ffffff;
+  outline: none;
+}
+
+.navbar .navbar-color-mode-toggle button:focus-visible,
+.navbar-sidebar__brand .navbar-color-mode-toggle button:focus-visible {
+  box-shadow: 0 0 0 2px rgba(48, 162, 255, 0.4);
+}
+
+.navbar-sidebar__brand .navbar-color-mode-toggle {
+  margin-left: auto;
+  margin-right: 0.35rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar .navbar-color-mode-toggle button,
+  .navbar-sidebar__brand .navbar-color-mode-toggle button {
+    transition: none;
+  }
+}
+
+/*
+ * Toggle icon: sun or moon only, never the "system" glyph.
+ *
+ * theme-classic picks the icon off `html[data-theme-choice]`, which stays
+ * `system` until the reader picks a mode — misleading on a two-state button
+ * (see the swizzle in `theme/Navbar/ColorModeToggle`). Fall back to the
+ * resolved `data-theme`; Docusaurus's pre-paint script sets both attributes,
+ * so this settles with no flash.
+ *
+ * `[class*=]` because the class names are hashed CSS modules, same as the
+ * search plugin selectors below.
+ */
+html[data-theme-choice='system'] [class*='systemToggleIcon_'] {
+  display: none;
+}
+
+html[data-theme-choice='system'][data-theme='light'] [class*='lightToggleIcon_'],
+html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
+  display: initial;
+}
+
+/*
+ * The landing page is dark-only by design: `pages/index.module.css` redefines
+ * the `--site-*` palette on `.page` and pins `color-scheme: dark`, so
+ * `[data-theme]` never reaches inside it. Toggling there moves no pixels,
+ * which reads as broken — so hide the button rather than ship a no-op.
+ *
+ * Scope on `.site-root--home`, which Root.tsx renders server-side, and NOT on
+ * `html[data-route-kind='home']`, which it only sets in an effect — that one
+ * is missing from the SSR'd HTML, so the toggle would flash in and back out.
+ *
+ * Hides the control only; the stored color mode is untouched.
+ */
+.site-root--home .navbar .navbar-color-mode-toggle,
+.site-root--home .navbar-sidebar__brand .navbar-color-mode-toggle {
+  display: none;
 }
 
 .footer {
@@ -282,7 +377,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   color: var(--site-text);
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 1339px) {
   :root {
     --site-header-height: 4.25rem;
   }
@@ -471,7 +566,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1099px) {
+@media (min-width: 640px) and (max-width: 1339px) {
   :root {
     --ifm-navbar-sidebar-width: 24rem;
   }

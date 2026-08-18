@@ -120,7 +120,7 @@
 .getInvolved code {
   padding: 0.12rem 0.32rem;
   border-radius: 0.35rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--site-badge-bg);
 }
 
 .link {

@@ -15,11 +15,13 @@ invokes the selected backend and recipe-scoped plugins.
 4. [tools/agent/docs/change-surfaces.md](tools/agent/docs/change-surfaces.md)
 5. `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 
-## Native Discovery vs Routed Context
+## Task Routing
 
-- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
-- Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
-- `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
+- Root startup begins with this [AGENTS.md](AGENTS.md) entrypoint.
+- Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+- Follow the primary skill selected from [tools/agent/skills/](tools/agent/skills/)
+  instead of treating the root entrypoint as a task-specific skill.
+- `tools/agent/**` remains the canonical harness source.
 
 If you need real AMD model deployment details instead of the minimal smoke path, also read [website/docs/installation/amd-rocm.md](website/docs/installation/amd-rocm.md) and [config/recipes/balance/config.yaml](config/recipes/balance/config.yaml).
 

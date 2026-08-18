@@ -53,8 +53,8 @@
 
 .enforcementItem {
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--site-border);
+  background: var(--site-surface-soft);
 }
 
 .enforcementItem h4 {
@@ -77,7 +77,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.9rem;
   padding: 1rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--site-border);
 }
 
 .step > :last-child,
@@ -112,7 +112,7 @@
   overflow: hidden;
   max-width: 100%;
   border: 1px solid var(--site-border);
-  background: #0c0c0c;
+  background: var(--site-code-bg);
 }
 
 .codeHeader {
@@ -186,7 +186,7 @@
 .card code {
   padding: 0.12rem 0.32rem;
   border-radius: 0.35rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--site-badge-bg);
   overflow-wrap: anywhere;
   word-break: break-word;
 }

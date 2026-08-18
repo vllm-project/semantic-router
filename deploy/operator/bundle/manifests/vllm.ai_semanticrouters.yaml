@@ -1362,8 +1362,9 @@ spec:
                             type: integer
                           target_layer:
                             description: |-
-                              TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-                              Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+                              TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+                              Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+                              Evaluate the latency and quality trade-off on representative deployment data.
                             enum:
                             - 3
                             - 6
@@ -1490,6 +1491,23 @@ spec:
                       model_id:
                         default: models/mmbert32k-jailbreak-detector-merged
                         type: string
+                      positive_labels:
+                        description: |-
+                          PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+                          for a custom backend whose positive class isn't named "jailbreak"
+                          (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+                        items:
+                          type: string
+                        type: array
+                      protocol:
+                        description: |-
+                          Protocol selects a remote HTTP backend's wire contract. Mutually
+                          exclusive with Variant. Requires an external model configured via a
+                          vllmEndpoints/externalModels entry with model_role="guardrail".
+                        enum:
+                        - http_chat
+                        - http_classify
+                        type: string
                       threshold:
                         default: "0.7"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1499,9 +1517,15 @@ spec:
                       use_cpu:
                         default: true
                         type: boolean
-                      use_modernbert:
-                        default: false
-                        type: boolean
+                      variant:
+                        description: |-
+                          Variant selects a local Candle-backed model variant. It is mutually
+                          exclusive with Protocol. When both fields are omitted, the operator uses
+                          mmbert32k.
+                        enum:
+                        - candle
+                        - mmbert32k
+                        type: string
                     type: object
                   reasoning_families:
                     additionalProperties:

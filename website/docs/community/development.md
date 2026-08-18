@@ -1,96 +1,115 @@
 # Development Guide
 
-This guide covers the prerequisites, setup, and testing procedures for the vLLM Semantic Router.
+Use the repository's local image workflow for changes that affect Router or CLI
+behavior. It builds the same service topology that contributors exercise in
+local validation.
 
 ## Prerequisites
 
-Ensure you have the following installed:
+- Git
+- GNU Make
+- Docker or Podman
+- Python 3.10 or newer for the CLI, tests, training, and simulator tools
 
-- **Docker** (or Podman)
-- **Make** (for build automation)
-- **Python** 3.10+ (recommended, for training and testing)
-
-## Quick Start
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/vllm-project/semantic-router.git
-   cd semantic-router
-   ```
-
-2. **Start the development environment:**
-
-   ```bash
-   make vllm-sr-start
-   ```
-
-   This single command handles everything:
-   - Builds the Docker image with all dependencies
-   - Downloads required models from Hugging Face
-   - Installs the `vllm-sr` CLI tool
-   - Starts all services (semantic router, envoy, dashboard)
-
-3. **Install Python dependencies (Optional):**
-
-   ```bash
-   # For training and development
-   pip install -r requirements.txt
-   
-   # For end-to-end testing
-   pip install -r e2e/testing/requirements.txt
-   ```
-
-## Debugging Tips
-
-- **Rust:** Set `RUST_LOG=debug`.
-- **Go:** Set `SR_LOG_LEVEL=debug`.
-
-## Running Tests
-
-### Unit Tests
-
-- **Rust bindings:**
-
-  ```bash
-  make test-binding
-  ```
-
-- **Go Router:**
-
-  ```bash
-  make test-semantic-router
-  ```
-
-- **Classifiers:**
-
-  ```bash
-  make test-category-classifier
-  make test-pii-classifier
-  make test-jailbreak-classifier
-  ```
-
-### Manual Testing
-
-Use these commands to test specific scenarios:
+The repository bootstrap target creates its Python environment and installs the
+tooling used by the validation harness:
 
 ```bash
-# Model auto-selection
-make test-auto-prompt-no-reasoning
-make test-auto-prompt-reasoning
-make test-pii          # PII detection
-make test-prompt-guard # Jailbreak detection
-make test-tools        # Tools auto-selection
+make agent-bootstrap
 ```
 
-### End-to-End Tests
+Individual subprojects may have additional requirements. Do not install a
+repository-root `requirements.txt`; none exists. Use the dependency file or
+package metadata beside the component you are changing.
 
-Ensure services are running, then:
+## Build and run locally
 
 ```bash
-# Run all E2E tests
-python e2e/testing/run_all_tests.py
-
-# Run specific test
-python e2e/testing/00-client-request-test.py
+make vllm-sr-dev
+vllm-sr serve --image-pull-policy never
 ```
+
+The build installs the editable `vllm-sr` CLI and creates local Router,
+Dashboard, Envoy, and Fleet Sim images. `--image-pull-policy never` ensures the
+run uses those local images.
+
+Useful lifecycle commands:
+
+```bash
+vllm-sr status
+vllm-sr logs router
+vllm-sr logs envoy -f
+vllm-sr dashboard
+vllm-sr stop
+```
+
+For ROCm-specific work:
+
+```bash
+make vllm-sr-dev VLLM_SR_PLATFORM=amd
+vllm-sr serve --image-pull-policy never --platform amd
+```
+
+## Select the right tests
+
+Start with the repository report for your changed files:
+
+```bash
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
+Common targeted suites include:
+
+```bash
+# Router and native bindings
+make test-semantic-router
+make test-binding
+
+# Classifiers
+make test-category-classifier
+make test-pii-classifier
+make test-jailbreak-classifier
+
+# Python CLI
+make vllm-sr-test
+
+# Fleet simulator
+make vllm-sr-sim-test
+```
+
+Use the affected E2E selector when a change is visible through startup,
+routing, an API, a deployment profile, or another live path:
+
+```bash
+make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+```
+
+## Validate a local stack
+
+The configured listener is the client-facing endpoint. For the setup generated
+by an empty workspace it is `http://localhost:8899`:
+
+```bash
+curl -sS http://localhost:8899/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "MoM",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+Use the virtual model name from your active configuration. `vllm-sr status`
+shows the stack and published ports when you use a custom listener or port
+offset.
+
+## Debugging
+
+- Inspect component logs with `vllm-sr logs <service>` before relying on
+  container names.
+- Set `RUST_LOG=debug` for native-library diagnostics.
+- Set `SR_LOG_LEVEL=debug` for Router diagnostics.
+- Run `vllm-sr validate --config <file>` before debugging a configuration at
+  runtime.
+- See [Common Errors](/docs/troubleshooting/common-errors) and
+  [Container Connectivity](/docs/troubleshooting/container-connectivity) for
+  startup and network failures.

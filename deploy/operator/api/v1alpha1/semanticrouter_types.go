@@ -1160,8 +1160,9 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetDimension int `json:"target_dimension,omitempty"`
 
-	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+	// Evaluate the latency and quality trade-off on representative deployment data.
 	// +kubebuilder:validation:Enum=3;6;11;22
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
@@ -1361,9 +1362,18 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=false
+	// Variant selects a local Candle-backed model variant. It is mutually
+	// exclusive with Protocol. When both fields are omitted, the operator uses
+	// mmbert32k.
+	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured via a
+	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// +kubebuilder:validation:Enum=http_chat;http_classify
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1377,6 +1387,11 @@ type PromptGuardConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
+	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+	// for a custom backend whose positive class isn't named "jailbreak"
+	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+	// +optional
+	PositiveLabels []string `json:"positive_labels,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

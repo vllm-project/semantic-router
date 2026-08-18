@@ -51,6 +51,14 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+.readonlyBanner {
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-md, 0.375rem);
+  background: var(--color-bg-secondary, #242424);
+  color: var(--color-text-secondary, #999);
+}
+
 .progressView {
   display: flex;
   flex-direction: column;

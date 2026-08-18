@@ -35,6 +35,11 @@ func testRouterReplaySessionListFilter(ctx context.Context, client *kubernetes.C
 		return fmt.Errorf("open session: %w", err)
 	}
 	defer session.Close()
+	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return fmt.Errorf("open Router management API session: %w", err)
+	}
+	defer apiSession.Close()
 
 	base := fmt.Sprintf("e2e_rs_%d", time.Now().UnixNano())
 	sessA := base + "_a"
@@ -57,10 +62,10 @@ func testRouterReplaySessionListFilter(ctx context.Context, client *kubernetes.C
 	}
 	time.Sleep(2 * time.Second)
 
-	if err := assertReplayListAllMatchSessionID(session, sessA, opts.Verbose); err != nil {
+	if err := assertReplayListAllMatchSessionID(apiSession, sessA, opts.Verbose); err != nil {
 		return fmt.Errorf("session A filter: %w", err)
 	}
-	if err := assertReplayListAllMatchSessionID(session, sessB, opts.Verbose); err != nil {
+	if err := assertReplayListAllMatchSessionID(apiSession, sessB, opts.Verbose); err != nil {
 		return fmt.Errorf("session B filter: %w", err)
 	}
 	return nil
@@ -75,6 +80,11 @@ func testRouterReplaySessionTurnProgression(ctx context.Context, client *kuberne
 		return fmt.Errorf("open session: %w", err)
 	}
 	defer session.Close()
+	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return fmt.Errorf("open Router management API session: %w", err)
+	}
+	defer apiSession.Close()
 
 	sess := fmt.Sprintf("e2e_turn_%d", time.Now().UnixNano())
 	user := "e2e-replay-turn-user"
@@ -102,7 +112,7 @@ func testRouterReplaySessionTurnProgression(ctx context.Context, client *kuberne
 	}
 	time.Sleep(2 * time.Second)
 
-	items, err := fetchReplayListForSession(session, sess, 20)
+	items, err := fetchReplayListForSession(apiSession, sess, 20)
 	if err != nil {
 		return err
 	}
@@ -110,15 +120,7 @@ func testRouterReplaySessionTurnProgression(ctx context.Context, client *kuberne
 		return fmt.Errorf("expected at least 2 replay rows for session %q, got %d", sess, len(items))
 	}
 
-	minTurn, maxTurn := items[0].TurnIndex, items[0].TurnIndex
-	for _, it := range items {
-		if it.TurnIndex < minTurn {
-			minTurn = it.TurnIndex
-		}
-		if it.TurnIndex > maxTurn {
-			maxTurn = it.TurnIndex
-		}
-	}
+	minTurn, maxTurn := replayTurnIndexRange(items)
 	if maxTurn <= minTurn {
 		return fmt.Errorf("expected turn_index range for session %q (min=%d max=%d across %d rows)",
 			sess, minTurn, maxTurn, len(items))
@@ -127,6 +129,15 @@ func testRouterReplaySessionTurnProgression(ctx context.Context, client *kuberne
 		fmt.Printf("[Test] session %q replay rows=%d turn_index min=%d max=%d\n", sess, len(items), minTurn, maxTurn)
 	}
 	return nil
+}
+
+func replayTurnIndexRange(items []replayListItem) (int, int) {
+	minTurn, maxTurn := items[0].TurnIndex, items[0].TurnIndex
+	for _, item := range items[1:] {
+		minTurn = min(minTurn, item.TurnIndex)
+		maxTurn = max(maxTurn, item.TurnIndex)
+	}
+	return minTurn, maxTurn
 }
 
 type postChatOpts struct {
@@ -167,8 +178,8 @@ type replayListItem struct {
 	Timestamp string `json:"timestamp"`
 }
 
-func assertReplayListAllMatchSessionID(session *fixtures.ServiceSession, wantSession string, verbose bool) error {
-	items, err := fetchReplayListForSession(session, wantSession, 50)
+func assertReplayListAllMatchSessionID(managementSession *fixtures.ServiceSession, wantSession string, verbose bool) error {
+	items, err := fetchReplayListForSession(managementSession, wantSession, 50)
 	if err != nil {
 		return err
 	}
@@ -186,12 +197,15 @@ func assertReplayListAllMatchSessionID(session *fixtures.ServiceSession, wantSes
 	return nil
 }
 
-func fetchReplayListForSession(session *fixtures.ServiceSession, sessionID string, limit int) ([]replayListItem, error) {
+func fetchReplayListForSession(managementSession *fixtures.ServiceSession, sessionID string, limit int) ([]replayListItem, error) {
 	q := url.Values{}
 	q.Set("session_id", sessionID)
 	q.Set("limit", fmt.Sprintf("%d", limit))
-	httpClient := session.HTTPClient(30 * time.Second)
-	raw, err := fixtures.DoGETRequest(context.Background(), httpClient, session.BaseURL()+"/v1/router_replay?"+q.Encode())
+	raw, err := doRouterReplayManagementGET(
+		context.Background(),
+		managementSession,
+		"/v1/router_replay?"+q.Encode(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("GET router_replay list: %w", err)
 	}
