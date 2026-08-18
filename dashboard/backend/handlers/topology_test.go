@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -221,7 +222,12 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "Bearer topology-service-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{RoutingDecision: "balanced-route"}))
+		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{
+			RoutingDecision: "balanced-route",
+			EvalTrace: []decision.DecisionTrace{
+				{DecisionName: "balanced-route", Matched: true, Confidence: 1},
+			},
+		}))
 	}))
 	defer server.Close()
 
