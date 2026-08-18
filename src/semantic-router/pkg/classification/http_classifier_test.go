@@ -18,11 +18,11 @@ func testJailbreakMapping() *JailbreakMapping {
 	}
 }
 
-func TestNewHTTPClassifierJailbreakInference(t *testing.T) {
+func TestNewHTTPClassifierInference(t *testing.T) {
 	tests := []struct {
 		name        string
 		externalCfg *config.ExternalModelConfig
-		mapping     *JailbreakMapping
+		mapping     sequenceLabelMapping
 		expectError bool
 	}{
 		{
@@ -49,11 +49,24 @@ func TestNewHTTPClassifierJailbreakInference(t *testing.T) {
 			mapping:     nil,
 			expectError: true,
 		},
+		{
+			// Guards the classic Go nil-interface gotcha: a caller-supplied
+			// concrete-typed nil pointer (as opposed to a literal nil
+			// interface) must still be rejected here, not slip through and
+			// panic later inside LabelCount/IndexForLabel.
+			name: "typed nil mapping pointer",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+				ModelName:     "custom-classifier",
+			},
+			mapping:     (*JailbreakMapping)(nil),
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewHTTPClassifierJailbreakInference(tt.externalCfg, tt.mapping)
+			_, err := NewHTTPClassifierInference(tt.externalCfg, tt.mapping)
 			if tt.expectError && err == nil {
 				t.Error("expected an error, got nil")
 			}
@@ -64,11 +77,11 @@ func TestNewHTTPClassifierJailbreakInference(t *testing.T) {
 	}
 }
 
-// TestNewHTTPClassifierJailbreakInference_DefaultTimeout guards the shorter
-// default for http_classify (a single lightweight forward pass) relative to
+// TestNewHTTPClassifierInference_DefaultTimeout guards the shorter default
+// for http_classify (a single lightweight forward pass) relative to
 // http_chat (a generative call that can legitimately take a few seconds) -
 // see adaamko's review of #2759. TimeoutSeconds still overrides it.
-func TestNewHTTPClassifierJailbreakInference_DefaultTimeout(t *testing.T) {
+func TestNewHTTPClassifierInference_DefaultTimeout(t *testing.T) {
 	tests := []struct {
 		name            string
 		timeoutSeconds  int
@@ -80,7 +93,7 @@ func TestNewHTTPClassifierJailbreakInference_DefaultTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inf, err := NewHTTPClassifierJailbreakInference(&config.ExternalModelConfig{
+			inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
 				ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
 				ModelName:      "custom-classifier",
 				TimeoutSeconds: tt.timeoutSeconds,
@@ -95,11 +108,11 @@ func TestNewHTTPClassifierJailbreakInference_DefaultTimeout(t *testing.T) {
 	}
 }
 
-// newTestHTTPClassifierInference points an HTTPClassifierJailbreakInference at
-// a local httptest.Server without going through address/port parsing.
-func newTestHTTPClassifierInference(t *testing.T, server *httptest.Server, mapping *JailbreakMapping) *HTTPClassifierJailbreakInference {
+// newTestHTTPClassifierInference points an HTTPClassifierInference at a
+// local httptest.Server without going through address/port parsing.
+func newTestHTTPClassifierInference(t *testing.T, server *httptest.Server, mapping sequenceLabelMapping) *HTTPClassifierInference {
 	t.Helper()
-	inf, err := NewHTTPClassifierJailbreakInference(&config.ExternalModelConfig{
+	inf, err := NewHTTPClassifierInference(&config.ExternalModelConfig{
 		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
 		ModelName:     "custom-classifier",
 	}, mapping)
@@ -144,6 +157,41 @@ func TestHTTPClassifierJailbreakInferenceClassify_AlignsLabelsToMapping(t *testi
 	}
 	if len(result.Probabilities) != 2 || result.Probabilities[0] != 0.1 || result.Probabilities[1] != 0.9 {
 		t.Errorf("Probabilities = %v, want [0.1 0.9] aligned to mapping order", result.Probabilities)
+	}
+}
+
+// TestHTTPClassifierInferenceClassify_CategoryMapping proves
+// HTTPClassifierInference - not just alignScoresToMapping in isolation -
+// works end to end (construction, request, response parsing, validation)
+// with a second, independently-shaped mapping type. The label set below
+// matches LLM-Semantic-Router/category_classifier_modernbert-base_model, a
+// real 14-label model this was manually validated against over the exact
+// http_classify wire contract before this generalization.
+func TestHTTPClassifierInferenceClassify_CategoryMapping(t *testing.T) {
+	mapping := &CategoryMapping{
+		CategoryToIdx: map[string]int{"math": 0, "physics": 1, "other": 2},
+		IdxToCategory: map[string]string{"0": "math", "1": "physics", "2": "other"},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{
+			{Label: "physics", Score: 0.15},
+			{Label: "math", Score: 0.80},
+			{Label: "other", Score: 0.05},
+		})
+	}))
+	defer server.Close()
+
+	inf := newTestHTTPClassifierInference(t, server, mapping)
+	result, err := inf.Classify(context.Background(), "What is the derivative of x^2?")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	class, confidence := deriveArgmax(result.Probabilities)
+	if class != 0 {
+		t.Errorf("class = %d, want 0 (math)", class)
+	}
+	if confidence != 0.80 {
+		t.Errorf("confidence = %v, want 0.80", confidence)
 	}
 }
 

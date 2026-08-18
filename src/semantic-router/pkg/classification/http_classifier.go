@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -34,38 +35,43 @@ type sequenceLabelMapping interface {
 	LabelCount() int
 }
 
-// HTTPClassifierJailbreakInference implements SequenceClassifierBackend by
-// calling an external sequence-classifier endpoint over HTTP. The wire
-// contract mirrors the widely-used HuggingFace text-classification pipeline
-// shape: a request carrying the input text, and a response listing every
-// label's score (not just the top prediction), so a server wrapping an
-// existing `transformers` pipeline or a Text Embeddings Inference (TEI)
-// classify endpoint can be plugged in with minimal glue:
+// HTTPClassifierInference implements SequenceClassifierBackend by calling an
+// external sequence-classifier endpoint over HTTP. The wire contract mirrors
+// the widely-used HuggingFace text-classification pipeline shape: a request
+// carrying the input text, and a response listing every label's score (not
+// just the top prediction), so a server wrapping an existing `transformers`
+// pipeline or a Text Embeddings Inference (TEI) classify endpoint can be
+// plugged in with minimal glue:
 //
 //	POST {endpoint}/classify
 //	  {"inputs": "<text>"}
 //	  -> [{"label": "safe", "score": 0.99}, {"label": "jailbreak", "score": 0.01}]
 //
-// Response labels are matched against the configured jailbreak_mapping by
-// name (not by array position, which the server is free to order however it
+// Response labels are matched against the configured label mapping by name
+// (not by array position, which the server is free to order however it
 // likes - e.g. sorted by score) so the resulting class index always lines up
-// with the same mapping every other backend uses.
-type HTTPClassifierJailbreakInference struct {
+// with the same mapping every other backend uses. This type is not
+// jailbreak-specific: any SequenceClassifierBackend consumer whose mapping
+// satisfies sequenceLabelMapping (JailbreakMapping, CategoryMapping, ...)
+// can construct one - validated against a real, independently-trained
+// external model (a 14-label category classifier) during #2918, not just a
+// synthetic mock.
+type HTTPClassifierInference struct {
 	httpClient *http.Client
 	baseURL    string
 	accessKey  string
 	timeout    time.Duration
-	mapping    *JailbreakMapping
+	mapping    sequenceLabelMapping
 }
 
-// NewHTTPClassifierJailbreakInference creates a new http_classify-backed
-// jailbreak inference instance from an external model config.
-func NewHTTPClassifierJailbreakInference(cfg *config.ExternalModelConfig, mapping *JailbreakMapping) (*HTTPClassifierJailbreakInference, error) {
+// NewHTTPClassifierInference creates a new http_classify-backed inference
+// instance from an external model config and label mapping.
+func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenceLabelMapping) (*HTTPClassifierInference, error) {
 	if cfg.ModelEndpoint.Address == "" {
-		return nil, fmt.Errorf("http_classify endpoint address is required for guardrail")
+		return nil, fmt.Errorf("http_classify endpoint address is required")
 	}
-	if mapping == nil {
-		return nil, fmt.Errorf("jailbreak mapping is required for http_classify")
+	if isNilMapping(mapping) {
+		return nil, fmt.Errorf("label mapping is required for http_classify")
 	}
 
 	scheme := cfg.ModelEndpoint.Protocol
@@ -82,13 +88,29 @@ func NewHTTPClassifierJailbreakInference(cfg *config.ExternalModelConfig, mappin
 		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 
-	return &HTTPClassifierJailbreakInference{
+	return &HTTPClassifierInference{
 		httpClient: &http.Client{Timeout: timeout},
 		baseURL:    baseURL,
 		accessKey:  cfg.AccessKey,
 		timeout:    timeout,
 		mapping:    mapping,
 	}, nil
+}
+
+// isNilMapping reports whether mapping is nil - either a literal nil
+// interface, or an interface holding a nil concrete pointer (e.g. a
+// (*JailbreakMapping)(nil) passed by a caller that forgot to check). A plain
+// `mapping == nil` comparison misses the second case: an interface value
+// carrying type information is never == nil even when the pointer it wraps
+// is, so a caller's nil *JailbreakMapping would otherwise slip past this
+// check and panic later inside LabelCount/IndexForLabel instead of failing
+// fast here.
+func isNilMapping(mapping sequenceLabelMapping) bool {
+	if mapping == nil {
+		return true
+	}
+	v := reflect.ValueOf(mapping)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
 
 type httpClassifyRequest struct {
@@ -104,7 +126,7 @@ type httpClassifyLabelScore struct {
 // deadline from the caller's ctx (so the request can be cancelled if the
 // caller gives up first) bounded by h.timeout, rather than always running to
 // its own internal timeout regardless of the caller's lifecycle.
-func (h *HTTPClassifierJailbreakInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+func (h *HTTPClassifierInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
@@ -122,7 +144,7 @@ func (h *HTTPClassifierJailbreakInference) Classify(ctx context.Context, text st
 }
 
 // buildClassifyRequest builds the outgoing http_classify HTTP request.
-func (h *HTTPClassifierJailbreakInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
+func (h *HTTPClassifierInference) buildClassifyRequest(ctx context.Context, text string) (*http.Request, error) {
 	reqBody, err := json.Marshal(httpClassifyRequest{Inputs: text})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal http_classify request: %w", err)
@@ -143,7 +165,7 @@ func (h *HTTPClassifierJailbreakInference) buildClassifyRequest(ctx context.Cont
 
 // doClassifyRequest sends the request and parses the label/score list from a
 // successful response.
-func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
+func (h *HTTPClassifierInference) doClassifyRequest(httpReq *http.Request) ([]httpClassifyLabelScore, error) {
 	resp, err := h.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("http_classify request failed: %w", err)
