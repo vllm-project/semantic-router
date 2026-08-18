@@ -15,6 +15,16 @@ type cachedJailbreakResult struct {
 	err    error
 }
 
+// jailbreakClassificationErrorType is the sentinel jailbreak type reported
+// when config.PromptGuardOnErrorFail forces a rule to match because
+// inference itself failed (e.g. an unreachable http_chat/http_classify
+// endpoint), rather than because the content was actually classified as a
+// jailbreak. It is distinguishable from a real detected type in
+// results/logs. Without this fail-closed path (config.PromptGuardOnErrorSkip,
+// the default), a classify error is indistinguishable from a genuinely safe
+// request - see @adaamko's review on #2760.
+const jailbreakClassificationErrorType = "classification_error"
+
 // collectJailbreakClassifierContents returns the deduplicated set of text pieces
 // that need BERT classifier inference (contrastive rules are excluded).
 func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, nonUserMessages []string) []string {
@@ -187,6 +197,9 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 		for _, cached := range cachedResults {
 			if cached.err != nil {
 				logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
+				if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorFail {
+					return jailbreakClassificationErrorType, 1.0
+				}
 				continue
 			}
 			class, _ := deriveArgmax(cached.result.Probabilities)

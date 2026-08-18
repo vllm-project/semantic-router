@@ -55,3 +55,103 @@ func TestFindBestJailbreakMatch_MultiplePositiveLabels(t *testing.T) {
 		t.Errorf("bestType = %q, want %q (argmax winner, for display)", bestType, "benign")
 	}
 }
+
+// newJailbreakTestClassifier builds a minimal *Classifier for
+// findBestJailbreakMatch tests, with the given PromptGuard.OnError policy.
+func newJailbreakTestClassifier(t *testing.T, onError string) *Classifier {
+	t.Helper()
+	cfg := &config.RouterConfig{}
+	cfg.PromptGuard.Enabled = true
+	cfg.PromptGuard.ModelID = "test-model"
+	cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
+	cfg.PromptGuard.PositiveLabels = []string{"jailbreak"}
+	cfg.PromptGuard.OnError = onError
+
+	mapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
+	}
+	classifier, err := newClassifierWithOptions(cfg,
+		withJailbreak(mapping, &MockJailbreakInitializer{}, &MockJailbreakInference{
+			responseMap: make(map[string]MockJailbreakInferenceResponse),
+		}))
+	if err != nil {
+		t.Fatalf("failed to construct classifier: %v", err)
+	}
+	return classifier
+}
+
+// TestFindBestJailbreakMatch_OnErrorSkip_DefaultToleratesFailure guards the
+// historical, default behavior: a classify error is logged and the affected
+// content is treated as not matching, so a request whose only content piece
+// failed to classify does not report a match.
+func TestFindBestJailbreakMatch_OnErrorSkip_DefaultToleratesFailure(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, "")
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	cache := map[string][]cachedJailbreakResult{
+		"some text": {{err: errClassifyUnreachable}},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"some text"}, cache)
+
+	if bestScore != 0 {
+		t.Errorf("bestScore = %v, want 0 (on_error: skip tolerates the failure)", bestScore)
+	}
+	if bestType != "" {
+		t.Errorf("bestType = %q, want empty", bestType)
+	}
+}
+
+// TestFindBestJailbreakMatch_OnErrorFail_TreatsFailureAsMatch verifies
+// PromptGuardOnErrorFail closes the gap @adaamko flagged on #2760: an
+// unreachable classifier endpoint must not look identical to a genuinely
+// clean request. With on_error: fail, the rule reports a match at maximum
+// confidence instead of silently skipping the failed content.
+func TestFindBestJailbreakMatch_OnErrorFail_TreatsFailureAsMatch(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.PromptGuardOnErrorFail)
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	cache := map[string][]cachedJailbreakResult{
+		"some text": {{err: errClassifyUnreachable}},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"some text"}, cache)
+
+	if bestScore != 1.0 {
+		t.Errorf("bestScore = %v, want 1.0 (fail-closed)", bestScore)
+	}
+	if bestType != jailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q", bestType, jailbreakClassificationErrorType)
+	}
+}
+
+// TestFindBestJailbreakMatch_OnErrorFail_DoesNotOverrideARealMatch verifies
+// that when a genuine content-based match already scores above the
+// fail-closed sentinel would, findBestJailbreakMatch still surfaces the
+// contract callers rely on: a score of 1.0 either way, so a decision
+// threshold at or below 1.0 behaves identically regardless of which content
+// piece is examined first.
+func TestFindBestJailbreakMatch_OnErrorFail_DoesNotOverrideARealMatch(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.PromptGuardOnErrorFail)
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	cache := map[string][]cachedJailbreakResult{
+		"attack text": {{result: SequenceClassificationResult{Probabilities: []float32{0.0, 1.0}}}},
+		"broken text": {{err: errClassifyUnreachable}},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(
+		rule, []string{"attack text", "broken text"}, cache,
+	)
+
+	if bestScore != 1.0 {
+		t.Errorf("bestScore = %v, want 1.0", bestScore)
+	}
+	if bestType != jailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q (fail-closed short-circuits the scan)", bestType, jailbreakClassificationErrorType)
+	}
+}
+
+var errClassifyUnreachable = &jailbreakTestError{"classifier endpoint unreachable"}
+
+type jailbreakTestError struct{ msg string }
+
+func (e *jailbreakTestError) Error() string { return e.msg }
