@@ -45,29 +45,35 @@ type ClassificationAPIServer struct {
 func (s *ClassificationAPIServer) currentContextCompression() (
 	*contextcompression.Service,
 	contextcompression.RecoveryStore,
+	func(),
 ) {
 	if s == nil {
-		return nil, nil
+		return nil, nil, func() {}
 	}
 	if s.runtimeRegistry != nil {
-		service, recovery := s.runtimeRegistry.ContextCompression()
+		service, recovery, release := s.runtimeRegistry.AcquireContextCompression()
 		if service != nil {
-			return service, recovery
+			return service, recovery, release
 		}
+		release()
+		return nil, nil, func() {}
 	}
-	return s.contextCompression, s.compressionRecovery
+	return s.contextCompression, s.compressionRecovery, func() {}
 }
 
-func (s *ClassificationAPIServer) currentResponseCache() *cache.ResponseCacheService {
+func (s *ClassificationAPIServer) currentResponseCache() (*cache.ResponseCacheService, func()) {
 	if s == nil {
-		return nil
+		return nil, func() {}
 	}
 	if s.runtimeRegistry != nil {
-		if service := s.runtimeRegistry.ResponseCache(); service != nil {
-			return service
+		if service, release := s.runtimeRegistry.AcquireResponseCache(); service != nil {
+			return service, release
+		} else {
+			release()
 		}
+		return nil, func() {}
 	}
-	return s.responseCache
+	return s.responseCache, func() {}
 }
 
 type (

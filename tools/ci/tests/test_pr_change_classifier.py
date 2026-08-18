@@ -146,6 +146,30 @@ class PRChangeClassifierTests(unittest.TestCase):
             ("envoy-ai-gateway", "dashboard", "remote-embedding"),
         )
 
+    def test_generated_api_docs_select_core_tests(self) -> None:
+        """Hand-edited API docs must still reach the api-docs-check drift gate.
+
+        Both artifacts are generated from the route catalog. They live under
+        `website/` and end in `.md`/`.json`, so without an explicit rule they
+        classify as docs-only and skip `core-tests`, letting a manual edit
+        drift away from the catalog undetected.
+        """
+        for path in (
+            "website/docs/api/apiserver.md",
+            "website/static/openapi/apiserver/apiserver.openapi.json",
+            "tools/openapi-gen/main.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+
+                self.assertIn("core-tests", result.selected_jobs)
+
+    def test_unrelated_website_docs_do_not_select_core_tests(self) -> None:
+        """The api-docs rule must not drag ordinary docs edits into core-tests."""
+        result = classify(["website/docs/community/development.md"])
+
+        self.assertNotIn("core-tests", result.selected_jobs)
+
     def test_recipe_changes_select_conformance_domain(self) -> None:
         result = classify(["config/recipes/privacy/probes.yaml"])
 

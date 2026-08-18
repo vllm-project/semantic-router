@@ -60,8 +60,10 @@ Latest Git commit times are the primary drift signal. translation.source_commit
 is a secondary metadata signal: when it is behind but the translated file is not
 older, the file is reported for verification instead of definitely outdated.
 
-Exit status is 0 when translations are fully synced, 1 when translation or
-metadata work remains, and 2 for usage or setup errors.
+Missing locale files use Docusaurus's current-English fallback and are reported
+as coverage information. Exit status is 0 when every present translation is
+synced, 1 when a present translation or its metadata needs work, and 2 for usage
+or setup errors.
 
 Options:
   -l, --locale LOCALE   Check specific locale only (default: all)
@@ -175,7 +177,7 @@ cd "$WEBSITE_DIR"
 
 total_likely_synced=0
 total_outdated=0
-total_missing=0
+total_fallback=0
 total_metadata=0
 total_verification=0
 total_status_mismatch=0
@@ -191,7 +193,7 @@ check_locale() {
     fi
 
     local outdated_count=0
-    local missing_count=0
+    local fallback_count=0
     local likely_synced_count=0
     local metadata_count=0
     local verification_count=0
@@ -199,7 +201,6 @@ check_locale() {
     local status_fixed_count=0
 
     declare -a outdated_files
-    declare -a missing_files
     declare -a metadata_files
     declare -a verification_files
     declare -a status_mismatches
@@ -216,8 +217,7 @@ check_locale() {
         local i18n_file="$WEBSITE_DIR/$i18n_rel_path"
 
         if [[ ! -f "$i18n_file" ]]; then
-            missing_files+=("$rel_path")
-            missing_count=$((missing_count + 1))
+            fallback_count=$((fallback_count + 1))
             continue
         fi
 
@@ -311,11 +311,8 @@ check_locale() {
 
     echo -e "${CYAN}[$locale]${NC}"
 
-    if [[ ${#missing_files[@]} -gt 0 ]]; then
-        echo -e "  ${RED}Missing translations:${NC}"
-        for file in "${missing_files[@]}"; do
-            echo -e "    ${RED}✗${NC} $file"
-        done
+    if [[ $fallback_count -gt 0 ]]; then
+        echo -e "  ${CYAN}English fallback:${NC} $fallback_count page(s) have no locale override"
     fi
 
     if [[ ${#outdated_files[@]} -gt 0 ]]; then
@@ -363,22 +360,22 @@ check_locale() {
         done
     fi
 
-    local total=$((likely_synced_count + outdated_count + missing_count))
+    local total=$((likely_synced_count + outdated_count + fallback_count))
     local sync_rate=0
     [[ $total -gt 0 ]] && sync_rate=$((likely_synced_count * 100 / total))
 
-    echo -e "  ${GREEN}✓${NC} $likely_synced_count likely synced  ${YELLOW}↓${NC} $outdated_count  ${RED}✗${NC} $missing_count  ${MAGENTA}!${NC} $metadata_count  ${CYAN}?${NC} $verification_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}%)"
+    echo -e "  ${GREEN}✓${NC} $likely_synced_count translated and likely synced  ${CYAN}↪${NC} $fallback_count English fallback  ${YELLOW}↓${NC} $outdated_count  ${MAGENTA}!${NC} $metadata_count  ${CYAN}?${NC} $verification_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}% translated coverage)"
     echo ""
 
     total_likely_synced=$((total_likely_synced + likely_synced_count))
     total_outdated=$((total_outdated + outdated_count))
-    total_missing=$((total_missing + missing_count))
+    total_fallback=$((total_fallback + fallback_count))
     total_metadata=$((total_metadata + metadata_count))
     total_verification=$((total_verification + verification_count))
     total_status_mismatch=$((total_status_mismatch + status_mismatch_count))
     total_status_fixed=$((total_status_fixed + status_fixed_count))
 
-    [[ $outdated_count -gt 0 ]] || [[ $missing_count -gt 0 ]] || [[ $metadata_count -gt 0 ]] || [[ $verification_count -gt 0 ]] || [[ $status_mismatch_count -gt 0 ]]
+    [[ $outdated_count -gt 0 ]] || [[ $metadata_count -gt 0 ]] || [[ $verification_count -gt 0 ]] || [[ $status_mismatch_count -gt 0 ]]
 }
 
 echo -e "${BLUE}=== Translation Sync Check ===${NC}"
@@ -393,11 +390,11 @@ done
 
 if [[ ${#LOCALES[@]} -gt 1 ]]; then
     echo -e "${BLUE}=== Total ===${NC}"
-    total=$((total_likely_synced + total_outdated + total_missing))
+    total=$((total_likely_synced + total_outdated + total_fallback))
     sync_rate=0
     [[ $total -gt 0 ]] && sync_rate=$((total_likely_synced * 100 / total))
-    echo -e "${GREEN}✓ Likely synced: $total_likely_synced${NC}  ${YELLOW}↓ Outdated: $total_outdated${NC}  ${RED}✗ Missing: $total_missing${NC}  ${MAGENTA}! Metadata: $total_metadata${NC}  ${CYAN}? Verify: $total_verification${NC}  ${YELLOW}~ Status: $total_status_mismatch${NC}  ${GREEN}+ Fixed: $total_status_fixed${NC}"
-    echo -e "Likely sync rate: ${sync_rate}% ($total_likely_synced / $total)"
+    echo -e "${GREEN}✓ Translated and likely synced: $total_likely_synced${NC}  ${CYAN}↪ English fallback: $total_fallback${NC}  ${YELLOW}↓ Outdated: $total_outdated${NC}  ${MAGENTA}! Metadata: $total_metadata${NC}  ${CYAN}? Verify: $total_verification${NC}  ${YELLOW}~ Status: $total_status_mismatch${NC}  ${GREEN}+ Fixed: $total_status_fixed${NC}"
+    echo -e "Translated coverage: ${sync_rate}% ($total_likely_synced / $total)"
 fi
 
 if $locale_has_issues; then

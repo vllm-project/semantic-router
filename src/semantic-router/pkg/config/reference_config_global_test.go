@@ -293,7 +293,10 @@ func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
 	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard")
+	// protocol is mutually exclusive with variant (PromptGuardConfig); the
+	// reference config demonstrates the local variant path, so protocol has
+	// no reference-config key to cover here.
+	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol")
 	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
 	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
 	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))

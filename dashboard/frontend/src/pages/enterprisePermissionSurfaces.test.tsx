@@ -110,12 +110,18 @@ describe('enterprise permission surfaces', () => {
     ]
 
     expect(securitySource).toContain('canManageSecurity')
+    expect(securitySource).toContain('!serverReadonly &&')
+    expect(securitySource).toContain('runtimeConfigWritable &&')
     expect(securitySource).toContain('<StringListEditor')
     expect(securitySource).toContain('security.manage')
     expect(securitySource).not.toContain('comma-separated')
     expect(securitySource).not.toContain('modelInputs')
 
     expect(pageSource).toContain('canManageOpenClaw')
+    expect(pageSource).toContain(
+      '!permissionsLoading && !serverReadonly && canManageOpenClaw(user)',
+    )
+    expect(pageSource).not.toContain('runtimeConfigWritable')
     expect(pageSource).toContain('openclaw.manage')
     expect(pageSource).toContain('createLatestOpenClawRequest')
     expect(pageSource).toContain('document.hidden')

@@ -7,6 +7,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
+import click
+
 
 def exit_with_logged_error(
     log: Any, interrupt_message: str | None = None
@@ -22,6 +24,8 @@ def exit_with_logged_error(
                 if interrupt_message:
                     log.info(interrupt_message)
                 sys.exit(0)
+            except click.ClickException:
+                raise
             except Exception as exc:
                 log.error(f"Error: {exc}")
                 sys.exit(1)

@@ -1,14 +1,17 @@
-{{- $config := deepCopy .Values.config -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $router := (get $global "router") | default (dict) -}}
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
 
-{{- $skipProcessingEnabled := false -}}
-{{- if and .Values.router .Values.router.skipProcessing -}}
-{{-   $skipProcessingEnabled = (.Values.router.skipProcessing.enabled | default false) -}}
+{{- $skipProcessing := (get $router "skip_processing") | default (dict) -}}
+{{- $skipProcessingEnabled := (get $skipProcessing "enabled") | default false -}}
+{{- $routerValues := .Values.router | default (dict) -}}
+{{- $skipProcessingValues := (get $routerValues "skipProcessing") | default (dict) -}}
+{{- if and (hasKey $skipProcessingValues "enabled") (ne (get $skipProcessingValues "enabled") nil) -}}
+{{-   $skipProcessingEnabled = (get $skipProcessingValues "enabled") -}}
 {{- end -}}
-{{- $skipProcessing := dict "enabled" $skipProcessingEnabled -}}
+{{- $_ := set $skipProcessing "enabled" $skipProcessingEnabled -}}
 {{- $_ := set $router "skip_processing" $skipProcessing -}}
 {{- $_ := set $global "router" $router -}}
 {{- $responseCache := (get $stores "response_cache") | default (get $stores "semantic_cache") | default (dict) -}}

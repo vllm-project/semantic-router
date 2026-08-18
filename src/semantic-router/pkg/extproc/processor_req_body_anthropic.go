@@ -70,6 +70,13 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	}
 	if passthrough != nil {
 		passthrough.SetHeadersFromIncoming(ctx.Headers)
+		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+			// ParseAnthropicRequest already represents user images in the
+			// canonical message IR. Re-appending the native image sidecar would
+			// duplicate those blocks and can misalign them after privacy policy
+			// removes historical tool messages.
+			passthrough.UserMessageImageBlocks = nil
+		}
 	}
 	ctx.AnthropicPassthrough = passthrough
 

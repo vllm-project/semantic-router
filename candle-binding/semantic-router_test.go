@@ -458,6 +458,55 @@ func TestBERTClassifiers(t *testing.T) {
 
 		t.Logf("BERT jailbreak classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
 	})
+
+	t.Run("BERTJailbreakClassifierWithProbs", func(t *testing.T) {
+		// ClassifyJailbreakTextWithProbs must agree with ClassifyJailbreakText's
+		// top-1 prediction and return a full, normalized distribution.
+		numClasses := 2
+		err := InitJailbreakClassifier(JailbreakClassifierModelPath, numClasses, true)
+		if err != nil {
+			if isModelInitializationError(err) {
+				t.Skipf("Skipping BERT jailbreak with-probs test due to model initialization error: %v", err)
+			}
+			t.Skipf("BERT jailbreak classifier not available: %v", err)
+		}
+
+		top1, err := ClassifyJailbreakText(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with BERT: %v", err)
+		}
+
+		withProbs, err := ClassifyJailbreakTextWithProbs(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with probabilities: %v", err)
+		}
+
+		if withProbs.Class != top1.Class {
+			t.Errorf("argmax class mismatch: ClassifyJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+		}
+		if withProbs.Confidence != top1.Confidence {
+			t.Errorf("confidence mismatch: ClassifyJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+		}
+		if withProbs.NumClasses != numClasses || len(withProbs.Probabilities) != numClasses {
+			t.Errorf("expected %d probabilities, got NumClasses=%d len=%d", numClasses, withProbs.NumClasses, len(withProbs.Probabilities))
+		}
+
+		var sum float32
+		for _, p := range withProbs.Probabilities {
+			sum += p
+		}
+		if sum < 0.99 || sum > 1.01 {
+			t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+		}
+		if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+			if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+				t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+			}
+		}
+
+		t.Logf("BERT jailbreak with-probs classification: Class=%d, Confidence=%.4f, Probabilities=%v",
+			withProbs.Class, withProbs.Confidence, withProbs.Probabilities)
+	})
 }
 
 func TestBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
@@ -3369,6 +3418,54 @@ func TestDebertaComparison(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestModernBertJailbreakClassifierWithProbs verifies that
+// ClassifyModernBertJailbreakTextWithProbs agrees with
+// ClassifyModernBertJailbreakText's top-1 prediction and returns a full,
+// normalized distribution.
+func TestModernBertJailbreakClassifierWithProbs(t *testing.T) {
+	numClasses := 2
+	err := InitModernBertJailbreakClassifier(JailbreakClassifierModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping ModernBERT jailbreak with-probs test due to model initialization error: %v", err)
+		}
+		t.Skipf("ModernBERT jailbreak classifier not available: %v", err)
+	}
+
+	top1, err := ClassifyModernBertJailbreakText(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with ModernBERT: %v", err)
+	}
+
+	withProbs, err := ClassifyModernBertJailbreakTextWithProbs(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with probabilities using ModernBERT: %v", err)
+	}
+
+	if withProbs.Class != top1.Class {
+		t.Errorf("argmax class mismatch: ClassifyModernBertJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+	}
+	if withProbs.Confidence != top1.Confidence {
+		t.Errorf("confidence mismatch: ClassifyModernBertJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+	}
+	if len(withProbs.Probabilities) != numClasses {
+		t.Errorf("expected %d probabilities, got %d", numClasses, len(withProbs.Probabilities))
+	}
+
+	var sum float32
+	for _, p := range withProbs.Probabilities {
+		sum += p
+	}
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+	}
+	if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+		if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+			t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+		}
 	}
 }
 

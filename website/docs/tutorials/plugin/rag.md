@@ -2,9 +2,10 @@
 
 ## Overview
 
-`rag` is a route-local plugin for retrieval-augmented generation.
-
-It aligns to `config/fragments/plugin/rag/milvus.yaml` (Milvus), `config/fragments/plugin/rag/qdrant.yaml` (Qdrant), and `config/fragments/plugin/rag/external-api.yaml` (external HTTP API).
+`rag` retrieves external context for a matched route before generation. Choose
+Milvus or Qdrant for direct vector-store retrieval, or use an external HTTP
+API, MCP tools, OpenAI file search, the Router's vector-store service, or a
+primary/fallback hybrid.
 
 ## Key Advantages
 
@@ -24,73 +25,85 @@ Some routes need external document retrieval before answering, while most do not
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Choose one backend:
+
+| Backend | Use it for | Required backend fields |
+| --- | --- | --- |
+| `milvus` | Direct retrieval from a Milvus collection | `collection`; optionally reuse the response-cache connection |
+| `qdrant` | Direct retrieval from a Qdrant collection | `collection`; optionally reuse the response-cache connection |
+| `external_api` | A service with a custom HTTP request contract | `endpoint`, `request_format` |
+| `mcp` | Retrieval exposed as an MCP tool | `server_name`, `tool_name` |
+| `openai` | OpenAI file search | `vector_store_id`, `api_key` |
+| `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
+| `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
+
+The examples below show the two direct-store options and the external HTTP
+API. For the other backends, start from the field names above and validate the
+complete config before deployment.
+
+Add the plugin under `routing.decisions[].plugins`:
 
 **Milvus backend:**
 
 ```yaml
-plugin:
-  type: rag
-  configuration:
-    enabled: true
-    backend: milvus
-    top_k: 5
-    similarity_threshold: 0.78
-    injection_mode: tool_role
-    on_failure: warn
-    backend_config:
-      collection: docs
-      reuse_cache_connection: true
-      content_field: content
-      metadata_field: metadata
+plugins:
+  - type: rag
+    configuration:
+      enabled: true
+      backend: milvus
+      top_k: 5
+      similarity_threshold: 0.78
+      injection_mode: tool_role
+      on_failure: warn
+      backend_config:
+        collection: docs
+        reuse_cache_connection: true
+        content_field: content
+        metadata_field: metadata
 ```
 
 **Qdrant backend:**
 
 ```yaml
-plugin:
-  type: rag
-  configuration:
-    enabled: true
-    backend: qdrant
-    top_k: 5
-    similarity_threshold: 0.78
-    injection_mode: tool_role
-    on_failure: warn
-    backend_config:
-      collection: docs
-      reuse_cache_connection: true
-      content_field: content
+plugins:
+  - type: rag
+    configuration:
+      enabled: true
+      backend: qdrant
+      top_k: 5
+      similarity_threshold: 0.78
+      injection_mode: tool_role
+      on_failure: warn
+      backend_config:
+        collection: docs
+        reuse_cache_connection: true
+        content_field: content
 ```
 
 **External API backend:**
 
 ```yaml
-plugin:
-  type: rag
-  configuration:
-    enabled: true
-    backend: external_api
-    top_k: 5
-    similarity_threshold: 0.78
-    injection_mode: tool_role
-    on_failure: warn
-    backend_config:
-      endpoint: https://search.example.com/query
-      request_format: custom
-      request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
-      timeout_seconds: 15
-      max_response_body_bytes: 16777216
+plugins:
+  - type: rag
+    configuration:
+      enabled: true
+      backend: external_api
+      top_k: 5
+      similarity_threshold: 0.78
+      injection_mode: tool_role
+      on_failure: warn
+      backend_config:
+        endpoint: https://search.example.com/query
+        request_format: custom
+        request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
+        timeout_seconds: 15
+        max_response_body_bytes: 16777216
 ```
 
-The supported request formats are `pinecone`, `weaviate`, `elasticsearch`, and `custom`. Custom
-request templates are parsed as non-null JSON objects or arrays at configuration load, including
-when `external_api` is a hybrid child. Exact placeholder nodes such as `${top_k}` stay typed,
-placeholders cannot be used as object keys, user content cannot add fields or change the configured
-object/array shape, and configured JSON numbers retain their original precision. The lowercase
-`${user_content}`, `${top_k}`, and `${threshold}` names are reserved for runtime substitution;
-other braced lowercase names fail before environment expansion. Use uppercase names such as
-`${RAG_TENANT}` for intentional environment references. Successful response bodies default to an
-exact 16 MiB limit. Set `max_response_body_bytes` to a positive byte count up to 64 MiB to override
-it; a response at the limit is accepted and a response one byte larger is rejected without decoding
-a truncated prefix.
+Retrieved documents become provider-bound context. Apply collection-level
+access control and avoid mixing tenants in one unrestricted search scope.
+Similarity thresholds are embedding-model specific. See complete examples:
+[`milvus.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/milvus.yaml),
+[`qdrant.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/qdrant.yaml),
+and
+[`external-api.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/external-api.yaml).

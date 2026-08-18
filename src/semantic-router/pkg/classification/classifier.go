@@ -32,7 +32,7 @@ type Classifier struct {
 	categoryInitializer         CategoryInitializer
 	categoryInference           CategoryInference
 	jailbreakInitializer        JailbreakInitializer
-	jailbreakInference          JailbreakInference
+	jailbreakInference          SequenceClassifierBackend
 	piiInitializer              PIIInitializer
 	piiInference                PIIInference
 	keywordClassifier           *KeywordClassifier
@@ -109,7 +109,7 @@ func withCategory(categoryMapping *CategoryMapping, categoryInitializer Category
 	}
 }
 
-func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference JailbreakInference) option {
+func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference SequenceClassifierBackend) option {
 	return func(c *Classifier) {
 		c.JailbreakMapping = jailbreakMapping
 		c.jailbreakInitializer = jailbreakInitializer

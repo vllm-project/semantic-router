@@ -1,190 +1,173 @@
 ---
-title: Container Connectivity Troubleshooting
+title: Container Connectivity
 sidebar_label: Container Connectivity
 ---
 
-This guide summarizes common connectivity issues we hit when running the router with Docker Compose or Kubernetes and how we fixed them. It also covers the “No data” problem in Grafana and how to validate the full metrics chain.
+# Container Connectivity
 
-## 1. Use IPv4 addresses for backend endpoints
+Use this guide when the local stack starts but cannot reach a model backend, or
+when the host cannot reach the Router, Envoy, Dashboard, or metrics endpoints.
 
-Symptoms
+## Start with the failing hop
 
-- Router/Envoy timeouts, 5xx, or “up/down” flapping in Prometheus. Curl from inside containers/pods fails.
+A routed request crosses several network boundaries:
 
-Root causes
-
-- Backend bound only to 127.0.0.1 (not reachable from containers/pods).
-- Using IPv6 or hostnames that resolve to IPv6 where IPv6 is disabled/blocked.
-- Using localhost/127.0.0.1 in the router config, which refers to the container itself, not the host.
-
-Fixes
-
-- Ensure backends bind to all interfaces: 0.0.0.0.
-- In Docker Compose, configure the router to call the host via a reachable IPv4 address.
-  - On macOS, host.docker.internal usually works; if not, use the host’s LAN IPv4 address.
-  - On Linux or custom networks, use the Docker host gateway IPv4 for your network.
-
-Example: start vLLM on the host
-
-```bash
-# Make vLLM listen on all interfaces
-python -m vllm.entrypoints.openai.api_server \
-  --host 0.0.0.0 --port 11434 \
-  --served-model-name phi4
+```text
+client -> Envoy -> Router -> selected provider backend
 ```
 
-Router config example (Docker Compose)
+Check each hop in that order:
+
+```bash
+vllm-sr status
+vllm-sr logs envoy
+vllm-sr logs router
+curl -sS http://localhost:8899/v1/models
+```
+
+If `/v1/models` is unavailable, focus on the local stack and published ports.
+If it succeeds but completions fail, inspect the selected provider name in the
+response/logs and test that provider from the Router's network.
+
+## `localhost` means the current container
+
+A common configuration error is pointing a provider at `localhost` even though
+the inference server runs on the host or in another container. From the Router
+container, `127.0.0.1` and `localhost` refer to the Router container itself.
+
+Configure an address that is reachable from the runtime network:
 
 ```yaml
-# config/config.yaml (snippet)
-llm_backends:
-  - name: phi4
-    # Use a reachable IPv4; replace with your host’s IP
-    address: http://172.28.0.1:11434
+providers:
+  models:
+    - name: local-model
+      provider_model_id: local-model
+      api_format: openai
+      backend_refs:
+        - name: local-vllm
+          endpoint: model-server:8000
+          protocol: http
+          type: vllm
 ```
 
-Kubernetes recommended pattern: use a Service
+Use a container DNS name when both services share a network. For a model server
+running directly on the host, use the container runtime's supported host
+gateway name or a host IP that the container can reach. On Kubernetes, use a
+Service DNS name rather than a pod IP.
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: my-vllm
-spec:
-  selector:
-    app: my-vllm
-  ports:
-    - name: http
-      port: 8000
-      targetPort: 8000
-```
+## Make the backend listen beyond loopback
 
-Router config then uses: http://my-vllm.default.svc.cluster.local:8000
-
-**Tip**: discover the host gateway from inside a container (mostly Linux)
+The model server must bind to an interface reachable by its clients. For
+example, a host-side vLLM server generally needs `--host 0.0.0.0`:
 
 ```bash
-# Inside the container/pod
-ip route | awk '/default/ {print $3}'
+vllm serve <model-id> \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name local-model
 ```
 
-## 2. Host firewall blocking container/pod traffic
+Binding to `0.0.0.0` does not provide authentication. Restrict the port with a
+firewall or private network, and use the provider's authentication support when
+traffic crosses a trust boundary.
 
-Symptoms
+## Test from the same network namespace
 
-- Host can curl the backend, but containers/pods time out until the firewall is opened.
-
-Fixes
-
-- macOS: System Settings → Network → Firewall. Allow incoming connections for the backend process (e.g., Python/uvicorn) or temporarily disable the firewall to test.
-- Linux examples:
+A successful host-side request proves only host reachability. Test from a
+temporary container on the same runtime network, or from the Router container
+using your container runtime's inspection tools. Query the backend's
+OpenAI-compatible model endpoint:
 
 ```bash
-# UFW (Ubuntu/Debian)
-sudo ufw allow 11434/tcp
-sudo ufw allow 11435/tcp
-
-# firewalld (RHEL/CentOS/Fedora)
-sudo firewall-cmd --add-port=11434/tcp --permanent
-sudo firewall-cmd --add-port=11435/tcp --permanent
-sudo firewall-cmd --reload
+curl -sS http://<reachable-backend>:8000/v1/models
 ```
 
-- Cloud hosts: also open security group/ACL rules.
-
-Validate from the container/pod:
+For Kubernetes, start with the Service and endpoints:
 
 ```bash
-docker compose exec semantic-router curl -sS http://<IPv4>:11434/v1/models
+kubectl get service,endpoints -n <namespace>
+kubectl run network-check \
+  --rm -i --restart=Never \
+  --image=curlimages/curl \
+  -n <namespace> -- \
+  curl -sS http://<service-name>:8000/v1/models
 ```
 
-## 3. Docker Compose: publish the router’s ports (not just expose)
+Remove or restrict temporary diagnostic pods according to your cluster policy.
 
-Symptoms
+## Check firewalls and security rules
 
-- Can’t access /metrics or API from the host. docker ps shows no published ports.
+If the host can reach a backend but the runtime cannot, inspect:
 
-Root cause
+- host firewall rules for the backend port;
+- cloud security groups or network ACLs;
+- Kubernetes NetworkPolicies;
+- corporate proxies that intercept only some address ranges; and
+- DNS resolution inside the container or pod.
 
-- Using `expose` only keeps ports internal to the Compose network; it doesn’t publish to the host.
+Open only the source networks and ports the deployment needs. Avoid making a
+provider endpoint public merely to diagnose an internal route.
 
-Fix
+## Published local ports
 
-- Map the needed ports with `ports:`.
+The default local stack publishes these user-facing endpoints:
 
-Example docker-compose.yml snippet (from `deploy/docker-compose/docker-compose.yml` after relocation)
+| Endpoint | Default address |
+|----------|-----------------|
+| OpenAI-compatible listener through Envoy | `http://localhost:8899` |
+| Dashboard | `http://localhost:8700` |
+| Router management API | `http://localhost:8080` |
+| Router metrics | `http://localhost:9190/metrics` |
 
-```yaml
-services:
-  semantic-router:
-    # ...
-    ports:
-      - "9190:9190" # Prometheus /metrics
-      - "50051:50051" # gRPC/HTTP API (use your actual service port)
-```
+Management endpoints may require authentication, depending on the active
+configuration. A nonzero `VLLM_SR_PORT_OFFSET` shifts every published host port;
+use `vllm-sr status` and `vllm-sr dashboard` rather than assuming defaults.
 
-Validate from the host:
+If a port is already occupied, either stop the conflicting process or run an
+isolated stack:
 
 ```bash
-curl -sS http://localhost:9190/metrics | head -n 5
+VLLM_SR_STACK_NAME=lane-b \
+VLLM_SR_PORT_OFFSET=200 \
+vllm-sr serve --config config.yaml
 ```
 
-## 4. Grafana dashboard shows “No data”
+Use the same two environment variables with `status`, `logs`, `dashboard`, and
+`stop` for that stack.
 
-Common causes and fixes
+## Grafana shows no data
 
-- Metrics not emitted yet
-  - Some panels are empty until code paths are hit. Examples:
-    - Cost: `llm_model_cost_total{currency="USD"}` grows only when cost is recorded.
-    - Refusals: `llm_request_errors_total{reason="pii_policy_denied"|"jailbreak_block"}` grows only when policies block requests.
-  - Generate relevant traffic or enable filters/policies to see data.
+Grafana and Prometheus are present only when observability is enabled. Check the
+metrics source before debugging panels:
 
-- Panel query nuances
-  - Classification bar gauge often needs instant query.
-  - Quantiles require histogram buckets.
-
-Useful PromQL examples (for Explore)
-
-```promql
-# Category classification (instant)
-sum by (category) (llm_category_classifications_count)
-
-# Cost rate (USD/sec)
-sum by (model) (rate(llm_model_cost_total{currency="USD"}[5m]))
-
-# Refusals per model
-sum by (model) (rate(llm_request_errors_total{reason=~"pii_policy_denied|jailbreak_block"}[5m]))
-
-# Refusal rate percentage
-100 * sum by (model) (rate(llm_request_errors_total{reason=~"pii_policy_denied|jailbreak_block"}[5m]))
-  / sum by (model) (rate(llm_model_requests_total[5m]))
-
-# Latency p95
-histogram_quantile(0.95, sum by (le) (rate(llm_model_completion_latency_seconds_bucket[5m])))
+```bash
+curl -sS http://localhost:9190/metrics | head
 ```
 
-Prometheus scrape config (verify targets are UP)
+Then confirm that Prometheus can scrape the Router and Envoy targets. Empty
+panels can be correct when no request has exercised the corresponding path; for
+example, rejection and cache metrics remain empty until a policy rejects or a
+cache handles a request.
 
-```yaml
-scrape_configs:
-  - job_name: semantic-router
-    static_configs:
-      - targets: ["semantic-router:9190"]
+Also verify:
 
-  - job_name: envoy
-    metrics_path: /stats/prometheus
-    static_configs:
-      - targets: ["envoy-proxy:19000"]
-```
-
-Time range & refresh
-
-- Select a window that includes your recent traffic (Last 5–15 minutes) and refresh the dashboard after sending test requests.
+- the selected time range includes recent traffic;
+- the active stack's port offset is reflected in local URLs;
+- histogram panels query bucket metrics with an appropriate rate window; and
+- labels in a copied dashboard match the metrics emitted by this version.
 
 ## Quick checklist
 
-- Backends listen on 0.0.0.0; router uses a reachable IPv4 address (or k8s Service DNS that resolves to IPv4).
-- Host firewall allows the backend ports; cloud SG/ACL opened if applicable.
-- In Docker Compose, router ports are published (e.g., 9190 for /metrics, service port for API).
-- Prometheus targets for `semantic-router:9190` and `envoy-proxy:19000` are UP.
-- Send traffic that triggers the metrics you expect (cost/refusals) and adjust panel query mode (instant vs. range) where needed.
+- The local stack is running and `vllm-sr status` identifies the failing
+  component.
+- Envoy's `/v1/models` endpoint is reachable from the client.
+- The provider endpoint is not `localhost` unless it truly runs in the same
+  container.
+- The backend listens on a reachable interface and exposes `/v1/models`.
+- DNS, firewall, security-group, and NetworkPolicy rules permit the required
+  path.
+- Model names in Router config match the names served by the provider.
+- Metrics are emitted before investigating Grafana queries.
+
+For registry or artifact-download failures, see
+[Restricted Network Environments](./network-tips).

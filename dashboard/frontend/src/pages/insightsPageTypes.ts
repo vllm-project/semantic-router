@@ -121,6 +121,11 @@ export interface InsightsRecord {
   request_body?: string
   response_body?: string
   response_status?: number
+  /** A response header alone is not terminal; only completed records are successful. */
+  lifecycle_state?: 'unknown' | 'in_progress' | 'completed' | 'aborted' | 'failed'
+  ended_at?: string
+  duration_ms?: number
+  terminal_reason?: string
   from_cache?: boolean
   streaming?: boolean
   request_body_truncated?: boolean
@@ -217,6 +222,13 @@ export interface InsightsAggregateTokenBreakdown {
 export interface InsightsAggregateResponse {
   object: string
   record_count: number
+  lifecycle: {
+    completed: number
+    failed: number
+    aborted: number
+    in_progress: number
+    unknown: number
+  }
   summary: InsightsAggregateSummary
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]

@@ -9,12 +9,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy bool) *RouterRuntimeStatus {
+func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterRuntimeStatus {
 	if routerAPIURL != "" {
-		if state := fetchStartupStatusFromAPI(routerAPIURL); state != nil {
+		if state := fetchStartupStatusFromAPI(routerAPIURL, credentialProvider...); state != nil {
 			return runtimeStatusFromState(state)
 		}
 	}
@@ -22,7 +23,7 @@ func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy 
 	if state, err := loadRouterRuntimeState(runtimePath); err == nil && state != nil {
 		runtime := runtimeStatusFromState(state)
 		if runtime.Ready && routerAPIURL != "" {
-			readyHealthy, _ := checkHTTPHealth(routerAPIURL + "/ready")
+			readyHealthy := checkRouterManagementHealth(routerAPIURL+"/ready", credentialProvider...)
 			if !readyHealthy {
 				runtime.Ready = false
 				runtime.Phase = "starting"
@@ -36,9 +37,8 @@ func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy 
 	return nil
 }
 
-func fetchStartupStatusFromAPI(routerAPIURL string) *startupstatus.State {
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(routerAPIURL + "/startup-status")
+func fetchStartupStatusFromAPI(routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) *startupstatus.State {
+	resp, err := routerManagementGET(routerAPIURL+"/startup-status", 3*time.Second, credentialProvider...)
 	if err != nil {
 		return nil
 	}

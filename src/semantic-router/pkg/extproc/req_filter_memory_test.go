@@ -621,17 +621,6 @@ func TestFormatHistoryForPrompt_LimitToLast5(t *testing.T) {
 }
 
 // =============================================================================
-// TruncateForLog Tests
-// =============================================================================
-
-func TestTruncateForLog(t *testing.T) {
-	assert.Equal(t, "short", truncateForLog("short", 10))
-	assert.Equal(t, "this is a ...", truncateForLog("this is a long string", 10))
-	assert.Empty(t, truncateForLog("", 10))
-	assert.Equal(t, "exactly10!", truncateForLog("exactly10!", 10))
-}
-
-// =============================================================================
 // injectMemoryMessages Tests
 // =============================================================================
 

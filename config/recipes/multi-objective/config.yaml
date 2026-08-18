@@ -263,19 +263,19 @@ routing:
   strategy: priority
 entrypoints:
 - model_names:
-  - vllm-sr/mom-balanced-v1
+  - vllm-sr/mom-v1-blend
   recipe: balanced
 - model_names:
-  - vllm-sr/mom-flash-v1
+  - vllm-sr/mom-v1-flash
   recipe: speed-first
 - model_names:
-  - vllm-sr/mom-economy-v1
+  - vllm-sr/mom-v1-lite
   recipe: cost-first
 - model_names:
-  - vllm-sr/mom-frontier-v1
+  - vllm-sr/mom-v1-ultra
   recipe: accuracy-first
 - model_names:
-  - vllm-sr/mom-private-v1
+  - vllm-sr/mom-v1-vault
   recipe: privacy-first
 recipes:
 - name: balanced
@@ -1621,7 +1621,9 @@ global:
       metrics:
         enabled: true
     management_api:
-      bind_address: 127.0.0.1
+      # The host publication remains loopback-only; split containers need the
+      # Router to listen on its container interface for Dashboard and Envoy.
+      bind_address: 0.0.0.0
       port: 8080
       auth:
         mode: disabled
@@ -1637,6 +1639,8 @@ global:
           - config.read
           - config.write
           - learning.ingest
+          - replay.read
+          - replay.detail
           - data.read
           - data.write
           viewer:
@@ -1646,6 +1650,7 @@ global:
           - metrics.read
           - classify.invoke
           - config.read
+          - replay.read
           - data.read
     router_replay:
       enabled: true
@@ -1694,8 +1699,7 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
+        variant: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:

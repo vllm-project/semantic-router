@@ -62,6 +62,9 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 }
 
 func (m *MilvusStore) recordRetrievalBatch(ids []string) {
+	m.retrievalUpdateMu.Lock()
+	defer m.retrievalUpdateMu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	for _, id := range ids {

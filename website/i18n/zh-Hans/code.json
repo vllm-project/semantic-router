@@ -408,13 +408,13 @@
     "message": "信号"
   },
   "homepage.stats.signals.description": {
-    "message": "16 类信号，覆盖启发式与学习式检测，从知识库路由到历史感知 reask。"
+    "message": "20 类信号，覆盖请求上下文、安全、意图、偏好与系统状态。"
   },
   "homepage.stats.algorithms.label": {
-    "message": "选择器"
+    "message": "算法"
   },
   "homepage.stats.algorithms.description": {
-    "message": "12 种路由策略，覆盖规则、时延启发式、强化学习与机器学习选择。"
+    "message": "11 种选择算法和 5 种 looper，用于选择、组合与重试模型调用。"
   },
   "homepage.stats.papers.label": {
     "message": "论文"
@@ -459,10 +459,10 @@
     "message": "不同模型擅长不同任务。"
   },
   "homepage.capabilities.models.value": {
-    "message": "组合个性化模型路径。"
+    "message": "组合面向策略的模型路径。"
   },
   "homepage.capabilities.compute.reality": {
-    "message": "GPU、加速器、边缘与云端算力并存。"
+    "message": "不同代际 GPU 与加速器在容量和时延上各不相同。"
   },
   "homepage.capabilities.compute.value": {
     "message": "跨异构算力完成路由。"
@@ -471,13 +471,13 @@
     "message": "推理横跨边缘、私有环境与云端。"
   },
   "homepage.capabilities.location.value": {
-    "message": "让数据始终留在边界之内。"
+    "message": "路由到已配置的本地、私有或云端后端。"
   },
   "homepage.capabilities.preference.reality": {
     "message": "“最佳”因用户与负载而变化。"
   },
   "homepage.capabilities.preference.value": {
-    "message": "让每一种偏好都可执行。"
+    "message": "将偏好表达为路由策略。"
   },
   "homepage.capabilities.docsCta": {
     "message": "了解工作原理"
@@ -693,7 +693,7 @@
     "message": "信号分类体系"
   },
   "homepage.paperFigures.figure4.summary": {
-    "message": "完整的 14 个信号按启发式与学习式两类组织，并汇入 S(r)。"
+    "message": "原始研究分类中的 14 个信号按启发式与学习式两类组织，并汇入 S(r)。"
   },
   "homepage.paperFigures.figure14.title": {
     "message": "智能体策略合成"
@@ -909,7 +909,7 @@
     "message": "偏好"
   },
   "homepage.paperFigures.figure4.summaryText": {
-    "message": "共 14 个信号。当前激活信号：{signal}。{groupNote}"
+    "message": "该研究快照展示 14 个信号。当前激活信号：{signal}。{groupNote}"
   },
   "homepage.paperFigures.figure14.flow.spec.label": {
     "message": "自然语言规范"
@@ -1030,6 +1030,54 @@
   },
   "homepage.architecture.title": {
     "message": "架构"
+  },
+  "homepage.videos.label": {
+    "message": "实际案例"
+  },
+  "homepage.videos.title": {
+    "message": "语义路由的真实应用"
+  },
+  "homepage.videos.description": {
+    "message": "了解团队如何在企业推理、开放模型服务、混合系统和 Mixture-of-Models 中使用语义路由。"
+  },
+  "homepage.videos.featured": {
+    "message": "精选"
+  },
+  "homepage.videos.selected": {
+    "message": "已选视频"
+  },
+  "homepage.videos.previous.aria": {
+    "message": "显示上一个视频"
+  },
+  "homepage.videos.previous": {
+    "message": "上一个"
+  },
+  "homepage.videos.next.aria": {
+    "message": "显示下一个视频"
+  },
+  "homepage.videos.next": {
+    "message": "下一个"
+  },
+  "homepage.videos.rail.aria": {
+    "message": "视频播放列表"
+  },
+  "homepage.videos.play.aria": {
+    "message": "显示视频：{title}"
+  },
+  "homepage.videos.pagination.aria": {
+    "message": "视频播放列表分页"
+  },
+  "homepage.videos.previousPage.aria": {
+    "message": "显示上一页视频"
+  },
+  "homepage.videos.previousPage": {
+    "message": "上一页"
+  },
+  "homepage.videos.nextPage.aria": {
+    "message": "显示下一页视频"
+  },
+  "homepage.videos.nextPage": {
+    "message": "下一页"
   },
   "features.sectionTitle": {
     "message": "我们的目标"
@@ -2417,13 +2465,13 @@
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
   "homepage.meta.description": {
-    "message": "我们相信，Mixture-of-Models 是面向异构 LLM 推理的下一代模型架构。vLLM Semantic Router 让这一架构可执行。"
+    "message": "Mixture-of-Models 是面向异构 LLM 推理的服务架构。vLLM Semantic Router 让它能够实际部署。"
   },
   "homepage.meta.title": {
     "message": "构建你的 Mixture-of-Models"
   },
   "homepage.meta.socialTitle": {
-    "message": "Mixture-of-Models：面向异构 LLM 推理的下一代模型架构 | vLLM Semantic Router"
+    "message": "构建你的 Mixture-of-Models | vLLM Semantic Router"
   },
 
   "homepage.whereItLives.title": {
@@ -2496,7 +2544,7 @@
     "message": "行业声音"
   },
   "homepage.testimonials.title": {
-    "message": "下一代模型架构正在形成。"
+    "message": "这场转变已经开始。"
   },
   "homepage.testimonials.source": {
     "message": "来源"
@@ -2508,7 +2556,7 @@
     "message": "组合你的 Mixture-of-Models。"
   },
   "homepage.finalCta.description": {
-    "message": "用信号、偏好与策略塑造每一条模型路径。"
+    "message": "用信号、偏好与策略塑造模型路径。"
   },
   "homepage.finalCta.playground": {
     "message": "体验 Playground"
@@ -2520,7 +2568,7 @@
     "message": "贡献者排行榜"
   },
   "community.contributors.pageDescription": {
-    "message": "vLLM Semantic Router 贡献者排行榜：按近期与历史提交活跃度统计。"
+    "message": "按版本窗口查看 vLLM Semantic Router 贡献者的提交与拉取请求审阅活动。"
   },
   "community.contributors.eyebrow": {
     "message": "社区"
@@ -2538,10 +2586,16 @@
     "message": "贡献者"
   },
   "community.contributors.metrics.newContributors": {
-    "message": "新增贡献者"
+    "message": "首次提交作者"
+  },
+  "community.contributors.metrics.commitAuthors": {
+    "message": "提交作者"
   },
   "community.contributors.metrics.commits": {
     "message": "提交数"
+  },
+  "community.contributors.metrics.reviews": {
+    "message": "审阅数"
   },
   "community.contributors.podium.aria": {
     "message": "贡献者领奖台"
@@ -2560,6 +2614,9 @@
   },
   "community.contributors.updated": {
     "message": "更新于"
+  },
+  "community.contributors.method": {
+    "message": "贡献者包括产生非合并提交或有效审阅的人。首次提交作者在更早的仓库历史中没有提交记录。审阅贡献按审阅提交日期归类；对每个最终合并的拉取请求，每位贡献者最多计一次。"
   },
   "community.contributors.sort.label": {
     "message": "排序"
@@ -2587,6 +2644,12 @@
   },
   "community.contributors.table.share": {
     "message": "占比"
+  },
+  "community.contributors.table.commitShare": {
+    "message": "提交占比"
+  },
+  "community.contributors.table.reviewShare": {
+    "message": "审阅占比"
   },
   "community.contributors.table.latest": {
     "message": "最新提交"
@@ -2631,25 +2694,25 @@
     "message": "v0.3 -> 当前"
   },
   "community.contributors.range.v03ToNow.caption": {
-    "message": "当前 release"
+    "message": "自 v0.3 起"
   },
   "community.contributors.range.v02ToV03.label": {
     "message": "v0.2 -> v0.3"
   },
   "community.contributors.range.v02ToV03.caption": {
-    "message": "Release gap"
+    "message": "两个版本之间"
   },
   "community.contributors.range.v01ToV02.label": {
     "message": "v0.1 -> v0.2"
   },
   "community.contributors.range.v01ToV02.caption": {
-    "message": "Release gap"
+    "message": "两个版本之间"
   },
   "community.contributors.range.v0ToV01.label": {
     "message": "v0 -> v0.1"
   },
   "community.contributors.range.v0ToV01.caption": {
-    "message": "初始 release"
+    "message": "项目起步阶段"
   },
   "community.contributors.range.all.label": {
     "message": "全部历史"
