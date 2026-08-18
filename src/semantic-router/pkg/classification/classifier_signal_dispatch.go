@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -29,10 +30,7 @@ func (c *Classifier) buildSignalDispatchers(
 	usedSignals map[string]bool,
 ) []signalDispatch {
 	dispatchers := []signalDispatch{
-		{
-			config.SignalTypeKeyword, "Keyword",
-			func() { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
-		},
+		c.keywordSignalDispatcher(results, mu, textForSignal, priorUserMessages),
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
@@ -111,6 +109,24 @@ func (c *Classifier) buildSignalDispatchers(
 	)
 }
 
+func (c *Classifier) keywordSignalDispatcher(
+	results *SignalResults,
+	mu *sync.Mutex,
+	textForSignal func(string) string,
+	priorUserMessages []string,
+) signalDispatch {
+	return signalDispatch{
+		config.SignalTypeKeyword, "Keyword",
+		func() {
+			c.evaluateKeywordSignal(
+				results,
+				mu,
+				keywordSignalText(textForSignal(config.SignalTypeKeyword), priorUserMessages),
+			)
+		},
+	}
+}
+
 func (c *Classifier) evaluateBoundedReaskSignal(
 	results *SignalResults,
 	mu *sync.Mutex,
@@ -131,6 +147,41 @@ func boundedReaskMessages(messages []string) []string {
 		bounded[index] = textForRoutingSignal(config.SignalTypeReask, message)
 	}
 	return bounded
+}
+
+// keywordSignalHistoryLimit bounds how many prior user messages are joined
+// into the keyword evaluation text. Keyword rules are cheap exact-match scans,
+// but rescanning the full conversation on every request grows linearly with the
+// chat length, so only the most recent window is considered.
+const keywordSignalHistoryLimit = 20
+
+// keywordSignalText returns the text evaluated by keyword rules: the current
+// user message plus the most recent prior user messages in conversation order.
+// Keyword rules are exact-match markers (privacy, local-only, internal-doc, ...),
+// so a marker that appeared in an earlier turn must still match on the latest
+// turn; the previous behavior evaluated only the current user message and
+// silently dropped multi-turn privacy requests. Entries are joined with a
+// newline so a rule that matches a phrase spanning the space between two turns
+// cannot fire across message boundaries, and empty entries are skipped so stray
+// whitespace-only history cannot turn into a false-positive separator.
+func keywordSignalText(currentText string, priorUserMessages []string) string {
+	if len(priorUserMessages) == 0 {
+		return currentText
+	}
+	start := 0
+	if len(priorUserMessages) > keywordSignalHistoryLimit {
+		start = len(priorUserMessages) - keywordSignalHistoryLimit
+	}
+	parts := make([]string, 0, keywordSignalHistoryLimit+1)
+	for _, msg := range priorUserMessages[start:] {
+		if trimmed := strings.TrimSpace(msg); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	if trimmed := strings.TrimSpace(currentText); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	return strings.Join(parts, "\n")
 }
 
 func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
