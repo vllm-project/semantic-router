@@ -267,6 +267,7 @@ const sidebars: SidebarsConfig = {
         'proposals/router-flow-workflows',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
+        'proposals/routing-inference-runtime-and-model-ecosystem',
         'proposals/nvidia-dynamo-integration',
         'proposals/production-stack-integration',
         'proposals/multi-protocol-adaptor',
