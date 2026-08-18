@@ -16,11 +16,11 @@ type cachedJailbreakResult struct {
 }
 
 // jailbreakClassificationErrorType is the sentinel jailbreak type reported
-// when config.PromptGuardOnErrorFail forces a rule to match because
+// when config.PromptGuardOnErrorBlock forces a rule to match because
 // inference itself failed (e.g. an unreachable http_chat/http_classify
 // endpoint), rather than because the content was actually classified as a
 // jailbreak. It is distinguishable from a real detected type in
-// results/logs. Without this fail-closed path (config.PromptGuardOnErrorSkip,
+// results/logs. Without this fail-closed path (config.PromptGuardOnErrorAllow,
 // the default), a classify error is indistinguishable from a genuinely safe
 // request - see @adaamko's review on #2760.
 const jailbreakClassificationErrorType = "classification_error"
@@ -215,7 +215,7 @@ type jailbreakCandidate struct {
 func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, cached cachedJailbreakResult) jailbreakCandidate {
 	if cached.err != nil {
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
-		if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorFail {
+		if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorBlock {
 			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
 		}
 		return jailbreakCandidate{}

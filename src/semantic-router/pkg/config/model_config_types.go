@@ -157,8 +157,8 @@ type PromptGuardConfig struct {
 	Protocol string `yaml:"protocol,omitempty"`
 
 	// OnError selects what a classifier-backend failure does to the rule
-	// that failed to evaluate: PromptGuardOnErrorSkip (default) or
-	// PromptGuardOnErrorFail. See the constants' doc comments.
+	// that failed to evaluate: PromptGuardOnErrorAllow (default) or
+	// PromptGuardOnErrorBlock. See the constants' doc comments.
 	OnError string `yaml:"on_error,omitempty"`
 }
 

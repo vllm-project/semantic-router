@@ -111,9 +111,9 @@ var validPromptGuardProtocols = map[string]bool{
 
 // validPromptGuardOnErrorValues is the set of recognized PromptGuardConfig.OnError values.
 var validPromptGuardOnErrorValues = map[string]bool{
-	"":                     true, // unset defaults to PromptGuardOnErrorSkip
-	PromptGuardOnErrorSkip: true,
-	PromptGuardOnErrorFail: true,
+	"":                      true, // unset defaults to PromptGuardOnErrorAllow
+	PromptGuardOnErrorAllow: true,
+	PromptGuardOnErrorBlock: true,
 }
 
 // validatePromptGuardBackendConfig validates the prompt_guard backend selection.
@@ -127,7 +127,7 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	}
 	if !validPromptGuardOnErrorValues[cfg.OnError] {
 		return fmt.Errorf("prompt_guard.on_error: unrecognized value %q, must be one of: %s, %s",
-			cfg.OnError, PromptGuardOnErrorSkip, PromptGuardOnErrorFail)
+			cfg.OnError, PromptGuardOnErrorAllow, PromptGuardOnErrorBlock)
 	}
 	if cfg.Protocol != "" {
 		if !validPromptGuardProtocols[cfg.Protocol] {
