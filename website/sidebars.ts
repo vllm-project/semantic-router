@@ -416,6 +416,7 @@ const sidebars: SidebarsConfig = {
         'training/training-overview',
         'training/model-performance-eval',
         'training/ml-model-selection',
+        'training/mmbert-safety-classifier',
       ],
     },
     {

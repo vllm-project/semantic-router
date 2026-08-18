@@ -140,6 +140,8 @@ docs:
 - tools/agent/docs/testing-strategy.md
 - tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
+- tools/agent/docs/plans/pl-0042-mom-training-source-consolidation.md
+- tools/agent/docs/plans/pl-0043-mmbert32k-safety-classifier-reconstruction.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -281,6 +283,12 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
+  - path: tools/agent/docs/plans/pl-0042-mom-training-source-consolidation.md
+    steward: training-stack
+    freshness: update while MoM training-source consolidation is active
+  - path: tools/agent/docs/plans/pl-0043-mmbert32k-safety-classifier-reconstruction.md
+    steward: training-stack
+    freshness: update while the mmBERT-32K safety reconstruction is active
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially

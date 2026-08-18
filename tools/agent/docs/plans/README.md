@@ -82,3 +82,5 @@ do not revive a completed release plan.
 
 - [PL-0032: Architecture Debt Consolidation](pl-0032-architecture-scorecard-ratchet.md)
 - [PL-0037: Router Flow Evaluation Campaign](pl-0037-router-flow-eval-campaign.md)
+- [PL-0042: MoM Training Source Consolidation](pl-0042-mom-training-source-consolidation.md)
+- [PL-0043: mmBERT-32K Safety Classifier Reconstruction](pl-0043-mmbert32k-safety-classifier-reconstruction.md)

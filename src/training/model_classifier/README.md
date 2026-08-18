@@ -15,6 +15,7 @@ training, export, and verification path.
 | `hallucination_detection_classifier/` | token classifier | mark unsupported answer spans |
 | `modality_routing_classifier/` | three-class classifier LoRA | choose text, image, or mixed response |
 | `user_feedback_classifier/` | four-class classifier | classify satisfaction signals in follow-up text |
+| `safety_classifier/` | binary and legacy nine-class LoRA/merged models | hierarchical content-safety classification |
 
 These scripts download models or datasets when needed. Review the task README
 before running a full job; dataset licenses, compute needs, and output formats

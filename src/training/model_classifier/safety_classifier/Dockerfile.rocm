@@ -1,0 +1,12 @@
+FROM rocm/pytorch:rocm7.2_ubuntu22.04_py3.11_pytorch_release_2.10.0@sha256:8ea1aa153bbd57b0b37ee20ed97dac5ee22edd0dfbd31f8937767e9c04f9e1d5
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1 \
+    TOKENIZERS_PARALLELISM=false
+
+WORKDIR /workspace/semantic-router
+
+COPY src/training/model_classifier/safety_classifier/requirements.txt /tmp/safety-requirements.txt
+RUN python -m pip install --no-cache-dir -r /tmp/safety-requirements.txt
+
+CMD ["python", "-m", "src.training.model_classifier.safety_classifier.train", "--help"]

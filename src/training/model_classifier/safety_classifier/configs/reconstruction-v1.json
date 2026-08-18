@@ -1,0 +1,133 @@
+{
+  "contract_version": 1,
+  "reconstruction_name": "mmbert32k-safety-legacy9-v1",
+  "taxonomy_version": "legacy-9-v1",
+  "base_model": {
+    "id": "llm-semantic-router/mmbert-32k-yarn",
+    "revision": "72a23a6640489471eb4ff7ad3ec5bc80af8a27de"
+  },
+  "datasets": {
+    "aegis": {
+      "id": "nvidia/Aegis-AI-Content-Safety-Dataset-2.0",
+      "revision": "d86bb8bedff51d25ac834ab7838f1cc61acb7a2c",
+      "files": {
+        "train": {
+          "path": "train.json",
+          "sha256": "154fba82c71d9fa73abd2ca5588a198e693ddc816c83444df180a22f613e02f6"
+        },
+        "validation": {
+          "path": "validation.json",
+          "sha256": "a97200e226ad4f6ba6a639982f817f675909bc74513859df3e8fc9a92951dfcd"
+        },
+        "test": {
+          "path": "test.json",
+          "sha256": "b0a6d602260524866053cb34105194f074f2c2906e3691b68d43b9e6e9318f35"
+        }
+      }
+    },
+    "synthetic": {
+      "id": "llm-semantic-router/mlcommons-ai-safety-synth",
+      "revision": "803cb35d8fc1c6d89b4082231ef0205cce931fb4",
+      "files": {
+        "train": {
+          "path": "data/train.jsonl",
+          "sha256": "7c02b1ba97a0f4082a2640993f8971bd2672a5bfac97a470999bf9d991770ea3"
+        }
+      }
+    }
+  },
+  "data": {
+    "seed": 42,
+    "input_field": "prompt",
+    "normalization": "nfkc-whitespace-casefold-v1",
+    "split_precedence": [
+      "test",
+      "validation",
+      "train"
+    ],
+    "binary_train_per_label": 10000,
+    "hazard_train_per_label": 2000,
+    "single_label_strategy": "first-mapped-source-order",
+    "drop_redacted": true,
+    "use_refusal_splits": false,
+    "use_responses": false
+  },
+  "model": {
+    "architecture": "ModernBertForSequenceClassification",
+    "max_length": 512,
+    "lora": {
+      "rank": 32,
+      "alpha": 64,
+      "dropout": 0.1,
+      "bias": "none",
+      "target_modules": [
+        "attn.Wqkv",
+        "attn.Wo",
+        "mlp.Wi",
+        "mlp.Wo"
+      ]
+    }
+  },
+  "training": {
+    "epochs": 10,
+    "global_train_batch_size": 64,
+    "per_device_train_batch_size": 8,
+    "per_device_eval_batch_size": 16,
+    "learning_rate": 0.0003,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "optimizer": "adamw_torch",
+    "scheduler": "linear",
+    "precision": "bf16",
+    "seed": 42,
+    "data_seed": 42,
+    "save_total_limit": 2,
+    "early_stopping_patience": 3
+  },
+  "tasks": {
+    "level1": {
+      "display_name": "mmBERT-32K Safety Classifier Level 1 (Binary)",
+      "num_labels": 2,
+      "label2id": {
+        "safe": 0,
+        "unsafe": 1
+      },
+      "selection_metric": "f1_macro",
+      "release_repositories": {
+        "adapter": "llm-semantic-router/mmbert32k-safety-classifier-level1-binary-lora",
+        "merged": "llm-semantic-router/mmbert32k-safety-classifier-level1-binary-merged"
+      }
+    },
+    "level2": {
+      "display_name": "mmBERT-32K Safety Classifier Level 2 (Legacy 9-Class)",
+      "num_labels": 9,
+      "label2id": {
+        "S1_violent_crimes": 0,
+        "S2_nonviolent_crimes": 1,
+        "S3_sex_crimes": 2,
+        "S5_weapons_cbrne": 3,
+        "S6_self_harm": 4,
+        "S7_hate": 5,
+        "S8_specialized_advice": 6,
+        "S9_privacy": 7,
+        "S13_misinformation": 8
+      },
+      "selection_metric": "f1_macro",
+      "release_repositories": {
+        "adapter": "llm-semantic-router/mmbert32k-safety-classifier-level2-hazard-lora",
+        "merged": "llm-semantic-router/mmbert32k-safety-classifier-level2-hazard-merged"
+      }
+    }
+  },
+  "artifact_validation": {
+    "parity_atol": 0.0001,
+    "parity_rtol": 0.0001
+  },
+  "reconstruction_decisions": [
+    "The original trainer, split seed, optimizer details, and preprocessing were not published.",
+    "Only AEGIS prompt labels are used; response and refusal variants are excluded.",
+    "The first mapped AEGIS category in source order defines the single legacy hazard label.",
+    "Legacy output IDs are preserved even where they differ from the canonical 13-class numbering.",
+    "Warmup ratio and weight decay are explicit reconstruction defaults, not recovered historical facts."
+  ]
+}
