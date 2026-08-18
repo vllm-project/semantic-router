@@ -2,7 +2,8 @@
 
 ## Overview
 
-`authz` turns identity and policy bindings into reusable routing inputs. It maps to `config/fragments/signal/authz/` and is declared under `routing.signals.role_bindings`.
+`authz` turns identity and policy bindings into reusable routing inputs under
+`routing.signals.role_bindings`.
 
 This family is heuristic: it matches request identity against explicit roles and subjects instead of classifier output.
 
@@ -30,8 +31,6 @@ Use `authz` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/authz/`
-
 ```yaml
 routing:
   signals:
@@ -51,3 +50,10 @@ routing:
 ```
 
 Use `role_bindings` when the signal should fire from authenticated identity and policy metadata instead of prompt content.
+
+## Dependencies and Limitations
+
+Identity comes from `global.services.authz`; the signal does not authenticate a
+request by itself. Trust only headers set or sanitized by your authentication
+layer. See a complete example:
+[`config/fragments/signal/authz/rbac.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/authz/rbac.yaml).

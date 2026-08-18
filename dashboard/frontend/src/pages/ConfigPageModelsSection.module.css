@@ -63,6 +63,123 @@
   font-size: 0.72rem;
 }
 
+.liveVerification {
+  display: grid;
+  min-width: 210px;
+  gap: 0.34rem;
+}
+
+.liveVerificationHeading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+.liveVerificationDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.liveVerificationDotSuccess {
+  border-color: rgba(74, 222, 128, 0.7);
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+
+.liveVerificationDotError {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.liveVerificationDotPending {
+  border-color: rgba(250, 204, 21, 0.7);
+  background: #eab308;
+  animation: live-verification-pulse 1.2s ease-in-out infinite;
+}
+
+.liveVerificationLabel {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationEvidence {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.liveVerificationEvidence > span,
+.liveVerificationError {
+  overflow: hidden;
+  max-width: 220px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationEvidence > span {
+  color: #bbf7d0;
+}
+
+.liveVerificationEvidence small {
+  overflow: hidden;
+  max-width: 220px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationError {
+  color: #fecaca;
+}
+
+.liveVerificationButton {
+  width: fit-content;
+  min-height: 28px;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.liveVerificationButton:hover:not(:disabled) {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: rgba(34, 197, 94, 0.1);
+  color: #dcfce7;
+}
+
+.liveVerificationButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+@keyframes live-verification-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .inventoryToolbar {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr)) auto auto;
@@ -257,6 +374,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .liveVerificationDotPending {
+    animation: none;
+  }
+
   .clearFiltersButton,
   .clearSelectionButton,
   .bulkDeleteButton {

@@ -222,9 +222,17 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	mu.Unlock()
 }
 
-func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mutex, contextText string) {
+func (c *Classifier) evaluateContextSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	contextText string,
+	contextTokenFloor int,
+) {
 	start := time.Now()
-	matchedRules, count, err := c.contextClassifier.Classify(contextText)
+	matchedRules, count, err := c.contextClassifier.ClassifyWithTokenFloor(
+		contextText,
+		contextTokenFloor,
+	)
 	elapsed := time.Since(start)
 
 	// Record metrics (use microseconds for better precision)

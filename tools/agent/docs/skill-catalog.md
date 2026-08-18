@@ -1,9 +1,8 @@
 # Skill Catalog
 
-Skills are routed instructions for coding agents and maintainer workflows.
-
-The physical source remains `tools/agent/skills/**`; `.agents/skills/**` is only
-the native discovery bridge.
+Skills are routed instructions for coding agents and maintainer workflows. All
+skill content lives under `tools/agent/skills/**`. Repository-wide bootstrap
+instructions live in the root `AGENTS.md`, not in a second discovery skill.
 
 ## Audience Model
 

@@ -27,14 +27,22 @@ type spyCache struct {
 	pendingQuery string
 }
 
-func (s *spyCache) IsEnabled() bool                                            { return true }
-func (s *spyCache) CheckConnection() error                                     { return nil }
-func (s *spyCache) LastSimilarity() float32                                    { return 0 }
-func (s *spyCache) Close() error                                               { return nil }
-func (s *spyCache) GetStats() cache.CacheStats                                 { return cache.CacheStats{} }
-func (s *spyCache) UpdateWithResponse(string, []byte, int) error               { return nil }
-func (s *spyCache) AddEntry(string, string, string, []byte, []byte, int) error { return nil }
-func (s *spyCache) FindSimilar(string, string) ([]byte, bool, error)           { return nil, false, nil }
+func (s *spyCache) IsEnabled() bool                              { return true }
+func (s *spyCache) CheckConnection(context.Context) error        { return nil }
+func (s *spyCache) Close() error                                 { return nil }
+func (s *spyCache) GetStats() cache.CacheStats                   { return cache.CacheStats{} }
+func (s *spyCache) UpdateWithResponse(string, []byte, int) error { return nil }
+func (s *spyCache) AddEntry(context.Context, string, string, string, []byte, []byte, int) error {
+	return nil
+}
+
+func (s *spyCache) FindSimilar(string, string) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func (s *spyCache) FindSimilarWithThreshold(string, string, float32) ([]byte, bool, error) {
+	return nil, false, nil
+}
 
 func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte, _ int) error {
 	s.pendingAdded = true
@@ -42,16 +50,7 @@ func (s *spyCache) AddPendingRequest(_ string, _ string, query string, _ []byte,
 	return nil
 }
 
-func (s *spyCache) FindSimilarWithThreshold(_ string, query string, _ float32) ([]byte, bool, error) {
-	s.findCalled = true
-	s.findQuery = query
-	if s.shouldHit {
-		return s.hitResponse, true, nil
-	}
-	return nil, false, nil
-}
-
-func (s *spyCache) LookupSimilarWithThreshold(_ string, query string, _ float32) (cache.LookupResult, error) {
+func (s *spyCache) LookupSimilarWithThreshold(_ context.Context, _ string, query string, _ float32) (cache.LookupResult, error) {
 	s.findCalled = true
 	s.findQuery = query
 	if s.shouldHit {

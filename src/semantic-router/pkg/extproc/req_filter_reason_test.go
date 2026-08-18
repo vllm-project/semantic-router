@@ -161,6 +161,45 @@ func TestChatTemplateKwargsPreservedWhenTogglingReasoning(t *testing.T) {
 	})
 }
 
+func TestReasoningEffortPreservesOpaqueChatTemplateFields(t *testing.T) {
+	router := newReasoningRouter(
+		config.ReasoningConfig{
+			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+				"glm": {
+					Type:      config.ReasoningFamilyTypeReasoningEffort,
+					Parameter: "reasoning_effort",
+				},
+			},
+		},
+		[]config.Decision{
+			reasoningDecision("fusion", "", 0, "glm-5.2", boolPtr(true), "high"),
+		},
+		map[string]config.ModelParams{"glm-5.2": {ReasoningFamily: "glm"}},
+	)
+	body := []byte(`{
+		"model":"glm-5.2",
+		"messages":[{"role":"user","content":"synthesize"}],
+		"chat_template_kwargs":{
+			"enable_thinking":false,
+			"vendor_limit":123456789012345678901234567890
+		}
+	}`)
+
+	modified, err := router.setReasoningModeToRequestBody(
+		body,
+		true,
+		router.Config.GetDecisionByName("fusion"),
+	)
+	require.NoError(t, err)
+	assert.Contains(t, string(modified), `"vendor_limit":123456789012345678901234567890`)
+
+	request := unmarshalReasoningRequest(t, modified)
+	kwargs, ok := request["chat_template_kwargs"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, false, kwargs["enable_thinking"])
+	assert.Equal(t, "high", kwargs["reasoning_effort"])
+}
+
 // TestReasoningEffortLevels tests all reasoning effort levels.
 func TestReasoningEffortLevels(t *testing.T) {
 	router := newReasoningEffortLevelsRouter()

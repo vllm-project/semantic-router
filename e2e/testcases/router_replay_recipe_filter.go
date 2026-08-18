@@ -33,6 +33,11 @@ func testRouterReplayRecipeListFilter(
 		return fmt.Errorf("open session: %w", err)
 	}
 	defer session.Close()
+	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return fmt.Errorf("open Router management API session: %w", err)
+	}
+	defer apiSession.Close()
 
 	sessionID := fmt.Sprintf("replay_recipe_%d", time.Now().UnixNano())
 	recipes := []struct {
@@ -49,7 +54,7 @@ func testRouterReplayRecipeListFilter(
 	}
 
 	for _, recipe := range recipes {
-		rows, err := fetchRecipeReplayRows(ctx, session, sessionID, recipe.name)
+		rows, err := fetchRecipeReplayRows(ctx, apiSession, sessionID, recipe.name)
 		if err != nil {
 			return fmt.Errorf("filter recipe %q: %w", recipe.name, err)
 		}
@@ -104,7 +109,7 @@ type recipeReplayListItem struct {
 
 func fetchRecipeReplayRows(
 	ctx context.Context,
-	session *fixtures.ServiceSession,
+	managementSession *fixtures.ServiceSession,
 	sessionID string,
 	recipe string,
 ) ([]recipeReplayListItem, error) {
@@ -114,10 +119,10 @@ func fetchRecipeReplayRows(
 	query.Set("session_id", sessionID)
 	query.Set("limit", "20")
 
-	raw, err := fixtures.DoGETRequest(
+	raw, err := doRouterReplayManagementGET(
 		ctx,
-		session.HTTPClient(30*time.Second),
-		session.BaseURL()+"/v1/router_replay?"+query.Encode(),
+		managementSession,
+		"/v1/router_replay?"+query.Encode(),
 	)
 	if err != nil {
 		return nil, err

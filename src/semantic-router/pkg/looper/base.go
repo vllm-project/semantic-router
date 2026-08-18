@@ -167,19 +167,32 @@ func (l *BaseLooper) aggregateResponses(responses []*ModelResponse, models []str
 
 // AggregatedResponse holds the combined result from multiple models
 type AggregatedResponse struct {
-	Models          []string
-	Responses       []*ModelResponse
+	Models    []string
+	Responses []*ModelResponse
+	// UsageResponses contains every paid model call when Responses is narrowed
+	// to the candidate whose content is safe to publish. Nil means Responses.
+	UsageResponses  []*ModelResponse
 	CombinedContent string
 	FinalModel      string
 	AverageLogprob  float64
 	HasToolCalls    bool
 }
 
+func aggregatedUsageResponses(agg *AggregatedResponse) []*ModelResponse {
+	if agg != nil && agg.UsageResponses != nil {
+		return agg.UsageResponses
+	}
+	if agg == nil {
+		return nil
+	}
+	return agg.Responses
+}
+
 // formatJSONResponse creates a JSON ChatCompletion response.
 // When the final response contains tool_calls, the original raw response
 // is preserved (with metadata patched) to avoid dropping tool_calls.
 func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	usage := SumUsage(agg.Responses...)
+	usage := SumUsage(aggregatedUsageResponses(agg)...)
 
 	// If the final response has tool_calls, use the original raw response
 	// but patch the model name and id to reflect the looper wrapper.
@@ -190,6 +203,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 			if err := json.Unmarshal(last.Raw, &raw); err == nil {
 				raw["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
 				raw["model"] = agg.FinalModel
+				raw["usage"] = usage.Map()
 				normalizeCompletionToolFinishReason(raw)
 				body, err := json.Marshal(raw)
 				if err == nil {
@@ -213,7 +227,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 	// to tool_calls so downstream agents can execute tools.
 	if len(agg.Responses) > 0 {
 		last := agg.Responses[len(agg.Responses)-1]
-		if body, ok := rewriteTaggedToolCallResponse(last.Raw, agg.FinalModel); ok {
+		if body, ok := rewriteTaggedToolCallResponse(last.Raw, agg.FinalModel, usage); ok {
 			return &Response{
 				Body:          body,
 				ContentType:   "application/json",
@@ -260,7 +274,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 	}, nil
 }
 
-func rewriteTaggedToolCallResponse(raw []byte, finalModel string) ([]byte, bool) {
+func rewriteTaggedToolCallResponse(raw []byte, finalModel string, usage ...TokenUsage) ([]byte, bool) {
 	if len(raw) == 0 {
 		return nil, false
 	}
@@ -305,6 +319,9 @@ func rewriteTaggedToolCallResponse(raw []byte, finalModel string) ([]byte, bool)
 	firstChoice["finish_reason"] = "tool_calls"
 	completion["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
 	completion["model"] = finalModel
+	if len(usage) > 0 {
+		completion["usage"] = usage[0].Map()
+	}
 
 	body, err := json.Marshal(completion)
 	if err != nil {
@@ -353,7 +370,7 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 	// If we have real SSE streams from the underlying model(s), preserve the SSE
 	// framing instead of simulating it. This still returns a single response body,
 	// but avoids the "fake streaming" behavior where we pre-split text.
-	usage := SumUsage(agg.Responses...)
+	usage := SumUsage(aggregatedUsageResponses(agg)...)
 	if len(agg.Responses) > 0 && agg.Responses[0].IsStreaming {
 		body := concatModelSSEStreams(agg.Responses)
 		resp := streamingLooperResponse(body, agg.FinalModel, modelsUsed, iterations, "simple")

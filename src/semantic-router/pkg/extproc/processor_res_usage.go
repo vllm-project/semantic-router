@@ -178,6 +178,12 @@ func tokenCalibrationByteLen(ctx *RequestContext) int {
 	if ctx == nil {
 		return 0
 	}
+	// Structured JSON uses a separate dense-token floor and images use a fixed
+	// reserve. Treating either as prose bytes would poison the online 4B/token
+	// calibrator with provider-specific schema/vision costs.
+	if ctx.VSRContextHasNonText {
+		return 0
+	}
 	if ctx.VSRContextTextBytes > 0 {
 		return ctx.VSRContextTextBytes
 	}

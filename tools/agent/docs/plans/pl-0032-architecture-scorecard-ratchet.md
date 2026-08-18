@@ -1,64 +1,63 @@
-# Architecture Debt Consolidation
+# PL-0032: Architecture Debt Consolidation
 
 ## Goal
 
-- Keep exactly one non-release architecture debt plan.
-- Own open TD entries that are valuable but not required for the active release.
-- Convert scattered architecture cleanup into a small, reviewable queue with
-  explicit retirement criteria.
+Keep one current execution owner for non-release architecture debt and retire
+exceptions as the corresponding code becomes modular and directly testable.
 
 ## Scope
 
-- Non-release technical debt:
-  - [TD006](../tech-debt/td-006-structural-rule-exceptions.md)
-  - [TD016](../tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md)
-  - [TD017](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
-  - [TD020](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
-  - [TD027](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
-  - [TD047](../tech-debt/td-047-looper-panel-executor-workflows-ratings-migration.md)
-- [../architecture-scorecard.md](../architecture-scorecard.md)
-- Harness scoring and validation logic that decides what is current.
+This plan owns every open entry indexed by
+[`../tech-debt/README.md`](../tech-debt/README.md):
 
-Out of scope:
+- repository structure-rule exceptions;
+- fleet-sim lint, structure, and optimizer boundaries;
+- classification subsystem boundaries;
+- native binding structure and complexity exceptions;
+- Router Flow state-store validation;
+- reviewed content moderation;
+- ONNX binding runtime coverage.
 
-- v0.3 Themis release closure; that belongs to
-  [PL0033](pl-0033-v0-3-themis-release-closure.md).
-- Daily GitHub issue and PR operations; that belongs to maintainer ops.
-- Plan archaeology.
+Release planning and daily GitHub queue state are out of scope.
 
 ## Exit Criteria
 
-- Every non-release open TD has one owner plan: this file.
-- The scorecard reports only current release/debt work.
-- Each debt item is either retired with source evidence or split into a new
-  release-owned item when it becomes release-critical.
-- No completed work contributes open task count.
+- Every open debt entry has this plan as its owner until it is promoted into an
+  active release plan.
+- Each entry is retired from current docs when its source-level exit criteria
+  pass.
+- Structure, lint, and runtime gates report new regressions without hiding them
+  behind broad exceptions.
 
 ## Task List
 
-- [x] `ADC001` Keep only current execution plans in active tracking.
-- [x] `ADC002` Assign owner-plan metadata to the current non-release TD set.
-- [ ] `ADC003` Retire or narrow TD006 by reducing remaining structural exceptions
-  that no longer need special treatment.
-- [ ] `ADC004` Retire or narrow TD016 and TD017 by bringing fleet-sim lint and
-  structure expectations into the shared contract.
-- [ ] `ADC005` Retire or narrow TD020 by extracting classifier orchestration
-  seams that are still doing request-time policy work.
-- [ ] `ADC006` Retire or narrow TD027 by splitting fleet-sim optimizer analysis,
-  verification, and export ownership.
+- [ ] `ADC-01` Reduce or narrow the remaining structure-rule exceptions.
+- [ ] `ADC-02` Align fleet-sim lint and structure checks with the shared
+  repository contract.
+- [ ] `ADC-03` Split classifier construction, discovery, and request-time
+  orchestration into narrower owner modules.
+- [ ] `ADC-04` Separate fleet-sim analytical sizing, simulation verification,
+  reporting, and public exports.
+- [ ] `ADC-05` Validate Router Flow's Redis state store and document deployment
+  guidance.
+- [ ] `ADC-06` Replace hidden moderation behavior with reviewed policy and code.
+- [ ] `ADC-07` Add mandatory CPU-compatible ONNX binding coverage.
 
 ## Next Action
 
-- Choose one non-release TD and either retire it with current-source evidence or
-  split it into a release-bound issue if it blocks the active milestone.
+Choose the highest-impact open debt entry, verify its current source evidence,
+and either narrow its scope or implement one independently reviewable exit
+criterion.
 
 ## Operating Rules
 
-- Keep non-release architecture debt out of release planning unless it directly
-  blocks a release track.
-- Use current-source evidence to decide whether a TD is still open.
+- Keep one unresolved gap per debt entry.
+- Use current code and gate output as evidence; do not copy pull-request
+  narratives into debt files.
+- Remove closed entries and completed tasks from the active tree.
 
 ## Related Docs
 
-- [Tech Debt README](../tech-debt/README.md)
-- [Architecture Scorecard](../architecture-scorecard.md)
+- [Technical Debt](../tech-debt/README.md)
+- [Architecture Guardrails](../architecture-guardrails.md)
+- [Architecture Status](../architecture-scorecard.md)

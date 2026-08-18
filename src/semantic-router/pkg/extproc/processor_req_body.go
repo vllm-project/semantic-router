@@ -136,6 +136,14 @@ func requestBodyAfterPreRouting(requestBody []byte, ctx *RequestContext) []byte 
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if changed, err := r.applyPreDispatchToolsPolicy(openAIRequest, ctx); err != nil {
+		return nil, err
+	} else if changed {
+		logging.ComponentDebugEvent("extproc", "pre_dispatch_tools_policy_applied", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decisionName,
+		})
+	}
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
@@ -162,11 +170,30 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)
 	}
 
-	// OpenAI-compatible routing
-	switch {
-	case !isAutoModel:
+	if !isAutoModel {
 		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, decisionName, ctx)
-	case r.shouldUseLooper(ctx.VSRSelectedDecision):
+	}
+	return r.handleAutoRouting(
+		openAIRequest,
+		originalModel,
+		decisionName,
+		reasoningDecision,
+		selectedModel,
+		ctx,
+		response,
+	)
+}
+
+func (r *OpenAIRouter) handleAutoRouting(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	decisionName string,
+	reasoningDecision entropy.ReasoningDecision,
+	selectedModel string,
+	ctx *RequestContext,
+	response *ext_proc.ProcessingResponse,
+) (*ext_proc.ProcessingResponse, error) {
+	if r.shouldUseLooper(ctx.VSRSelectedDecision) {
 		logging.ComponentDebugEvent("extproc", "looper_execution_selected", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   ctx.VSRSelectedDecision.Name,
@@ -178,27 +205,28 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		// types; otherwise x-vsr-selected-decision comes back empty.
 		ctx.VSRSelectedDecisionName = ctx.VSRSelectedDecision.Name
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
-	case selectedModel != "":
-		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
-	default:
-		// Auto model selected no concrete model (e.g. empty or contentless
-		// messages). Fall back to the configured default model instead of
-		// forwarding the unresolved auto-model name, which would reach the
-		// backend without resolvable credentials and surface as a misleading
-		// upstream "401 No api key" rather than a clear client error.
-		if r.Config.DefaultModel != "" {
-			logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"model":      r.Config.DefaultModel,
-			})
-			return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
-		}
-		logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
-			"request_id": ctx.RequestID,
-		})
-		metrics.RecordRequestError(originalModel, "no_model_selected")
-		return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 	}
+	if selectedModel != "" {
+		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
+	}
+
+	// Auto model selected no concrete model (e.g. empty or contentless
+	// messages). Fall back to the configured default model instead of
+	// forwarding the unresolved auto-model name, which would reach the
+	// backend without resolvable credentials and surface as a misleading
+	// upstream "401 No api key" rather than a clear client error.
+	if r.Config.DefaultModel != "" {
+		logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      r.Config.DefaultModel,
+		})
+		return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
+	}
+	logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
+		"request_id": ctx.RequestID,
+	})
+	metrics.RecordRequestError(originalModel, "no_model_selected")
+	return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 }
 
 func (r *OpenAIRouter) handleDirectLoopModel(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool, error) {
@@ -337,6 +365,16 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 
 	// Resolve model name alias to the real model name expected by the backend
 	upstreamModel := r.resolveModelNameForBackend(originalModel, backendName)
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		// The canonical request is an OpenAI-compatible IR. Concrete models bypass
+		// recipe decisions, but they must not bypass inbound protocol translation:
+		// an Anthropic /v1/messages document is not valid for an OpenAI backend.
+		providerBody, serializeErr := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+		if serializeErr != nil {
+			return nil, fmt.Errorf("translate Anthropic request for specified model: %w", serializeErr)
+		}
+		ctx.setWorkingRequestBody(providerBody)
+	}
 
 	// Create response with headers (and body mutation if model name changed)
 	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, backendAddress, backendName, ctx)

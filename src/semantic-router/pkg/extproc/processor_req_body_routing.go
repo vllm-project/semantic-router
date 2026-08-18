@@ -71,11 +71,23 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 ) ([]byte, error) {
 	openAIRequest.Model = matchedModel
 
-	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	var modifiedBody []byte
+	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
+		modifiedBody = ctx.workingRequestBody()
+	}
+	var err error
+	if len(modifiedBody) > 0 {
+		modifiedBody, err = rewriteModelInBody(modifiedBody, matchedModel)
+		if err == nil && ctx.ExpectStreamingResponse {
+			modifiedBody = addStreamFieldsFast(modifiedBody)
+		}
+	} else {
+		modifiedBody, err = serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	}
 	if err != nil {
-		logging.Errorf("Error serializing modified request: %v", err)
+		logging.Errorf("Error building modified request: %v", err)
 		metrics.RecordRequestError(matchedModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
+		return nil, status.Errorf(codes.Internal, "error building modified request: %v", err)
 	}
 
 	if decisionName != "" {
@@ -406,6 +418,14 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 		return specifiedModel, nil
 	}
 	if state.profile == nil {
+		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+			state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      ":path",
+					RawValue: []byte("/v1/chat/completions"),
+				},
+			})
+		}
 		return false, nil
 	}
 
@@ -413,6 +433,9 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 	if pathErr != nil {
 		logging.Errorf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
 		return false, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	if chatPath == "" && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		chatPath = "/v1/chat/completions"
 	}
 	if chatPath != "" {
 		state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{

@@ -5,26 +5,31 @@ import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDate } from '../types/evaluation'
 import { Link } from 'react-router-dom'
 
-import type {
-  InsightsCostSummary,
-  InsightsFilterType,
-  InsightsRecord,
-  Signal,
-} from './insightsPageTypes'
+import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildToolTraceFields, renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
-interface InsightsFilterState {
-  searchTerm: string
-  filter: InsightsFilterType
-  recipeFilter: string
-  decisionFilter: string
-  modelFilter: string
-}
+export { filterInsightsRecords } from './insightsPageFilters'
 
 export const formatInsightsDecisionName = (decision: string): string =>
   formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+
+export function getInsightsLifecyclePresentation(record: InsightsRecord) {
+  const state = record.lifecycle_state || 'unknown'
+  const successful =
+    state === 'completed' && Boolean(record.response_status && record.response_status < 400)
+  const errored =
+    state === 'failed' ||
+    state === 'aborted' ||
+    (state === 'completed' && Boolean(record.response_status && record.response_status >= 400))
+  const pending = state === 'in_progress'
+  const label = record.response_status
+    ? `${record.response_status} · ${state.replace('_', ' ')}`
+    : state.replace('_', ' ')
+
+  return { state, successful, errored, pending, label }
+}
 
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
@@ -47,37 +52,6 @@ export function getUniqueModels(records: InsightsRecord[]) {
     }
   })
   return Array.from(models).sort()
-}
-
-export function filterInsightsRecords(records: InsightsRecord[], filters: InsightsFilterState) {
-  const searchTerm = filters.searchTerm.trim().toLowerCase()
-
-  return records.filter((record) => {
-    if (filters.filter === 'cached' && !record.from_cache) {
-      return false
-    }
-    if (filters.filter === 'streamed' && !record.streaming) {
-      return false
-    }
-    if (filters.recipeFilter !== 'all' && record.recipe !== filters.recipeFilter) {
-      return false
-    }
-    if (filters.decisionFilter !== 'all' && record.decision !== filters.decisionFilter) {
-      return false
-    }
-    if (
-      filters.modelFilter !== 'all' &&
-      record.selected_model !== filters.modelFilter &&
-      record.original_model !== filters.modelFilter
-    ) {
-      return false
-    }
-    if (searchTerm && !record.request_id?.toLowerCase().includes(searchTerm)) {
-      return false
-    }
-
-    return true
-  })
 }
 
 export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
@@ -268,19 +242,26 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'response_status',
       header: 'Status',
-      width: '80px',
+      width: '150px',
       align: 'center',
-      render: (row) => (
-        <span
-          className={`${styles.statusBadge} ${
-            row.response_status && row.response_status < 400
-              ? styles.statusSuccess
-              : styles.statusError
-          }`}
-        >
-          {row.response_status || '-'}
-        </span>
-      ),
+      render: (row) => {
+        const lifecycle = getInsightsLifecyclePresentation(row)
+        return (
+          <span
+            className={`${styles.statusBadge} ${
+              lifecycle.successful
+                ? styles.statusSuccess
+                : lifecycle.errored
+                  ? styles.statusError
+                  : lifecycle.pending
+                    ? styles.statusPending
+                    : styles.statusUnknown
+            }`}
+          >
+            {lifecycle.label}
+          </span>
+        )
+      },
     },
     {
       key: 'flags',
@@ -305,6 +286,20 @@ export function buildInsightsRecordSections(
   options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
+
+  sections.push({
+    title: 'Lifecycle',
+    fields: [
+      { label: 'State', value: record.lifecycle_state || 'unknown' },
+      { label: 'HTTP status', value: record.response_status || '-' },
+      { label: 'Ended at', value: record.ended_at ? formatDate(record.ended_at) : '-' },
+      {
+        label: 'Duration',
+        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+      },
+      { label: 'Terminal reason', value: record.terminal_reason || '-' },
+    ],
+  })
 
   sections.push({
     title: 'Decision Information',
@@ -449,6 +444,7 @@ export function collectSignals(signals: Signal): string[] {
 
 export function hasCompleteCostData(record: InsightsRecord) {
   return (
+    (record.lifecycle_state === undefined || record.lifecycle_state === 'completed') &&
     typeof record.actual_cost === 'number' &&
     typeof record.baseline_cost === 'number' &&
     typeof record.cost_savings === 'number' &&

@@ -78,10 +78,28 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 ) ([]byte, error) {
 	openAIRequest.Model = upstreamModel
 
-	modifiedBody, err := serializeOpenAIRequestWithStream(
-		openAIRequest,
-		ctx.ExpectStreamingResponse,
-	)
+	// Preserve provider-specific request fields on the internal Looper hop.
+	// The OpenAI SDK parameter types intentionally discard unknown JSON fields
+	// when they are unmarshaled, so serializing openAIRequest here would lose
+	// extensions such as chat_template_kwargs, cache_control, and exact large
+	// integers. Native Anthropic requests still require the typed protocol
+	// translation path, matching ordinary auto routing.
+	var modifiedBody []byte
+	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
+		modifiedBody = ctx.workingRequestBody()
+	}
+	var err error
+	if len(modifiedBody) > 0 {
+		modifiedBody, err = rewriteModelInBody(modifiedBody, upstreamModel)
+		if err == nil && ctx.ExpectStreamingResponse {
+			modifiedBody = addStreamFieldsFast(modifiedBody)
+		}
+	} else {
+		modifiedBody, err = serializeOpenAIRequestWithStream(
+			openAIRequest,
+			ctx.ExpectStreamingResponse,
+		)
+	}
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

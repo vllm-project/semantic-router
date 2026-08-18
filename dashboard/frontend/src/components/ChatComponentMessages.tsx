@@ -27,7 +27,26 @@ interface ToolCallsProps {
 }
 
 function getSearchSources(message: Message) {
-  return message.toolResults?.find(result => result.name === 'search_web')?.content
+  return message.toolResults?.find((result) => result.name === 'search_web')?.content
+}
+
+function MessageImages({ message }: { message: Message }) {
+  const images = message.images ?? []
+  if (images.length === 0) return null
+
+  return (
+    <div className={styles.messageImageGrid} aria-label="Probe images">
+      {images.map((image, index) => (
+        <img
+          key={`${image.src.slice(0, 80)}-${index}`}
+          className={styles.messageImage}
+          src={image.src}
+          alt={image.alt}
+          data-testid="probe-message-image"
+        />
+      ))}
+    </div>
+  )
 }
 
 function ToolCalls({
@@ -42,12 +61,12 @@ function ToolCalls({
 
   return (
     <div className={styles.toolCallsContainer}>
-      {message.toolCalls.map(toolCall => {
+      {message.toolCalls.map((toolCall) => {
         const card = (
           <ToolCard
             key={toolCall.id}
             toolCall={toolCall}
-            toolResult={message.toolResults?.find(result => result.callId === toolCall.id)}
+            toolResult={message.toolResults?.find((result) => result.callId === toolCall.id)}
             isExpanded={expandedToolCards.has(toolCall.id)}
             onToggle={() => onToggleToolCard(toolCall.id)}
           />
@@ -88,6 +107,7 @@ function AssistantRatingsMessage({
       {message.thinkingProcess ? (
         <ThinkingBlock content={message.thinkingProcess} isStreaming={message.isStreaming} />
       ) : null}
+      <MessageImages message={message} />
       <div className={styles.ratingsChoices}>
         {message.choices?.map((choice, index) => (
           <div key={`${message.id}-${index}`} className={styles.choiceCard}>
@@ -147,6 +167,7 @@ function AssistantSingleMessage({
         <ThinkingBlock content={message.thinkingProcess} isStreaming={message.isStreaming} />
       ) : null}
       <div className={styles.messageText}>
+        <MessageImages message={message} />
         {message.content ? (
           <>
             <ErrorBoundary>
@@ -180,7 +201,7 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
     <div className={styles.messageText}>
       {attachmentItems.length > 0 ? (
         <div className={styles.messageAttachmentList}>
-          {attachmentItems.map(attachment => (
+          {attachmentItems.map((attachment) => (
             <span
               key={`${attachment.fileName}-${attachment.sizeBytes}`}
               className={styles.messageAttachmentChip}
@@ -194,77 +215,84 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
           ))}
         </div>
       ) : null}
+      <MessageImages message={message} />
       {message.content || message.isStreaming ? <span>{message.content}</span> : null}
       {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
     </div>
   )
 }
 
-const MessageCard = memo(function MessageCard({
-  expandedToolCards,
-  message,
-  onToggleToolCard,
-  prevUserQuery,
-}: MessageCardProps) {
-  const isRatingsMessage =
-    message.role === 'assistant' && Boolean(message.choices && message.choices.length > 1)
-  const showCopyAction =
-    (message.role === 'assistant' || message.role === 'user') &&
-    (Boolean(message.content) || (message.attachments?.length ?? 0) > 0) &&
-    !message.isStreaming
+const MessageCard = memo(
+  function MessageCard({
+    expandedToolCards,
+    message,
+    onToggleToolCard,
+    prevUserQuery,
+  }: MessageCardProps) {
+    const isRatingsMessage =
+      message.role === 'assistant' && Boolean(message.choices && message.choices.length > 1)
+    const showCopyAction =
+      (message.role === 'assistant' || message.role === 'user') &&
+      (Boolean(message.content) ||
+        (message.attachments?.length ?? 0) > 0 ||
+        (message.images?.length ?? 0) > 0) &&
+      !message.isStreaming
 
-  return (
-    <div
-      className={`${styles.message} ${styles[message.role]}`}
-      translate={getTranslateAttr(message.isStreaming ?? false)}
-      data-message-id={message.id}
-      data-message-role={message.role}
-    >
-      <div className={styles.messageContent} data-message-content>
-        {message.role !== 'assistant' ? (
-          <UserOrSystemMessage message={message} />
-        ) : isRatingsMessage ? (
-          <AssistantRatingsMessage
-            expandedToolCards={expandedToolCards}
-            message={message}
-            onToggleToolCard={onToggleToolCard}
-            prevUserQuery={prevUserQuery}
-          />
-        ) : (
-          <AssistantSingleMessage
-            expandedToolCards={expandedToolCards}
-            message={message}
-            onToggleToolCard={onToggleToolCard}
-          />
-        )}
-        {message.role === 'assistant' && message.headers ? <HeaderDisplay headers={message.headers} /> : null}
-        {message.role === 'assistant' && message.reasoning_mom_responses ? (
-          <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
-        ) : null}
-        {showCopyAction ? (
-          <div className={styles.messageActionRow}>
-            <MessageActionBar content={message.content} />
-            {message.role === 'assistant'
-              && message.headers?.['x-vsr-selected-model']
-              && message.headers?.['x-vsr-replay-id'] ? (
-              <FeedbackButtons
-                modelId={message.headers['x-vsr-selected-model']}
-                replayId={message.headers['x-vsr-replay-id']}
-                category={message.headers['x-vsr-selected-decision']}
-                query={prevUserQuery}
-              />
-            ) : null}
-          </div>
-        ) : null}
+    return (
+      <div
+        className={`${styles.message} ${styles[message.role]}`}
+        translate={getTranslateAttr(message.isStreaming ?? false)}
+        data-message-id={message.id}
+        data-message-role={message.role}
+      >
+        <div className={styles.messageContent} data-message-content>
+          {message.role !== 'assistant' ? (
+            <UserOrSystemMessage message={message} />
+          ) : isRatingsMessage ? (
+            <AssistantRatingsMessage
+              expandedToolCards={expandedToolCards}
+              message={message}
+              onToggleToolCard={onToggleToolCard}
+              prevUserQuery={prevUserQuery}
+            />
+          ) : (
+            <AssistantSingleMessage
+              expandedToolCards={expandedToolCards}
+              message={message}
+              onToggleToolCard={onToggleToolCard}
+            />
+          )}
+          {message.role === 'assistant' && message.headers ? (
+            <HeaderDisplay headers={message.headers} />
+          ) : null}
+          {message.role === 'assistant' && message.reasoning_mom_responses ? (
+            <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
+          ) : null}
+          {showCopyAction ? (
+            <div className={styles.messageActionRow}>
+              <MessageActionBar content={message.content} />
+              {message.role === 'assistant' &&
+              message.headers?.['x-vsr-selected-model'] &&
+              message.headers?.['x-vsr-replay-id'] ? (
+                <FeedbackButtons
+                  modelId={message.headers['x-vsr-selected-model']}
+                  replayId={message.headers['x-vsr-replay-id']}
+                  category={message.headers['x-vsr-selected-decision']}
+                  query={prevUserQuery}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  )
-}, (prevProps, nextProps) => (
-  prevProps.message === nextProps.message
-  && prevProps.prevUserQuery === nextProps.prevUserQuery
-  && prevProps.onToggleToolCard === nextProps.onToggleToolCard
-  && prevProps.expandedToolCards === nextProps.expandedToolCards
-))
+    )
+  },
+  (prevProps, nextProps) =>
+    prevProps.message === nextProps.message &&
+    prevProps.prevUserQuery === nextProps.prevUserQuery &&
+    prevProps.onToggleToolCard === nextProps.onToggleToolCard &&
+    prevProps.expandedToolCards === nextProps.expandedToolCards,
+)
 
 export default function ChatComponentMessages({
   expandedToolCards,
@@ -285,7 +313,8 @@ export default function ChatComponentMessages({
     <div className={styles.messagesContainer}>
       <div className={styles.messages}>
         {messages.map((message, index) => {
-          const prevUserQuery = messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
+          const prevUserQuery =
+            messages[index - 1]?.role === 'user' ? messages[index - 1].content : undefined
 
           return (
             <MessageCard

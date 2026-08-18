@@ -14,9 +14,17 @@ import {
 import {
   buildChatMessages,
   buildChatRequestBody,
+  buildExactChatRequestBody,
+  buildPlaygroundRequestHeaders,
   collectResponseHeaders,
+  PLAYGROUND_REQUEST_TIMEOUT_MS,
+  type OutboundChatMessage,
 } from './chatRequestSupport'
-import { toPlaygroundAttachmentSummaries } from './playgroundFileAttachments'
+import {
+  buildPlaygroundUserContent,
+  toPlaygroundAttachmentImages,
+  toPlaygroundAttachmentSummaries,
+} from './playgroundFileAttachments'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import { runToolLoop } from './chatTaskToolLoop'
 import {
@@ -80,7 +88,12 @@ export const runPlaygroundTask = async ({
 }: RunPlaygroundTaskOptions): Promise<void> => {
   const trimmedInput = task.prompt.trim()
   const taskAttachments = task.attachments ?? []
-  if (!trimmedInput && taskAttachments.length === 0) return
+  const taskAttachmentImages = toPlaygroundAttachmentImages(taskAttachments)
+  const displayImages = [...(task.displayMessage?.images ?? []), ...taskAttachmentImages]
+  const exactMessages = Array.isArray(task.exactRequest?.messages)
+    ? (task.exactRequest.messages as OutboundChatMessage[])
+    : []
+  if (!trimmedInput && taskAttachments.length === 0 && exactMessages.length === 0) return
 
   setConversationError(task.conversationId, null)
 
@@ -88,13 +101,26 @@ export const runPlaygroundTask = async ({
   const responseHeaders: Record<string, string> = {}
   const latestThinkingProcessRef = { current: '' }
   const abortController = new AbortController()
+  const timeout = globalThis.setTimeout(() => {
+    abortController.abort(
+      new DOMException(
+        `Playground request timed out after ${PLAYGROUND_REQUEST_TIMEOUT_MS / 1000} seconds.`,
+        'TimeoutError',
+      ),
+    )
+  }, PLAYGROUND_REQUEST_TIMEOUT_MS)
+  const exactUserContent = [...exactMessages]
+    .reverse()
+    .find((message) => message.role === 'user')?.content
   const userMessage: Message = {
     id: generateId(),
     role: 'user',
-    content: trimmedInput,
+    content: task.displayMessage?.content ?? trimmedInput,
+    images: displayImages.length > 0 ? displayImages : undefined,
     attachments:
       taskAttachments.length > 0 ? toPlaygroundAttachmentSummaries(taskAttachments) : undefined,
     playgroundAttachments: taskAttachments.length > 0 ? taskAttachments : undefined,
+    requestContent: exactUserContent ?? buildPlaygroundUserContent(trimmedInput, taskAttachments),
     timestamp: new Date(),
   }
   const assistantMessage: Message = {
@@ -107,7 +133,7 @@ export const runPlaygroundTask = async ({
 
   updateConversationMessages(task.conversationId, (prev) => [
     ...prev,
-    userMessage,
+    ...(task.appendPromptMessage === false ? [] : [userMessage]),
     assistantMessage,
   ])
   registerAbortController(task.conversationId, abortController)
@@ -117,20 +143,24 @@ export const runPlaygroundTask = async ({
   let cancelStreamingChoiceSync = () => {}
 
   try {
-    const activeTools = buildTaskTools(task)
-    const chatMessages = buildChatMessages(
-      getConversationMessagesSnapshot(task.conversationId),
-      trimmedInput,
-      task.requestOptions.enableClawMode && !clawManagementDisabled,
-      taskAttachments,
-    )
-    const requestBody = buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
+    const exactTools = Array.isArray(task.exactRequest?.tools)
+      ? (task.exactRequest.tools as ToolDefinition[])
+      : null
+    const activeTools = task.exactRequest ? (exactTools ?? []) : buildTaskTools(task)
+    const chatMessages = task.exactRequest
+      ? exactMessages
+      : buildChatMessages(
+          getConversationMessagesSnapshot(task.conversationId),
+          trimmedInput,
+          task.requestOptions.enableClawMode && !clawManagementDisabled,
+          taskAttachments,
+        )
+    const requestBody = task.exactRequest
+      ? buildExactChatRequestBody(task.exactRequest, task.requestOptions.model)
+      : buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-vsr-debug': 'true',
-      },
+      headers: buildPlaygroundRequestHeaders(task.conversationId),
       body: JSON.stringify(requestBody),
       signal: abortController.signal,
     })
@@ -319,7 +349,12 @@ export const runPlaygroundTask = async ({
       }
     }
 
-    if (hasToolCalls) {
+    // A fast stream can finish before the scheduled frame commits its initial
+    // tool-call state. Flush it before the tool loop so that stale empty content
+    // cannot overwrite the model's follow-up answer after tool execution.
+    streamingChoiceSync.drain()
+
+    if (hasToolCalls && task.requestOptions.executeToolCalls !== false) {
       await runToolLoop({
         activeTools,
         assistantMessageId,
@@ -336,6 +371,13 @@ export const runPlaygroundTask = async ({
         toolCallsMap,
         updateConversationMessages,
       })
+    } else if (hasToolCalls) {
+      toolCallsMap.forEach((toolCall) => {
+        if (toolCall.status === 'pending' || toolCall.status === 'running') {
+          toolCall.status = 'skipped'
+        }
+      })
+      syncAssistantToolCalls()
     }
 
     const finalChoices: Choice[] | undefined = isRatingsMode
@@ -369,6 +411,7 @@ export const runPlaygroundTask = async ({
       prev.filter((message) => message.id !== assistantMessageId),
     )
   } finally {
+    globalThis.clearTimeout(timeout)
     cancelStreamingChoiceSync()
     setConversationThinking(task.conversationId, false)
     clearConversationActiveTask(task.conversationId, task.id)

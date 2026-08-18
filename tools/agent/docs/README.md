@@ -52,7 +52,6 @@ Start here when resolving task context mechanically:
 - [environments.md](environments.md)
 - [local-rules.md](local-rules.md)
 - [skill-catalog.md](skill-catalog.md)
-- [.agents/skills/harness/SKILL.md](../../../.agents/skills/harness/SKILL.md)
 
 The default loop is:
 

@@ -14,7 +14,7 @@ file-length limit.
 import os
 
 import pytest
-from cli import container_cli, container_start
+from cli import container_cli, container_openclaw_support, container_start
 from tests.test_openclaw_shared_network import (
     _capture_run_commands,
     _find_container_run_cmd,
@@ -24,6 +24,11 @@ from tests.test_openclaw_shared_network import (
 @pytest.fixture(autouse=True)
 def _split_runtime_topology(monkeypatch):
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
+    monkeypatch.setattr(
+        container_openclaw_support,
+        "_runtime_socket_is_group_safe",
+        lambda _path: True,
+    )
 
 
 _LISTENERS = [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
@@ -142,3 +147,5 @@ def test_container_start_vllm_sr_warns_when_podman_socket_missing(
     assert not any(
         "docker.sock" in part for part in dashboard_cmd
     ), f"unexpected socket mount: {dashboard_cmd!r}"
+    assert "OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in dashboard_cmd
+    assert "OPENCLAW_CONTAINER_RUNTIME=docker" not in dashboard_cmd

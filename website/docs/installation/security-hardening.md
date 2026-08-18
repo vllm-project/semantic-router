@@ -1,210 +1,159 @@
-# Security Hardening Guide
+---
+title: Security Hardening
+description: Secure the inference listener, Dashboard, credentials, replay data, stores, and container-runtime access.
+---
 
-This document describes the RBAC-to-router integration and production-default
-Envoy configuration shipped with the semantic router to close trust-boundary
-gaps between the dashboard and the routing plane.
+# Security Hardening
 
-## Overview
+Semantic Router sits on the request path between clients and model providers.
+Treat it as part of the application's trust boundary: it can inspect prompts,
+choose providers, mutate requests, and optionally retain routing data.
 
-The semantic router sits between external clients and upstream LLM backends.
-It processes requests through Envoy's ext_proc filter and makes routing
-decisions based on signal classification. This guide covers:
+This guide highlights the controls that need an explicit production decision.
+It does not replace the identity, network, secret-management, and data-governance
+controls of the surrounding platform.
 
-1. **Production-default Envoy config** — defense-in-depth header stripping at
-   the proxy layer.
-2. **Dashboard RBAC integration** — translating dashboard role/permission
-   changes into router `role_bindings` and `ratelimit` rules.
-3. **New dashboard permissions** — fine-grained RBAC permissions for
-   feedback, replay, and security policy management.
+## Map the trust boundaries
 
-## Architecture
-
-```
- Client → Envoy (header stripping) → ext_proc → upstream LLM
-                                       │
-                  Dashboard ──────────►│ (config fragment sync)
-                    │                  │
-                    ├── Security Policy API
-                    ├── Role-to-Model mappings
-                    └── Rate-limit tier mappings
+```mermaid
+flowchart LR
+    Client["Client"] --> Listener["Public Envoy listener"]
+    Listener --> Router["Semantic Router"]
+    Router --> Provider["Model providers"]
+    Admin["Authenticated Dashboard / API"] --> Router
+    Router --> Stores["Cache, memory, replay, and logs"]
 ```
 
-## 1. Production-Default Envoy Config
+Review each boundary separately:
 
-The Envoy template strips sensitive internal headers from client requests
-at the proxy layer (defense-in-depth). Even if ext_proc validation is
-bypassed, these headers never reach the router:
+- who can call inference endpoints;
+- which identity claims the Router trusts;
+- which models and tools each role may use;
+- where provider credentials are stored;
+- which requests may leave the local environment;
+- what prompts, responses, and route metadata are retained; and
+- who can change configuration or inspect stored data.
+
+## Protect the public listener
+
+The maintained Envoy configuration removes internal control headers before a
+client request reaches the Router. Do the same when supplying a custom Envoy or
+gateway configuration. Internal examples include:
 
 ```yaml
 request_headers_to_remove:
-  - "x-vsr-looper-request"
-  - "x-vsr-looper-secret"
-  - "x-vsr-looper-decision"
-  - "x-vsr-looper-iteration"
-  - "x-authz-user-id"
-  - "x-authz-user-groups"
+  - x-vsr-looper-request
+  - x-vsr-looper-secret
+  - x-vsr-looper-decision
+  - x-vsr-looper-iteration
+  - x-authz-user-id
+  - x-authz-user-groups
 ```
 
-This is configured in both:
+Do not expose Router management, metrics, ExtProc, or backing-store ports as
+public inference endpoints. Terminate client authentication at a trusted
+boundary and allow only that component to supply identity headers.
 
-- `deploy/local/envoy.yaml` (local development)
-- `src/vllm-sr/cli/templates/envoy.template.yaml` (production template)
+## Configure authorization and rate limits
 
-## 2. Dashboard RBAC Integration
+The Dashboard **Security Policy** page maps users or groups to Router roles and
+model access, and can define per-subject request and token limits. Saving a
+valid policy updates the canonical Router configuration and applies it to the
+active stack.
 
-### Security Policy API
+Use preview before saving when a policy changes several mappings. Keep the
+management surface authenticated and grant write permissions only to operators
+who are allowed to change live routing policy.
 
-The dashboard provides a Security Policy management page (`/security`),
-accessible from the **Manager** dropdown in the top navigation bar. It
-allows administrators to:
+Relevant Dashboard permissions include:
 
-1. **Map RBAC roles to models** — Define which user groups or individual users
-   can access which LLM models. Each mapping generates a router authz signal
-   rule and a corresponding decision entry.
-2. **Set rate-limit tiers** — Configure per-role/group rate limits that are
-   translated into router `ratelimit.providers[].rules`.
+| Permission | Purpose | Default roles |
+| --- | --- | --- |
+| `feedback.submit` | Submit routing feedback. | admin, write |
+| `replay.read` | List replay records. | admin, write, read |
+| `security.manage` | Change security policy. | admin |
+| `logs.read` | Read bounded local-stack service logs. | admin, write |
 
-### Auto-Apply on Save
+The Router management API distinguishes replay metadata from replay detail.
+The Dashboard service can retrieve complete records, then removes captured
+bodies and tool payloads for users who do not have configuration-write access.
+It does not receive permission to reveal stored secret values.
 
-When a security policy is saved via `PUT /api/security/policy`, the dashboard
-automatically applies the generated fragment to the router's `config.yaml` and
-triggers a hot-reload. The full pipeline is:
+See the [management API reference](../api/apiserver) for endpoints and response
+contracts.
 
-```
-Dashboard UI → PUT /api/security/policy
-  → GenerateRouterFragment()
-  → toCanonicalYAML()          (maps to routing.signals.role_bindings,
-                                 routing.decisions, and
-                                 global.services.ratelimit)
-  → mergeDeployPayload()       (deep-merges into existing config.yaml)
-  → writeConfigAtomically()
-  → applyWrittenConfig()       (Envoy restart + fsnotify router hot-reload)
-```
+## Keep credentials out of configuration
 
-The merge uses **replace semantics** for both `routing.decisions` and
-`global.services.ratelimit`: the entire block is replaced by the security
-policy fragment. Other global config fields (observability, authz, etc.) are
-preserved. `routing.signals.role_bindings` are merged alongside other signals.
+Use environment references in canonical YAML:
 
-The API response includes an `"applied": true` field when the fragment was
-successfully written and propagated to the runtime.
-
-A `SecurityPolicyConfig` contains:
-
-- `role_mappings[]` — each entry maps subjects (Users/Groups) to a router role
-  and a set of allowed models
-- `rate_tiers[]` — each entry maps a user/group to RPM and TPM limits
-
-The `GenerateRouterFragment()` function converts this into:
-
-- `role_bindings[]` — router-config-compatible subject-to-role bindings
-- `decisions[]` — decision entries with authz rules referencing the mapped role
-- `ratelimit.providers[].rules[]` — local-limiter rules with per-unit limits
-
-### Example
-
-Given this security policy:
-
-```json
-{
-  "role_mappings": [
-    {
-      "name": "premium",
-      "subjects": [{"kind": "Group", "name": "paying-customers"}],
-      "role": "premium_tier",
-      "model_refs": ["gpt-4", "claude-3"],
-      "priority": 10
-    }
-  ],
-  "rate_tiers": [
-    {
-      "name": "premium-rate",
-      "group": "paying-customers",
-      "rpm": 1000,
-      "tpm": 100000
-    }
-  ]
-}
+```yaml
+api_key: ${MODEL_API_KEY}
 ```
 
-The generated router config fragment is:
+Do not commit literal API keys, passwords, authorization headers, credential
+query parameters, or URLs containing user information.
 
-```json
-{
-  "role_bindings": [
-    {
-      "subjects": [{"kind": "Group", "name": "paying-customers"}],
-      "role": "premium_tier"
-    }
-  ],
-  "decisions": [
-    {
-      "name": "rbac-premium",
-      "priority": 10,
-      "rules": {"type": "authz", "name": "premium_tier"},
-      "modelRefs": [{"model": "gpt-4"}, {"model": "claude-3"}]
-    }
-  ],
-  "ratelimit": {
-    "providers": [
-      {
-        "type": "local-limiter",
-        "rules": [
-          {
-            "name": "premium-rate",
-            "match": {"group": "paying-customers"},
-            "requests_per_unit": 1000,
-            "tokens_per_unit": 100000,
-            "unit": "minute"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+For `vllm-sr serve --target k8s`, the CLI places sensitive environment values
+in an immutable Secret revision scoped to the namespace and Helm release. Helm
+values and the Deployment reference the Secret by name; they do not contain
+the credential value. A failed upgrade keeps the previous workload and Secret
+active. Release-owned old revisions are removed only after they are no longer
+referenced.
 
-### API Endpoints
+Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
+external objects and are not copied into the CLI-managed Secret. Use the same
+namespace and release ownership discipline for every manually managed Secret.
 
-| Endpoint | Method | Permission | Description |
-|---|---|---|---|
-| `/api/security/policy` | `GET` | `config.read` | Get current security policy |
-| `/api/security/policy` | `PUT` | `security.manage` | Update policy, generate fragment, and auto-apply to router |
-| `/api/security/policy/preview` | `POST` | `security.manage` | Preview fragment without saving |
+## Review stored request data
 
-### Validation Rules
+Replay, response cache, memory, response history, service logs, and provider
+logs can all retain data derived from a request. Their settings are independent
+from the model's placement. A route to a local model can still write a prompt
+or response to a shared store.
 
-The security policy is validated before processing:
+For every enabled store:
 
-- Role mapping `name` must be non-empty and unique
-- Role mapping `role` must be non-empty
-- At least one subject (User or Group) per mapping
-- Subject `kind` must be `"User"` or `"Group"`
-- Subject `name` must be non-empty
-- Rate tier `name` must be non-empty
-- At least one of `rpm` or `tpm` must be set per tier
+- identify which routes write to it;
+- inspect whether request or response bodies are captured;
+- set a retention and deletion policy;
+- restrict read and backup access;
+- use encryption and transport security appropriate to the data; and
+- test behavior when the store is unavailable.
 
-## 3. Dashboard RBAC Permissions
+Recipe Model Cards describe the checked-in replay and cache behavior for each
+maintained recipe. See [Data and Storage](storage-overview) for deployment
+guides.
 
-Three new permissions were added to the dashboard RBAC system:
+## Limit container-runtime access
 
-| Permission | Description | Admin | Write | Read |
-|---|---|---|---|---|
-| `feedback.submit` | Submit model selection feedback | Yes | Yes | Yes |
-| `replay.read` | Access router replay API records | Yes | Yes | Yes |
-| `security.manage` | Manage security policy (write) | Yes | No | No |
+Some Dashboard workflows can manage local containers. The CLI mounts a
+container-runtime socket only when it is a Unix socket with a safe owner and
+group mode; it rejects symlinks, world-accessible sockets, and unsafe group
+ownership. The Dashboard repeats the check inside the container and runs as a
+non-root user.
 
-The `security.manage` permission is required for `PUT` and `POST` requests
-to `/api/security/*` endpoints. `GET` requests only require `config.read`.
+When the socket is missing or rejected, Router and Dashboard still start, but
+container-management features report the runtime as unavailable. Do not make a
+socket world-writable to bypass this protection. Use
+`VLLM_SR_CONTAINER_SOCKET` for a non-default rootless runtime socket and verify
+its user-namespace and supplementary-group mapping.
 
-## Deployment Checklist
+If the deployment does not need Dashboard-managed containers, do not mount a
+runtime socket.
 
-For production multi-user deployments:
+## Production checklist
 
-- [ ] Verify Envoy config includes `request_headers_to_remove` for internal headers
-- [ ] Configure rate-limit tiers via the Security Policy page or API
-- [ ] Set `ratelimit.fail_open: false` for strict enforcement
-- [ ] Configure role-to-model mappings to restrict model access by group
-- [ ] Review dashboard user roles — only admins should have `security.manage`
-- [ ] Ensure the looper endpoint is only accessible from the router container
-      (network-level isolation)
+- [ ] Authenticate the public inference listener and the management surface.
+- [ ] Strip internal control and identity headers at the trusted proxy.
+- [ ] Bind Router management, ExtProc, metrics, and store ports to private
+      interfaces.
+- [ ] Restrict model access and rate limits by role or tenant.
+- [ ] Keep provider and store credentials in a secret manager or Kubernetes
+      Secret.
+- [ ] Review every route's provider locality, tools, and data-retention behavior.
+- [ ] Grant replay detail, logs, and configuration writes only to trusted
+      operators.
+- [ ] Set strict failure behavior where bypassing a policy is unacceptable.
+- [ ] Test backup, restore, credential rotation, upgrade, and rollback.
+- [ ] Leave the container-runtime socket unmounted unless a workflow requires
+      it.
