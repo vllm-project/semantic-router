@@ -49,15 +49,24 @@ def _yaml_labels(task: dict[str, Any]) -> str:
     return "\n".join(f"  {label}: {index}" for label, index in task["label2id"].items())
 
 
-def _usage_example(repository_id: str, artifact_type: str) -> str:
+def _usage_example(repository_id: str, artifact_type: str, task: dict[str, Any]) -> str:
     if artifact_type == "adapter":
+        labels_by_id = id2label(task)
+        labels_by_name = task["label2id"]
         return f"""```python
 from peft import AutoPeftModelForSequenceClassification
 from transformers import AutoTokenizer
 
 model_id = "{repository_id}"
+id2label = {labels_by_id!r}
+label2id = {labels_by_name!r}
 tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoPeftModelForSequenceClassification.from_pretrained(model_id)
+model = AutoPeftModelForSequenceClassification.from_pretrained(
+    model_id,
+    num_labels=len(id2label),
+    id2label=id2label,
+    label2id=label2id,
+)
 ```"""
     return f"""```python
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -84,7 +93,7 @@ def build_model_card(
         f"{source_commit}/src/training/model_classifier/safety_classifier"
     )
     library_name = "peft" if artifact_type == "adapter" else "transformers"
-    usage = _usage_example(repository_id, artifact_type)
+    usage = _usage_example(repository_id, artifact_type, task)
     return f"""---
 license: apache-2.0
 library_name: {library_name}
