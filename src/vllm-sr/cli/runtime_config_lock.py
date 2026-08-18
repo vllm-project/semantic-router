@@ -17,6 +17,8 @@ except ImportError:  # pragma: no cover - managed packages are Linux-only today.
 
 LOCK_FILENAME = "runtime-config.lock"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 30.0
+RECIPE_STORE_PARENT_TRAVERSE_BITS = stat.S_IXGRP | stat.S_IXOTH
+LOCK_FILE_OTHER_ACCESS_BITS = stat.S_IRWXO
 
 
 class RuntimeConfigLockError(RuntimeError):
@@ -119,7 +121,10 @@ def acquire_runtime_config_lock(
             raise RuntimeConfigLockError(
                 "The runtime configuration lock must be a private regular file."
             )
-        os.fchmod(lock_fd, 0o600)
+        if stat.S_IMODE(info.st_mode) & LOCK_FILE_OTHER_ACCESS_BITS:
+            raise RuntimeConfigLockError(
+                "The runtime configuration lock must not grant access to other users."
+            )
         os.set_inheritable(lock_fd, False)
         deadline = time.monotonic() + timeout_seconds
         while True:
@@ -169,8 +174,17 @@ def _open_recipe_store_dir(
     descriptor = _open_real_directory(state_root)
     current_path = state_root
     try:
-        for component in (".vllm-sr", "recipe-store", stack_name):
-            next_descriptor = _open_or_create_child_directory(descriptor, component)
+        components = (
+            (".vllm-sr", 0),
+            ("recipe-store", RECIPE_STORE_PARENT_TRAVERSE_BITS),
+            (stack_name, 0),
+        )
+        for component, required_mode_bits in components:
+            next_descriptor = _open_or_create_child_directory(
+                descriptor,
+                component,
+                required_mode_bits=required_mode_bits,
+            )
             os.close(descriptor)
             descriptor = next_descriptor
             current_path /= component
@@ -180,9 +194,14 @@ def _open_recipe_store_dir(
         raise
 
 
-def _open_or_create_child_directory(parent_fd: int, name: str) -> int:
+def _open_or_create_child_directory(
+    parent_fd: int,
+    name: str,
+    *,
+    required_mode_bits: int = 0,
+) -> int:
     with suppress(FileExistsError):
-        os.mkdir(name, 0o700, dir_fd=parent_fd)
+        os.mkdir(name, 0o700 | required_mode_bits, dir_fd=parent_fd)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
@@ -197,6 +216,16 @@ def _open_or_create_child_directory(parent_fd: int, name: str) -> int:
         raise RuntimeConfigLockError(
             "The local runtime coordination path must be a real directory."
         )
+    current_mode = stat.S_IMODE(info.st_mode)
+    if current_mode & required_mode_bits != required_mode_bits:
+        try:
+            os.fchmod(descriptor, current_mode | required_mode_bits)
+        except OSError as error:
+            os.close(descriptor)
+            raise RuntimeConfigLockError(
+                "The local runtime coordination path permissions cannot be "
+                "prepared safely."
+            ) from error
     os.set_inheritable(descriptor, False)
     return descriptor
 

@@ -334,7 +334,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -346,7 +346,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -362,7 +362,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -380,7 +380,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -399,7 +399,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -411,7 +411,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -423,7 +423,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -440,7 +440,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -457,7 +457,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Correct the previous miss from first principles and state the improvement clearly."
       mode: "insert"
     }
   }
@@ -475,7 +475,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -491,7 +491,7 @@ RECIPE balance (description = "A balanced model optimized across quality, speed,
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer."
+      system_prompt: "You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer."
       mode: "insert"
     }
   }
@@ -609,7 +609,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -621,7 +621,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -633,7 +633,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -645,7 +645,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -662,7 +662,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -679,7 +679,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -695,7 +695,7 @@ RECIPE speed (description = "A speed-first model for low-latency, real-time expe
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely."
+      system_prompt: "You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely."
       mode: "insert"
     }
   }
@@ -813,7 +813,7 @@ RECIPE cost (description = "A cost-first model for efficient, high-volume worklo
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer."
+      system_prompt: "You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail."
       mode: "insert"
     }
   }
@@ -825,7 +825,7 @@ RECIPE cost (description = "A cost-first model for efficient, high-volume worklo
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer."
+      system_prompt: "You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail."
       mode: "insert"
     }
   }
@@ -837,7 +837,7 @@ RECIPE cost (description = "A cost-first model for efficient, high-volume worklo
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer."
+      system_prompt: "You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail."
       mode: "insert"
     }
   }
@@ -849,7 +849,7 @@ RECIPE cost (description = "A cost-first model for efficient, high-volume worklo
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer."
+      system_prompt: "You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail."
       mode: "insert"
     }
   }
@@ -860,7 +860,7 @@ RECIPE cost (description = "A cost-first model for efficient, high-volume worklo
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer."
+      system_prompt: "You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail."
       mode: "insert"
     }
   }
@@ -1121,7 +1121,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied image and tool result directly, verify key claims, and do not call another tool."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Use the provided image and tool result. Verify key claims; do not call another tool."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1137,7 +1137,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied tool result directly, verify key claims, and do not call another tool."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Use the provided tool result. Verify key claims; do not call another tool."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1153,7 +1153,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1165,7 +1165,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1177,7 +1177,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1189,7 +1189,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1201,7 +1201,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1229,7 +1229,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1254,7 +1254,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1273,7 +1273,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1301,7 +1301,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     }
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1312,7 +1312,7 @@ RECIPE accuracy (description = "An accuracy-first model for complex reasoning an
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness."
+      system_prompt: "You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims."
       mode: "insert"
     }
   }
@@ -1421,7 +1421,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1441,7 +1441,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1461,7 +1461,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1481,7 +1481,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1501,7 +1501,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1521,7 +1521,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1541,7 +1541,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential. Minimize data use, do not reproduce secrets verbatim, and return only fields necessary to answer the request."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential. Do not repeat secrets; return only the fields needed to answer."
       mode: "insert"
     }
     PLUGIN tools {
@@ -1560,7 +1560,7 @@ RECIPE vault (description = "A privacy-first model for sensitive workloads and p
     ALGORITHM static
     PLUGIN system_prompt {
       enabled: true
-      system_prompt: "You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure."
+      system_prompt: "You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary."
       mode: "insert"
     }
     PLUGIN tools {

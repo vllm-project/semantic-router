@@ -32,6 +32,20 @@ CATALOG_MODELS = {
 }
 
 
+def _system_prompts(value: Any) -> list[str]:
+    prompts: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "system_prompt" and isinstance(item, str):
+                prompts.append(item)
+            else:
+                prompts.extend(_system_prompts(item))
+    elif isinstance(value, list):
+        for item in value:
+            prompts.extend(_system_prompts(item))
+    return prompts
+
+
 def _target_at(document: dict[str, Any], path: tuple[str | int, ...]) -> Any:
     target: Any = document
     for part in path:
@@ -121,6 +135,37 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert {model.id for model in catalog.models} == CATALOG_MODELS
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
+
+
+def test_packaged_mom_prompts_use_model_ids_and_community_attribution() -> None:
+    packaged_root = model_catalog.resources.files("cli.model_assets")
+    document = yaml.safe_load(
+        packaged_root.joinpath("latest", "mom-v1", "config.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected_identities = {
+        "balance": "mom-v1-blend",
+        "cost": "mom-v1-lite",
+        "speed": "mom-v1-flash",
+        "accuracy": "mom-v1-ultra",
+        "vault": "mom-v1-vault",
+    }
+    seen: set[str] = set()
+
+    for recipe in document["recipes"]:
+        recipe_name = recipe["name"]
+        if recipe_name not in expected_identities:
+            continue
+        prompts = _system_prompts(recipe)
+        identity = expected_identities[recipe_name]
+        prefix = f"You are {identity}, built by vLLM-SR Community."
+        assert prompts, f"{recipe_name} has no system prompts"
+        assert all(prompt.startswith(prefix) for prompt in prompts)
+        assert all("built by AMD" not in prompt for prompt in prompts)
+        seen.add(recipe_name)
+
+    assert seen == set(expected_identities)
 
 
 @pytest.mark.parametrize(
