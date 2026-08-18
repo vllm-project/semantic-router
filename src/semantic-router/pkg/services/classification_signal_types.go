@@ -8,14 +8,29 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
+const (
+	EvalSelectionSelected          = "selected"
+	EvalSelectionPlannedFinal      = "planned_final"
+	EvalSelectionFallback          = "fallback"
+	EvalSelectionExecutionRequired = "execution_required"
+	EvalSelectionUnavailable       = "unavailable"
+	EvalSelectionFailed            = "failed"
+)
+
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	Text     string            `json:"text"`
-	Messages []IntentMessage   `json:"messages,omitempty"`
-	Tools    []json.RawMessage `json:"tools,omitempty"`
-	Model    string            `json:"model,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
-	Options  *IntentOptions    `json:"options,omitempty"`
+	Text                string            `json:"text"`
+	Messages            []IntentMessage   `json:"messages,omitempty"`
+	Tools               []json.RawMessage `json:"tools,omitempty"`
+	Functions           []json.RawMessage `json:"functions,omitempty"`
+	ToolChoice          json.RawMessage   `json:"tool_choice,omitempty"`
+	FunctionCall        json.RawMessage   `json:"function_call,omitempty"`
+	ResponseFormat      json.RawMessage   `json:"response_format,omitempty"`
+	MaxTokens           json.RawMessage   `json:"max_tokens,omitempty"`
+	MaxCompletionTokens json.RawMessage   `json:"max_completion_tokens,omitempty"`
+	Model               string            `json:"model,omitempty"`
+	Metadata            map[string]string `json:"metadata,omitempty"`
+	Options             *IntentOptions    `json:"options,omitempty"`
 }
 
 // IntentOptions contains options for intent classification.
@@ -77,11 +92,39 @@ type EvalResponse struct {
 	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	EvalTrace         []decision.DecisionTrace                `json:"eval_trace,omitempty"`         // Per-decision evaluation trace (when ?trace=true)
 	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
+	SelectedModel     string                                  `json:"selected_model,omitempty"`     // Concrete selector result or configured final-output model
+	SelectionStatus   string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, unavailable, or failed
+	SelectionMethod   string                                  `json:"selection_method,omitempty"`
+	SelectionReason   string                                  `json:"selection_reason,omitempty"`
 	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
 	Metrics           *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
 	SignalValues      map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors      map[string]string                       `json:"signal_errors,omitempty"`      // Bounded evaluator failures that can affect on_error routing
+}
+
+// EvalModelSelectionInput is the content-minimized selection contract passed
+// from classification to the live Router selector. It intentionally excludes
+// raw tool schemas and message bodies beyond the current semantic query.
+type EvalModelSelectionInput struct {
+	Recipe            config.RecipeName
+	Decision          *config.Decision
+	Query             string
+	Category          string
+	ContextTokenCount int
+}
+
+type EvalModelSelection struct {
+	SelectedModel string
+	Status        string
+	Method        string
+	Reason        string
+}
+
+// EvalModelSelector performs a non-generating selection preview with the same
+// runtime-owned selector registry used by data-plane routing.
+type EvalModelSelector interface {
+	SelectModelForEval(input EvalModelSelectionInput) EvalModelSelection
 }
 
 // IntentResponse represents the response from intent classification.

@@ -9,6 +9,10 @@
   gap: 1.5rem;
 }
 
+.container > section {
+  flex: 1 0 auto;
+}
+
 .header {
   display: flex;
   justify-content: space-between;

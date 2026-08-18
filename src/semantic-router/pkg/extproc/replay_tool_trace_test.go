@@ -205,6 +205,23 @@ func TestBuildReplayStreamingToolTrace(t *testing.T) {
 	}
 }
 
+func TestBuildReplayStreamingToolTraceMarksReasoningOnlyCompletionWithoutContent(t *testing.T) {
+	ctx := &RequestContext{
+		StreamingReasoning: "private chain of thought",
+	}
+
+	trace := buildReplayStreamingToolTrace(ctx)
+	if assert.NotNil(t, trace) {
+		assert.Equal(t, "LLM Reasoning Complete", trace.Flow)
+		assert.Equal(t, "LLM Reasoning Complete", trace.Stage)
+		if assert.Len(t, trace.Steps, 1) {
+			assert.Equal(t, replayToolStepAssistantReasoningDone, trace.Steps[0].Type)
+			assert.Empty(t, trace.Steps[0].Text)
+			assert.NotContains(t, trace.Steps[0].Text, "private chain of thought")
+		}
+	}
+}
+
 func TestParseResponseAPIResponseToolTraceWithComplexContent(t *testing.T) {
 	trace := parseResponseAPIResponseToolTrace([]byte(`{
 		"output": [

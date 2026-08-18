@@ -12,8 +12,7 @@ export type ShellRoutePage =
   | 'logs'
   | 'monitoring'
   | 'playground'
-  | 'response-cache'
-  | 'context-compression'
+  | 'plugins'
   | 'security'
   | 'status'
   | 'topology'
@@ -44,8 +43,8 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/topology', page: 'topology' },
   { path: '/tracing', page: 'tracing' },
   { path: '/status', page: 'status' },
-  { path: '/response-cache', page: 'response-cache' },
-  { path: '/context-compression', page: 'context-compression' },
+  { path: '/plugins', page: 'plugins' },
+  { path: '/plugins/:plugin', page: 'plugins' },
   { path: '/logs', page: 'logs' },
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
@@ -64,6 +63,8 @@ export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
   { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
   { path: '/taxonomy', to: '/knowledge-bases/bases' },
   { path: '/openclaw', to: '/clawos' },
+  { path: '/response-cache', to: '/plugins/response-cache' },
+  { path: '/context-compression', to: '/plugins/context-compression' },
 ]
 
 export const fallbackRouteTarget = (setupMode: boolean): string =>

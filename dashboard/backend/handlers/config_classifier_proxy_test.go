@@ -47,3 +47,36 @@ func TestRouterClassifierProxyHandlerBlocksReadonlyMutations(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+type classifierProxyCredentialProvider struct {
+	token string
+}
+
+func (provider classifierProxyCredentialProvider) ManagementCredential() (string, error) {
+	return provider.token, nil
+}
+
+func TestRouterClassifierProxyReplacesBrowserAuthorization(t *testing.T) {
+	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer classifier-service-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer routerAPI.Close()
+
+	handler := RouterClassifierProxyHandler(
+		routerAPI.URL,
+		false,
+		classifierProxyCredentialProvider{token: "classifier-service-token"},
+	)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/config/kbs/example", nil)
+	req.Header.Set("Authorization", "Bearer dashboard-user-jwt")
+	rr := httptest.NewRecorder()
+
+	handler(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}

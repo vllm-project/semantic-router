@@ -1,14 +1,18 @@
 package handlers
 
-import "path/filepath"
+import (
+	"path/filepath"
 
-func detectSystemStatus(routerAPIURL, configDir string) SystemStatus {
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+)
+
+func detectSystemStatus(routerAPIURL, configDir string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
 	runtimePath := filepath.Join(configDir, ".vllm-sr", "router-runtime.json")
 	if isRunningInContainer() {
-		return collectInContainerStatus(runtimePath, routerAPIURL)
+		return collectInContainerStatus(runtimePath, routerAPIURL, credentialProvider...)
 	}
 
-	return collectHostStatus(runtimePath, routerAPIURL)
+	return collectHostStatus(runtimePath, routerAPIURL, credentialProvider...)
 }
 
 func baseSystemStatus() SystemStatus {

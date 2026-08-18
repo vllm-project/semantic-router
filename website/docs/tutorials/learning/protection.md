@@ -94,6 +94,8 @@ boundaries:
 routing:
   decisions:
     - name: local_privacy_policy
+      description: Keep privacy-sensitive traffic on the local model.
+      priority: 200
       modelRefs:
         - model: local-private-model
       adaptations:

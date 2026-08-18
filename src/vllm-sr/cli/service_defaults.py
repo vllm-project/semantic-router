@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 from cli.runtime_stack import RuntimeStackLayout
 from cli.utils import get_logger
@@ -16,8 +17,8 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "store_backend": "redis",
     },
     "router_replay": {
-        "enabled": True,
-        "store_backend": "postgres",
+        "enabled": False,
+        "store_backend": "memory",
     },
     "startup_status": {
         "store_backend": "file",
@@ -27,8 +28,13 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
     "response_cache": {
         "enabled": True,
-        "backend_type": "milvus",
+        "backend_type": "memory",
     },
+}
+
+LOCAL_MANAGEMENT_API_DEFAULTS: dict[str, object] = {
+    "bind_address": "0.0.0.0",
+    "port": 8080,
 }
 
 _INVALID_MAPPING = object()
@@ -45,21 +51,27 @@ def detect_canonical_storage_backends(
 ) -> set[str]:
     """Return provisionable backends implied by canonical service and store defaults.
 
-    Setup-mode bootstrap still uses the local default sidecar stack so the
-    first `vllm-sr serve` starts the same local storage dependencies that the
-    activated config will later consume.
+    When a stack layout is supplied, canonical omitted service endpoints are
+    resolved to that stack while explicit external endpoints are never
+    converted into speculative local sidecars.
     """
     backends: set[str] = set()
     for service_key in CANONICAL_SERVICE_DEFAULTS:
         backend = effective_service_backend(config, service_key)
-        if backend in {"redis", "postgres"}:
+        if backend in {"redis", "postgres", "milvus"} and (
+            stack_layout is None
+            or _service_uses_managed_backend(config, service_key, backend, stack_layout)
+        ):
             backends.add(backend)
 
     if _response_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)
-    if vs_metadata == "postgres":
+    if vs_metadata == "postgres" and (
+        stack_layout is None
+        or _vector_metadata_uses_managed_postgres(config, stack_layout)
+    ):
         backends.add("postgres")
 
     return backends
@@ -76,9 +88,72 @@ def _response_cache_requires_managed_milvus(
 
     host = _response_cache_milvus_connection_host(config)
     if not host:
+        # Reaching this branch already means the effective backend was
+        # explicitly Milvus; runtime materialization fills this stack's host.
         return True
 
-    return host == stack_layout.milvus_container_name
+    return _is_managed_storage_endpoint(host, "milvus", stack_layout)
+
+
+def _service_uses_managed_backend(
+    config: Mapping[str, Any],
+    service_key: str,
+    backend: str,
+    stack_layout: RuntimeStackLayout,
+) -> bool:
+    service_config = _merged_service_config(config, service_key)
+    if not isinstance(service_config, Mapping):
+        return False
+    backend_config = service_config.get(backend)
+    if backend_config is None:
+        return True
+    if not isinstance(backend_config, Mapping):
+        return False
+    endpoint_key = "host" if backend == "postgres" else "address"
+    if not str(backend_config.get(endpoint_key) or "").strip():
+        return True
+    return _is_managed_storage_endpoint(
+        backend_config.get(endpoint_key), backend, stack_layout
+    )
+
+
+def _vector_metadata_uses_managed_postgres(
+    config: Mapping[str, Any], stack_layout: RuntimeStackLayout
+) -> bool:
+    stores = _stores_mapping(config)
+    if stores is _INVALID_MAPPING:
+        return False
+    vector_config = stores.get("vector_store")
+    if not isinstance(vector_config, Mapping):
+        return False
+    postgres_config = vector_config.get("metadata_postgres")
+    if postgres_config is None:
+        return True
+    if not isinstance(postgres_config, Mapping):
+        return False
+    if not str(postgres_config.get("host") or "").strip():
+        return True
+    return _is_managed_storage_endpoint(
+        postgres_config.get("host"), "postgres", stack_layout
+    )
+
+
+def _is_managed_storage_endpoint(
+    endpoint: object, backend: str, stack_layout: RuntimeStackLayout
+) -> bool:
+    value = str(endpoint or "").strip()
+    if not value:
+        return False
+    if "://" in value:
+        host = urlparse(value).hostname or ""
+    elif value.startswith("[") and "]" in value:
+        host = value[1 : value.index("]")]
+    elif value.count(":") == 1:
+        host = value.split(":", 1)[0]
+    else:
+        host = value
+    managed_name = getattr(stack_layout, f"{backend}_container_name")
+    return host.rstrip(".").lower() in {backend, managed_name.lower()}
 
 
 def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
@@ -142,7 +217,7 @@ def inject_local_service_runtime_defaults(
     if services is None:
         return False
 
-    changed = False
+    changed = _inject_local_management_api_defaults(services)
     for service_key, default_config in CANONICAL_SERVICE_DEFAULTS.items():
         changed = (
             _inject_service_runtime_defaults(
@@ -155,6 +230,20 @@ def inject_local_service_runtime_defaults(
         )
 
     return changed
+
+
+def _inject_local_management_api_defaults(services: dict[str, object]) -> bool:
+    """Materialize a container-reachable listener only when intent is absent.
+
+    Explicit management listener fields remain authoritative. The Router's
+    container entrypoint marks this wildcard listener as internal; host
+    publication is independently constrained to loopback by container_start.
+    """
+
+    if "management_api" in services:
+        return False
+    services["management_api"] = dict(LOCAL_MANAGEMENT_API_DEFAULTS)
+    return True
 
 
 def _services_mapping(config: Mapping[str, Any]) -> Mapping[str, Any] | object:
