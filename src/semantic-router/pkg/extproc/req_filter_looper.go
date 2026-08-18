@@ -18,6 +18,8 @@ package extproc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
@@ -25,6 +27,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 // isLooperRequest checks if the incoming request is from looper (internal request)
@@ -107,7 +110,25 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if err != nil {
 		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
 	}
+	looperReq, errorResponse := r.buildLooperRequest(openAIRequest, decision, reqCtx)
+	if errorResponse != nil {
+		return errorResponse, nil
+	}
+	resp, errorResponse := r.executeLooperRequest(ctx, l, looperReq, openAIRequest.Model, decision, reqCtx)
+	if errorResponse != nil {
+		return errorResponse, nil
+	}
 
+	r.recordSuccessfulLooperExecution(resp, openAIRequest.Model, decision, reqCtx)
+	r.translateLooperResponse(ctx, resp, decision, reqCtx)
+	return r.createLooperResponse(resp, reqCtx), nil
+}
+
+func (r *OpenAIRouter) buildLooperRequest(
+	openAIRequest *openai.ChatCompletionNewParams,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) (*looper.Request, *ext_proc.ProcessingResponse) {
 	// Build looper request.
 	// Response API requests always return JSON, so force non-streaming in the
 	// looper to get a JSON body that TranslateResponse can parse. The
@@ -135,28 +156,39 @@ func (r *OpenAIRouter) handleLooperExecution(
 		OutputContract:     decision.OutputContract,
 		OutputContractSpec: decision.OutputContractSpec,
 	}
-	if decision.Algorithm.Type == config.DecisionAlgorithmFusion {
-		fusionOverride, parseErr := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
-		if parseErr != nil {
-			return r.createErrorResponse(400, "invalid Fusion plugin: "+parseErr.Error()), nil
-		}
-		looperReq.Fusion = fusionOverride
+	if decision.Algorithm.Type != config.DecisionAlgorithmFusion {
+		return looperReq, nil
 	}
+	fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
+	if err == nil {
+		looperReq.Fusion = fusionOverride
+		return looperReq, nil
+	}
+	return nil, r.recordLooperFailure(
+		reqCtx,
+		openAIRequest.Model,
+		decision,
+		400,
+		"invalid Fusion plugin: "+err.Error(),
+		"invalid_fusion_request",
+	)
+}
 
+func (r *OpenAIRouter) executeLooperRequest(
+	ctx context.Context,
+	l looper.Looper,
+	req *looper.Request,
+	originalModel string,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) (*looper.Response, *ext_proc.ProcessingResponse) {
 	// Execute looper, recording the wall-clock latency of the full execution
 	// (all model calls plus algorithm overhead) on the response for the
 	// x-vsr-looper-latency-ms debug header (#2694).
-	resp, err := looper.ExecuteWithLatency(ctx, l, looperReq)
+	resp, err := looper.ExecuteWithLatency(ctx, l, req)
 	if err != nil {
-		logging.ComponentErrorEvent("extproc", "looper_execution_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"decision":   decision.Name,
-			"algorithm":  decision.Algorithm.Type,
-			"error":      err.Error(),
-		})
-		return r.createErrorResponse(500, "Looper execution failed: "+err.Error()), nil
+		return nil, r.looperExecutionErrorResponse(err, originalModel, decision, reqCtx)
 	}
-
 	logging.ComponentEvent("extproc", "looper_execution_completed", map[string]interface{}{
 		"request_id":     reqCtx.RequestID,
 		"decision":       decision.Name,
@@ -165,7 +197,49 @@ func (r *OpenAIRouter) handleLooperExecution(
 		"iterations":     resp.Iterations,
 		"selected_model": resp.Model,
 	})
+	return resp, nil
+}
 
+func (r *OpenAIRouter) looperExecutionErrorResponse(
+	err error,
+	originalModel string,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	failureFields := map[string]interface{}{
+		"request_id": reqCtx.RequestID,
+		"decision":   decision.Name,
+		"algorithm":  decision.Algorithm.Type,
+		"error":      err.Error(),
+	}
+	confidenceEvidence, hasConfidenceEvidence := looper.ConfidenceEvidenceFromError(err)
+	var evidenceArgs []looper.ConfidenceExecutionEvidence
+	if hasConfidenceEvidence {
+		failureFields["models_used"] = confidenceEvidence.ModelsUsed
+		failureFields["iterations"] = confidenceEvidence.Iterations
+		failureFields["prompt_tokens"] = confidenceEvidence.Usage.PromptTokens
+		failureFields["completion_tokens"] = confidenceEvidence.Usage.CompletionTokens
+		failureFields["total_tokens"] = confidenceEvidence.Usage.TotalTokens
+		evidenceArgs = append(evidenceArgs, confidenceEvidence)
+	}
+	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
+	return r.recordLooperFailure(
+		reqCtx,
+		originalModel,
+		decision,
+		500,
+		"Looper execution failed: "+err.Error(),
+		"looper_execution_failed",
+		evidenceArgs...,
+	)
+}
+
+func (r *OpenAIRouter) recordSuccessfulLooperExecution(
+	resp *looper.Response,
+	originalModel string,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) {
 	// Update context with looper results
 	reqCtx.RequestModel = resp.Model
 	reqCtx.VSRSelectedModel = resp.Model
@@ -173,7 +247,8 @@ func (r *OpenAIRouter) handleLooperExecution(
 
 	// Capture router replay information if enabled
 	// ModelsUsed is the execution trace; resp.Model is the final response model.
-	r.startRouterReplay(reqCtx, openAIRequest.Model, resp.Model, decision.Name)
+	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
+	r.updateLooperReplayUsage(reqCtx, resp.Usage)
 
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)
@@ -188,7 +263,14 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// ResponseAPICtx on reqCtx provides the ConversationID and user message
 	// needed by extractMemoryInfo / extractCurrentUserMessage.
 	r.scheduleResponseMemoryStore(reqCtx, resp.Body)
+}
 
+func (r *OpenAIRouter) translateLooperResponse(
+	ctx context.Context,
+	resp *looper.Response,
+	decision *config.Decision,
+	reqCtx *RequestContext,
+) {
 	// Response API back-translation: the looper executes against Chat
 	// Completions endpoints directly, so resp.Body is in Chat Completions
 	// format. If the original client request was a Response API request,
@@ -211,7 +293,58 @@ func (r *OpenAIRouter) handleLooperExecution(
 			})
 		}
 	}
+}
 
-	// Create immediate response with detailed headers
-	return r.createLooperResponse(resp, reqCtx), nil
+func (r *OpenAIRouter) recordLooperFailure(
+	ctx *RequestContext,
+	originalModel string,
+	decision *config.Decision,
+	statusCode int,
+	message string,
+	reason string,
+	executionEvidence ...looper.ConfidenceExecutionEvidence,
+) *ext_proc.ProcessingResponse {
+	response := r.createErrorResponse(statusCode, message)
+	decisionName := ""
+	if decision != nil {
+		decisionName = decision.Name
+	}
+	if len(executionEvidence) > 0 && executionEvidence[0].Iterations > 0 {
+		evidence := executionEvidence[0]
+		ctx.VSRSelectionMethod = "confidence"
+		ctx.VSRSelectionReasoning = boundedSelectionReasoning(fmt.Sprintf(
+			"confidence execution failed after %d call attempts; completed models: %s",
+			evidence.Iterations,
+			strings.Join(evidence.ModelsUsed, ","),
+		))
+	}
+	r.startRouterReplay(ctx, originalModel, "", decisionName)
+	if len(executionEvidence) > 0 {
+		r.updateLooperReplayUsage(ctx, executionEvidence[0].Usage)
+	}
+	r.updateRouterReplayStatus(ctx, statusCode, false)
+	if immediate := response.GetImmediateResponse(); immediate != nil {
+		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	}
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
+	addRouterReplayHeaderToImmediateResponse(response, ctx.RouterReplayID)
+	return response
+}
+
+func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {
+	promptTokens := int(usage.PromptTokens)
+	completionTokens := int(usage.CompletionTokens)
+	totalTokens := int(usage.TotalTokens)
+	if promptTokens == 0 && completionTokens == 0 && totalTokens == 0 {
+		return
+	}
+
+	// A looper result can aggregate differently priced model calls. Persist its
+	// exact reported token counts, but leave pricing fields unset rather than
+	// attributing the whole cascade to the selected model's price.
+	r.updateRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		PromptTokens:     replayIntPtr(promptTokens),
+		CompletionTokens: replayIntPtr(completionTokens),
+		TotalTokens:      replayIntPtr(totalTokens),
+	})
 }

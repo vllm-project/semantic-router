@@ -2,9 +2,12 @@
 
 ## Overview
 
-`domain` classifies the request topic family. It maps to `config/fragments/signal/domain/` and is declared under `routing.signals.domains`.
+`domain` classifies the request topic family. Define domain rules under
+`routing.signals.domains`.
 
-This family is learned: the router uses the domain-classification path under `global.model_catalog.modules.classifier` and the stable domain system model bindings in `global.model_catalog.system`.
+The detector uses the classifier configured under
+`global.model_catalog.modules.classifier` and its model bindings under
+`global.model_catalog.system`.
 
 ## Key Advantages
 
@@ -30,8 +33,6 @@ Use `domain` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/domain/`
-
 ```yaml
 routing:
   signals:
@@ -54,3 +55,10 @@ routing:
 ```
 
 Keep domain names stable because decisions reference those names directly.
+
+## Dependencies and Limitations
+
+Domain classification uses the configured classifier module and processes the
+request text. Treat `other` as a fallback, and re-evaluate labels and thresholds
+when the classifier changes. See a complete example:
+[`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml).

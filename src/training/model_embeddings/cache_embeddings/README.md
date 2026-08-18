@@ -1,273 +1,90 @@
-# Cache Embedding LoRA Training
+# Semantic-Cache Embedding Training
 
-Training domain-specific and multi-domain LoRA adapters for semantic cache embeddings.
+These scripts train LoRA adapters that make an embedding model separate
+paraphrases from related-but-different queries. That distinction is useful for
+semantic caches, where an overly broad match can return the wrong response.
 
-## Overview
+This directory produces training and evaluation artifacts. Loading a LoRA
+adapter in the router is a separate runtime capability; do not assume a trained
+adapter is active because it appears in a config file.
 
-This directory contains scripts for training LoRA (Low-Rank Adaptation) adapters that improve semantic cache accuracy for domain-specific queries. LoRA adapters are small (≈600KB) fine-tuned models that enhance the base embedding model's ability to distinguish between semantically similar but different queries.
+## Data Contract
 
-## Pre-trained Models
+Training data is JSONL with one triplet per line:
 
-All trained models are available on HuggingFace:
+```json
+{"anchor":"How is diabetes diagnosed?","positive":"Which tests diagnose diabetes?","negative":"How is hypertension treated?"}
+```
 
-### Recommended: Multi-Domain LoRA
+The positive should be safe to reuse as the same cache intent. The negative
+should be topically close but require a different answer. Review generated
+triplets before training; fluent synthetic text can still contain label errors.
 
-- **[multi-domain-cache-lora-L12](https://huggingface.co/llm-semantic-router/multi-domain-cache-lora-L12)** - Single adapter for all domains
-  - Medical: +24.9% improvement
-  - Law: +27.3% improvement
-  - Programming: +12.4% improvement
-  - **Use this for production** ✅
+## Generate Triplets
 
-### Domain-Specific LoRAs
-
-- **[medical-cache-lora](https://huggingface.co/llm-semantic-router/medical-cache-lora)** - Medical/health queries only (+42.8%)
-- **[law-cache-lora](https://huggingface.co/llm-semantic-router/law-cache-lora)** - Legal queries only (+25.9%)
-- **[programming-cache-lora](https://huggingface.co/llm-semantic-router/programming-cache-lora)** - NOT recommended (+0.4%, use multi-domain instead)
-- **[psychology-cache-lora](https://huggingface.co/llm-semantic-router/psychology-cache-lora)** - Psychology queries only (no test set yet)
-
-## Test Datasets
-
-Test datasets are available on HuggingFace:
-
-- **[cache-embedding-test-sets](https://huggingface.co/datasets/llm-semantic-router/cache-embedding-test-sets)**
-  - Medical: 200 triplets
-  - Law: 20,862 triplets
-  - Programming: 20,862 triplets
-
-## Quick Start
-
-### 1. Generate Training Data
-
-First prepare an unlabeled queries file (JSONL, one `{"query": "..."}` per line) — see [Prepare Your Data](domains/README.md#1-prepare-your-data). Then:
+`generate_training_data.py` uses a local vLLM-supported generation model and
+the domain prompts in `domains/prompts.yaml`.
 
 ```bash
-python3 src/training/model_embeddings/cache_embeddings/generate_training_data.py \
-  --input data/cache_embeddings/medical/unlabeled_queries.jsonl \
+python src/training/model_embeddings/cache_embeddings/generate_training_data.py \
+  --input data/medical_queries.jsonl \
   --domain medical \
-  --output data/cache_embeddings/medical/triplets.jsonl \
-  --max-queries 10000
+  --output data/medical_triplets.jsonl \
+  --max-queries 1000
 ```
 
-### 2. Train Domain-Specific LoRA
+Input lines must contain `{"query":"..."}`. Use `--resume` to continue from the
+script's checkpoint after an interrupted generation job.
+
+## Train an Adapter
 
 ```bash
-python3 src/training/model_embeddings/cache_embeddings/lora_trainer.py \
-  --train-data data/cache_embeddings/medical/triplets.jsonl \
+python src/training/model_embeddings/cache_embeddings/lora_trainer.py \
+  --train-data data/medical_triplets.jsonl \
   --base-model sentence-transformers/all-MiniLM-L12-v2 \
-  --output models/cache/medical-cache-lora \
+  --output models/medical-cache-lora \
   --epochs 1
 ```
 
-### 3. Train Multi-Domain LoRA
+Use a separate validation file with `--val-data` when tuning hyperparameters.
+Record the base model with the adapter; a LoRA checkpoint cannot be interpreted
+without it.
+
+To combine domains, concatenate reviewed triplet files and train one adapter.
+Compare that adapter with domain-specific alternatives on the same held-out
+sets before choosing a deployment strategy.
+
+## Evaluate
+
+`evaluate_multi_domain.py` compares a LoRA adapter with the MiniLM-L12 baseline
+on medical, law, and programming triplets:
 
 ```bash
-# Combine all domain triplets
-cat data/cache_embeddings/medical/triplets.jsonl \
-    data/cache_embeddings/law/triplets.jsonl \
-    data/cache_embeddings/programming/triplets.jsonl \
-    data/cache_embeddings/psychology/triplets.jsonl \
-    > data/cache_embeddings/multi-domain/triplets.jsonl
-
-# Train on combined data
-python3 src/training/model_embeddings/cache_embeddings/lora_trainer.py \
-  --train-data data/cache_embeddings/multi-domain/triplets.jsonl \
-  --base-model sentence-transformers/all-MiniLM-L12-v2 \
-  --output models/multi-domain-cache-lora-L12 \
-  --epochs 1
-```
-
-### 4. Evaluate Model
-
-```bash
-python3 src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py \
-  --lora-path models/multi-domain-cache-lora-L12 \
+python src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py \
+  --lora-path models/medical-cache-lora \
   --sample-size 2000
 ```
 
-## Using Pre-trained Models
-
-### Download from HuggingFace
-
-```python
-from huggingface_hub import hf_hub_download
-from sentence_transformers import SentenceTransformer
-from peft import PeftModel
-
-# Load base model
-base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
-
-# Download and apply LoRA adapter
-base_model[0].auto_model = PeftModel.from_pretrained(
-    base_model[0].auto_model,
-    "llm-semantic-router/multi-domain-cache-lora-L12"
-)
-
-# Use for embeddings
-embedding = base_model.encode("What are the symptoms of diabetes?")
-```
-
-### Download Test Dataset
-
-```python
-from huggingface_hub import hf_hub_download
-import json
-
-# Download test set
-test_file = hf_hub_download(
-    repo_id="llm-semantic-router/cache-embedding-test-sets",
-    filename="medical/test_set.jsonl",
-    repo_type="dataset"
-)
-
-# Load triplets
-triplets = []
-with open(test_file) as f:
-    for line in f:
-        triplets.append(json.loads(line))
-```
-
-## Configuration
-
-### Config File: `config/config.yaml`
-
-**Note:** LoRA integration requires code changes to support loading adapters. The configuration below shows the intended usage once implemented.
-
-```yaml
-semantic_cache:
-  enabled: true
-  backend_type: "memory"
-  similarity_threshold: 0.8
-
-  # LoRA model (requires base model: sentence-transformers/all-MiniLM-L12-v2)
-  # This feature requires implementation of LoRA loading in the semantic cache module
-  lora_model: "llm-semantic-router/multi-domain-cache-lora-L12"
-```
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `generate_training_data.py` | Generate synthetic training triplets |
-| `lora_trainer.py` | Train LoRA adapter on triplets |
-| `evaluate_multi_domain.py` | Evaluate LoRA on test set |
-| `test_lora_model.py` | Quick test of trained model |
-
-## Domain Configuration
-
-Domain-specific prompts and settings are in `domains/prompts.yaml`.
-
-## Performance Metrics
-
-### Margin Score
-
-The primary metric for cache quality:
+The main metric is the mean similarity margin:
 
 ```text
-margin = avg(positive_similarity) - avg(negative_similarity)
+mean(anchor, positive) - mean(anchor, negative)
 ```
 
-**Higher margin = Better cache accuracy**
+A larger margin is useful, but it does not select a safe cache threshold on its
+own. Also measure false reuse and missed reuse at the threshold used by the
+router, with a held-out and representative workload.
 
-### Baseline Margins (No LoRA)
+## Files
 
-- Medical: 0.44
-- Law: 0.49
-- Programming: 0.24 (harder task - negatives are very similar)
+| File | Purpose |
+|---|---|
+| `domains/prompts.yaml` | generation prompts and supported domain aliases |
+| `generate_training_data.py` | create paraphrase and hard-negative triplets |
+| `lora_trainer.py` | train an adapter with multiple-negatives ranking loss |
+| `evaluate_multi_domain.py` | compare baseline and adapter margins |
+| `test_lora_model.py` | inspect one trained adapter interactively |
 
-### With Multi-Domain LoRA
-
-- Medical: 0.55 (+24.9%)
-- Law: 0.63 (+27.3%)
-- Programming: 0.27 (+12.4%)
-
-## Architecture
-
-### Base Model
-
-- **sentence-transformers/all-MiniLM-L12-v2** (90MB)
-- 12-layer transformer
-- 384-dimensional embeddings
-- Fast inference on CPU
-
-### LoRA Adapter
-
-- ≈600KB per adapter
-- Rank: 8
-- Alpha: 16
-- Target modules: query, value projections
-- Training: 1 epoch on triplet loss
-
-### Memory Usage
-
-- Base model: 90 MB
-- Single LoRA: 0.6 MB
-- **Total: 90.6 MB** (multi-domain)
-
-## Production Recommendations
-
-### Use Multi-Domain LoRA
-
-**Why:**
-
-- Works well across all domains
-- No domain detection needed
-- Simple deployment
-- Small memory overhead
-- Better generalization
-
-**Configuration:**
-
-```yaml
-semantic_cache:
-  lora_model: "llm-semantic-router/multi-domain-cache-lora-L12"
-```
-
-### Alternative: Hybrid Approach
-
-For maximum medical accuracy:
-
-1. Detect medical queries
-2. Use `medical-cache-lora` for medical (+42.8%)
-3. Use `multi-domain-cache-lora-L12` for others
-
-Requires domain detection classifier.
-
-## Triplet Data Format
-
-Training data should be JSONL with triplets:
-
-```json
-{
-  "anchor": "What are the symptoms of acute myocardial infarction?",
-  "positive": "How do patients present with acute myocardial infarction?",
-  "negative": "What is the mechanism of action for beta-blockers?"
-}
-```
-
-**Key properties:**
-
-- **Anchor**: Original query
-- **Positive**: Semantically equivalent (should cache)
-- **Negative**: Related but different (should NOT cache)
-
-## Citation
-
-If you use these models or training scripts, please cite:
-
-```bibtex
-@misc{semantic-router-cache-lora,
-  title={LoRA Adapters for Semantic Cache Embeddings},
-  author={vLLM Project},
-  year={2025},
-  publisher={HuggingFace},
-  howpublished={\url{https://huggingface.co/llm-semantic-router}}
-}
-```
-
-## License
-
-Apache 2.0
-
-## Contact
-
-For questions or issues, open an issue on [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router).
+Published model links and measured results belong in the model card for the
+specific artifact, including its dataset, split, threshold analysis, and known
+domains. They are intentionally not duplicated here.

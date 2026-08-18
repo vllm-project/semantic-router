@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canWriteConfig } from '../utils/accessControl'
 import styles from './ResponseCachePage.module.css'
 
 interface CacheCapabilities {
@@ -29,8 +31,14 @@ interface CacheStats {
 
 const endpoint = (path: string) => `/api/router/api/v1/response-cache/${path}`
 
-const ResponseCachePage: React.FC = () => {
+interface ResponseCachePageProps {
+  embedded?: boolean
+}
+
+const ResponseCachePage: React.FC<ResponseCachePageProps> = ({ embedded = false }) => {
   const { isReadonly } = useReadonly()
+  const { user } = useAuth()
+  const canManage = !isReadonly && canWriteConfig(user)
   const [capabilities, setCapabilities] = useState<CacheCapabilities | null>(null)
   const [stats, setStats] = useState<CacheStats | null>(null)
   const [health, setHealth] = useState('loading')
@@ -122,13 +130,16 @@ const ResponseCachePage: React.FC = () => {
   ]
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
+      <header className={styles.sectionHeader}>
         <div>
-          <h1>Response Cache</h1>
+          <span className={styles.eyebrow}>Plugin health and controls</span>
+          <h2>Response Cache</h2>
           <p>Health, backend capabilities, cache tiers, freshness, and scoped invalidation.</p>
         </div>
-        <button onClick={() => void refresh()}>Refresh</button>
+        <button className={styles.refreshButton} onClick={() => void refresh()}>
+          Refresh
+        </button>
       </header>
       {error && <div className={styles.error}>{error}</div>}
       <section className={styles.grid}>
@@ -169,7 +180,7 @@ const ResponseCachePage: React.FC = () => {
             />
             Dry run
           </label>
-          <button disabled={isReadonly} onClick={() => void invalidate()}>
+          <button disabled={!canManage} onClick={() => void invalidate()}>
             Invalidate
           </button>
         </div>
@@ -185,7 +196,7 @@ const ResponseCachePage: React.FC = () => {
           />
           <button
             className={styles.danger}
-            disabled={isReadonly || confirm !== 'flush response cache'}
+            disabled={!canManage || confirm !== 'flush response cache'}
             onClick={() => void flush()}
           >
             Flush

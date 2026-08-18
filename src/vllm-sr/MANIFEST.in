@@ -7,6 +7,7 @@ include PUBLISHING.md
 recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
+recursive-include cli/model_assets *.yaml *.md *.dsl
 
 # Include requirements
 include requirements.txt
@@ -16,4 +17,3 @@ global-exclude __pycache__
 global-exclude *.py[co]
 global-exclude .DS_Store
 global-exclude *.egg-info
-

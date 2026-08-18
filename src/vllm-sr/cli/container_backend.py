@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from cli.container_cli import container_status
+from cli.container_runtime import get_container_runtime
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
+from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
 from cli.utils import get_logger
 
@@ -30,29 +32,41 @@ class ContainerBackend:
         topology: str | None = None,
         pull_policy: str | None = None,
         enable_observability: bool = True,
+        runtime_config_lock: Any = None,
         **kwargs: Any,
     ) -> None:
         if source_config_file is None:
             source_config_file = kwargs.get("source_config_file")
         if runtime_config_file is None:
             runtime_config_file = kwargs.get("runtime_config_file")
-        start_vllm_sr(
-            config_file,
-            env_vars=env_vars,
-            source_config_file=source_config_file,
-            runtime_config_file=runtime_config_file,
-            image=image,
-            router_image=router_image,
-            envoy_image=envoy_image,
-            dashboard_image=dashboard_image,
-            sim_image=sim_image,
-            topology=topology,
-            pull_policy=pull_policy,
-            enable_observability=enable_observability,
-        )
+        with self._lifecycle_lock():
+            start_vllm_sr(
+                config_file,
+                env_vars=env_vars,
+                source_config_file=source_config_file,
+                runtime_config_file=runtime_config_file,
+                image=image,
+                router_image=router_image,
+                envoy_image=envoy_image,
+                dashboard_image=dashboard_image,
+                sim_image=sim_image,
+                topology=topology,
+                pull_policy=pull_policy,
+                enable_observability=enable_observability,
+                runtime_config_lock=runtime_config_lock,
+            )
 
     def teardown(self) -> None:
-        stop_vllm_sr()
+        with self._lifecycle_lock():
+            stop_vllm_sr()
+
+    @staticmethod
+    def _lifecycle_lock():
+        stack_layout = resolve_runtime_stack()
+        return acquire_runtime_lifecycle_lock(
+            runtime=get_container_runtime(),
+            stack_name=stack_layout.stack_name,
+        )
 
     def logs(self, service: str, follow: bool = False) -> None:
         show_logs(service, follow=follow)

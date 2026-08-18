@@ -33,6 +33,52 @@ func TestResolveConfigPersistencePathsUsesRuntimeOverrideSourcePath(t *testing.T
 	}
 }
 
+func TestHandleConfigPutMutatesRuntimeOwnedSourceAndKeepsStateFlat(t *testing.T) {
+	tempDir := t.TempDir()
+	stateDir := filepath.Join(tempDir, ".vllm-sr")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	activePath := filepath.Join(stateDir, "runtime-config.yaml")
+	readonlySourcePath := filepath.Join(tempDir, "source-config.yaml")
+	oldYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("old_route"))
+	if err := os.WriteFile(activePath, oldYAML, 0o600); err != nil {
+		t.Fatalf("write active config: %v", err)
+	}
+	if err := os.WriteFile(readonlySourcePath, oldYAML, 0o400); err != nil {
+		t.Fatalf("write read-only source config: %v", err)
+	}
+	t.Setenv(sourceConfigPathEnv, activePath)
+	t.Setenv(runtimeConfigPathEnv, activePath)
+	t.Setenv(configBaseDirEnv, tempDir)
+
+	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(deployYAML), DSL: "ROUTE new_route"})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+	apiServer := &ClassificationAPIServer{configPath: activePath}
+	req := httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	apiServer.handleConfigPut(rr, req)
+
+	if rr.Code != http.StatusOK && rr.Code != http.StatusAccepted {
+		t.Fatalf("expected successful update, got %d: %s", rr.Code, rr.Body.String())
+	}
+	assertDeployedDecisionName(t, activePath, "new_route")
+	assertDeployedDecisionName(t, readonlySourcePath, "old_route")
+	backupDir := filepath.Join(stateDir, "config-backups")
+	if entries, readErr := os.ReadDir(backupDir); readErr != nil || len(entries) == 0 {
+		t.Fatalf("expected flat state backups in %s: entries=%v err=%v", backupDir, entries, readErr)
+	}
+	nestedStateDir := filepath.Join(stateDir, ".vllm-sr")
+	if _, statErr := os.Stat(nestedStateDir); !os.IsNotExist(statErr) {
+		t.Fatalf("did not expect nested runtime state at %s", nestedStateDir)
+	}
+}
+
 func TestDetectPythonCLIRootRequiresRuntimeSyncModule(t *testing.T) {
 	cliRoot := t.TempDir()
 	t.Setenv("VLLM_SR_CLI_PATH", cliRoot)

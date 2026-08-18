@@ -2,39 +2,79 @@
 title: Overview
 ---
 
-# Fleet Sim Overview
+# Fleet Sim overview
 
-Fleet Sim is the maintained fleet simulator for vLLM Semantic Router. The
-`vllm-sr-sim` package is its CLI and service entrypoint. It helps you plan GPU
-fleets before deployment, compare routing and split strategies, and expose those
-workflows inside the dashboard without reviving a separate simulator frontend.
+Fleet Sim answers planning questions that are expensive to explore on a live
+GPU fleet: how many workers a workload may need, where to split traffic across
+pools, and which assumptions most affect a latency or cost target.
 
-## What Fleet Sim is for
+It provides the `vllm-sr-sim` command-line tool and an HTTP service used by the
+vLLM Semantic Router dashboard.
 
-- sizing homogeneous, heterogeneous, or disaggregated fleets against a latency target
-- comparing annualized cost across GPU choices, routing policies, and threshold choices
-- validating planning assumptions with simulation runs, trace replay, and what-if analysis
-- surfacing those workflows in the dashboard through a maintained backend proxy
+## What goes into a study
 
-## What Fleet Sim is not for
+A useful study combines four kinds of input:
 
-- it is not the router's live request path
-- it is not a runtime autoscaler or burst controller
-- it is not a per-kernel profiler for one deployment replica
-- it is not a replacement for the router configuration docs
+- a workload distribution, or an uploaded trace from which the service derives
+  a token-length distribution;
+- a service objective, currently reported primarily as P99 time to first token
+  (TTFT);
+- one or more pools with GPU profile, count, and maximum context length; and
+- a routing policy, such as a prompt-length split or a model-to-pool mapping.
 
-## Deployment modes
+The simulator can then compare fleet size, queueing delay, utilization, modeled
+cost, and, when a power profile is available, estimated energy behavior.
 
-`vllm-sr-sim` can run as:
+## Two levels of analysis
 
-- a standalone Python CLI for local sizing and what-if analysis
-- an HTTP service with `vllm-sr-sim serve`
-- a sidecar container that `vllm-sr serve` starts by default on the shared `vllm-sr-network`
+Fleet Sim uses analytical sizing for fast searches and a discrete-event
+simulator (DES) for request-by-request checks.
 
-## Read this section in order
+1. Analytical sizing narrows a large configuration space quickly.
+2. DES tests selected candidates with explicit arrivals, queueing, prefill,
+   decode, and KV-cache admission.
 
-1. [Getting started](./getting-started.md) for local sidecar, standalone CLI, and external service setup
-2. [Dashboard integration](./dashboard-integration.md) for the proxy path and UI surfaces
-3. [Capacity planning scenarios](./use-cases.md) for example-driven decision workflows
-4. [Simulation model reference](./sim-algorithms.md) and [power model reference](./power-model.md) when you need the underlying mechanics
-5. [Guide PDF](pathname:///files/fleet-sim/fleet-sim.pdf) and [guide assets](./guide.md) when you want the printable version or source files
+Agreement between the two is useful evidence, but neither is a production
+guarantee. Validate a final design with traces and measurements from the model,
+hardware, tensor-parallel layout, vLLM configuration, and runtime version you
+will deploy.
+
+## Built-in data is a starting point
+
+The repository includes workload CDFs and GPU profiles so you can learn the
+workflow without collecting data first. Their constants are planning defaults,
+not current prices or benchmark results for every model. Cost, latency, KV
+capacity, and power conclusions become deployment-specific only after those
+inputs are calibrated.
+
+This distinction matters most for hardware comparisons: some built-in profiles
+represent different model sizes and parallel layouts. Comparing their output
+directly can measure the combined system choice, but it does not isolate the GPU
+itself.
+
+The current dashboard job path converts an uploaded trace to a total-token CDF
+and generates Poisson arrivals for simulation. It does not replay the trace's
+original inter-arrival times or per-request route labels. The Python library's
+`TraceWorkload` is available when an exact timestamped replay is required.
+
+## What Fleet Sim does not do
+
+- It is not part of the router's live inference path.
+- It does not autoscale or curtail a running deployment.
+- It does not model kernels, networking, failures, or scheduler behavior with
+  the fidelity of measurements from the target system.
+- It does not decide whether a smaller model has acceptable answer quality.
+- It does not replace load testing before capacity is committed.
+
+## Choose a workflow
+
+| Goal | Start here |
+| --- | --- |
+| Run a first sizing study | [Getting started](./getting-started) |
+| Work through a planning decision | [Capacity-planning workflows](./use-cases) |
+| Understand equations and simulator behavior | [Simulation model](./sim-algorithms) |
+| Calibrate energy estimates | [Power model](./power-model) |
+| Use the web interface | [Dashboard integration](./dashboard-integration) |
+
+The [research context](./related-work) explains how this planning tool
+relates to serving engines, high-fidelity simulators, and autoscaling systems.

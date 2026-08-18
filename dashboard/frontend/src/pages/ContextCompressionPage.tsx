@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canWriteConfig } from '../utils/accessControl'
 import styles from './ResponseCachePage.module.css'
 
 interface CompressionCapabilities {
@@ -92,8 +94,14 @@ const defaultRequest = JSON.stringify(
   2,
 )
 
-const ContextCompressionPage: React.FC = () => {
+interface ContextCompressionPageProps {
+  embedded?: boolean
+}
+
+const ContextCompressionPage: React.FC<ContextCompressionPageProps> = ({ embedded = false }) => {
   const { isReadonly } = useReadonly()
+  const { user } = useAuth()
+  const canManage = !isReadonly && canWriteConfig(user)
   const [capabilities, setCapabilities] = useState<CompressionCapabilities | null>(null)
   const [stats, setStats] = useState<CompressionStats | null>(null)
   const [health, setHealth] = useState('loading')
@@ -181,9 +189,7 @@ const ContextCompressionPage: React.FC = () => {
       await refresh()
     } catch (invalidateError) {
       setError(
-        invalidateError instanceof Error
-          ? invalidateError.message
-          : 'Recovery invalidation failed',
+        invalidateError instanceof Error ? invalidateError.message : 'Recovery invalidation failed',
       )
     }
   }
@@ -196,17 +202,25 @@ const ContextCompressionPage: React.FC = () => {
     ['Estimated cost saved', `$${(stats?.estimated_cost_saved_usd ?? 0).toFixed(4)}`],
     ['Savings ratio', `${savingsRatio.toFixed(1)}%`],
     ['Recovery writes', String(stats?.recovery_writes ?? 0)],
-    ['Recovery reads / failures', `${stats?.recovery_reads ?? 0} / ${stats?.recovery_failures ?? 0}`],
+    [
+      'Recovery reads / failures',
+      `${stats?.recovery_reads ?? 0} / ${stats?.recovery_failures ?? 0}`,
+    ],
   ]
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main className={`${styles.page} ${embedded ? styles.embedded : ''}`}>
+      <header className={styles.sectionHeader}>
         <div>
-          <h1>Context Compression</h1>
-          <p>Provider-aware budgets, target policies, recovery capability, and redacted previews.</p>
+          <span className={styles.eyebrow}>Plugin health and controls</span>
+          <h2>Context Compression</h2>
+          <p>
+            Provider-aware budgets, target policies, recovery capability, and redacted previews.
+          </p>
         </div>
-        <button onClick={() => void refresh()}>Refresh</button>
+        <button className={styles.refreshButton} onClick={() => void refresh()}>
+          Refresh
+        </button>
       </header>
       {error && <div className={styles.error}>{error}</div>}
       <section className={styles.grid}>
@@ -223,7 +237,9 @@ const ContextCompressionPage: React.FC = () => {
       </section>
       <section className={styles.panel}>
         <h2>Redacted preview</h2>
-        <p>The API returns plans and token counts only. Omitted source content is never returned.</p>
+        <p>
+          The API returns plans and token counts only. Omitted source content is never returned.
+        </p>
         <div className={styles.formRow}>
           <label>
             Model
@@ -283,7 +299,7 @@ const ContextCompressionPage: React.FC = () => {
             </label>
           ))}
           <button
-            disabled={isReadonly || Object.values(recoveryScope).some((value) => !value.trim())}
+            disabled={!canManage || Object.values(recoveryScope).some((value) => !value.trim())}
             onClick={() => void invalidateRecovery()}
           >
             Invalidate

@@ -1,6 +1,6 @@
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 1.1rem;
 }
@@ -116,13 +116,28 @@
   text-decoration: none;
 }
 
-.podiumCommits {
+.podiumActivity {
+  display: grid;
   flex: 0 0 auto;
+  gap: 0.08rem;
+  justify-items: end;
+}
+
+.podiumActivity strong {
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.podiumActivity span {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .leaderboardSection {
@@ -151,6 +166,13 @@
   color: var(--site-muted-bright);
   font-size: 1rem;
   line-height: 1.6;
+}
+
+.sectionHeader .methodNote {
+  max-width: 44rem;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .sectionControls {
@@ -460,7 +482,7 @@
 
 @media (max-width: 996px) {
   .metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

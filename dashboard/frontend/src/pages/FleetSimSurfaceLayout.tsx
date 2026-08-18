@@ -1,8 +1,10 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import DashboardSurfaceHero, { type DashboardSurfaceHeroMeta } from '../components/DashboardSurfaceHero'
+import DashboardSurfaceHero, {
+  type DashboardSurfaceHeroMeta,
+} from '../components/DashboardSurfaceHero'
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
-import styles from './ConfigPageManagerLayout.module.css'
+import styles from '../components/DashboardManagerLayout.module.css'
 
 interface FleetSimSurfaceLayoutProps {
   title: string

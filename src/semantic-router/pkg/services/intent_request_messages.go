@@ -16,10 +16,14 @@ const (
 )
 
 type IntentMessage struct {
-	Role       string            `json:"role"`
-	Content    json.RawMessage   `json:"content"`
-	ToolCalls  []json.RawMessage `json:"tool_calls,omitempty"`
-	ToolCallID string            `json:"tool_call_id,omitempty"`
+	Role             string            `json:"role"`
+	Name             string            `json:"name,omitempty"`
+	Content          json.RawMessage   `json:"content"`
+	ToolCalls        []json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallID       string            `json:"tool_call_id,omitempty"`
+	FunctionCall     json.RawMessage   `json:"function_call,omitempty"`
+	Refusal          json.RawMessage   `json:"refusal,omitempty"`
+	ReasoningContent json.RawMessage   `json:"reasoning_content,omitempty"`
 }
 
 type intentSignalInput struct {
@@ -80,14 +84,34 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	rawText := req.Text
 	text := strings.TrimSpace(rawText)
 
-	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, len(req.Tools)); ok {
+	toolDefinitionCount := len(req.Tools) + len(req.Functions)
+	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount); ok {
+		useTopLevelTextFallback := rawText != "" && strings.TrimSpace(input.evaluationText) == ""
 		input = applyTopLevelTextFallback(input, rawText)
-		input.requestFacts.Metadata = cloneIntentMetadata(req.Metadata)
+		contextEstimate, err := estimateIntentRequestContext(
+			req,
+			fallbackText(rawText, useTopLevelTextFallback),
+		)
+		if err != nil {
+			return intentSignalInput{}, err
+		}
+		input.requestFacts = requestFactsForIntent(
+			req.Metadata,
+			contextEstimate,
+		)
 		return input, nil
 	}
 
 	if rawText == "" && len(req.Metadata) == 0 {
 		return intentSignalInput{}, ErrEmptyText
+	}
+
+	contextEstimate, err := estimateIntentRequestContext(
+		req,
+		rawText,
+	)
+	if err != nil {
+		return intentSignalInput{}, err
 	}
 
 	return intentSignalInput{
@@ -96,13 +120,79 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		currentUserText: rawText,
 		conversationFacts: classification.ConversationFacts{
 			UserMessageCount:    1,
-			ToolDefinitionCount: len(req.Tools),
+			ToolDefinitionCount: toolDefinitionCount,
 			LastMessageRole:     "user",
 		},
-		requestFacts: classification.RequestFacts{
-			Metadata: cloneIntentMetadata(req.Metadata),
-		},
+		requestFacts: requestFactsForIntent(req.Metadata, contextEstimate),
 	}, nil
+}
+
+func fallbackText(text string, enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return text
+}
+
+func requestFactsForIntent(
+	metadata map[string]string,
+	estimate classification.RequestContextEstimate,
+) classification.RequestFacts {
+	return classification.RequestFacts{
+		Metadata:               cloneIntentMetadata(metadata),
+		ContextTokenFloor:      estimate.TokenFloor,
+		ContextTextBytes:       estimate.TextBytes,
+		ContextEquivalentBytes: estimate.EquivalentBytes,
+		ContextHasNonText:      estimate.HasNonText,
+	}
+}
+
+// estimateIntentRequestContext serializes only the prompt-bearing subset of
+// the eval/classify request and delegates to the exact same OpenAI envelope
+// estimator used by ExtProc. json.RawMessage preserves structured numbers
+// lexically; no request content is logged or retained after this call.
+func estimateIntentRequestContext(
+	req IntentRequest,
+	additionalUserText string,
+) (classification.RequestContextEstimate, error) {
+	estimateMessages := append([]IntentMessage(nil), req.Messages...)
+	if additionalUserText != "" {
+		content, err := json.Marshal(additionalUserText)
+		if err != nil {
+			return classification.RequestContextEstimate{}, err
+		}
+		estimateMessages = append(estimateMessages, IntentMessage{
+			Role:    "user",
+			Content: content,
+		})
+	}
+
+	envelope, err := json.Marshal(struct {
+		Messages            []IntentMessage   `json:"messages"`
+		Tools               []json.RawMessage `json:"tools,omitempty"`
+		Functions           []json.RawMessage `json:"functions,omitempty"`
+		ToolChoice          json.RawMessage   `json:"tool_choice,omitempty"`
+		FunctionCall        json.RawMessage   `json:"function_call,omitempty"`
+		ResponseFormat      json.RawMessage   `json:"response_format,omitempty"`
+		MaxTokens           json.RawMessage   `json:"max_tokens,omitempty"`
+		MaxCompletionTokens json.RawMessage   `json:"max_completion_tokens,omitempty"`
+	}{
+		Messages:            estimateMessages,
+		Tools:               req.Tools,
+		Functions:           req.Functions,
+		ToolChoice:          req.ToolChoice,
+		FunctionCall:        req.FunctionCall,
+		ResponseFormat:      req.ResponseFormat,
+		MaxTokens:           req.MaxTokens,
+		MaxCompletionTokens: req.MaxCompletionTokens,
+	})
+	if err != nil {
+		return classification.RequestContextEstimate{}, fmt.Errorf(
+			"estimate intent request context: %w",
+			err,
+		)
+	}
+	return classification.EstimateOpenAIRequestContext(envelope), nil
 }
 
 // applyTopLevelTextFallback fills empty text slots from req.Text when the
@@ -185,7 +275,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			ToolDefinitionCount: toolDefinitionCount,
 		},
 	}
-	sawToolResult := false
+	previousWasToolResult := false
 
 	for _, msg := range messages {
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
@@ -197,11 +287,11 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			}
 			history.conversationFacts.ImageContentCount += countIntentMessageImages(msg.Content)
 		}
-		sawToolResult = observeIntentConversationMessage(
+		previousWasToolResult = observeIntentConversationMessage(
 			&history.conversationFacts,
 			role,
 			len(msg.ToolCalls),
-			sawToolResult,
+			previousWasToolResult,
 		)
 		if recordIntentUserMessage(&history, role, text, msg.Content) {
 			continue
@@ -216,17 +306,15 @@ func observeIntentConversationMessage(
 	facts *classification.ConversationFacts,
 	role string,
 	toolCallCount int,
-	sawToolResult bool,
+	previousWasToolResult bool,
 ) bool {
-	if role == "" {
-		return sawToolResult
-	}
 	facts.LastMessageRole = role
-	facts.LastMessageToolResult = role == "tool"
+	facts.LastMessageToolResult = false
+	facts.LastUserAfterToolResult = false
 	switch role {
 	case "user":
 		facts.UserMessageCount++
-		facts.LastUserAfterToolResult = sawToolResult
+		facts.LastUserAfterToolResult = previousWasToolResult
 	case "assistant":
 		facts.AssistantMessageCount++
 		facts.AssistantToolCallCount += toolCallCount
@@ -237,9 +325,9 @@ func observeIntentConversationMessage(
 	case "tool":
 		facts.ToolMessageCount++
 		facts.ToolResultCount++
-		return true
+		facts.LastMessageToolResult = true
 	}
-	return sawToolResult
+	return facts.LastMessageToolResult
 }
 
 func recordIntentUserMessage(

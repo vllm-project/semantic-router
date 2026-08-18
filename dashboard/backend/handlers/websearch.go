@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -367,7 +368,7 @@ func searchDuckDuckGo(query string, numResults int) ([]SearchResult, error) {
 		if attempt < maxRetries-1 {
 			delay := retryBaseDelay * time.Duration(1<<attempt)
 			time.Sleep(delay)
-			log.Printf("Retrying search (attempt %d/%d) after error: %v", attempt+2, maxRetries, err)
+			log.Printf("Retrying search (attempt %d/%d, error_class=%T)", attempt+2, maxRetries, err)
 		}
 	}
 
@@ -411,10 +412,11 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if strings.Contains(err.Error(), "timeout") {
-			return nil, fmt.Errorf("%s: %w", ErrCodeTimeout, err)
+		var networkError net.Error
+		if errors.As(err, &networkError) && networkError.Timeout() {
+			return nil, fmt.Errorf("%s: upstream request timed out", ErrCodeTimeout)
 		}
-		return nil, fmt.Errorf("%s: %w", ErrCodeSearchFailed, err)
+		return nil, fmt.Errorf("%s: upstream request failed", ErrCodeSearchFailed)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -427,14 +429,10 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Debug: Log response details to diagnose empty results
+	// Keep response diagnostics content-free. Search HTML may contain the full
+	// user query, snippets, credentials, or tenant data.
 	bodyStr := string(body)
 	log.Printf("DuckDuckGo response: status=%d, length=%d", resp.StatusCode, len(body))
-	if len(bodyStr) < 2000 {
-		log.Printf("DuckDuckGo full response: %s", bodyStr)
-	} else {
-		log.Printf("DuckDuckGo response preview (first 1000 chars): %s", bodyStr[:1000])
-	}
 	// Check for common blocking indicators
 	if strings.Contains(bodyStr, "captcha") || strings.Contains(bodyStr, "robot") || strings.Contains(bodyStr, "blocked") {
 		log.Printf("WARNING: DuckDuckGo may be blocking requests (captcha/robot detected)")
@@ -482,7 +480,7 @@ func parseDuckDuckGoHTML(htmlContent string, maxResults int) ([]SearchResult, er
 
 		// Security: Validate URL to prevent XSS
 		if !isValidURL(actualURL) {
-			log.Printf("Skipping invalid URL: %s", actualURL)
+			log.Printf("Skipping invalid search-result URL (url_bytes=%d)", len(actualURL))
 			continue
 		}
 
@@ -698,12 +696,12 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Web search request: query=%q, num_results=%d, client=%s", req.Query, req.NumResults, clientKey)
+		log.Printf("Web search request: query_bytes=%d, num_results=%d, client=%s", len(req.Query), req.NumResults, clientKey)
 
 		// Perform search with retry
 		results, err := searchDuckDuckGo(req.Query, req.NumResults)
 		if err != nil {
-			log.Printf("Search error: %v", err)
+			log.Printf("Search failed: error_class=%T", err)
 
 			// Determine appropriate error code
 			errCode := ErrCodeSearchFailed
@@ -722,7 +720,7 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Web search completed: query=%q, results=%d", req.Query, len(results))
+		log.Printf("Web search completed: query_bytes=%d, results=%d", len(req.Query), len(results))
 
 		// Send response
 		w.Header().Set("Content-Type", "application/json")

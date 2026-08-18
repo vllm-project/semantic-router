@@ -106,18 +106,20 @@ func TestConvertOpenAIToMCPCall_EmptyArgs(t *testing.T) {
 }
 
 func TestConvertOpenAIToMCPCall_InvalidJSON(t *testing.T) {
+	const secretCanary = "mcp-argument-secret-canary" //nolint:gosec // Canary verifies invalid arguments are not exposed.
 	toolCall := openai.ChatCompletionMessageToolCall{
 		ID:   "call_bad",
 		Type: "function",
 		Function: openai.ChatCompletionMessageToolCallFunction{
 			Name:      "bad_tool",
-			Arguments: `{not valid json`,
+			Arguments: `{not valid json ` + secretCanary,
 		},
 	}
 
 	_, err := ConvertOpenAIToMCPCall(toolCall)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse arguments")
+	assert.NotContains(t, err.Error(), secretCanary)
 }
 
 func TestConvertToolToOpenAI_RoundTrip_JSON(t *testing.T) {

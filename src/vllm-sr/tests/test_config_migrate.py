@@ -218,8 +218,13 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     result = runner.invoke(main, ["config", "migrate", "--config", str(config_path)])
 
     assert result.exit_code == 0
+    assert result.stderr == ""
+    assert "✓ Configuration migrated" in result.stdout
+    assert "Files" in result.stdout
+    assert f"Source  {config_path}" in result.stdout
 
     migrated_path = tmp_path / "config.migrated.yaml"
+    assert f"Output  {migrated_path}" in result.stdout
     migrated = yaml.safe_load(migrated_path.read_text())
 
     assert migrated["version"] == "v0.3"

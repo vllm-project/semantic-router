@@ -12,6 +12,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
+	"github.com/tidwall/sjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -82,7 +83,10 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 	switch toolsCfg.EffectiveMode() {
 	case config.ToolsPluginModeNone:
 		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
-		openAIRequest.Tools = nil
+		removed := applyToolsPluginRequestPolicy(openAIRequest, toolsCfg)
+		if removed > 0 {
+			logging.Infof("[ToolsPlugin] Decision %q stripped %d prior tool-history messages", ctx.VSRSelectedDecision.Name, removed)
+		}
 		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
 			return false, err
 		}
@@ -610,7 +614,13 @@ func filterToolsByDecisionPolicy(tools []openai.ChatCompletionToolParam, allowTo
 
 // updateRequestWithTools updates the request body with the selected tools.
 func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
-	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	serializedRequest, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	if err != nil {
+		return err
+	}
+	commonResponse := ensureRequestBodyCommonResponse(response)
+	modifiedBody := requestBodyForToolUpdate(commonResponse, ctx, serializedRequest)
+	modifiedBody, err = mergeSerializedToolFields(modifiedBody, serializedRequest, toolFieldsForUpdate(ctx))
 	if err != nil {
 		return err
 	}
@@ -619,7 +629,6 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 			Body: modifiedBody,
 		},
 	}
-	commonResponse := ensureRequestBodyCommonResponse(response)
 	commonResponse.Status = ext_proc.CommonResponse_CONTINUE
 	commonResponse.BodyMutation = bodyMutation
 	if commonResponse.HeaderMutation == nil {
@@ -632,6 +641,50 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
 	}
 	return nil
+}
+
+func requestBodyForToolUpdate(
+	commonResponse *ext_proc.CommonResponse,
+	ctx *RequestContext,
+	serializedRequest []byte,
+) []byte {
+	if body := commonResponse.GetBodyMutation().GetBody(); len(body) > 0 {
+		return body
+	}
+	if ctx != nil {
+		if body := ctx.workingRequestBody(); len(body) > 0 {
+			return body
+		}
+	}
+	return serializedRequest
+}
+
+func toolFieldsForUpdate(ctx *RequestContext) []string {
+	fields := []string{"tools", "tool_choice"}
+	toolsCfg := resolveDecisionToolsConfig(ctx)
+	if toolsCfg != nil && toolsCfg.EffectiveMode() == config.ToolsPluginModeNone {
+		return append(fields, "functions", "function_call", "parallel_tool_calls", "web_search_options")
+	}
+	return fields
+}
+
+func mergeSerializedToolFields(body, serializedRequest []byte, fields []string) ([]byte, error) {
+	var serializedFields map[string]json.RawMessage
+	if err := json.Unmarshal(serializedRequest, &serializedFields); err != nil {
+		return nil, err
+	}
+	var err error
+	for _, field := range fields {
+		if raw, ok := serializedFields[field]; ok {
+			body, err = sjson.SetRawBytes(body, field, raw)
+		} else {
+			body, err = sjson.DeleteBytes(body, field)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return body, nil
 }
 
 func ensureRequestBodyCommonResponse(response **ext_proc.ProcessingResponse) *ext_proc.CommonResponse {

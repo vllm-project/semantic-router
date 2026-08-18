@@ -4,9 +4,9 @@
 // ChatCompletionNewParams and produces an Anthropic-shape MessageNewParams.
 // Several Anthropic-only fields have no OpenAI representation (cache_control
 // markers, top_k, metadata.user_id, multi-block system prompts with per-block
-// markers, image content blocks, tool_result.is_error, tool_result with array
-// content, anthropic-version, anthropic-beta). When those fields are present on
-// the inbound request, today's translation silently drops them.
+// markers, tool_result.is_error, tool_result with array content,
+// anthropic-version, anthropic-beta). When those fields are present on the
+// inbound request, today's translation silently drops them.
 //
 // AnthropicPassthrough is a per-request sidecar that the caller populates from
 // the raw inbound body (or supplies directly when the upstream IR knows the
@@ -64,11 +64,12 @@ type AnthropicPassthrough struct {
 	// an array rather than a plain string.
 	ToolResultArrayContent map[string][]ToolResultContentBlock
 
-	// UserMessageImageBlocks maps user-message index to image blocks dropped by
-	// the OpenAI-side flatten. The emitter re-attaches them to the
-	// corresponding user message on the outbound side. Indices are counted
-	// against user messages only (i.e. index 0 is the first user message,
-	// regardless of any preceding system or assistant messages).
+	// UserMessageImageBlocks maps user-message index to image blocks for legacy
+	// or manually constructed canonical requests that do not carry image_url
+	// parts. Native ParseAnthropicRequest callers already carry those parts in
+	// the canonical IR and must not replay this sidecar a second time. Indices
+	// are counted against user messages only (i.e. index 0 is the first user
+	// message, regardless of preceding system or assistant messages).
 	UserMessageImageBlocks map[int][]ImageBlock
 }
 

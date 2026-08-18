@@ -58,7 +58,29 @@ func TestReadRoleDoesNotHaveSecurityManage(t *testing.T) {
 	}
 }
 
-func TestAllRolesHaveFeedbackSubmitAndReplayRead(t *testing.T) {
+func TestRuntimeLogsRequireWriteOrAdminRoleByDefault(t *testing.T) {
+	t.Parallel()
+
+	for _, role := range []string{RoleAdmin, RoleWrite} {
+		if !containsPermission(DefaultRolePermissions[role], PermLogsRead) {
+			t.Fatalf("role %q should have %q permission", role, PermLogsRead)
+		}
+	}
+	if containsPermission(DefaultRolePermissions[RoleRead], PermLogsRead) {
+		t.Fatalf("read role should not have %q permission", PermLogsRead)
+	}
+}
+
+func containsPermission(permissions []string, target string) bool {
+	for _, permission := range permissions {
+		if permission == target {
+			return true
+		}
+	}
+	return false
+}
+
+func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
 	t.Parallel()
 
 	for _, role := range SupportedRoles {
@@ -73,8 +95,8 @@ func TestAllRolesHaveFeedbackSubmitAndReplayRead(t *testing.T) {
 				hasReplay = true
 			}
 		}
-		if !hasFeedback {
-			t.Fatalf("role %q should have %q permission", role, PermFeedbackSubmit)
+		if hasFeedback != (role != RoleRead) {
+			t.Fatalf("role %q feedback permission = %v", role, hasFeedback)
 		}
 		if !hasReplay {
 			t.Fatalf("role %q should have %q permission", role, PermReplayRead)

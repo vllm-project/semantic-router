@@ -1,500 +1,286 @@
-# vLLM Semantic Router
+# vLLM Semantic Router CLI
 
-Intelligent Router for Mixture-of-Models (MoM).
+`vllm-sr` configures and runs the local vLLM Semantic Router stack. It can also
+validate or migrate config files, deploy the router Helm chart, inspect virtual
+models and Recipes, and send test requests.
 
-GitHub: https://github.com/vllm-project/semantic-router
+Full documentation: <https://vllm-sr.ai/docs/installation/>
 
-## Quick Start
-
-### Installation
+## Install
 
 ```bash
-# Install from PyPI
 pip install vllm-sr
+vllm-sr --version
+```
 
-# Or install from source (development)
+For CLI development:
+
+```bash
 cd src/vllm-sr
+python -m venv .venv
+. .venv/bin/activate
 pip install -e .
 ```
 
-### Usage
+Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native
+Windows Python environment can run config and catalog commands, but it cannot
+run the local container stack.
 
-Local `vllm-sr serve` requires Docker or Podman on Linux, macOS, or WSL2 on
-Windows. Native Windows Python environments can install the CLI for
-configuration and validation tasks, but the local container runtime is not
-supported there.
+## Start a local stack
 
 ```bash
-# Start the router (includes dashboard, simulator sidecar, and first-run setup)
-HF_TOKEN=hf_xxx vllm-sr serve
+# Start Router, Envoy, Dashboard, the simulator, and observability.
+vllm-sr serve
 
-# Use Podman instead of Docker (set on the command, in env, or both)
-HF_TOKEN=hf_xxx vllm-sr serve --runtime podman
-HF_TOKEN=hf_xxx CONTAINER_RUNTIME=podman vllm-sr serve
+# Use Podman.
+vllm-sr serve --runtime podman
 
-# Start an isolated second local stack on offset host ports
-VLLM_SR_STACK_NAME=lane-b VLLM_SR_PORT_OFFSET=200 HF_TOKEN=hf_xxx vllm-sr serve
-
-# Open the dashboard
-# http://localhost:8700
-# second stack example: http://localhost:8900
-
-# Optional: open the dashboard in your browser
+# Check the stack and open the Dashboard.
+vllm-sr status
 vllm-sr dashboard
+```
 
-# View logs
+The Dashboard is available at <http://localhost:8700>. The routed
+OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
+reference config).
+
+`vllm-sr serve` starts the routing stack. It does not start the physical LLM
+backends referenced by `providers.models`; those endpoints must already be
+running and reachable.
+
+Useful lifecycle commands:
+
+```bash
 vllm-sr logs router
 vllm-sr logs envoy
 vllm-sr logs dashboard
 vllm-sr logs simulator
-
-# Evaluate how signals fire for a prompt (requires: vllm-sr serve)
-# Single prompt — readable summary (default)
-vllm-sr eval --prompt "Explain inflation vs recession in plain English."
-# decision: economics
-# used signals: 3
-#   - domain:economics
-#   - keyword:inflation
-#   - embedding:price_movement
-# matched signals: 3
-#   - domains:economics
-#   - keywords:inflation
-#   - embeddings:price_movement
-# unmatched signals: 3
-# signal confidences:
-#   - domain:economics: 0.95
-#   - keyword:inflation: 0.87
-#   - embedding:price_movement: 0.82
-# routing: economics
-
-# Single prompt — full JSON payload
-vllm-sr eval --prompt "Explain inflation vs recession in plain English." --json
-
-# Evaluate one entrypoint's isolated recipe without calling its backend model
-# The response identifies the selected recipe, decision, algorithm, and plugins.
-vllm-sr eval \
-  --model vllm-sr/mom-balanced-v1 \
-  --prompt "Summarize this architecture plan." \
-  --json
-
-# Multi-turn messages array (OpenAI chat format) — readable summary
-vllm-sr eval --messages '[{"role":"system","content":"You are a careful tutor."},{"role":"user","content":"Explain inflation vs recession in plain English."}]'
-
-# Multi-turn messages array — full JSON payload
-vllm-sr eval --messages '[{"role":"system","content":"You are a careful tutor."},{"role":"user","content":"Explain inflation vs recession in plain English."}]' --json
-
-# Override endpoint (e.g. remote stack or non-default port)
-vllm-sr eval --prompt "hello" --endpoint http://localhost:8080
-
-# Common errors:
-#   Router not started:
-#     ERROR - Router is not running at http://localhost:8080/api/v1/eval. Start the router with 'vllm-sr serve' and retry.
-#   Wrong port (hitting a proxy instead of the router API):
-#     ERROR - Router returned 403 from http://localhost:8080/api/v1/eval. This looks like a proxy or gateway —
-#             check that --endpoint points directly to the router API port (default: 8080), not to Envoy or another proxy.
-#   Invalid request body (400):
-#     ERROR - Router returned 400 INVALID_INPUT: text cannot be empty
-#   Service unavailable (503):
-#     ERROR - Router returned 503 SERVICE_UNAVAILABLE: classifier not ready
-
-# Check status
-vllm-sr status
-
-# Send a one-shot chat completion through Envoy (default model: MoM)
-vllm-sr chat "hello"
-vllm-sr chat --json "hello"
-# Remote or port-forwarded stack
-vllm-sr chat --base-url http://localhost:8080 "hello"
-
-# Stop
 vllm-sr stop
 ```
 
-### Kubernetes Deployment
+Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
+`--readonly` to keep Dashboard available without config editing.
 
-The same CLI deploys to Kubernetes via Helm:
+## Test routing
+
+`eval` reports which signals, decision, algorithm, and plugins matched without
+calling the selected model backend:
 
 ```bash
-# Deploy to Kubernetes (uses your existing config.yaml)
-HF_TOKEN=hf_xxx vllm-sr serve --target k8s --profile dev --config config.yaml
-
-# Deploy to a specific namespace and context
-HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod-cluster
-
-# Check status / logs / stop
-vllm-sr status --target k8s
-vllm-sr logs router --target k8s -f
-vllm-sr stop --target k8s
-
-# Chat completion against a port-forwarded or ingress URL (requires --base-url)
-vllm-sr chat --base-url http://localhost:8080 "hello"
+vllm-sr eval --prompt "Explain inflation in plain English."
+vllm-sr eval --prompt "Explain inflation in plain English." --json
+vllm-sr eval \
+  --model vllm-sr/mom-v1-blend \
+  --prompt "Summarize this architecture plan." \
+  --json
 ```
 
-**Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`) are automatically stored in a Kubernetes Secret
-(`vllm-sr-env-secrets`) and mounted via `envFrom`. They never appear as
-plain-text values in Helm overrides or the Deployment spec. Non-sensitive
-variables (`HF_ENDPOINT`, `HF_HOME`, etc.) are passed as standard `env`
-entries.
-
-The secret is created before `helm upgrade --install` and cleaned up by
-`vllm-sr stop --target k8s`.
-
-If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
-
-Local dashboard state is persisted under `.vllm-sr/dashboard-data/` and bind-mounted into the container at `/app/data`. User accounts, evaluation history, and ML pipeline artifacts survive `vllm-sr stop` followed by a new `vllm-sr serve` as long as that workspace directory is kept.
-
-The fleet simulator sidecar is started on the same runtime network by default. The dashboard backend proxies it at `/api/fleet-sim/*`, and the dashboard exposes its workflows under the `Fleet Sim` top-bar dropdown.
-
-To run parallel local stacks from the same machine or multiple worktrees, set `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET` before `vllm-sr serve`, `vllm-sr status`, `vllm-sr dashboard`, and `vllm-sr stop`. The stack name isolates container and network names, and the port offset shifts the published host ports while keeping internal container ports unchanged.
-
-### Advanced YAML-first setup
+Use `--messages` for an OpenAI-style messages array and `--endpoint` when the
+Router management API is not at `http://localhost:8080`:
 
 ```bash
-# Validate a hand-authored canonical config before serving
-vllm-sr validate config.yaml
+vllm-sr eval \
+  --messages '[{"role":"user","content":"Explain inflation."}]' \
+  --endpoint http://localhost:8080
 ```
 
-`vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
-
-### Inspect configured models
-
-Use `vllm-sr model list` to print the provider models and routing model cards from your active config without opening the dashboard.
+`chat` sends a real one-shot completion through the routed listener. It uses
+`vllm-sr/auto` unless `--model` is set:
 
 ```bash
-# Uses config.yaml in the current directory
+vllm-sr chat "Hello"
+vllm-sr chat --model my-virtual-model --json "Hello"
+vllm-sr chat --base-url https://gateway.example.com "Hello"
+```
+
+`--base-url` must point to an OpenAI-compatible routed endpoint, such as an
+ingress or port-forwarded gateway. It is not the Router management API used by
+`eval` and `rag list`.
+
+## Choose a configuration
+
+The CLI reads canonical v0.3 YAML with
+`version/listeners/providers/routing/global`. Author a file directly, start
+from a [maintained Recipe](../../config/recipes/README.md), or fork a bundled
+virtual model.
+
+```bash
+vllm-sr validate --config config.yaml
+vllm-sr serve --config config.yaml
+```
+
+Route policy lives in `routing.decisions[]`. For example, this decision
+fragment defines a final static fallback; merge it into a complete config that
+declares `local-model` under `providers.models` and `routing.modelCards`:
+
+```yaml
+routing:
+  decisions:
+    - name: local-fallback
+      description: Handle requests that did not match an earlier decision.
+      priority: 0
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: local-model
+      algorithm:
+        type: static
+```
+
+`vllm-sr init` was removed in v0.3. For older files or supported external
+provider configs, use the explicit conversion commands:
+
+```bash
+vllm-sr config migrate --config old-config.yaml
+vllm-sr config import \
+  --from openclaw \
+  --source openclaw.json \
+  --target config.yaml
+```
+
+The current field reference is generated in the
+[configuration guide](https://vllm-sr.ai/docs/installation/configuration/).
+Focused examples live under [`config/fragments/`](../../config/fragments/).
+Use those sources instead of copying plugin or algorithm schemas from this
+package README.
+
+Keep credentials out of YAML. Reference environment variables and authorize
+Recipe-specific variables explicitly:
+
+```bash
+export PROVIDER_API_KEY=...
+vllm-sr serve --config recipe.yaml --recipe-env PROVIDER_API_KEY
+```
+
+## Discover virtual and provider models
+
+The installed catalog is available offline:
+
+```bash
 vllm-sr model list
+vllm-sr model list --all-versions
+vllm-sr model show vllm-sr/mom-v1-blend
+```
 
-# Inspect a specific config file
+When `./config.yaml` exists, the ordinary list merges its configured models
+with compatible built-ins. Pass a file explicitly to inspect only that config:
+
+```bash
 vllm-sr model list --config my-config.yaml
 ```
 
-The output is split into two sections:
+The output separates **Provider models** (backend bindings) from **Model cards**
+(routing metadata). Credential values and credential variable names
+are omitted or redacted so the output can be shared in support logs. Use
+`--output json` for automation.
 
-- **Provider models**: configured model names, the default model marker, provider model IDs, reasoning family, API format, and backend identity fields such as provider, redacted base URL, protocol, and weight.
-- **Model cards**: routing metadata such as modality, parameter size, context window, capabilities, tags, and LoRA names.
-
-Credential fields are intentionally not printed. API keys, API key environment variable names, embedded URL credentials, and sensitive query parameters are omitted or redacted so the command is safe to use in support logs.
-
-### Inspect ingested vector stores
-
-Use `vllm-sr rag list` to list the vector stores created through the router's OpenAI-compatible Vector Stores API (`POST /v1/vector_stores`). The command queries the running router's `GET /v1/vector_stores` endpoint, so the router must be up (`vllm-sr serve`).
+Fork a built-in model before changing it:
 
 ```bash
-# Talk to the local router (default: http://localhost:8080, shifted by VLLM_SR_PORT_OFFSET)
-vllm-sr rag list
+vllm-sr model fork vllm-sr/mom-v1-blend mom.yaml
+vllm-sr model validate mom.yaml
+vllm-sr serve --config mom.yaml
+```
 
-# Override the endpoint (remote router, port-forwarded stack, or stack started with VLLM_SR_PORT_OFFSET)
-vllm-sr rag list --endpoint http://localhost:8080
+For a local Docker stack, a catalog ID can also be passed directly:
+
+```bash
+vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve \
+  vllm-sr/mom-v1-lite \
+  vllm-sr/mom-v1-flash
+```
+
+These IDs select request-facing routing policies, not downloadable inference
+models. Configure and start their required provider backends separately. The
+catalog shorthand is local-only; materialize the YAML before Kubernetes
+deployment.
+
+## Deploy to Kubernetes
+
+The Kubernetes target installs or upgrades the Helm release:
+
+```bash
+vllm-sr serve \
+  --target k8s \
+  --profile dev \
+  --namespace semantic-router \
+  --config config.yaml
+
+vllm-sr status --target k8s --namespace semantic-router
+vllm-sr logs router --target k8s --namespace semantic-router -f
+vllm-sr stop --target k8s --namespace semantic-router
+```
+
+Kubernetes requires a complete, non-empty config. The CLI does not merge local
+Docker defaults or sample routes into it. Credential references are stored in
+a release-scoped Secret, and literal credentials or credential-bearing URLs
+are rejected.
+
+`--platform amd` and `--platform nvidia` are local-container shortcuts. On
+Kubernetes, select GPU images, resources, and device plugins through Helm
+values, a deployment profile, or the operator.
+
+See [Kubernetes installation](https://vllm-sr.ai/docs/installation/k8s/) for
+gateway, profile, and production guidance.
+
+## Inspect vector stores
+
+`rag list` reads vector stores created through the Router's OpenAI-compatible
+Vector Stores API. It does not create, modify, or delete stores.
+
+```bash
+vllm-sr rag list
 vllm-sr rag list --endpoint http://router.example.com:8080
 ```
 
-For each vector store, the output prints name, id, status, backend type, and file counts (total / completed / in-progress / failed):
+The Router must be running with a vector-store backend enabled. `--endpoint`
+points to the management API, not the routed inference listener.
 
-```
-vLLM Semantic Router - Vector Stores
-============================================================
-Endpoint: http://localhost:8080/v1/vector_stores
+## Local ports and state
 
-Vector stores (2):
-  - docs-prod  (vs_abc123)
-      status:       active
-      backend:      milvus
-      files:        10 total (9 completed, 1 in progress, 0 failed)
-  - support-kb  (vs_def456)
-      status:       active
-      backend:      memory
-      files:        4 total (3 completed, 0 in progress, 1 failed)
-```
+Default ports in the reference local stack are:
 
-Common outcomes:
+| Service | Port | Purpose |
+| --- | ---: | --- |
+| Dashboard | `8700` | Configuration, Playground, and embedded observability |
+| Routed inference listener | `8899` | OpenAI-compatible model requests |
+| Router management API | `8080` | Eval, config, replay, and vector-store APIs |
+| Router metrics | `9190` | Prometheus metrics |
+| Jaeger | `16686` | Trace UI |
+| Prometheus | `9090` | Metrics storage and queries |
 
-- **No stores ingested yet**: prints `(none created)`.
-- **Vector store feature disabled**: the router returns `503` and the CLI exits with `Vector store feature is not enabled on the router. Enable a vector store backend in your config to use RAG ingestion and retrieval.`
-- **Router not running / wrong port**: the CLI exits with an actionable message pointing at `vllm-sr serve` or the router API port.
+Listener and management ports can be changed in YAML. Local Dashboard data is
+stored under `.vllm-sr/dashboard-data/` and survives `stop` unless that
+workspace directory is removed.
 
-`vllm-sr rag list` only reads; it does not create, modify, or delete stores. Create stores through the Vector Stores API (e.g. `POST /v1/vector_stores`); this command is purely an inspection surface, mirroring how `vllm-sr model list` inspects configured models.
-
-## Features
-
-- **Router**: Intelligent request routing based on intent classification
-- **Envoy Proxy**: High-performance proxy with ext_proc integration
-- **Dashboard**: Web UI for monitoring and testing (http://localhost:8700)
-- **Metrics**: Prometheus metrics endpoint (http://localhost:9190/metrics)
-
-## Endpoints
-
-After running `vllm-sr serve`, the following endpoints are available:
-
-| Endpoint | Port | Description |
-|----------|------|-------------|
-| Dashboard | 8700 | Web UI for monitoring and Playground |
-| API | 8888* | Chat completions API (configurable in config.yaml) |
-| Metrics | 9190 | Prometheus metrics |
-| gRPC | 50051 | Router gRPC (internal) |
-| Jaeger UI | 16686 | Distributed tracing UI |
-| Grafana (embedded) | 8700 | Dashboards at /embedded/grafana |
-| Prometheus UI | 9090 | Metrics storage and querying |
-
-*Default port, configurable via `listeners` in config.yaml
-
-### Observability
-
-`vllm-sr serve` automatically starts the observability stack:
-
-- **Jaeger**: Distributed tracing embedded at http://localhost:8700/embedded/jaeger (also available directly at http://localhost:16686)
-- **Grafana**: Pre-configured dashboards embedded at http://localhost:8700/embedded/grafana
-- **Prometheus**: Metrics collection at http://localhost:9090
-
-**Note**: Grafana is optimized for embedded access through the dashboard. For the best experience, use http://localhost:8700/embedded/grafana where anonymous authentication is pre-configured.
-
-Tracing is enabled by default. Traces are visible in Jaeger under the `vllm-sr` service name.
-
-## Configuration
-
-### Plugin Configuration
-
-The CLI supports configuring plugins in your routing decisions. Plugins are per-decision behaviors that customize request handling (security, caching, customization, debugging).
-
-**Supported Plugin Types:**
-
-- `semantic-cache` - Cache similar requests for performance
-- `memory` - Retrieve and store route-local conversation memory
-- `system_prompt` - Inject custom system prompts
-- `header_mutation` - Add/modify HTTP headers
-- `hallucination` - Detect hallucinations in responses
-- `router_replay` - Record routing decisions for debugging
-- `rag` - Inject retrieved knowledge into prompts
-- `image_gen` - Hand a matched route off to an image generation backend
-- `fast_response` - Return a route-local response immediately
-- `request_params` - Sanitize or cap request body parameters before forwarding
-- `response_jailbreak` - Screen model output before returning it
-- `tools` - Restrict or curate tool access per route
-
-**Plugin Examples:**
-
-Each example shows the plugin list inside a canonical `routing.decisions[]` entry.
-
-1. **semantic-cache** - Cache similar requests:
-
-```yaml
-routing:
-  decisions:
-    - name: "cached-route"
-      plugins:
-        - type: "semantic-cache"
-          configuration:
-            enabled: true
-            similarity_threshold: 0.92  # 0.0-1.0, higher = more strict
-            ttl_seconds: 3600  # Optional: cache TTL in seconds
-```
-
-2. **fast_response** - Return a route-local response:
-
-```yaml
-routing:
-  decisions:
-    - name: "guarded-route"
-      plugins:
-        - type: "fast_response"
-          configuration:
-            message: "This request was blocked by the matched route policy."
-```
-
-3. **system_prompt** - Inject custom instructions:
-
-```yaml
-routing:
-  decisions:
-    - name: "persona-route"
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            enabled: true
-            system_prompt: "You are a helpful assistant."
-            mode: "replace"  # "replace" (default) or "insert" (prepend)
-```
-
-4. **header_mutation** - Modify HTTP headers:
-
-```yaml
-routing:
-  decisions:
-    - name: "header-route"
-      plugins:
-        - type: "header_mutation"
-          configuration:
-            add:
-              - name: "X-Custom-Header"
-                value: "custom-value"
-            update:
-              - name: "User-Agent"
-                value: "SemanticRouter/1.0"
-            delete:
-              - "X-Old-Header"
-```
-
-5. **hallucination** - Detect hallucinations:
-
-```yaml
-routing:
-  decisions:
-    - name: "fact-check-route"
-      plugins:
-        - type: "hallucination"
-          configuration:
-            enabled: true
-            use_nli: false  # Optional: use NLI for detailed analysis
-            hallucination_action: "header"  # "header", "body", or "none"
-```
-
-6. **router_replay** - Record decisions for debugging:
-
-```yaml
-routing:
-  decisions:
-    - name: "debug-route"
-      plugins:
-        - type: "router_replay"
-          configuration:
-            enabled: true
-            max_records: 10000  # Optional: max records in memory (default: 10000)
-            capture_request_body: true  # Optional: capture request payloads (default: true)
-            capture_response_body: true  # Optional: capture response payloads (default: true)
-            max_body_bytes: 4096  # Optional: max bytes to capture (default: 4096)
-```
-
-7. **memory** - Retrieve route-local memory:
-
-```yaml
-routing:
-  decisions:
-    - name: "memory-route"
-      plugins:
-        - type: "memory"
-          configuration:
-            enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.75
-            auto_store: true
-```
-
-8. **rag** - Inject retrieved context:
-
-```yaml
-routing:
-  decisions:
-    - name: "knowledge-route"
-      plugins:
-        - type: "rag"
-          configuration:
-            enabled: true
-            backend: "milvus"
-            top_k: 5
-            similarity_threshold: 0.8
-```
-
-9. **tools** - Restrict available tools:
-
-```yaml
-routing:
-  decisions:
-    - name: "tool-route"
-      plugins:
-        - type: "tools"
-          configuration:
-            enabled: true
-            mode: "filtered"
-            allow_tools: ["search_web"]
-            block_tools: ["exec_cmd"]
-```
-
-10. **image_gen** - Route to an image backend:
-
-```yaml
-routing:
-  decisions:
-    - name: "image-route"
-      plugins:
-        - type: "image_gen"
-          configuration:
-            enabled: true
-            backend: "vllm_omni"
-            backend_config:
-              base_url: "http://image-router:8005"
-```
-
-11. **request_params** - Cap or strip request parameters:
-
-```yaml
-routing:
-  decisions:
-    - name: "budget-route"
-      plugins:
-        - type: "request_params"
-          configuration:
-            blocked_params: ["logprobs", "top_logprobs"]
-            max_tokens_limit: 512
-            max_n: 1
-            strip_unknown: true
-```
-
-12. **response_jailbreak** - Screen generated output:
-
-```yaml
-routing:
-  decisions:
-    - name: "safety-route"
-      plugins:
-        - type: "response_jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.8
-            action: "header"
-```
-
-Router replay records are exposed through:
-
-- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`. List rows return summary records (routing metadata without large captured bodies or full tool traces). Fetch `GET /v1/router_replay/{id}` for full payloads. Pass `showDetails=true` only when you explicitly need full bodies embedded in each list row.
-- `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
-- `GET /v1/router_replay/{id}` - Fetch a single replay record.
-
-If a replay list page with `showDetails=true` would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream. Prefer the default summary list and use the detail endpoint for full request/response bodies.
-
-**Validation Rules:**
-
-- **Plugin Type**: Must be one of: `semantic-cache`, `memory`, `system_prompt`, `header_mutation`, `hallucination`, `router_replay`, `rag`, `image_gen`, `fast_response`, `request_params`, `response_jailbreak`, `tools`, `tool_selection`
-- **enabled**: Must be a boolean (required for most plugins)
-- **similarity_threshold/min_confidence_threshold**: Must be a float between 0.0 and 1.0
-- **max_records/max_body_bytes**: Must be a positive integer
-- **ttl_seconds**: Must be a non-negative integer
-- **system_prompt**: Must be a string (if provided)
-- **mode**: Must be "replace" or "insert" (if provided)
-- **injection_mode**: Must be `tool_role` or `system_prompt` (if provided)
-- **on_failure**: Must be `skip`, `block`, or `warn` (if provided)
-- **action**: Must be `block`, `header`, or `none` (if provided)
-
-**CLI Commands:**
+To run independent stacks from multiple worktrees, use a distinct name and
+port offset on every lifecycle command:
 
 ```bash
-# Validate configuration (including plugins)
-vllm-sr validate
-
-# Migrate older configs to the canonical contract
-vllm-sr config migrate --config old-config.yaml
-
-# Import supported OpenClaw model providers into canonical config.yaml
-vllm-sr config import --from openclaw --source openclaw.json --target config.yaml
-```
-
-### File Descriptor Limits
-
-The CLI automatically sets file descriptor limits to 65,536 for Envoy proxy. To customize:
-
-```bash
-export VLLM_SR_NOFILE_LIMIT=100000  # Optional (min: 8192)
+export VLLM_SR_STACK_NAME=lane-b
+export VLLM_SR_PORT_OFFSET=200
 vllm-sr serve
+vllm-sr status
+vllm-sr stop
 ```
+
+## Troubleshooting
+
+- `eval` and `rag list` use the Router management API, normally port `8080`.
+- `chat` uses the routed inference listener from `config.yaml`, normally port
+  `8899`.
+- A healthy Router and Envoy do not prove that an external model backend can
+  generate. Use Dashboard **Verify** or `chat` to test the backend path.
+- If a lifecycle command reports that the stack is busy, let the active
+  `serve` or `stop` finish and retry.
+- Set `NO_COLOR=1` for plain CLI output. JSON modes keep stdout free of status
+  messages so it can be consumed by scripts.
+
+Run `vllm-sr COMMAND --help` for command-specific options. For installation,
+security, configuration, and operations, use the
+[website documentation](https://vllm-sr.ai/docs/).
 
 ## License
 

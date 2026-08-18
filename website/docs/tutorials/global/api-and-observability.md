@@ -54,7 +54,10 @@ secret viewing is not implied.
 global:
   services:
     api:
-      enabled: true
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
 ```
 
 ### Response API
@@ -153,24 +156,41 @@ interop pattern that motivates this gate lives in
 global:
   services:
     router_replay:
-      store_backend: postgres     # default; SQL-queryable audit storage
       enabled: true
+      store_backend: postgres     # explicit durable, SQL-queryable audit storage
       async_writes: true
       postgres:
         host: postgres
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: ${ROUTER_REPLAY_POSTGRES_PASSWORD}
 ```
 
-`global.services.router_replay.enabled` is the router-wide default. When it is on, a decision captures replay unless that decision adds a route-local `router_replay` plugin with `enabled: false`.
+Router replay is disabled by default. Set `global.services.router_replay.enabled`
+to enable it router-wide; when it is on, a decision captures replay unless that
+decision adds a route-local `router_replay` plugin with `enabled: false`. A
+decision may also opt in explicitly. If no durable backend is configured, the
+default in-memory store is process-local and is lost on restart.
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `postgres` | Full SQL queryability, long-term audit retention | Production (default) |
+| `postgres` | Full SQL queryability, long-term audit retention | Production audit storage |
 | `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
 | `milvus` | Vector-searchable replay records | Semantic replay search |
+| `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
 | `memory` | Lost on router restart | Local development only |
+
+## Data and Security
+
+- Response API and Router Replay may persist prompts, responses, routing
+  outcomes, and tool traces. Set TTLs, capture limits, tenant/user scope, and
+  read permissions before enabling them.
+- Bind the management API to a private interface or enable its role-based token
+  authentication before remote exposure.
+- Traces and metric labels should carry bounded identifiers, not raw request
+  content or secrets.
+- See the complete service configuration in
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).
