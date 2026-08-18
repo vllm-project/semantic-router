@@ -22,7 +22,7 @@ func NewLegacyBackendAdapter(
 }
 
 func (a *LegacyBackendAdapter) LookupExact(
-	_ context.Context,
+	ctx context.Context,
 	lookup ExactLookup,
 ) (CacheResult, error) {
 	exact, ok := a.backend.(ExactCacheBackend)
@@ -30,6 +30,7 @@ func (a *LegacyBackendAdapter) LookupExact(
 		return CacheResult{}, ErrUnsupported
 	}
 	result, err := exact.FindExact(
+		ctx,
 		lookup.Identity.Partition.Key(),
 		lookup.Identity.ExactFingerprint,
 	)
@@ -45,7 +46,7 @@ func (a *LegacyBackendAdapter) LookupExact(
 	}, nil
 }
 
-func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) error {
+func (a *LegacyBackendAdapter) StoreExact(ctx context.Context, write CacheWrite) error {
 	exact, ok := a.backend.(ExactCacheBackend)
 	if !ok {
 		return ErrUnsupported
@@ -54,6 +55,7 @@ func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) e
 		return nil
 	}
 	return exact.AddExact(
+		ctx,
 		write.Identity.Partition.Key(),
 		write.Identity.ExactFingerprint,
 		write.ResponseBody,
@@ -62,10 +64,11 @@ func (a *LegacyBackendAdapter) StoreExact(_ context.Context, write CacheWrite) e
 }
 
 func (a *LegacyBackendAdapter) LookupSemantic(
-	_ context.Context,
+	ctx context.Context,
 	lookup SemanticLookup,
 ) (CacheResult, error) {
 	result, err := a.backend.LookupSimilarWithThreshold(
+		ctx,
 		lookup.Identity.Partition.Key(),
 		lookup.Identity.SemanticQuery,
 		lookup.Threshold,
@@ -82,11 +85,12 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	}, nil
 }
 
-func (a *LegacyBackendAdapter) StoreSemantic(_ context.Context, write CacheWrite) error {
+func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWrite) error {
 	if write.TTL.NoStore {
 		return nil
 	}
 	return a.backend.AddEntry(
+		ctx,
 		write.RequestID,
 		write.Identity.Partition.Key(),
 		write.Identity.SemanticQuery,
@@ -96,8 +100,8 @@ func (a *LegacyBackendAdapter) StoreSemantic(_ context.Context, write CacheWrite
 	)
 }
 
-func (a *LegacyBackendAdapter) Health(_ context.Context) error {
-	return a.backend.CheckConnection()
+func (a *LegacyBackendAdapter) Health(ctx context.Context) error {
+	return a.backend.CheckConnection(ctx)
 }
 
 func (a *LegacyBackendAdapter) Close() error {

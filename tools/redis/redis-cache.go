@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -43,7 +44,7 @@ func newRedisConfig() *config.RedisConfig {
 	return cfg
 }
 
-func demoCacheOperations(cacheBackend cache.CacheBackend) {
+func demoCacheOperations(ctx context.Context, cacheBackend cache.LegacyCacheBackend) {
 	model := "gpt-4"
 	query := "What is the capital of France?"
 	requestID := "req-12345"
@@ -51,7 +52,7 @@ func demoCacheOperations(cacheBackend cache.CacheBackend) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"The capital of France is Paris."}}]}`)
 
 	fmt.Println("\n2. Adding entry to cache...")
-	err := cacheBackend.AddEntry(requestID, model, query, requestBody, responseBody, 3600)
+	err := cacheBackend.AddEntry(ctx, requestID, model, query, requestBody, responseBody, 3600)
 	if err != nil {
 		log.Fatalf("Failed to add entry: %v", err)
 	}
@@ -94,7 +95,7 @@ func demoCacheOperations(cacheBackend cache.CacheBackend) {
 	}
 }
 
-func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
+func demoPendingRequestWorkflow(ctx context.Context, cacheBackend cache.LegacyCacheBackend) {
 	model := "gpt-4"
 	fmt.Println("\n6. Pending Request Workflow:")
 	newRequestID := "req-67890"
@@ -132,7 +133,7 @@ func demoPendingRequestWorkflow(cacheBackend cache.CacheBackend) {
 	}
 }
 
-func printFinalStats(cacheBackend cache.CacheBackend) {
+func printFinalStats(cacheBackend cache.LegacyCacheBackend) {
 	fmt.Println("\n7. Final Statistics:")
 	stats := cacheBackend.GetStats()
 	fmt.Printf("  Total Entries: %d\n", stats.TotalEntries)
@@ -174,7 +175,8 @@ func main() {
 		fmt.Printf("⚠ Found %d existing entries in cache (from previous runs)\n", initialStats.TotalEntries)
 	}
 
-	demoCacheOperations(cacheBackend)
-	demoPendingRequestWorkflow(cacheBackend)
+	ctx := context.Background()
+	demoCacheOperations(ctx, cacheBackend)
+	demoPendingRequestWorkflow(ctx, cacheBackend)
 	printFinalStats(cacheBackend)
 }
