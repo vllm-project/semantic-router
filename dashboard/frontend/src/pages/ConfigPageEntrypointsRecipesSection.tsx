@@ -71,78 +71,7 @@ export default function ConfigPageEntrypointsRecipesSection({
       state: {
         playgroundInvocation: createProbePlaygroundInvocation(intent, plan),
       },
-<<<<<<< HEAD
-      {
-        name: 'description',
-        label: 'Description',
-        type: 'textarea',
-        placeholder: 'Explain the objective and model allocation policy.',
-      },
-      {
-        name: 'strategy',
-        label: 'Decision strategy',
-        type: 'select',
-        required: true,
-        options: [...ROUTING_STRATEGIES],
-        description: 'How this recipe chooses among matching decisions.',
-      },
-      {
-        name: 'signals',
-        label: 'Recipe policy signals',
-        type: 'custom',
-        description: 'Author metadata and classifier signals inside this isolated recipe.',
-        customRender: (value, onChange) => (
-          <ConfigPageRecipePolicyEditor
-            value={value && typeof value === 'object' ? value : {}}
-            onChange={(nextValue) => onChange(nextValue)}
-          />
-        ),
-      },
-      {
-        name: 'decisions',
-        label: 'Decision model routes',
-        type: 'custom',
-        description: 'Manage every decision and its complete target model reference data.',
-        customRender: (value, onChange) => (
-          <ConfigPageRecipeDecisionsEditor
-            value={Array.isArray(value) ? value : []}
-            models={models}
-            signals={form.signals}
-            onChange={(nextValue) => onChange(nextValue)}
-          />
-        ),
-      },
-    ]
-    openEditModal(
-      mode === 'add' ? 'Add Routing Recipe' : `Edit Recipe · ${recipe?.name ?? ''}`,
-      form,
-      fields,
-      async (data) => {
-        const normalized = validateRecipeForm(data, config, models, originalName)
-        const nextConfig = cloneConfigData(config)
-        const nextRecipes = [...(nextConfig.recipes ?? [])]
-        if (originalName === null) {
-          nextRecipes.push(normalized)
-        } else {
-          const index = nextRecipes.findIndex((item) => item.name === originalName)
-          if (index < 0) throw new Error(`Recipe "${originalName}" no longer exists.`)
-          nextRecipes[index] = normalized
-          if (normalized.name !== originalName) {
-            nextConfig.entrypoints = (nextConfig.entrypoints ?? []).map((entrypoint) =>
-              entrypoint.recipe === originalName
-                ? { ...entrypoint, recipe: normalized.name }
-                : entrypoint,
-            )
-          }
-        }
-        nextConfig.recipes = nextRecipes
-        await saveConfig(nextConfig)
-      },
-      mode,
-    )
-=======
     })
->>>>>>> upstream/main
   }
 
   const handleRecipeLifecycleChanged = async (): Promise<boolean> => {
