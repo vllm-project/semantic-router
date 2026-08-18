@@ -117,7 +117,7 @@ export interface ExprTextParseResult {
 }
 
 // Parses DSL text produced by ExpressionBuilder back into a DecisionRuleSet. Blank text is a
-// valid "no conditions" state; unparseable text keeps `previous` and reports an actionable error
+// valid "no conditions" state; unparsable text keeps `previous` and reports an actionable error
 // instead of silently discarding the operator's edit.
 export function exprTextToDecisionRuleSet(
   text: string,

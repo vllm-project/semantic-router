@@ -62,7 +62,7 @@ describe('decisionRuleSetToExprText / exprTextToDecisionRuleSet round trip', () 
     expect(rules).toEqual(empty)
   })
 
-  it('keeps the previous rules and reports an error for unparseable text', () => {
+  it('keeps the previous rules and reports an error for unparsable text', () => {
     const { rules, error } = exprTextToDecisionRuleSet(
       'domain("business") AND (',
       collectLeafMetadata(safeHybridRoute),
