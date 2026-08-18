@@ -36,7 +36,6 @@ func TestValidateBudgetConfigRejectsNegativeLimits(t *testing.T) {
 		{MaxWallTimeMs: -1},
 	}
 	for _, cfg := range cases {
-		cfg := cfg
 		err := ValidateBudgetConfig("confidence", &cfg)
 		require.Error(t, err, "%+v should be rejected", cfg)
 		assert.Contains(t, err.Error(), "cannot be negative")

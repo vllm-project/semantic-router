@@ -41,7 +41,6 @@ func TestComputeBudgetIsZeroFalseWhenAnyLimitSet(t *testing.T) {
 		{MaxWallTimeMs: 1},
 	}
 	for _, budget := range cases {
-		budget := budget
 		if budget.IsZero() {
 			t.Fatalf("budget %+v should not be zero", budget)
 		}

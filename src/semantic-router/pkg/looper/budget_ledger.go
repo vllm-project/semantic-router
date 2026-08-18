@@ -34,13 +34,13 @@ const (
 	BudgetReasonNone BudgetExhaustionReason = ""
 	// BudgetReasonPromptTokens means cumulative prompt tokens reached
 	// ComputeBudget.MaxPromptTokens.
-	BudgetReasonPromptTokens BudgetExhaustionReason = "prompt_tokens_exhausted"
+	BudgetReasonPromptTokens BudgetExhaustionReason = "prompt_tokens_exhausted" //nolint:gosec // enum value, not a credential
 	// BudgetReasonCompletionTokens means cumulative completion tokens
 	// reached ComputeBudget.MaxCompletionTokens.
 	BudgetReasonCompletionTokens BudgetExhaustionReason = "completion_tokens_exhausted"
 	// BudgetReasonTotalTokens means cumulative prompt+completion tokens
 	// reached ComputeBudget.MaxTotalTokens.
-	BudgetReasonTotalTokens BudgetExhaustionReason = "total_tokens_exhausted"
+	BudgetReasonTotalTokens BudgetExhaustionReason = "total_tokens_exhausted" //nolint:gosec // enum value, not a credential
 	// BudgetReasonEstimatedCost means cumulative estimated cost reached
 	// ComputeBudget.MaxEstimatedCost.
 	BudgetReasonEstimatedCost BudgetExhaustionReason = "estimated_cost_exhausted"
