@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
@@ -15,16 +16,16 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, authSvc *auth.Service) {
 	registerHealthAndSetupRoutes(mux, cfg)
-	registerConfigRoutes(mux, cfg)
+	registerConfigRoutes(mux, cfg, authSvc)
 	registerToolRoutes(mux, cfg)
 	registerStatusRoutes(mux, cfg)
 	registerTopologyRoutes(mux, cfg)
-	registerSecurityPolicyRoutes(mux, cfg)
+	registerSecurityPolicyRoutes(mux, cfg, authSvc)
 }
 
-func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config, authSvc *auth.Service) {
 	handlers.SetSecurityPolicyConfigPaths(cfg.AbsConfigPath, cfg.ConfigDir)
 	mux.HandleFunc("/api/security/policy", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -35,7 +36,7 @@ func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
 				http.Error(w, "Dashboard is in read-only mode", http.StatusForbidden)
 				return
 			}
-			handlers.HandleUpdateSecurityPolicy(w, r)
+			auditMutation(authSvc, fixedAuditAction("security.policy.update"), "security/policy", handlers.HandleUpdateSecurityPolicy)(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -62,13 +63,13 @@ func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/setup/presets/delta", handlers.PresetDeltaHandler())
 }
 
-func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, authSvc *auth.Service) {
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/update", auditMutation(authSvc, fixedAuditAction("config.update"), "router/config", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
 	mux.HandleFunc("/api/router/config/deploy/preview", handlers.DeployPreviewHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/deploy", auditMutation(authSvc, fixedAuditAction("config.deploy"), "router/config", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
+	mux.HandleFunc("/api/router/config/rollback", auditMutation(authSvc, fixedAuditAction("config.rollback"), "router/config", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
 	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/deployments", handlers.ConfigDeploymentsHandler())
 	mux.HandleFunc("/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler())
@@ -79,13 +80,13 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/global/update", auditMutation(authSvc, fixedAuditAction("config.update"), "router/config/global", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
 	mux.HandleFunc("/api/router/config/global/raw", handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/global/raw/update", auditMutation(authSvc, fixedAuditAction("config.update"), "router/config/global/raw", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
-	mux.HandleFunc("/api/router/config/kbs/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/defaults/update", auditMutation(authSvc, fixedAuditAction("config.update"), "router/config/defaults", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir)))
+	mux.HandleFunc("/api/router/config/kbs", auditMutation(authSvc, kbAuditAction, "router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode)))
+	mux.HandleFunc("/api/router/config/kbs/", auditMutation(authSvc, kbAuditAction, "router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode)))
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
 }
 

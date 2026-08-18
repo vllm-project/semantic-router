@@ -423,6 +423,21 @@ func (w *auditResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap lets http.ResponseController reach the underlying writer, so wrapped
+// handlers keep access to Flush/Hijack without losing the audit capture.
+func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// Flush forwards to the underlying writer when it supports streaming, so the
+// audit wrapper can sit in front of SSE or chunked handlers without breaking
+// their flush behavior.
+func (w *auditResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func (w *auditResponseWriter) statusCodeOr200() int {
 	if w.status == 0 {
 		return http.StatusOK

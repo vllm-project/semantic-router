@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -250,6 +251,27 @@ func (s *Service) CanBootstrap(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return count == 0, nil
+}
+
+// Audit wraps a handler so that every request it serves is recorded in the
+// audit log after the handler completes. The action and resource are recorded
+// verbatim; the authenticated user, method, path, IP, user agent and status
+// code are captured from the request/response. When the service has no store
+// (auth unavailable), the handler passes through unwrapped.
+func (s *Service) Audit(action, resource string, next http.HandlerFunc) http.HandlerFunc {
+	if s == nil || s.store == nil {
+		return next
+	}
+	return AuditMiddleware(s.store, action, resource, next)
+}
+
+// Close releases the underlying store. Safe to call when the service was never
+// backed by a store (auth unavailable).
+func (s *Service) Close() error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store.Close()
 }
 
 func defaultAdminName(name string) string {

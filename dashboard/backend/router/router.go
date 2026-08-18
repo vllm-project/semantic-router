@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -45,9 +46,9 @@ func Setup(cfg *config.Config) *Server {
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
 
-	registerCoreRoutes(mux, cfg)
+	registerCoreRoutes(mux, cfg, authSvc)
 	registerEvaluationRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
+	SetupMCP(mux, cfg, wf, openClawHandler, authSvc)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg)
@@ -57,10 +58,24 @@ func Setup(cfg *config.Config) *Server {
 	return &Server{
 		Handler: wrapWithAuth(mux, authSvc),
 		Close: func() error {
-			if cp == nil {
-				return nil
+			var closeErrs []error
+			if authSvc != nil {
+				if err := authSvc.Close(); err != nil {
+					closeErrs = append(closeErrs, err)
+				}
 			}
-			return cp.Close()
+			if err := wf.Close(); err != nil {
+				closeErrs = append(closeErrs, err)
+			}
+			if cp != nil {
+				if err := cp.Close(); err != nil {
+					closeErrs = append(closeErrs, err)
+				}
+			}
+			if len(closeErrs) > 0 {
+				return fmt.Errorf("dashboard close: %v", closeErrs)
+			}
+			return nil
 		},
 	}
 }
