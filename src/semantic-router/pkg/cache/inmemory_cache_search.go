@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -131,12 +132,12 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	result, err := c.LookupSimilarWithThreshold(model, query, threshold)
+	result, err := c.LookupSimilarWithThreshold(context.Background(), model, query, threshold)
 	return result.ResponseBody, result.Found, err
 }
 
 // LookupSimilarWithThreshold returns a request-scoped lookup result.
-func (c *InMemoryCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+func (c *InMemoryCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
@@ -146,10 +147,16 @@ func (c *InMemoryCache) LookupSimilarWithThreshold(model string, query string, t
 	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query=%s, threshold=%.4f",
 		model, logging.ContentDescriptor(query), threshold)
 
-	queryEmbedding, err := c.generateEmbedding(query)
+	queryEmbedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Do not return a result if cancellation occurred during embedding.
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "find_similar", "canceled", time.Since(start).Seconds())
+		return LookupResult{}, err
 	}
 
 	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(
@@ -247,5 +254,7 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+	// A rejected candidate's score remains request-owned and is exposed on the
+	// debug and Replay surfaces to diagnose near-threshold misses.
 	return LookupResult{Similarity: bestSimilarity}, nil
 }
