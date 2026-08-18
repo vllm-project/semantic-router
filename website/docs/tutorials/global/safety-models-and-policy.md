@@ -72,6 +72,28 @@ global:
 `http_chat` uses a chat-completions prompt. Both send request text to the
 configured service.
 
+### On a classifier failure
+
+`on_error` controls what an unreachable or failing guardrail classifier does
+to the rule that failed to evaluate: `allow` (the default) tolerates the
+failure and treats the affected content as not matching, so other content
+still evaluates normally; `block` treats the failure itself as a positive
+detection instead, since an inference failure means the content could not be
+verified safe.
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        protocol: http_classify
+        on_error: block
+```
+
+Applies to any prompt guard backend, local or remote - not only the remote
+protocols above.
+
 ### Hallucination mitigation
 
 The local detector uses `backend: candle`. An OpenAI-compatible remote detector
