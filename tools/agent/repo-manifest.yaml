@@ -157,6 +157,7 @@ docs:
 - tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
 - tools/agent/docs/tech-debt/td-045-reviewed-content-moderation.md
 - tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
+- tools/agent/docs/tech-debt/td-047-looper-panel-executor-workflows-ratings-migration.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -339,6 +340,9 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
     steward: agent-contract
     freshness: update when mandatory ONNX binding CI coverage changes
+  - path: tools/agent/docs/tech-debt/td-047-looper-panel-executor-workflows-ratings-migration.md
+    steward: router-core
+    freshness: update when Workflows or Ratings migrate onto the shared panel executor
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md
