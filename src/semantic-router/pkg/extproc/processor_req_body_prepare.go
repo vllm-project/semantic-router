@@ -109,6 +109,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
+	applyFastRequestContextEstimate(fast, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
@@ -154,6 +155,16 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		reasoningDecision: reasoningDecision,
 		selectedModel:     selectedModel,
 	}, nil
+}
+
+func applyFastRequestContextEstimate(fast *FastExtractResult, ctx *RequestContext) {
+	if fast == nil || ctx == nil {
+		return
+	}
+	ctx.VSRContextTokenCount = fast.ContextTokenFloor
+	ctx.VSRContextTextBytes = fast.ContextTextBytes
+	ctx.VSRContextEquivalentBytes = fast.ContextEquivalentBytes
+	ctx.VSRContextHasNonText = fast.ContextHasNonText
 }
 
 func (r *OpenAIRouter) applyRateLimitAndCacheChecks(

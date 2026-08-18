@@ -407,6 +407,18 @@ func semanticCacheWriteAllowed(ctx *RequestContext) bool {
 	return ctx != nil && (ctx.CacheSemanticSafe || ctx.CacheExactFingerprint == "")
 }
 
+// cacheWriteContext detaches a cache write from request cancellation while
+// keeping the trace values. The response being stored is already computed, so
+// abandoning the write when the client disconnects would discard a cache fill
+// for no saved work. Cancellation is honored on the read path instead, where
+// the work is still ahead of the request (#2473).
+func cacheWriteContext(ctx *RequestContext) context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx.TraceContext)
+}
+
 func (r *OpenAIRouter) addSemanticCacheEntry(
 	ctx *RequestContext,
 	responseBody []byte,
@@ -425,10 +437,7 @@ func (r *OpenAIRouter) addSemanticCacheEntry(
 		identity = responseCacheIdentity(ctx, requestModel)
 	}
 	identity.SemanticQuery = query
-	writeContext := ctx.TraceContext
-	if writeContext == nil {
-		writeContext = context.Background()
-	}
+	writeContext := cacheWriteContext(ctx)
 	service := r.responseCacheService()
 	if service == nil {
 		return nil

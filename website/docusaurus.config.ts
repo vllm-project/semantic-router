@@ -10,14 +10,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+  = 'Mixture-of-Models is a serving-system architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
   = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference',
+  tagline: 'Building a Mixture-of-Models Serving Architecture for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -169,6 +169,10 @@ const config: Config = {
             to: '/docs/installation/',
           },
           {
+            from: '/docs/installation/models-and-recipes',
+            to: '/docs/tutorials/global/models-entrypoints-serving',
+          },
+          {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
@@ -183,6 +187,18 @@ const config: Config = {
           {
             from: '/docs/tutorials/plugin/semantic-cache',
             to: '/docs/tutorials/plugin/response-cache',
+          },
+          {
+            from: '/docs/tutorials/signal/learned/embedding-design-principles',
+            to: '/docs/tutorials/signal/learned/embedding',
+          },
+          {
+            from: '/docs/overview/collective-intelligence',
+            to: '/docs/overview/mom-model-family',
+          },
+          {
+            from: '/blog/multi-objective-mom-on-amd-developer-cloud',
+            to: '/docs/overview/mom-model-family',
           },
         ],
       },
@@ -229,7 +245,6 @@ const config: Config = {
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm-sr-logo.white.png',
-        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {

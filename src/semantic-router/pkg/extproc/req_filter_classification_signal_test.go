@@ -130,6 +130,59 @@ func TestEnsureContextTokenCountRecordsContextTextBytes(t *testing.T) {
 	assert.Equal(t, len("system prompt and current user prompt"), ctx.VSRContextTextBytes)
 }
 
+func TestEnsureContextTokenCountUsesRequestAwareFloorWithoutPollutingTextBytes(t *testing.T) {
+	ctx := &RequestContext{VSRContextTokenCount: 64}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "ok",
+		requestFacts: classification.RequestFacts{
+			ContextTokenFloor:      12_345,
+			ContextTextBytes:       2,
+			ContextEquivalentBytes: 49_380,
+			ContextHasNonText:      true,
+		},
+	})
+
+	assert.Equal(t, 12_345, ctx.VSRContextTokenCount)
+	assert.Equal(t, 2, ctx.VSRContextTextBytes,
+		"routing reserve must not masquerade as prose calibration bytes")
+	assert.Equal(t, 49_380, ctx.VSRContextEquivalentBytes)
+	assert.True(t, ctx.VSRContextHasNonText)
+}
+
+func TestPrepareSignalEvaluationInputDoesNotDoubleCountCurrentUserInFloor(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	history := signalConversationHistory{
+		currentUserMessage:     "hello",
+		contextTokenFloor:      7,
+		contextTextBytes:       9,
+		contextEquivalentBytes: 28,
+		contextHasNonText:      true,
+	}
+
+	input := router.prepareSignalEvaluationInput(history)
+	assert.Equal(t, "hello", input.evaluationText)
+	assert.Equal(t, "hello", input.allMessagesText)
+	assert.Equal(t, 7, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, 9, input.requestFacts.ContextTextBytes)
+	assert.Equal(t, 28, input.requestFacts.ContextEquivalentBytes)
+	assert.True(t, input.requestFacts.ContextHasNonText)
+}
+
+func TestApplyFastRequestContextEstimateSetsContentFreeScalars(t *testing.T) {
+	ctx := &RequestContext{}
+	applyFastRequestContextEstimate(&FastExtractResult{
+		ContextTokenFloor:      24_000,
+		ContextTextBytes:       400,
+		ContextEquivalentBytes: 96_000,
+		ContextHasNonText:      true,
+	}, ctx)
+
+	assert.Equal(t, 24_000, ctx.VSRContextTokenCount)
+	assert.Equal(t, 400, ctx.VSRContextTextBytes)
+	assert.Equal(t, 96_000, ctx.VSRContextEquivalentBytes)
+	assert.True(t, ctx.VSRContextHasNonText)
+}
+
 func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 	signals := &classification.SignalResults{
 		MatchedKeywordRules:      []string{"keyword:a"},

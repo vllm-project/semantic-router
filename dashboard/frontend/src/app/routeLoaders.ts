@@ -19,11 +19,10 @@ export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
+export const loadPluginOperationsPage = () => import('../pages/PluginOperationsPage')
 export const loadSecurityPolicyPage = () => import('../pages/SecurityPolicyPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
 export const loadStatusPage = () => import('../pages/StatusPage')
-export const loadResponseCachePage = () => import('../pages/ResponseCachePage')
-export const loadContextCompressionPage = () => import('../pages/ContextCompressionPage')
 export const loadTaxonomyPage = () => import('../pages/TaxonomyPage')
 export const loadTopologyPage = () => import('../pages/TopologyPage')
 export const loadTracingPage = () => import('../pages/TracingPage')
@@ -61,10 +60,11 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/fleet-sim'), load: loadFleetSimOverviewPage },
   { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
-  { matches: (pathname) => pathname.startsWith('/response-cache'), load: loadResponseCachePage },
+  { matches: (pathname) => pathname.startsWith('/plugins'), load: loadPluginOperationsPage },
+  { matches: (pathname) => pathname.startsWith('/response-cache'), load: loadPluginOperationsPage },
   {
     matches: (pathname) => pathname.startsWith('/context-compression'),
-    load: loadContextCompressionPage,
+    load: loadPluginOperationsPage,
   },
   { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },
   { matches: (pathname) => pathname.startsWith('/monitoring'), load: loadMonitoringPage },

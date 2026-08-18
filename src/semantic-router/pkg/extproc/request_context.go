@@ -216,35 +216,37 @@ type RequestContext struct {
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
 	// VSR signal tracking - stores all matched signals for response headers
-	VSRMatchedKeywords     []string // Matched keyword rule names
-	VSRMatchedEmbeddings   []string // Matched embedding rule names
-	VSRMatchedDomains      []string // Matched domain rule names
-	VSRMatchedFactCheck    []string // Matched fact-check signals
-	VSRMatchedUserFeedback []string // Matched user feedback signals
-	VSRMatchedReask        []string // Matched repeated-question dissatisfaction signals
-	VSRMatchedPreference   []string // Matched preference signals
-	VSRMatchedLanguage     []string // Matched language signals
-	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
-	VSRContextTokenCount   int      // Actual token count for the request
-	VSRContextTextBytes    int      // Byte length of text used for context token estimation
-	VSRMatchedStructure    []string // Matched structure rule names
-	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
-	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
-	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
-	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
-	VSRMatchedKB           []string // Matched knowledge-base signal names
-	VSRMatchedConversation []string // Matched conversation-shape signal names
-	VSRMatchedEvent        []string // Matched event signal names
-	VSRMatchedMetadata     []string // Matched untrusted request metadata signal names
-	VSRMatchedClassifier   []string // Matched generic classifier signal names
-	VSRConversationFacts   classification.ConversationFacts
-	VSRMatchedProjection   []string // Matched projection mapping outputs
-	VSRProjectionScores    map[string]float64
-	VSRSignalConfidences   map[string]float64
-	VSRSignalValues        map[string]float64
-	VSRSignalErrors        map[string]string
-	VSRProjectionTrace     *projectiontrace.Trace
+	VSRMatchedKeywords        []string // Matched keyword rule names
+	VSRMatchedEmbeddings      []string // Matched embedding rule names
+	VSRMatchedDomains         []string // Matched domain rule names
+	VSRMatchedFactCheck       []string // Matched fact-check signals
+	VSRMatchedUserFeedback    []string // Matched user feedback signals
+	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
+	VSRMatchedPreference      []string // Matched preference signals
+	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
+	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
+	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
+	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
+	VSRMatchedStructure       []string // Matched structure rule names
+	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
+	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
+	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedKB              []string // Matched knowledge-base signal names
+	VSRMatchedConversation    []string // Matched conversation-shape signal names
+	VSRMatchedEvent           []string // Matched event signal names
+	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
+	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRConversationFacts      classification.ConversationFacts
+	VSRMatchedProjection      []string // Matched projection mapping outputs
+	VSRProjectionScores       map[string]float64
+	VSRSignalConfidences      map[string]float64
+	VSRSignalValues           map[string]float64
+	VSRSignalErrors           map[string]string
+	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification

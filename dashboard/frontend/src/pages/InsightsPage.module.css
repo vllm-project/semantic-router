@@ -367,6 +367,16 @@
   color: var(--color-danger);
 }
 
+.statusPending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.statusUnknown {
+  background: rgba(143, 148, 156, 0.12);
+  color: var(--color-text-secondary);
+}
+
 .indicators {
   display: flex;
   gap: 0.55rem;

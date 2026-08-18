@@ -23,15 +23,19 @@ def render_coverage_markdown(payload: dict[str, Any]) -> str:
         _render_coverage_totals(summary["coverage"]),
         "",
         (
-            "| Recipe | Entrypoints | Decisions | Variants | Signals | "
-            "Projections | Algorithms | Plugins | Request shapes |"
+            "| Recipe identity | Version | Entrypoints | Decisions | Variants | "
+            "Signals | Projections | Algorithms | Plugins | Request shapes |"
         ),
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for recipe in payload["recipes"]:
         coverage = recipe["coverage"]
+        identity = _mapping(recipe.get("identity"))
+        recipe_id = str(identity.get("id") or recipe["name"])
+        display_name = str(identity.get("name") or recipe_id)
         lines.append(
-            f"| {recipe['name']} | {len(recipe['entrypoints'])} | "
+            f"| {display_name} (`{recipe_id}`) | {identity.get('version', '')} | "
+            f"{len(recipe['entrypoints'])} | "
             f"{len(recipe['decisions'])} | {recipe['variants']} | "
             f"{coverage['signals']['percent']:.1f}% | "
             f"{coverage['projections']['percent']:.1f}% | "

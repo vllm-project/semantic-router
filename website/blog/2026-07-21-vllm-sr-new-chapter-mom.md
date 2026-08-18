@@ -153,13 +153,15 @@ Open checkpoints can travel with the artifact; closed models remain authenticate
 
 Preferences become concrete when they are published as model identities. One MoM family can offer several operating points:
 
+The built-in identities currently shipped by the CLI are listed below. Run `vllm-sr model list` for the authoritative catalog state.
+
 | Model identity | Contract |
 | --- | --- |
+| `vllm-sr/mom-v1-blend` | Balance quality, latency, cost, and recovery across the configured model pool |
+| `vllm-sr/mom-v1-lite` | Minimize cost above a quality floor |
 | `vllm-sr/mom-v1-flash` | Minimize expected latency |
-| `vllm-sr/mom-v1-light` | Minimize cost above a quality floor |
 | `vllm-sr/mom-v1-ultra` | Maximize quality within a declared budget |
-| `vllm-sr/mom-v1-halu` | Require grounding checks and fail-closed fallback |
-| `vllm-sr/mom-v1-secu` | Enforce jailbreak and PII policy before execution |
+| `vllm-sr/mom-v1-vault` | Keep sensitive traffic on the configured private model pool |
 
 Each name is a versioned model contract, not a router preset. The application chooses the behavior it needs; vLLM-SR selects and coordinates the models that deliver it while preserving hard privacy, residency, authorization, and safety constraints.
 
@@ -177,7 +179,7 @@ To an application, the full system remains an ordinary model call:
 That identity may select one model, escalate through a cascade, compare parallel answers, require grounding, or run a bounded workflow—without changing the external interface, version, or response contract.
 
 <p align="center">
-  <img src="/img/blog/vllm/2026-07-21-vllm-sr-new-chapter/preference-models.png" alt="One Mixture-of-Models family exposes flash, light, ultra, grounding, and security variants as individually versioned model identities" width="100%" />
+  <img src="/img/blog/vllm/2026-07-21-vllm-sr-new-chapter/preference-models.png" alt="One Mixture-of-Models family exposes blend, lite, flash, ultra, and vault variants as individually versioned model identities" width="100%" />
   <br />
   <em>Figure 7: Preferences are published as bounded, versioned model contracts—not hidden application-side routing presets.</em>
 </p>

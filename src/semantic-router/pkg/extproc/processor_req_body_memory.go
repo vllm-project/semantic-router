@@ -45,7 +45,7 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
-	logging.Debugf("Memory: retrieval flow query=%q", truncateForLog(userContent, 80))
+	logging.Debugf("Memory: retrieval flow query=%s", logging.ContentDescriptor(userContent))
 	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, openAIRequest)
 	if !shouldSearch {
 		return requestBody, nil
@@ -54,9 +54,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
 		recordMemoryOutcome(ctx, "unavailable", "retrieval_error", true)
-		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
-			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
-		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
+		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%s error_class=%T",
+			userID, ctx.VSRSelectedDecisionName, logging.ContentDescriptor(searchQuery), err)
+		// The caller records this error in the stack log. Do not propagate the
+		// provider's free-form text because it may echo tenant content or secrets.
+		return requestBody, fmt.Errorf("memory retrieval failed (error_class=%T)", err)
 	}
 	retrievedCount := len(memories)
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -132,7 +134,7 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	history := r.extractConversationHistory(openAIRequest)
 	searchQuery, err := BuildSearchQuery(ctx.TraceContext, history, userContent, r.Config)
 	if err != nil {
-		logging.Warnf("Memory: Query rewriting failed, using original query: %v", err)
+		logging.Warnf("Memory: Query rewriting failed, using original query (error_class=%T)", err)
 		ctx.MemoryFailOpen = true
 		ctx.MemoryFallbackReason = "query_rewrite_error"
 		searchQuery = userContent

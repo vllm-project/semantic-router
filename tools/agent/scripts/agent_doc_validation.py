@@ -149,8 +149,14 @@ def validate_agent_entry_docs(repo_manifest: dict, errors: list[str]) -> None:
         errors.append(
             f"AGENTS.md is {agent_line_count} lines; keep the agent entry under {MAX_AGENTS_ENTRY_LINES} lines"
         )
-    if "tools/agent/docs/README.md" not in agents_text:
-        errors.append("AGENTS.md must link to tools/agent/docs/README.md")
+    required_entry_refs = {
+        "tools/agent/docs/README.md": "link to the agent docs index",
+        "make agent-report": "require the repository task-routing command",
+        "tools/agent/skills/": "point to routed repository skills",
+    }
+    for required_ref, purpose in required_entry_refs.items():
+        if required_ref not in agents_text:
+            errors.append(f"AGENTS.md must {purpose}: missing '{required_ref}'")
 
     repo_docs = set(repo_manifest.get("docs", []))
     for required_doc in (

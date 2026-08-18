@@ -19,6 +19,7 @@ var (
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
 
 	globalConfigContractValidators = []configContractValidator{
+		validateReasoningFamilyContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,

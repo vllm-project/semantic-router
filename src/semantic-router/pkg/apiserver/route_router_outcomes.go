@@ -59,12 +59,13 @@ func (s *ClassificationAPIServer) handleRouterOutcome(w http.ResponseWriter, r *
 	outcome.Source = source
 	outcome.IdempotencyKey = idempotencyKey
 
-	runtime := s.currentLearningRuntime()
+	runtime, releaseRuntime := s.acquireLearningRuntime()
 	if runtime == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NO_ROUTER_LEARNING_RUNTIME",
 			"Router Learning outcome ingestion requires an active router learning runtime.")
 		return
 	}
+	defer releaseRuntime()
 	ctx := r.Context()
 	if ctx == nil {
 		ctx = context.Background()

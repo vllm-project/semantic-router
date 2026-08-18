@@ -5,9 +5,6 @@
 `response_cache` is the route-local plugin for reusing exact or semantically
 compatible prior responses.
 
-It aligns to `config/fragments/plugin/response-cache/high-recall.yaml` and
-`config/fragments/plugin/response-cache/memory.yaml`.
-
 ## Key Advantages
 
 - Reuses prior responses only on routes that benefit from cache hits.
@@ -27,25 +24,25 @@ every time. `response_cache` keeps the reuse policy local to the route.
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: response_cache
-  configuration:
-    enabled: true
-    mode: exact_then_semantic
-    scope: user
-    semantic:
-      similarity_threshold: 0.92
-    ttl_seconds: 86400
-    request_controls:
+plugins:
+  - type: response_cache
+    configuration:
       enabled: true
-      header: x-vsr-cache-control
-      allowed: [no-cache, no-store, bypass, max-age, ttl]
-      max_ttl_seconds: 86400
-    personalized:
-      mode: disabled
+      mode: exact_then_semantic
+      scope: user
+      semantic:
+        similarity_threshold: 0.92
+      ttl_seconds: 86400
+      request_controls:
+        enabled: true
+        header: x-vsr-cache-control
+        allowed: [no-cache, no-store, bypass, max-age, ttl]
+        max_ttl_seconds: 86400
+      personalized:
+        mode: disabled
 ```
 
 `mode` accepts:
@@ -88,3 +85,12 @@ configuration testing, scoped invalidation, epoch-based flush, and a
 hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
+
+Cached responses can contain user or tenant data. Choose an appropriate scope,
+TTL, backend authentication, encryption, and invalidation process. Semantic
+thresholds must be calibrated for the configured embedding model, and routes
+with personalized RAG or memory should not reuse pre-enrichment responses
+without an explicit policy. See complete examples:
+[`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)
+and
+[`memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/memory.yaml).

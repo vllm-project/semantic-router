@@ -1,116 +1,136 @@
-# Config Assets
+# Configuration assets
 
-`config/` is now the user-facing config surface only.
+Use this directory to find a complete configuration, copy a focused fragment,
+or start from a maintained routing recipe.
 
-- `config/config.yaml`: exhaustive canonical reference config
-- `config/fragments/signal/`: reusable `routing.signals` fragments
-- `config/fragments/decision/`: reusable `routing.decisions` rule-shape fragments
-- `config/fragments/algorithm/`: reusable `decision.algorithm` snippets
-- `config/fragments/plugin/`: reusable route plugin snippets
-- `config/recipes/`: complete use-case deliveries with symmetric YAML, DSL,
-  Eval API probes, and documentation
-- `config/runtime/`: backend-specific runtime examples referenced by configs
-  and tests; these are support assets rather than schema fragments
+| Need | Start here |
+| --- | --- |
+| See every supported field | `config/config.yaml`, the exhaustive canonical reference config |
+| Add one routing capability | `config/fragments/` |
+| Run a complete use case | `config/recipes/` |
+| Serve a packaged virtual model | `config/recipes/built-in/` |
+| Configure a storage or service backend | `config/runtime/` |
+| Validate a managed asset | `config/schemas/` |
 
-The four fragment families previously lived directly under `config/`. Update
-repository links and automation to use `config/fragments/...`. This is an asset
-path migration only; the YAML configuration schema and runtime field names do
-not change.
+The website's [configuration guide](../website/docs/installation/configuration.md)
+is the reader-facing reference. `config/config.yaml` is intentionally exhaustive;
+trim it for a deployment instead of treating every optional service as required.
 
-Inside canonical `config.yaml`:
+## Canonical shape
 
-- `providers.defaults` holds provider-wide defaults such as `default_model` and reasoning families
-- `providers.models[]` holds concrete backend access details directly
-- `providers.models[].pricing` supports separate prompt, cached-input, cache-write, and completion rates; omitted `cache_write_per_1m` falls back to `prompt_per_1m`
-- `routing.modelCards[]` holds semantic model metadata, including optional `loras[]` catalogs for decision-level `lora_name` references
-- `routing.projections` carries cross-signal coordination and derived routing outputs
-- `routing.projections.partitions` is the canonical runtime home for exclusive domain or embedding partitions; DSL authoring uses `PROJECTION partition`
-- `routing.projections.scores` and `routing.projections.mappings` let maintained configs turn learned and heuristic signals into named routing bands that decisions can reference with `type: projection`
-- `routing.decisions[].candidateIterations` carries bounded DSL `FOR ... IN` metadata for candidate-model authoring; it is declarative selection policy input, not a general scripting runtime
-- `routing.decisions[].emits[]` carries typed side-effect directives from DSL `EMIT` blocks; the current supported kind is `retention`, where `drop: true` skips response-cache writes and the remaining fields stay structured/auditable for follow-up runtime consumers such as turn-aware cache TTL, current-model affinity, prefix/KV-cache warmth, and session transition telemetry
-- request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
-- `routing.signals.metadata` matches bounded, untrusted caller hints; authenticated identity remains owned by `authz`
-- `routing.signals.classifiers` exposes generic native or constrained-LLM label scores; decisions select a declared label and apply a numeric predicate
-- decision leaves may add `predicate` and `on_error` when they need to gate an exposed signal value rather than only boolean membership
-- `routing.signals.embeddings[].query_modality` declares which modality of incoming request payload the embedding rule's query is computed from. Defaults to `"text"`; `"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal` so the query and candidate embeddings land in the same shared space. See `website/docs/tutorials/signal/learned/embedding.md` for the worked multimodal example.
-- structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
-- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `config/recipes/balance/` delivery for end-to-end usage
-- top-level `entrypoints` maps request-facing virtual model names onto named routing recipes; the names never reach a backend, they only select which routing profile evaluates the request
-- top-level `recipes` adds named routing profiles beside the `routing` block. The top-level `routing` profile is the `default` recipe; each `recipes[].routing` block carries the same profile shape (`signals`, `projections`, `decisions`, `strategy`) but never `modelCards`. Signal, projection, and decision names are local to one recipe, cross-recipe references are invalid, and PII/jailbreak/authz rules, algorithms, plugins, cache, replay, and learning state stay isolated. The model catalog, providers, model assets, and service/store infrastructure remain shared. See `website/docs/tutorials/global/entrypoints-and-recipes.md`
-- `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
-- `global.router.learning.adaptation` adds online model-choice learning after the base decision algorithm. `global.router.learning.protection` protects agentic continuity, cache, tool loops, and handoff cost. Decisions can opt out with `routing.decisions[].adaptations.mode: bypass`, use component-level `adaptations.adaptation.mode` / `adaptations.protection.mode`, or override the adaptation search space with `adaptations.adaptation.candidate_set`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter|bandit|personalization` is no longer a supported public algorithm.
-- `global.router.learning.state_store` optionally mirrors protection snapshots to Redis with bounded request-time reads and fail-open local fallback for multi-replica deployments.
-- `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
-- embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
-- prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
-- reusable startup-loaded knowledge bases live under `global.model_catalog.kbs[]`, while `routing.signals.kb[]` binds label/group matches into normal routing signals
-- built-in knowledge base defaults keep `source.path` aligned with the steady-state `knowledge_bases/<dir>/` contract; local/dev runtime seeds missing built-ins from `config/knowledge_bases/<dir>/` into `.vllm-sr/knowledge_bases/<dir>/` once, and router reads the shared runtime KB store from there
-- `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
-- `global.router.auto_model_names` declares the request model aliases that enter full vLLM-SR automatic routing. Defaults include `vllm-sr/auto`, `auto`, and `MoM`; `auto_model_name` remains the legacy single-name compatibility field.
-- `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
-- router-owned model-backed module config lives under `global.model_catalog.modules`
-- `global.model_catalog.modules.prompt_compression.profile` selects built-in signal-compression scoring defaults (`default`, `coding`, `medical`, `security`, or `multi_turn`); `multi-turn` is accepted as an alias, unknown names fail validation, and explicit weight/preserve fields override the profile.
-- `global.model_catalog.modules.hallucination_mitigation.detector.backend` selects the hallucination span detector: `candle` (default) runs the in-process token classifier, while `endpoint` calls a generative span detector behind an OpenAI-compatible server. The `endpoint` backend requires an absolute `http(s)` `detector.endpoint` and a `detector.model_id`; an unknown backend fails config validation.
-- `global.model_catalog.modules.prompt_guard.variant` and `.protocol` select the jailbreak classifier backend and are mutually exclusive - set at most one. `variant` picks a local Candle-backed model: `candle` (LoRA/BERT auto-detect) or `mmbert32k` (in-process mmBERT-32K); omitting both `variant` and `protocol` defaults to `mmbert32k`. `protocol` picks a remote HTTP backend: `http_chat` (external chat-completion model, role `guardrail`) or `http_classify` (external sequence-classifier endpoint speaking the HuggingFace text-classification pipeline contract, role `guardrail`) - either requires an `external_models` entry with `model_role: guardrail`. Setting both `variant` and `protocol`, or an unrecognized value for either, fails config validation. `prompt_guard.positive_labels` overrides which mapping label(s) count as unsafe, for models whose positive class isn't literally `jailbreak`; if set, at least one label must exist in the loaded `jailbreak_mapping` or the router fails to start.
+A router config uses these top-level sections:
 
-`config/fragments/decision/` is organized by boolean rule shape:
+```yaml
+version: v0.3
+listeners: []
+providers: {}
+routing: {}
+entrypoints: []
+recipes: []
+global: {}
+```
 
-- `single/`: one signal condition
-- `and/`: conjunction examples
-- `or/`: disjunction examples
-- `not/`: exclusion examples
-- `composite/`: nested AND/OR/NOT cases
+- `listeners` exposes inference and management endpoints.
+- `providers.defaults` defines shared provider behavior;
+  `providers.models[]` binds model names to concrete backends.
+- `routing` owns model cards, signals, projections, decisions, and the routing
+  strategy for the default profile. Any looper algorithm (`confidence`,
+  `ratings`, `remom`, `fusion`, `workflows`) can also declare
+  `algorithm.budget`, an optional per-request token/cost/wall-time ceiling
+  separate from the per-subrequest knobs above. It defaults to unlimited and
+  stops further escalation deterministically once exhausted; config
+  validation rejects it on algorithm types that don't execute through
+  Looper. Each supported algorithm now has its own tutorial page under
+  `website/docs/tutorials/algorithm/`.
+- `entrypoints` maps request-facing model names to isolated `recipes`. Each
+  recipe has its own signals, decisions, algorithms, and plugins while sharing
+  providers and router-wide services. See
+  [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
+- `global` owns cross-cutting router settings, services, stores, integrations,
+  and router-managed model assets.
 
-Decision fragments may reference `modelRefs[].lora_name`, but those adapter names must be declared in the base config's `routing.modelCards[].loras`.
-Candidate iteration fragments must stay bounded to `decision.candidates` or an explicit model list and feed existing decision outputs such as `MODEL <iterator>`.
+Validate a file before serving it:
 
-`config/fragments/algorithm/` is organized by routing policy:
+```bash
+vllm-sr validate --config config.yaml
+vllm-sr serve --config config.yaml
+```
 
-- `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
-- `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, `latency_aware`, and `prompt`
+## Choose the right asset
 
-The ReMoM looper fragment includes `max_completion_tokens` as an optional
-per-subrequest completion budget.
+### Fragments
 
-Any looper algorithm (`confidence`, `ratings`, `remom`, `fusion`, `workflows`)
-can also declare `algorithm.budget`, an optional per-request token/cost/wall-time
-ceiling separate from the per-subrequest knobs above. It defaults to unlimited
-and stops further escalation deterministically once exhausted; config
-validation rejects it on algorithm types that don't execute through Looper.
+Fragments show one capability in its owning section. They are not complete
+deployments and may rely on model or service definitions from a base config.
 
-Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
+- `config/fragments/signal/`: request and response facts used by decisions.
+  Heuristic and learned signal guides live under
+  `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
+- `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
+  boolean rule shapes.
+- `config/fragments/algorithm/`: per-decision model selection and bounded
+  multi-model execution policies.
+- `config/fragments/plugin/`: route-local request or response processing such
+  as caching, memory, RAG, tool policy, and safety handling.
 
-`config/fragments/plugin/` is organized by route-local plugin or reusable plugin bundle:
+The corresponding website sections are
+[`tutorials/signal/`](../website/docs/tutorials/signal/),
+[`tutorials/decision/`](../website/docs/tutorials/decision/),
+[`tutorials/algorithm/`](../website/docs/tutorials/algorithm/),
+[`tutorials/plugin/`](../website/docs/tutorials/plugin/), and
+[`tutorials/global/`](../website/docs/tutorials/global/).
 
-- one directory per plugin or bundle, such as `response-cache/`, `context-compression/`, `rag/`, `memory/`, or `content-safety/`
-- `context-compression/` protects RAG-injected tool results by default; set `targets.rag.mode: extractive` only for routes that accept extractive RAG compression
-- route-local tool policy examples live under `tools/`
-- one fragment example per directory in the current catalog
+### Recipes and built-in models
 
-Each supported plugin now has its own tutorial page under `website/docs/tutorials/plugin/`.
+`config/recipes/` contains complete, runnable examples. Read a recipe's Model
+Card before using it; the card explains its intended use, backend roles, data
+handling, evaluation scope, and limitations.
 
-The repository enforces this fragment catalog, the exhaustive reference config,
-the maintained recipes and E2E assets, and the core public config docs in Go
-tests. When a supported signal, decision algorithm, plugin surface, or canonical
-contract term changes, both `go test ./pkg/config/...` and `make agent-lint`
-fail until `config/`, `e2e/`, and the website docs agree.
+`config/recipes/built-in/` is the versioned source for virtual models bundled
+with the CLI. Use `vllm-sr model list` and `vllm-sr model show` to inspect the
+installed catalog. Fork a built-in before changing its provider bindings or
+routing policy.
 
-Latest official tutorials mirror the same top-level taxonomy:
+### Runtime examples
 
-- `tutorials/signal/`
-  - `tutorials/signal/heuristic/` for rule-based and lightweight detector signals
-  - `tutorials/signal/learned/` for embedding- and classifier-driven signals
-- `tutorials/decision/`
-- `tutorials/algorithm/` with one page per algorithm
-- `tutorials/learning/` for cross-request Router Learning adaptation and protection
-- `tutorials/plugin/` with one page per plugin
-- `tutorials/global/`
+`config/runtime/` contains backend-specific support files for memory, response
+cache, the Response API, tools, and vector stores. These files configure a
+runtime dependency; they do not define routing behavior by themselves.
 
-Runtime support files have explicit homes:
+## Important boundaries
 
-- backend configuration examples live in `config/runtime/`
-- complete routing scenarios live in `config/recipes/`
-- local Envoy lives in `deploy/local/envoy.yaml`
-- harness and smoke manifests live in `e2e/config/`
+- Model backend credentials belong in environment references, not literal YAML
+  values.
+- `routing.modelCards` describes semantic capabilities; concrete URLs and
+  credentials belong in `providers.models`.
+- `routing.projections` derives named routing outputs from signals. Decisions
+  consume those outputs instead of embedding free-form computation.
+- Candidate iteration is bounded policy metadata, not a general scripting
+  runtime.
+- Router Learning lives under `global.router.learning`; it is separate from a
+  decision's request-time base algorithm.
+- Router replay is disabled by default and can capture request or response
+  bodies. Review its access controls and retention settings before enabling it.
+- `global.router.skip_processing.enabled` should be enabled only when an
+  authenticated upstream component owns the bypass header.
+- Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
+  signals bind to those shared assets by name.
 
-The old full-example trees under `config/intelligent-routing/`, `config/memory-rag/`, `config/multi-modal/`, `config/observability/`, and `config/prompt-guard/` were retired in v0.3. Use `config/config.yaml` as the exhaustive contract reference, then copy or trim it into deployment-specific `config.yaml` files as needed.
+## Keep examples in sync
+
+When a public config field or supported routing surface changes, update its
+fragment, the exhaustive reference, affected recipes, and the matching website
+page together. Run `go test ./pkg/config/...` from `src/semantic-router`, then
+run `make agent-lint` from the repository root:
+
+```bash
+cd src/semantic-router
+go test ./pkg/config/...
+
+cd ../..
+make agent-lint
+```
+
+Complete routing scenarios belong in `config/recipes/`; backend support files
+belong in `config/runtime/`; local Envoy and test-only manifests belong under
+`deploy/` and `e2e/`, respectively.

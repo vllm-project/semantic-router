@@ -81,18 +81,34 @@ func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationIn
 		return
 	}
 	text := contextTokenText(signalInput)
-	if text == "" {
+	floor := signalInput.requestFacts.ContextTokenFloor
+	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
+		signalInput.requestFacts.ContextHasNonText
+	if text == "" && floor <= 0 {
 		return
 	}
 	if ctx.VSRContextTextBytes <= 0 {
-		ctx.VSRContextTextBytes = len(text)
+		ctx.VSRContextTextBytes = signalInput.requestFacts.ContextTextBytes
+		if ctx.VSRContextTextBytes <= 0 {
+			ctx.VSRContextTextBytes = len(text)
+		}
 	}
-	if ctx.VSRContextTokenCount > 0 {
-		return
+	if ctx.VSRContextEquivalentBytes <= 0 {
+		ctx.VSRContextEquivalentBytes = signalInput.requestFacts.ContextEquivalentBytes
 	}
-	counter := classification.CharacterBasedTokenCounter{}
-	count, err := counter.CountTokens(text)
-	if err != nil || count <= 0 {
+	count := ctx.VSRContextTokenCount
+	if count <= 0 {
+		counter := classification.CharacterBasedTokenCounter{}
+		var err error
+		count, err = counter.CountTokens(text)
+		if err != nil {
+			return
+		}
+	}
+	if floor > count {
+		count = floor
+	}
+	if count <= 0 {
 		return
 	}
 	ctx.VSRContextTokenCount = count

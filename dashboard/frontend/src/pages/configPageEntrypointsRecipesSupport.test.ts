@@ -28,7 +28,7 @@ const baseConfig = (): ConfigData => ({
       },
     ],
   },
-  entrypoints: [{ model_names: ['vllm-sr/mom-balanced-v1'], recipe: 'default' }],
+  entrypoints: [{ model_names: ['vllm-sr/mom-v1-blend'], recipe: 'default' }],
   recipes: [
     {
       name: 'frontier',
@@ -63,16 +63,16 @@ describe('entrypoints and recipes support', () => {
   it('normalizes public model IDs from newline and comma input', () => {
     expect(
       normalizeEntrypointModelNames(
-        ' vllm-sr/mom-flash-v1,\nvllm-sr/mom-flash-v1\nvllm-sr/mom-private-v1 ',
+        ' vllm-sr/mom-v1-flash,\nvllm-sr/mom-v1-flash\nvllm-sr/mom-v1-vault ',
       ),
-    ).toEqual(['vllm-sr/mom-flash-v1', 'vllm-sr/mom-private-v1'])
+    ).toEqual(['vllm-sr/mom-v1-flash', 'vllm-sr/mom-v1-vault'])
   })
 
   it('rejects duplicate and reserved entrypoint model IDs', () => {
     const config = baseConfig()
     expect(() =>
       validateEntrypointForm(
-        { modelNames: 'vllm-sr/mom-balanced-v1', recipe: 'default' },
+        { modelNames: 'vllm-sr/mom-v1-blend', recipe: 'default' },
         config,
         models,
         null,
@@ -253,7 +253,7 @@ describe('entrypoints and recipes support', () => {
   it('collects physical targets and blocks deletion of referenced recipes', () => {
     const config = baseConfig()
     config.entrypoints?.push({
-      model_names: ['vllm-sr/mom-frontier-v1'],
+      model_names: ['vllm-sr/mom-v1-ultra'],
       recipe: 'frontier',
     })
     const recipe = config.recipes?.[0] as RecipeConfig

@@ -10,6 +10,10 @@
   overflow-x: hidden;
 }
 
+.container > section {
+  flex: 1 0 auto;
+}
+
 .loading {
   display: flex;
   flex-direction: column;

@@ -46,9 +46,10 @@ const emptyPolicy: SecurityPolicy = {
 
 const SecurityPolicyPage: React.FC = () => {
   const { user, isLoading: authLoading } = useAuth()
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
   const permissionsLoading = authLoading || readonlyLoading
-  const canManage = !permissionsLoading && !isReadonly && canManageSecurity(user)
+  const canManage =
+    !permissionsLoading && !serverReadonly && runtimeConfigWritable && canManageSecurity(user)
   const [policy, setPolicy] = useState<SecurityPolicy>(emptyPolicy)
   const [fragment, setFragment] = useState<GeneratedFragment | null>(null)
   const [loading, setLoading] = useState(true)
@@ -227,8 +228,10 @@ const SecurityPolicyPage: React.FC = () => {
       {!permissionsLoading && !canManage ? (
         <div className={styles.readOnlyNotice} role="status">
           <strong>View-only access.</strong>{' '}
-          {isReadonly ? (
-            <>This dashboard deployment is in read-only mode, so security changes are disabled.</>
+          {serverReadonly ? (
+            <>The server-wide read-only policy disables security changes.</>
+          ) : !runtimeConfigWritable ? (
+            <>Security changes require a writable runtime configuration mount.</>
           ) : (
             <>
               You can review security policy mappings and rate limits, but the{' '}

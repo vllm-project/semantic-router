@@ -163,10 +163,6 @@ skills:
     resume_refs:
     - path: tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
       reason: Current non-release debt and harness cleanup execution plan.
-  maintainer-release-ops:
-    resume_refs:
-    - path: tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md
-      reason: Current release plan that owns milestone-bound maintainer work.
   cross-stack-bugfix:
     resume_refs:
     - path: tools/agent/docs/tech-debt-register.md

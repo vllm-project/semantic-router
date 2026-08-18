@@ -12,11 +12,15 @@ var _ ExactCacheBackend = (*MilvusCache)(nil)
 
 // FindExact returns a deterministic Milvus exact-response entry.
 func (c *MilvusCache) FindExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 ) (LookupResult, error) {
 	if !c.enabled || fingerprint == "" {
 		return LookupResult{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
 	expr := fmt.Sprintf(
@@ -27,11 +31,12 @@ func (c *MilvusCache) FindExact(
 		time.Now().Unix(),
 	)
 	results, err := c.client.Query(
-		context.Background(),
+		ctx,
 		c.collectionName,
 		nil,
 		expr,
 		[]string{"response_body"},
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		return LookupResult{}, fmt.Errorf("milvus exact lookup failed: %w", err)
@@ -62,6 +67,7 @@ func (c *MilvusCache) FindExact(
 
 // AddExact writes a deterministic Milvus exact-response entry.
 func (c *MilvusCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -69,6 +75,9 @@ func (c *MilvusCache) AddExact(
 ) error {
 	if !c.enabled || fingerprint == "" || ttlSeconds == 0 {
 		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	recordID := exactCacheRecordID(partition, fingerprint)
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
@@ -82,7 +91,7 @@ func (c *MilvusCache) AddExact(
 		c.embeddingModel,
 	)
 	_, err := c.client.Upsert(
-		context.Background(),
+		ctx,
 		c.collectionName,
 		"",
 		entity.NewColumnVarChar("id", []string{recordID}),
@@ -103,7 +112,7 @@ func (c *MilvusCache) AddExact(
 	if err != nil {
 		return fmt.Errorf("milvus exact write failed: %w", err)
 	}
-	if err := c.client.Flush(context.Background(), c.collectionName, false); err != nil {
+	if err := c.client.Flush(ctx, c.collectionName, false); err != nil {
 		return fmt.Errorf("milvus exact flush failed: %w", err)
 	}
 	return nil
