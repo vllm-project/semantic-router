@@ -5,15 +5,16 @@ import (
 	"testing"
 )
 
-func TestCanonicalEntrypointRuleValidationErrors(t *testing.T) {
-	cases := []struct {
-		name    string
-		extra   string
-		wantErr string
-	}{
-		{
-			name: "both recipe and rules set",
-			extra: `
+type canonicalEntrypointRuleValidationErrorCase struct {
+	name    string
+	extra   string
+	wantErr string
+}
+
+var canonicalEntrypointRuleValidationErrorCases = []canonicalEntrypointRuleValidationErrorCase{
+	{
+		name: "both recipe and rules set",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/both"]
     recipe: privacy
@@ -21,39 +22,39 @@ entrypoints:
       - name: r
         recipe: privacy
 `,
-			wantErr: "set either recipe or rules, not both",
-		},
-		{
-			name: "neither recipe nor rules set",
-			extra: `
+		wantErr: "set either recipe or rules, not both",
+	},
+	{
+		name: "neither recipe nor rules set",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/neither"]
 `,
-			wantErr: "recipe cannot be empty",
-		},
-		{
-			name: "empty rules with no recipe",
-			extra: `
+		wantErr: "recipe cannot be empty",
+	},
+	{
+		name: "empty rules with no recipe",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/empty-rules"]
     rules: []
 `,
-			wantErr: "recipe cannot be empty",
-		},
-		{
-			name: "empty rule name",
-			extra: `
+		wantErr: "recipe cannot be empty",
+	},
+	{
+		name: "empty rule name",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/bad-name"]
     rules:
       - name: ""
         recipe: privacy
 `,
-			wantErr: "name cannot be empty",
-		},
-		{
-			name: "duplicate rule name",
-			extra: `
+		wantErr: "name cannot be empty",
+	},
+	{
+		name: "duplicate rule name",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/dup-name"]
     rules:
@@ -66,22 +67,22 @@ entrypoints:
         matches:
           - headers: [{name: x-b, value: "2"}]
 `,
-			wantErr: "duplicate rule name",
-		},
-		{
-			name: "unknown recipe reference from a rule",
-			extra: `
+		wantErr: "duplicate rule name",
+	},
+	{
+		name: "unknown recipe reference from a rule",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/bad-recipe-ref"]
     rules:
       - name: r
         recipe: does-not-exist
 `,
-			wantErr: "unknown recipe",
-		},
-		{
-			name: "duplicate case-equivalent header name within one match",
-			extra: `
+		wantErr: "unknown recipe",
+	},
+	{
+		name: "duplicate case-equivalent header name within one match",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/dup-header"]
     rules:
@@ -92,11 +93,11 @@ entrypoints:
               - {name: X-Tenant, value: "A"}
               - {name: x-tenant, value: "A"}
 `,
-			wantErr: "duplicate header",
-		},
-		{
-			name: "multiple catch-all rules",
-			extra: `
+		wantErr: "duplicate header",
+	},
+	{
+		name: "multiple catch-all rules",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/two-catchalls"]
     rules:
@@ -105,11 +106,11 @@ entrypoints:
       - name: r2
         recipe: default
 `,
-			wantErr: "multiple catch-all rules",
-		},
-		{
-			name: "ambiguous incomparable rules",
-			extra: `
+		wantErr: "multiple catch-all rules",
+	},
+	{
+		name: "ambiguous incomparable rules",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/ambiguous"]
     rules:
@@ -122,11 +123,11 @@ entrypoints:
         matches:
           - headers: [{name: x-plan, value: "gold"}]
 `,
-			wantErr: "ambiguous",
-		},
-		{
-			name: "path matcher missing leading slash",
-			extra: `
+		wantErr: "ambiguous",
+	},
+	{
+		name: "path matcher missing leading slash",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/bad-path"]
     rules:
@@ -135,11 +136,11 @@ entrypoints:
         matches:
           - path: {type: exact, value: "v1/chat/completions"}
 `,
-			wantErr: "must start with",
-		},
-		{
-			name: "unsupported path matcher type",
-			extra: `
+		wantErr: "must start with",
+	},
+	{
+		name: "unsupported path matcher type",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/bad-path-type"]
     rules:
@@ -148,11 +149,11 @@ entrypoints:
         matches:
           - path: {type: regex, value: "/v1/.*"}
 `,
-			wantErr: "path.type must be",
-		},
-		{
-			name: "unsupported header matcher type",
-			extra: `
+		wantErr: "path.type must be",
+	},
+	{
+		name: "unsupported header matcher type",
+		extra: `
 entrypoints:
   - model_names: ["vllm-sr/bad-header-type"]
     rules:
@@ -161,11 +162,12 @@ entrypoints:
         matches:
           - headers: [{name: x-a, type: regex, value: "1"}]
 `,
-			wantErr: "headers[\"x-a\"].type must be",
-		},
-	}
+		wantErr: "headers[\"x-a\"].type must be",
+	},
+}
 
-	for _, c := range cases {
+func TestCanonicalEntrypointRuleValidationErrors(t *testing.T) {
+	for _, c := range canonicalEntrypointRuleValidationErrorCases {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML + c.extra))
 			if err == nil {

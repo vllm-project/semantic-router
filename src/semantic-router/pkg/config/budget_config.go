@@ -26,20 +26,20 @@ func ValidateBudgetConfig(normalizedType string, cfg *BudgetConfig) error {
 			SupportedLooperAlgorithmTypes(), normalizedType,
 		)
 	}
-	if err := validateBudgetLimit("max_prompt_tokens", float64(cfg.MaxPromptTokens)); err != nil {
-		return err
+	limits := []struct {
+		field string
+		value float64
+	}{
+		{"max_prompt_tokens", float64(cfg.MaxPromptTokens)},
+		{"max_completion_tokens", float64(cfg.MaxCompletionTokens)},
+		{"max_total_tokens", float64(cfg.MaxTotalTokens)},
+		{"max_estimated_cost", cfg.MaxEstimatedCost},
+		{"max_wall_time_ms", float64(cfg.MaxWallTimeMs)},
 	}
-	if err := validateBudgetLimit("max_completion_tokens", float64(cfg.MaxCompletionTokens)); err != nil {
-		return err
-	}
-	if err := validateBudgetLimit("max_total_tokens", float64(cfg.MaxTotalTokens)); err != nil {
-		return err
-	}
-	if err := validateBudgetLimit("max_estimated_cost", cfg.MaxEstimatedCost); err != nil {
-		return err
-	}
-	if err := validateBudgetLimit("max_wall_time_ms", float64(cfg.MaxWallTimeMs)); err != nil {
-		return err
+	for _, limit := range limits {
+		if err := validateBudgetLimit(limit.field, limit.value); err != nil {
+			return err
+		}
 	}
 	if cfg.MaxPromptTokens > 0 && cfg.MaxTotalTokens > 0 && cfg.MaxPromptTokens > cfg.MaxTotalTokens {
 		return fmt.Errorf("algorithm.budget: max_prompt_tokens (%d) cannot exceed max_total_tokens (%d)", cfg.MaxPromptTokens, cfg.MaxTotalTokens)
