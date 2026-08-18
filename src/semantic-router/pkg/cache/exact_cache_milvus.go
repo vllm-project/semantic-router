@@ -32,6 +32,7 @@ func (c *MilvusCache) FindExact(
 		nil,
 		expr,
 		[]string{"response_body"},
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		return LookupResult{}, fmt.Errorf("milvus exact lookup failed: %w", err)

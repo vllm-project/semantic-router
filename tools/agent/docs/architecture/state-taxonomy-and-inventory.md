@@ -81,7 +81,7 @@ Use it to answer three questions before adding or changing a stateful feature:
 - RAG `cache_results` in `src/semantic-router/pkg/config/rag_plugin.go`
 - vector-store metadata in `src/semantic-router/pkg/vectorstore/manager.go`
 - vector-store file registry in `src/semantic-router/pkg/vectorstore/filestore.go`
-- model-selection learning state without configured storage in `src/semantic-router/pkg/selection/{elo.go,rl_driven.go,gmtrouter.go}`; `rl_driven` and `gmtrouter` decision-scoped `storage_path` now reaches runtime selector construction, API servers with a runtime registry no longer use selector globals before runtime publication, and RL-driven looper execution now receives the runtime selector registry, but shared-store parity remains open
+- model-selection learning state without configured storage in `src/semantic-router/pkg/selection/{elo.go,rl_driven.go,gmtrouter.go}`; `rl_driven` and `gmtrouter` decision-scoped `storage_path` now reaches runtime selector construction, and API servers with a runtime registry no longer use selector globals before runtime publication, but shared-store parity remains open
 
 ## What Should Go To A Database First
 

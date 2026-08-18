@@ -1,6 +1,6 @@
 # vLLM Semantic Router Agent Entry
 
-This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [tools/agent/docs/README.md](tools/agent/docs/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
+This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [tools/agent/docs/README.md](tools/agent/docs/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/test-domain-registry.yaml](tools/agent/test-domain-registry.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
 vLLM Semantic Router is an Envoy ExtProc request router for LLM inference. It
 resolves a request-facing entrypoint to an isolated recipe, evaluates that
@@ -78,7 +78,7 @@ tool-mandated entrypoints. The executable allowlist is in
 - Entry and navigation: [tools/agent/docs/README.md](tools/agent/docs/README.md), [tools/agent/docs/governance.md](tools/agent/docs/governance.md)
 - Architecture and boundaries: [tools/agent/docs/architecture-guardrails.md](tools/agent/docs/architecture-guardrails.md), nearest local `AGENTS.md`
 - Testing and done criteria: [tools/agent/docs/feature-complete-checklist.md](tools/agent/docs/feature-complete-checklist.md)
-- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
+- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/test-domain-registry.yaml](tools/agent/test-domain-registry.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
 - Maintainer ops: [tools/agent/docs/maintainer-ops.md](tools/agent/docs/maintainer-ops.md), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml)
 
 Temporary working notes can exist when needed, but they are not part of the canonical harness unless promoted into the docs or executable rule layer above.

@@ -50,6 +50,26 @@ the paths one per line and pass `AGENT_CHANGED_FILES_PATH=<file>` instead.
 - Use `make agent-pr-gate` before opening or updating a PR when you want the repo-native local baseline for the same CI jobs contributors most often miss.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
 
+## Project Test Taxonomy
+
+- **Unit:** decision algebra, config parsing, bindings, controllers, and pure
+  package behavior.
+- **Contract:** maintained assets, schemas, generated manifests, Helm safety,
+  and recipe reachability.
+- **Runtime integration:** CLI lifecycle, memory persistence/injection, and
+  maintained recipe behavior through a live router.
+- **Deployment E2E:** Kind/Helm profiles, gateways, dashboard APIs, and operator
+  reconciliation.
+- **Packaging:** affected container builds, charts, bundles, and paper output.
+- **Evaluation/benchmark:** Router Learning thresholds and allocation/byte
+  performance regressions.
+
+Keep separate domain workflows when they protect different layers of the same
+feature. Merge duplicated path selection, setup, image builds, and reporting;
+do not replace unique runtime or deployment contracts with a cheaper unit test.
+The canonical ownership and execution metadata is
+`tools/agent/test-domain-registry.yaml`.
+
 ## Loop Handling
 
 - `make agent-report` resolves the task loop mode from `tools/agent/task-matrix.yaml`.
@@ -72,9 +92,10 @@ See [environments.md](environments.md) for the concrete commands.
 
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
-- `tools/ci/classify_pr_changes.py` is the executable source for hosted PR
-  domain, E2E, and image selection. Workflow-local product path filters are not
-  a second source of truth.
+- `tools/agent/test-domain-registry.yaml` is the path, ownership, command,
+  workflow, receipt, cadence, and report source for test domains.
+  `tools/ci/classify_pr_changes.py` and the local agent resolver consume it;
+  workflow-local product path filters are not a second source of truth.
 - Workflow-only and classifier-infrastructure changes receive static workflow
   validation and one Kubernetes smoke; only classifier/core contract changes
   add the core test receipt.
@@ -82,19 +103,25 @@ See [environments.md](environments.md) for the concrete commands.
   subtracts images already built by active suites: Kubernetes E2E supplies
   `extproc`; CLI supplies `extproc`, `vllm-sr`, `dashboard`, and `vllm-sr-sim`;
   Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
-  `operator-bundle`.
+  `operator-bundle`; Recipe Conformance supplies `vllm-sr`.
 - Performance runs only for `perf/**` (plus its explicit manual/nightly
   lifecycle). `ci/full` expands E2E and affected Operator coverage but does not
   enable Performance.
 - Native Candle, ML, NLP, and ONNX paths select the core/native receipt.
   `make test` builds Candle, ML, and NLP and runs Candle tests; mandatory ONNX
   runtime coverage remains the explicit TD046 gap.
-- The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its exact path ownership and CI selection remain executable in `tools/agent/e2e-profile-map.yaml` and `.github/workflows/integration-test-k8s.yml`.
+- The baseline full-CI matrix includes `remote-embedding`, which owns the deterministic OpenAI-compatible external embedding-provider contract: authenticated startup health plus text embedding-signal routing. Its exact path ownership lives in `tools/agent/test-domain-registry.yaml`; profile metadata and execution remain in `tools/agent/e2e-profile-map.yaml` and `.github/workflows/integration-test-k8s.yml`.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
-- Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
+- Workflow-driven integration suites are part of the canonical validation story when their registry domain declares a `suite`; `e2e-profile-map.yaml` is a validated metadata projection.
 - The current workflow-driven suites are:
+  - `recipe-conformance-live` via `make recipe-conformance-live-cpu-all`
   - `vllm-sr-cli-integration` via `make vllm-sr-test-integration`
   - `memory-integration` via `make memory-test-integration`
+- Maintained recipe conformance blocks on T0 structural/schema and YAML/DSL
+  contracts, T1 decision/entrypoint/fallback reachability, T2 exact routing
+  fidelity with coverage ratchets, and T3 robustness counts/pass rates.
+  Live CPU executes every base probe through `/api/v1/eval?trace=true`.
+  T4 framing, generation, GPU, and latency work remains reporting-only.
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
 ## Model-Gated Multimodal Tests
@@ -151,10 +178,10 @@ Still manual, split into two targets so exit status stays meaningful:
 
 ## Source of Truth
 
-- Gate selection and commands: [../../tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
+- Domain selection, commands, workflows, receipts, and cadence: [../../tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)
+- Loop mode and non-domain task rules: [../../tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
 - Environment resolution: [../../tools/agent/repo-manifest.yaml](../../../tools/agent/repo-manifest.yaml)
-- E2E profile mapping: [../../tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
-- E2E taxonomy and suite selection: [../../tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
+- E2E profile metadata: [../../tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
 - Executable entrypoints: [../../tools/make/agent.mk](../../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)
 - Local testcase rules: [../../e2e/testcases/AGENTS.md](../../../e2e/testcases/AGENTS.md)

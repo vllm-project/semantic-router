@@ -10,7 +10,18 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-FULL_E2E_PROFILES = ("kubernetes", "dashboard", "remote-embedding")
+from test_domain_registry import (
+    domain_paths,
+    domain_records,
+    pr_job_order,
+    profile_paths,
+    profile_records,
+)
+
+FULL_E2E_PROFILES = tuple(
+    name for name, data in profile_records().items() if data.get("full_ci")
+)
+BASELINE_E2E_PROFILE = "envoy-ai-gateway"
 PRODUCTION_RELEASE_IMAGES = (
     "dashboard",
     "extproc",
@@ -28,90 +39,16 @@ NIGHTLY_IMAGES = (
     "vllm-sr-sim",
 )
 
-E2E_RULES = {
-    "istio": ("e2e/profiles/istio/**", "deploy/kubernetes/istio/**"),
-    "agentgateway": (
-        "e2e/profiles/agentgateway/**",
-        "deploy/kubernetes/agentgateway/**",
-    ),
-    "kubernetes": (
-        "e2e/profiles/ai-gateway/**",
-        "deploy/kubernetes/ai-gateway/**",
-    ),
-    "aibrix": ("e2e/profiles/aibrix/**", "deploy/kubernetes/aibrix/**"),
-    "dashboard": (
-        "e2e/profiles/dashboard/**",
-        "e2e/testcases/dashboard_*.go",
-        "e2e/testcases/security_policy_apply.go",
-        "deploy/kubernetes/observability/dashboard/**",
-        "dashboard/backend/handlers/security_policy*.go",
-        "dashboard/backend/handlers/deploy.go",
-        "dashboard/backend/handlers/canonical_transport.go",
-    ),
-    "dynamic-config": ("e2e/profiles/dynamic-config/**",),
-    "multimodal-routing": ("e2e/profiles/multimodal-routing/**",),
-    "remote-embedding": (
-        "e2e/profiles/remote-embedding/**",
-        "e2e/testcases/remote_embedding_routing.go",
-    ),
-    "llm-d": (
-        "e2e/profiles/llm-d/**",
-        "deploy/kubernetes/llmd-base/**",
-    ),
-    "routing-strategies": (
-        "e2e/profiles/routing-strategies/**",
-        "deploy/kubernetes/routing-strategies/**",
-    ),
-    "production-stack": (
-        "e2e/profiles/production-stack/**",
-        "deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml",
-        "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
-    ),
-    "ml-model-selection": (
-        "e2e/profiles/ml-model-selection/**",
-        "src/semantic-router/pkg/modelselection/**",
-        "src/training/model_selection/ml_model_selection/**",
-        "ml-binding/**",
-    ),
-    "multi-endpoint": (
-        "e2e/profiles/multi-endpoint/**",
-        "e2e/config/config.multi-endpoint.yaml",
-        "tools/demos/multi-endpoint.sh",
-    ),
-    "authz-rbac": (
-        "e2e/profiles/authz-rbac/**",
-        "e2e/config/config.authz-rbac.yaml",
-        "e2e/config/authz-profile-*.yaml",
-        "src/semantic-router/pkg/classification/authz*.go",
-        "src/semantic-router/pkg/authz/**",
-        "dashboard/backend/handlers/security_policy*.go",
-    ),
-    "streaming": (
-        "e2e/profiles/streaming/**",
-        "deploy/kubernetes/streaming/**",
-        "src/semantic-router/pkg/extproc/processor_req_body_streamed*.go",
-    ),
-    "anthropic-shim": (
-        "e2e/profiles/anthropic-shim/**",
-        "e2e/testing/anthropic-shim/**",
-        "deploy/kubernetes/anthropic-backend/**",
-        "src/semantic-router/pkg/anthropic/outbound*.go",
-    ),
-}
+E2E_RULES = profile_paths("pr")
+_MANUAL_PROFILE_PATHS = profile_paths("manual")
 NON_PR_E2E_RULES = {
-    "response-api": (
-        "e2e/profiles/response-api/**",
-        "deploy/kubernetes/response-api/gwapi-resources.yaml",
-        "deploy/kubernetes/response-api/mock-vllm.yaml",
-    ),
-    "response-api-redis": (
-        "e2e/profiles/response-api-redis/**",
-        "deploy/kubernetes/response-api/redis.yaml",
-    ),
-    "response-api-redis-cluster": (
-        "e2e/profiles/response-api-redis-cluster/**",
-        "deploy/kubernetes/response-api/redis-cluster.yaml",
-    ),
+    name: _MANUAL_PROFILE_PATHS[name]
+    for name in (
+        "anthropic-shim",
+        "response-api",
+        "response-api-redis",
+        "response-api-redis-cluster",
+    )
 }
 
 
@@ -187,97 +124,20 @@ def is_vllm_sr_product_source(path: str) -> bool:
 
 
 def is_memory_change(changed: tuple[str, ...]) -> bool:
-    return any_matches(
-        changed,
-        "src/semantic-router/pkg/memory/**",
-        "src/semantic-router/pkg/responseapi/**",
-        "src/semantic-router/pkg/responsestore/**",
-        "src/semantic-router/pkg/extproc/*memory*",
-        "src/semantic-router/pkg/apiserver/*memory*",
-        "src/semantic-router/pkg/sessiontelemetry/*memory*",
-        "src/semantic-router/pkg/vectorstore/*memory*",
-        "src/semantic-router/pkg/cache/*memory*",
-        "src/vllm-sr/**/*memory*",
-        "tools/make/milvus.mk",
-        "e2e/testing/09-memory-features-test.py",
-        "e2e/testing/run_memory_integration.sh",
-        "e2e/testing/llm-katan/**",
-        "e2e/config/config.memory*.yaml",
-        "e2e/profiles/response-api/**",
-        "e2e/profiles/response-api-redis/**",
-        "e2e/profiles/response-api-redis-cluster/**",
-        "deploy/kubernetes/response-api/**",
-    )
+    return any_matches(changed, *domain_paths("memory"))
 
 
 def is_router_learning_change(changed: tuple[str, ...]) -> bool:
-    return any_matches(
-        changed,
-        "bench/agentic_routing_experiment.py",
-        "bench/profiles/router_learning/**",
-        "bench/test_agentic_routing_experiment.py",
-        "src/semantic-router/pkg/extproc/router_learning*",
-        "src/semantic-router/pkg/config/*learning*",
-        "src/semantic-router/pkg/routerreplay/store/learning_diagnostics.go",
-        "src/semantic-router/pkg/apiserver/route_router_outcomes.go",
-    )
+    return any_matches(changed, *domain_paths("router-learning"))
+
+
+def is_recipe_conformance_change(changed: tuple[str, ...]) -> bool:
+    return any_matches(changed, *domain_paths("recipe-conformance"))
 
 
 def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
     product_changed = non_documentation_paths(changed)
-    domains = {
-        "website": any(path.startswith("website/") for path in changed),
-        "docs": any(is_documentation_path(path) for path in changed),
-        "agent_text": any(is_agent_text(path) for path in changed),
-        "docs_only": bool(changed)
-        and all(
-            path.startswith("website/")
-            or path.endswith((".md", ".mdx"))
-            or is_agent_text(path)
-            for path in changed
-        ),
-        "ci": any_matches(changed, ".github/workflows/**", ".mergify.yml"),
-        "dashboard": any_matches(product_changed, "dashboard/**"),
-        "operator": any_matches(product_changed, "deploy/operator/**"),
-        "openvino": any_matches(product_changed, "openvino-binding/**"),
-        "performance": any_matches(product_changed, "perf/**"),
-        "paper": any_matches(product_changed, "paper/**"),
-        "helm": any_matches(product_changed, "deploy/helm/**"),
-        "make": any_matches(changed, "Makefile", "tools/make/**"),
-        "fleet_sim": any_matches(product_changed, "src/fleet-sim/**"),
-        "full": full,
-    }
-    domains["agent_exec"] = any_matches(
-        changed,
-        "tools/agent/*.yaml",
-        "tools/agent/scripts/**",
-        "tools/ci/**",
-        "tools/make/agent.mk",
-        ".github/workflows/**",
-        ".mergify.yml",
-    )
-    domains["classifier_contract"] = any_matches(
-        changed,
-        ".github/workflows/ci-changes.yml",
-        ".github/workflows/pr.yml",
-        ".github/workflows/main.yml",
-        "tools/ci/**",
-    )
-    domains["cli_source"] = any(
-        is_vllm_sr_product_source(path) for path in product_changed
-    )
-    domains["cli"] = domains["cli_source"] or any_matches(
-        product_changed, "tools/make/docker.mk", "e2e/testing/vllm-sr-cli/**"
-    )
-    domains["memory"] = is_memory_change(product_changed)
-    domains["native_binding"] = any_matches(
-        product_changed,
-        "candle-binding/**",
-        "ml-binding/**",
-        "nlp-binding/**",
-        "onnx-binding/**",
-    )
-    domains["router_learning"] = is_router_learning_change(product_changed)
+    domains = _detect_direct_domains(changed, product_changed, full=full)
     domains["router_core"] = any_matches(
         product_changed,
         "src/semantic-router/**",
@@ -312,9 +172,92 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         or domains["helm"]
         or domains["common_e2e"]
         or domains["classifier_contract"]
+        or domains["api_docs_generated"]
         or (domains["make"] and not domains["docs_only"])
     )
     domains["security"] = full or not domains["docs_only"]
+    return domains
+
+
+def _detect_direct_domains(
+    changed: tuple[str, ...],
+    product_changed: tuple[str, ...],
+    *,
+    full: bool,
+) -> dict[str, bool]:
+    domains = {
+        "website": any(path.startswith("website/") for path in changed),
+        "docs": any(is_documentation_path(path) for path in changed),
+        "agent_text": any(is_agent_text(path) for path in changed),
+        "docs_only": bool(changed)
+        and all(
+            path.startswith("website/")
+            or path.endswith((".md", ".mdx"))
+            or is_agent_text(path)
+            for path in changed
+        ),
+        "ci": any_matches(
+            changed,
+            ".github/actions/**",
+            ".github/workflows/**",
+            ".mergify.yml",
+        ),
+        "dashboard": any_matches(product_changed, *domain_paths("dashboard")),
+        "operator": any_matches(product_changed, *domain_paths("operator")),
+        "openvino": any_matches(product_changed, *domain_paths("openvino")),
+        "performance": any_matches(product_changed, *domain_paths("performance")),
+        "paper": any_matches(product_changed, *domain_paths("paper")),
+        "helm": any_matches(product_changed, *domain_paths("helm")),
+        "make": any_matches(changed, "Makefile", "tools/make/**"),
+        "fleet_sim": any_matches(product_changed, "src/fleet-sim/**"),
+        "full": full,
+    }
+    domains["agent_exec"] = any_matches(
+        changed,
+        "tools/agent/*.yaml",
+        "tools/agent/scripts/**",
+        "tools/ci/**",
+        "tools/make/agent.mk",
+        ".github/actions/**",
+        ".github/workflows/**",
+        ".mergify.yml",
+    )
+    domains["classifier_contract"] = any_matches(
+        changed,
+        ".github/workflows/ci-changes.yml",
+        ".github/workflows/pr.yml",
+        ".github/workflows/main.yml",
+        ".github/actions/**",
+        "tools/ci/**",
+    )
+    # The apiserver API reference and OpenAPI JSON are generated from the route
+    # catalog by `make api-docs-generate`. Editing either artifact by hand is
+    # classified as docs-only, which would otherwise skip the `make
+    # api-docs-check` drift gate that keeps them faithful to the catalog.
+    domains["api_docs_generated"] = any_matches(
+        changed,
+        "website/docs/api/apiserver.md",
+        "website/static/openapi/apiserver/**",
+        "tools/openapi-gen/**",
+    )
+    domains["cli_source"] = any(
+        is_vllm_sr_product_source(path) for path in product_changed
+    )
+    domains["cli"] = domains["cli_source"] or any_matches(
+        product_changed, "tools/make/docker.mk", "e2e/testing/vllm-sr-cli/**"
+    )
+    domains["memory"] = is_memory_change(product_changed)
+    domains["native_binding"] = any_matches(
+        product_changed,
+        "candle-binding/**",
+        "ml-binding/**",
+        "nlp-binding/**",
+        "onnx-binding/**",
+    )
+    domains["router_learning"] = is_router_learning_change(product_changed)
+    domains["recipe_conformance"] = full or is_recipe_conformance_change(
+        product_changed
+    )
     return domains
 
 
@@ -327,7 +270,7 @@ def select_profiles(
         for profile, patterns in E2E_RULES.items()
         if any_matches(product_changed, *patterns)
     ]
-    needs_kubernetes = any(
+    needs_baseline = any(
         domains[key]
         for key in (
             "router_core",
@@ -337,8 +280,8 @@ def select_profiles(
             "common_e2e",
         )
     )
-    if needs_kubernetes and "kubernetes" not in profiles:
-        profiles.insert(0, "kubernetes")
+    if needs_baseline and BASELINE_E2E_PROFILE not in profiles:
+        profiles.insert(0, BASELINE_E2E_PROFILE)
     return FULL_E2E_PROFILES if full else tuple(profiles)
 
 
@@ -412,16 +355,17 @@ def built_by_active_suites(
     domains: dict[str, bool], profiles: tuple[str, ...]
 ) -> set[str]:
     receipts: set[str] = set()
-    if profiles:
-        receipts.add("extproc")
-    if domains["cli"]:
-        receipts.update({"dashboard", "extproc", "vllm-sr", "vllm-sr-sim"})
-    if domains["memory"]:
-        receipts.update({"dashboard", "extproc", "llm-katan", "vllm-sr", "vllm-sr-sim"})
-    if domains["operator"]:
-        receipts.update({"extproc", "operator", "operator-bundle"})
-    if "anthropic-shim" in profiles:
-        receipts.add("anthropic-shim")
+    for data in domain_records().values():
+        selector = str(data.get("selector") or "")
+        enabled = bool(profiles) if selector == "e2e" else domains.get(selector, False)
+        if enabled:
+            receipts.update(str(image) for image in data.get("image_receipts", []))
+    selected_profiles = profile_records()
+    for profile in profiles:
+        receipts.update(
+            str(image)
+            for image in selected_profiles.get(profile, {}).get("image_receipts", [])
+        )
     return receipts
 
 
@@ -450,6 +394,7 @@ def build_output_signals(
             "openvino",
             "performance",
             "router_learning",
+            "recipe_conformance",
             "agent_text",
             "agent_exec",
             "docs_only",
@@ -481,23 +426,20 @@ def select_jobs(
     profiles: tuple[str, ...],
     pr_images: tuple[str, ...],
 ) -> tuple[str, ...]:
-    jobs = ["quality"]
-    selections = (
-        (domains["security"], "security"),
-        (domains["core_test"], "core-tests"),
-        (domains["dashboard"], "dashboard"),
-        (domains["operator"], "operator"),
-        (bool(profiles), "e2e"),
-        (domains["cli"], "cli"),
-        (domains["memory"], "memory"),
-        (domains["openvino"], "openvino"),
-        (bool(pr_images), "images"),
-        (domains["performance"], "performance"),
-        (domains["router_learning"], "router-learning"),
-        (domains["paper"], "paper"),
-    )
-    jobs.extend(job for enabled, job in selections if enabled)
-    return tuple(jobs)
+    enabled_jobs: set[str] = set()
+    for data in domain_records().values():
+        selector = str(data.get("selector") or "")
+        if selector == "always":
+            enabled = True
+        elif selector == "e2e":
+            enabled = bool(profiles)
+        elif selector == "images":
+            enabled = bool(pr_images)
+        else:
+            enabled = domains.get(selector, False)
+        if enabled:
+            enabled_jobs.add(str(data["pr_job"]))
+    return tuple(job for job in pr_job_order() if job in enabled_jobs)
 
 
 def classify(

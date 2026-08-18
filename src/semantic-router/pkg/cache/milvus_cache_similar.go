@@ -74,6 +74,7 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 		entity.MetricType(c.config.Collection.VectorField.MetricType),
 		c.config.Search.TopK,
 		searchParam,
+		c.searchQueryOptions()...,
 	)
 }
 
@@ -117,6 +118,14 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 		return LookupResult{}, nil
 	}
 
+	// Err can coexist with ResultCount == 0, so check it first.
+	if len(searchResult) > 0 && searchResult[0].Err != nil {
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search result error: %v", searchResult[0].Err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		return LookupResult{}, nil
+	}
+
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
@@ -125,20 +134,22 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 	}
 
 	hit := &searchResult[0]
-	bestScore := hit.Scores[0]
-	if bestScore < threshold {
+	metricType := c.config.Collection.VectorField.MetricType
+	bestSimilarity := milvusScoreToSimilarity(metricType, hit.Scores[0])
+	if bestSimilarity < threshold {
 		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
-			bestScore, threshold)
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (metric=%s)",
+			bestSimilarity, threshold, metricType)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "milvus",
-			"best_similarity": bestScore,
+			"best_similarity": bestSimilarity,
 			"threshold":       threshold,
+			"metric":          metricType,
 			"model":           model,
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		return LookupResult{Similarity: bestScore}, nil
+		return LookupResult{Similarity: bestSimilarity}, nil
 	}
 
 	idx := milvusResponseBodyFieldIndex(hit)
@@ -147,16 +158,17 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		return LookupResult{Similarity: bestScore}, nil
+		return LookupResult{Similarity: bestSimilarity}, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
-	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-		bestScore, threshold, len(responseBody))
+	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f (metric=%s), response_size=%d bytes",
+		bestSimilarity, threshold, metricType, len(responseBody))
 	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "milvus",
-		"similarity": bestScore,
+		"similarity": bestSimilarity,
 		"threshold":  threshold,
+		"metric":     metricType,
 		"model":      model,
 		"collection": c.collectionName,
 	})
@@ -164,7 +176,7 @@ func (c *MilvusCache) LookupSimilarWithThreshold(model string, query string, thr
 	return LookupResult{
 		ResponseBody: responseBody,
 		Found:        true,
-		Similarity:   bestScore,
+		Similarity:   bestSimilarity,
 	}, nil
 }
 

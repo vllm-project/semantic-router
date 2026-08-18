@@ -319,6 +319,7 @@ surfaces:
   ci_e2e:
     description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
+    - .github/actions/**
     - .github/workflows/**
     - .mergify.yml
     - e2e/testing/vllm-sr-cli/**
@@ -363,6 +364,7 @@ skills:
     - .github/PULL_REQUEST_TEMPLATE.md
     - .github/ISSUE_TEMPLATE/**
     - .prowlabels.yaml
+    - .github/actions/**
     - .github/workflows/**
     - .mergify.yml
     required_surfaces:

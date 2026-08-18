@@ -54,6 +54,12 @@ jobs:
     if: needs.changes.outputs.cli == 'true'
     uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
 
+  recipe-conformance:
+    needs: changes
+    if: needs.changes.outputs.recipe_conformance == 'true'
+    uses: ./.github/workflows/recipe-conformance.yml
+    secrets: inherit
+
   openvino:
     needs: changes
     if: needs.changes.outputs.openvino == 'true'
@@ -70,6 +76,7 @@ jobs:
       - operator
       - e2e
       - cli
+      - recipe-conformance
       - openvino
     runs-on: ubuntu-latest
     steps:
