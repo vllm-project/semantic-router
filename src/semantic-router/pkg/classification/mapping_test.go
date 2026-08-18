@@ -59,3 +59,46 @@ func TestGetIndexForJailbreakType(t *testing.T) {
 		})
 	}
 }
+
+// TestJailbreakMapping_SequenceLabelMappingMethods guards the thin
+// sequenceLabelMapping wrapper methods (http_classifier.go) against silently
+// delegating to the wrong underlying jailbreak-named method.
+func TestJailbreakMapping_SequenceLabelMappingMethods(t *testing.T) {
+	mapping := &JailbreakMapping{
+		LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1},
+		IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
+	}
+
+	if idx, ok := mapping.IndexForLabel("jailbreak"); !ok || idx != 1 {
+		t.Errorf("IndexForLabel(%q) = (%d, %v), want (1, true)", "jailbreak", idx, ok)
+	}
+	if label, ok := mapping.LabelFromIndex(0); !ok || label != "benign" {
+		t.Errorf("LabelFromIndex(0) = (%q, %v), want (%q, true)", label, ok, "benign")
+	}
+	if count := mapping.LabelCount(); count != 2 {
+		t.Errorf("LabelCount() = %d, want 2", count)
+	}
+}
+
+// TestCategoryMapping_SequenceLabelMappingMethods guards CategoryMapping's
+// sequenceLabelMapping wrapper methods, added so a category http_classify
+// backend (#2760) can reuse alignScoresToMapping/assignScoreToMapping.
+func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
+	mapping := &CategoryMapping{
+		CategoryToIdx: map[string]int{"business": 0, "law": 1},
+		IdxToCategory: map[string]string{"0": "business", "1": "law"},
+	}
+
+	if idx, ok := mapping.IndexForLabel("law"); !ok || idx != 1 {
+		t.Errorf("IndexForLabel(%q) = (%d, %v), want (1, true)", "law", idx, ok)
+	}
+	if _, ok := mapping.IndexForLabel("unknown"); ok {
+		t.Error("IndexForLabel(\"unknown\") ok = true, want false")
+	}
+	if label, ok := mapping.LabelFromIndex(0); !ok || label != "business" {
+		t.Errorf("LabelFromIndex(0) = (%q, %v), want (%q, true)", label, ok, "business")
+	}
+	if count := mapping.LabelCount(); count != 2 {
+		t.Errorf("LabelCount() = %d, want 2", count)
+	}
+}

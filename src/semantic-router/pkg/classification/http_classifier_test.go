@@ -235,6 +235,53 @@ func TestHTTPClassifierJailbreakInferenceClassify_OutOfRangeScore(t *testing.T) 
 	}
 }
 
+// TestAlignScoresToMapping_CategoryMapping proves alignScoresToMapping and
+// assignScoreToMapping generalize beyond JailbreakMapping - the sequenceLabelMapping
+// interface lets a second, independently-shaped mapping type (CategoryMapping,
+// which has no LabelToID/IdxToLabel dual-naming and no reverse-scan fallback)
+// reuse the same validator a future category http_classify backend needs (#2760),
+// instead of duplicating this logic per classifier.
+func TestAlignScoresToMapping_CategoryMapping(t *testing.T) {
+	mapping := &CategoryMapping{
+		CategoryToIdx: map[string]int{"business": 0, "law": 1, "technology": 2},
+		IdxToCategory: map[string]string{"0": "business", "1": "law", "2": "technology"},
+	}
+
+	result, err := alignScoresToMapping(mapping, []httpClassifyLabelScore{
+		{Label: "technology", Score: 0.7},
+		{Label: "business", Score: 0.2},
+		{Label: "law", Score: 0.1},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []float32{0.2, 0.1, 0.7}
+	if len(result.Probabilities) != len(want) {
+		t.Fatalf("Probabilities = %v, want length %d", result.Probabilities, len(want))
+	}
+	for i, w := range want {
+		if result.Probabilities[i] != w {
+			t.Errorf("Probabilities[%d] = %v, want %v", i, result.Probabilities[i], w)
+		}
+	}
+}
+
+// TestAlignScoresToMapping_CategoryMapping_MissingLabel proves the "complete
+// distribution required" guard (see alignScoresToMapping's doc comment) also
+// holds for CategoryMapping, not just JailbreakMapping.
+func TestAlignScoresToMapping_CategoryMapping_MissingLabel(t *testing.T) {
+	mapping := &CategoryMapping{
+		CategoryToIdx: map[string]int{"business": 0, "law": 1},
+		IdxToCategory: map[string]string{"0": "business", "1": "law"},
+	}
+
+	if _, err := alignScoresToMapping(mapping, []httpClassifyLabelScore{
+		{Label: "business", Score: 1.0},
+	}); err == nil {
+		t.Error("expected an error when the response omits a configured category label")
+	}
+}
+
 func TestHTTPClassifierJailbreakInferenceClassify_ScoresDoNotSumToOne(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]httpClassifyLabelScore{

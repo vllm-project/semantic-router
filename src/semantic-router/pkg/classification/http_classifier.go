@@ -19,6 +19,21 @@ import (
 // unaccounted-for probability mass.
 const probabilitySumTolerance = 0.02
 
+// sequenceLabelMapping is the minimal label<->index contract
+// alignScoresToMapping/assignScoreToMapping need to validate an http_classify
+// response against a classifier's configured label mapping. JailbreakMapping
+// and CategoryMapping (mapping.go) both satisfy it via thin wrapper methods,
+// so category's http_classify backend (#2760) can reuse the same validator
+// jailbreak uses instead of duplicating it.
+type sequenceLabelMapping interface {
+	// IndexForLabel returns the configured class index for a label name.
+	IndexForLabel(label string) (int, bool)
+	// LabelFromIndex returns the label name for a configured class index.
+	LabelFromIndex(classIndex int) (string, bool)
+	// LabelCount returns the number of configured labels.
+	LabelCount() int
+}
+
 // HTTPClassifierJailbreakInference implements SequenceClassifierBackend by
 // calling an external sequence-classifier endpoint over HTTP. The wire
 // contract mirrors the widely-used HuggingFace text-classification pipeline
@@ -153,15 +168,17 @@ func (h *HTTPClassifierJailbreakInference) doClassifyRequest(httpReq *http.Reque
 	return scores, nil
 }
 
-// alignScoresToMapping matches response labels against the jailbreak_mapping
-// by name (not by array position) and builds the full-distribution result.
-// It requires the response to be a complete, valid distribution over exactly
-// the configured labels - not just "at least one label matched" - because an
-// incomplete response (e.g. a top-k response that omits the positive label)
-// would otherwise default the missing entries to 0.0 and silently under-report
-// risk instead of surfacing the mismatch.
-func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
-	numClasses := mapping.GetJailbreakTypeCount()
+// alignScoresToMapping matches response labels against the configured label
+// mapping by name (not by array position) and builds the full-distribution
+// result. It requires the response to be a complete, valid distribution over
+// exactly the configured labels - not just "at least one label matched" -
+// because an incomplete response (e.g. a top-k response that omits the
+// positive label) would otherwise default the missing entries to 0.0 and
+// silently under-report risk instead of surfacing the mismatch. mapping may
+// be any classifier's label mapping (JailbreakMapping, CategoryMapping, ...)
+// that satisfies sequenceLabelMapping.
+func alignScoresToMapping(mapping sequenceLabelMapping, scores []httpClassifyLabelScore) (SequenceClassificationResult, error) {
+	numClasses := mapping.LabelCount()
 	probabilities := make([]float32, numClasses)
 	seenIdx := make([]bool, numClasses)
 	seenLabels := make([]string, 0, len(scores))
@@ -181,9 +198,9 @@ func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelS
 		if present {
 			continue
 		}
-		missingLabel, _ := mapping.GetJailbreakTypeFromIndex(idx)
+		missingLabel, _ := mapping.LabelFromIndex(idx)
 		return SequenceClassificationResult{}, fmt.Errorf(
-			"http_classify response is missing label %q from the configured jailbreak_mapping (got %v)", missingLabel, seenLabels)
+			"http_classify response is missing label %q from the configured label mapping (got %v)", missingLabel, seenLabels)
 	}
 
 	if math.Abs(float64(sum)-1.0) > probabilitySumTolerance {
@@ -195,14 +212,14 @@ func alignScoresToMapping(mapping *JailbreakMapping, scores []httpClassifyLabelS
 }
 
 // assignScoreToMapping validates a single response label/score pair against
-// the jailbreak_mapping and marks its index as seen, returning the resolved
-// index. Split out of alignScoresToMapping to keep its cyclomatic complexity
-// within the repo's lint gate.
-func assignScoreToMapping(mapping *JailbreakMapping, seenIdx []bool, s httpClassifyLabelScore) (int, error) {
-	idx, ok := mapping.GetIndexForJailbreakType(s.Label)
+// the configured label mapping and marks its index as seen, returning the
+// resolved index. Split out of alignScoresToMapping to keep its cyclomatic
+// complexity within the repo's lint gate.
+func assignScoreToMapping(mapping sequenceLabelMapping, seenIdx []bool, s httpClassifyLabelScore) (int, error) {
+	idx, ok := mapping.IndexForLabel(s.Label)
 	if !ok || idx < 0 || idx >= len(seenIdx) {
 		return 0, fmt.Errorf(
-			"http_classify response label %q is not in the configured jailbreak_mapping", s.Label)
+			"http_classify response label %q is not in the configured label mapping", s.Label)
 	}
 	if seenIdx[idx] {
 		return 0, fmt.Errorf("http_classify response contains duplicate label %q", s.Label)

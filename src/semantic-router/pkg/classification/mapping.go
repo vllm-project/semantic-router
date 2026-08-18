@@ -210,6 +210,24 @@ func (cm *CategoryMapping) GetCategoryCount() int {
 	return len(cm.CategoryToIdx)
 }
 
+// IndexForLabel satisfies sequenceLabelMapping (http_classifier.go) for
+// CategoryMapping, letting a category http_classify backend reuse the same
+// label-alignment validator jailbreak already uses.
+func (cm *CategoryMapping) IndexForLabel(label string) (int, bool) {
+	idx, ok := cm.CategoryToIdx[label]
+	return idx, ok
+}
+
+// LabelFromIndex satisfies sequenceLabelMapping for CategoryMapping.
+func (cm *CategoryMapping) LabelFromIndex(classIndex int) (string, bool) {
+	return cm.GetCategoryFromIndex(classIndex)
+}
+
+// LabelCount satisfies sequenceLabelMapping for CategoryMapping.
+func (cm *CategoryMapping) LabelCount() int {
+	return cm.GetCategoryCount()
+}
+
 // GetCategorySystemPrompt returns the system prompt for a specific category if available
 func (cm *CategoryMapping) GetCategorySystemPrompt(category string) (string, bool) {
 	if cm.CategorySystemPrompts == nil {
@@ -242,6 +260,22 @@ func (jm *JailbreakMapping) GetJailbreakTypeCount() int {
 	}
 	// Fall back to alternative field
 	return len(jm.LabelToID)
+}
+
+// IndexForLabel satisfies sequenceLabelMapping (http_classifier.go) for
+// JailbreakMapping by delegating to the existing jailbreak-named lookup.
+func (jm *JailbreakMapping) IndexForLabel(label string) (int, bool) {
+	return jm.GetIndexForJailbreakType(label)
+}
+
+// LabelFromIndex satisfies sequenceLabelMapping for JailbreakMapping.
+func (jm *JailbreakMapping) LabelFromIndex(classIndex int) (string, bool) {
+	return jm.GetJailbreakTypeFromIndex(classIndex)
+}
+
+// LabelCount satisfies sequenceLabelMapping for JailbreakMapping.
+func (jm *JailbreakMapping) LabelCount() int {
+	return jm.GetJailbreakTypeCount()
 }
 
 // resolveSinglePositiveIndex resolves the configured positive_labels against
