@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ from .config import (
 )
 
 RELEASE_WORLD_SIZE = 8
+SOURCE_COMMIT_ENV = "VLLM_SR_SOURCE_COMMIT"
+SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,7 @@ class _TrainingRuntime:
     per_device_batch: int
     gradient_accumulation: int
     use_bf16: bool
+    source_commit: str | None
     output_root: Path
 
 
@@ -68,8 +72,15 @@ def _write_json(path: Path, payload: Any, *, runtime_values: bool = False) -> No
 
 
 def _source_commit() -> str | None:
+    configured = os.environ.get(SOURCE_COMMIT_ENV)
+    if configured is not None:
+        if SOURCE_COMMIT_PATTERN.fullmatch(configured) is None:
+            raise ValueError(
+                f"{SOURCE_COMMIT_ENV} must be a lowercase 40-character Git SHA"
+            )
+        return configured
     try:
-        return subprocess.run(
+        commit = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
@@ -77,6 +88,7 @@ def _source_commit() -> str | None:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
+    return commit if SOURCE_COMMIT_PATTERN.fullmatch(commit) else None
 
 
 def _package_versions(names: tuple[str, ...]) -> dict[str, str]:
@@ -308,6 +320,7 @@ def _prepare_runtime(
         per_device_batch=per_device_batch,
         gradient_accumulation=gradient_accumulation,
         use_bf16=bool(accelerator_available and not args.disable_bf16),
+        source_commit=_source_commit(),
         output_root=_prepare_output_root(args),
     )
 
@@ -454,7 +467,7 @@ def _build_training_manifest(
         "task": task_name,
         "contract_sha256": contract_sha256(contract),
         "data_manifest_sha256": _file_sha256(source_manifest_path),
-        "source_commit": _source_commit(),
+        "source_commit": runtime.source_commit,
         "base_model": contract["base_model"],
         "taxonomy_version": contract["taxonomy_version"],
         "world_size": runtime.world_size,
@@ -475,7 +488,7 @@ def _build_training_manifest(
                 "NCCL_P2P_DISABLE",
             )
         },
-        "release_eligible": is_release_eligible,
+        "release_eligible": bool(is_release_eligible and runtime.source_commit),
         "python": platform.python_version(),
         "packages": _package_versions(
             (

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from .config import DEFAULT_CONTRACT_PATH, id2label, load_contract, task_contrac
 from .export import file_sha256, validate_artifact_shape, write_artifact_manifest
 
 HTTP_NOT_FOUND = 404
+SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -31,6 +33,16 @@ def _format_metrics(metrics: dict[str, Any]) -> str:
     if not rows:
         return "Test metrics are available in `metrics.json`."
     return "\n".join(["| Metric | Value |", "| --- | ---: |", *rows])
+
+
+def _source_commit(training_manifest: dict[str, Any]) -> str:
+    source_commit = training_manifest.get("source_commit")
+    if (
+        not isinstance(source_commit, str)
+        or SOURCE_COMMIT_PATTERN.fullmatch(source_commit) is None
+    ):
+        raise ValueError("Training manifest has no valid immutable source commit")
+    return source_commit
 
 
 def _yaml_labels(task: dict[str, Any]) -> str:
@@ -66,7 +78,7 @@ def build_model_card(
     task = task_contract(contract, task_name)
     metrics = _read_json(run_root / "metrics.json")["test"]
     training_manifest = _read_json(run_root / "training_manifest.json")
-    source_commit = training_manifest.get("source_commit") or "main"
+    source_commit = _source_commit(training_manifest)
     source_url = (
         "https://github.com/vllm-project/semantic-router/tree/"
         f"{source_commit}/src/training/model_classifier/safety_classifier"
@@ -237,6 +249,7 @@ def publish(
     training_manifest = _read_json(run_path / "training_manifest.json")
     if not training_manifest.get("release_eligible"):
         raise ValueError("Training manifest is not release-eligible")
+    _source_commit(training_manifest)
     validate_artifact_shape(adapter_dir, "adapter")
     validate_artifact_shape(merged_path, "merged")
 

@@ -52,6 +52,20 @@ class ReleaseEligibilityTest(unittest.TestCase):
         self.assertFalse(train._release_eligible(release_args(), 1, True))
         self.assertFalse(train._release_eligible(release_args(), 8, False))
 
+    def test_explicit_source_commit_is_validated(self) -> None:
+        commit = "a" * 40
+        with mock.patch.dict(os.environ, {train.SOURCE_COMMIT_ENV: commit}, clear=True):
+            self.assertEqual(train._source_commit(), commit)
+        with (
+            mock.patch.dict(
+                os.environ,
+                {train.SOURCE_COMMIT_ENV: "not-a-commit"},
+                clear=True,
+            ),
+            self.assertRaisesRegex(ValueError, train.SOURCE_COMMIT_ENV),
+        ):
+            train._source_commit()
+
 
 class TrainingReceiptTest(unittest.TestCase):
     def test_manifest_schema_and_batch_accounting_remain_stable(self) -> None:
@@ -66,6 +80,7 @@ class TrainingReceiptTest(unittest.TestCase):
                 per_device_batch=8,
                 gradient_accumulation=1,
                 use_bf16=True,
+                source_commit="a" * 40,
                 output_root=Path(directory),
             )
             model = SimpleNamespace(config=SimpleNamespace(reference_compile=False))
@@ -75,7 +90,6 @@ class TrainingReceiptTest(unittest.TestCase):
                 "NCCL_P2P_DISABLE": "1",
             }
             with (
-                mock.patch.object(train, "_source_commit", return_value="abc123"),
                 mock.patch.object(
                     train, "_package_versions", return_value={"torch": "pinned"}
                 ),
@@ -134,6 +148,7 @@ class TrainingReceiptTest(unittest.TestCase):
                 per_device_batch=8,
                 gradient_accumulation=1,
                 use_bf16=True,
+                source_commit="a" * 40,
                 output_root=root,
             )
             args = release_args()

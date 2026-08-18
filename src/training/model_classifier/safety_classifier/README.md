@@ -109,20 +109,28 @@ The checked contract reproduces global batch 64 as `8 samples × 8 ranks × 1`
 gradient accumulation step:
 
 ```bash
-torchrun --standalone --nproc_per_node=8 \
+VLLM_SR_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  torchrun --standalone --nproc_per_node=8 \
   -m src.training.model_classifier.safety_classifier.train \
   --task level1 \
   --expected-world-size 8 \
   --data-dir /artifacts/data \
   --output-dir /artifacts/runs/level1
 
-torchrun --standalone --nproc_per_node=8 \
+VLLM_SR_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  torchrun --standalone --nproc_per_node=8 \
   -m src.training.model_classifier.safety_classifier.train \
   --task level2 \
   --expected-world-size 8 \
   --data-dir /artifacts/data \
   --output-dir /artifacts/runs/level2
 ```
+
+`VLLM_SR_SOURCE_COMMIT` is mandatory for a release-eligible container run when
+the mounted checkout is not trusted by the container's Git configuration. The
+trainer validates it as a full immutable Git SHA; missing provenance makes the
+run non-release-eligible, and the release command never falls back to a mutable
+branch name.
 
 Use `--max-steps 2` for an accelerator smoke. Override runs are marked
 non-release-eligible in `training_manifest.json`.
