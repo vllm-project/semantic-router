@@ -16,6 +16,7 @@ import type {
 } from './mcpConfigPanelTypes'
 
 const DEFAULT_TIMEOUT_MS = 30000
+export const MCP_REDACTED_ARGUMENTS = '__VLLM_SR_REDACTED__'
 
 export interface ServerFormValues {
   name: string
@@ -24,10 +25,23 @@ export interface ServerFormValues {
   enabled: boolean
   command: string
   args: string[]
+  preserveArguments: boolean
   url: string
   headers: Record<string, string>
   timeout: string
   autoReconnect: boolean
+}
+
+export function hiddenArgumentsBlockCommandChange(
+  server: MCPServerConfig | null,
+  command: string,
+  preserveArguments: boolean,
+): boolean {
+  return Boolean(
+    server?.transport === 'stdio' &&
+      preserveArguments &&
+      command !== (server.connection.command || ''),
+  )
 }
 
 interface ParameterSchemaLike {
@@ -204,9 +218,10 @@ export function getTransportLabel(transport: MCPTransportType): string {
   }
 }
 
-function normalizeArgs(args: readonly string[]): string[] | undefined {
+function normalizeArgs(args: readonly string[], preserveArguments: boolean): string[] | undefined {
+  if (preserveArguments) return undefined
   const normalized = args.map((argument) => argument.trim()).filter(Boolean)
-  return normalized.length > 0 ? normalized : undefined
+  return normalized
 }
 
 function normalizeHeaders(
@@ -228,11 +243,13 @@ export function buildServerConfig(values: ServerFormValues): Omit<MCPServerConfi
       values.transport === 'stdio'
         ? {
             command: values.command,
-            args: normalizeArgs(values.args),
+            args: normalizeArgs(values.args, values.preserveArguments),
           }
         : {
             url: values.url,
-            headers: normalizeHeaders(values.headers),
+            // An explicit empty object tells the backend to clear all stored
+            // headers; omission means that a client did not edit the field.
+            headers: normalizeHeaders(values.headers) || {},
           },
     options: {
       timeout: parseInt(values.timeout, 10) || DEFAULT_TIMEOUT_MS,
@@ -255,11 +272,11 @@ export function buildTestServerConfig(
       values.transport === 'stdio'
         ? {
             command: values.command,
-            args: normalizeArgs(values.args),
+            args: normalizeArgs(values.args, values.preserveArguments),
           }
         : {
             url: values.url,
-            headers: normalizeHeaders(values.headers),
+            headers: normalizeHeaders(values.headers) || {},
           },
     options: {
       timeout: parseInt(values.timeout, 10) || DEFAULT_TIMEOUT_MS,

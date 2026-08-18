@@ -22,7 +22,7 @@ func buildReplayRouteDiagnostics(
 	decisionTier int,
 	decisionPriority int,
 ) *routerreplay.RouteDiagnostics {
-	finalModel := replaySelectedModel(originalModel, selectedModel)
+	finalModel := replaySelectedModel(selectedModel)
 	diagnostics := &routerreplay.RouteDiagnostics{
 		Decision:                       decisionName,
 		DecisionTier:                   decisionTier,

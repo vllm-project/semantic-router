@@ -30,6 +30,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	detectClientProtocol(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
+	// Router Replay contains captured request, response, and tool data. It is a
+	// management API only: the public inference listener must fail closed even
+	// when a caller supplies the otherwise valid skip-processing opt-out.
+	if isRouterReplayRequestTarget(path) {
+		return r.createErrorResponse(404, "endpoint not found"), nil
+	}
+
 	// Honor x-vsr-skip-processing as early as possible: once captured we bypass
 	// every router-side header check (replay API, validation, response-API
 	// translation) and emit a plain CONTINUE so the request flows through.
@@ -39,10 +46,6 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
 		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
-	}
-
-	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
-		return replayResp, nil
 	}
 
 	detectStreamingExpectation(ctx)

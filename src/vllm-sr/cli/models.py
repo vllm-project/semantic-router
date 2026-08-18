@@ -865,14 +865,78 @@ class ResponseJailbreakPluginConfig(BaseModel):
     action: Optional[Literal["block", "header", "none"]] = None
 
 
+class ToolsDynamicRetrievalWeights(BaseModel):
+    """Per-source weights for decision-scoped dynamic tool retrieval."""
+
+    semantic: Optional[float] = None
+    history: Optional[float] = None
+    decision_prior: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+
+
+class ToolsDynamicRetrievalConfig(BaseModel):
+    """History-aware retrieval settings owned by the tools plugin."""
+
+    enabled: bool
+    strategy: str = "semantic_only"
+    history_window: Optional[int] = None
+    weights: Optional[ToolsDynamicRetrievalWeights] = None
+    min_history_confidence: Optional[float] = None
+    fallback_on_low_confidence: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_enabled_contract(self):
+        if not self.enabled:
+            return self
+        if self.strategy not in ("", "semantic_only", "hybrid_history"):
+            raise ValueError(
+                "dynamic_retrieval.strategy must be semantic_only or hybrid_history"
+            )
+        if self.strategy == "hybrid_history" and (
+            self.history_window is None or self.history_window < 1
+        ):
+            raise ValueError(
+                "history_window must be at least 1 when dynamic_retrieval.strategy=hybrid_history"
+            )
+        if self.min_history_confidence is not None and not (
+            0.0 <= self.min_history_confidence <= 1.0
+        ):
+            raise ValueError("min_history_confidence must be between 0.0 and 1.0")
+        if self.weights is not None:
+            for name, value in self.weights.model_dump(exclude_none=True).items():
+                if value < 0.0:
+                    raise ValueError(
+                        f"dynamic_retrieval.weights.{name} must be non-negative"
+                    )
+        return self
+
+
 class ToolsPluginConfig(BaseModel):
     """Configuration for tools plugin."""
 
     enabled: bool
-    mode: Literal["none", "passthrough", "filtered"] = "passthrough"
+    mode: str = "passthrough"
     semantic_selection: Optional[bool] = None
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
+    strip_tool_history: Optional[bool] = None
+    strategy: Optional[str] = None
+    dynamic_retrieval: Optional[ToolsDynamicRetrievalConfig] = None
+
+    @model_validator(mode="after")
+    def validate_mode_contract(self):
+        if not self.enabled:
+            return self
+        if self.mode not in ("none", "passthrough", "filtered"):
+            raise ValueError("mode must be none, passthrough, or filtered")
+        has_filters = bool(self.allow_tools or self.block_tools)
+        if self.mode == "filtered" and not has_filters:
+            raise ValueError("mode=filtered requires allow_tools or block_tools")
+        if self.mode != "filtered" and has_filters:
+            raise ValueError("allow_tools and block_tools require mode=filtered")
+        if self.strip_tool_history and self.mode != "none":
+            raise ValueError("strip_tool_history requires mode=none")
+        return self
 
 
 class ToolFilteringWeights(BaseModel):

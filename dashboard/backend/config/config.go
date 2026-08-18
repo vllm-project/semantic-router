@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 // Config holds all application configuration
@@ -31,8 +32,12 @@ type Config struct {
 	EnvoyURL      string // Envoy proxy for chat completions
 	FleetSimURL   string // Fleet simulator base URL
 
-	// Read-only mode for public beta deployments
-	ReadonlyMode bool
+	// ReadonlyMode is the explicit, process-wide hard deny. The writable flags
+	// describe the two independent persisted surfaces discovered by the
+	// container entrypoint: runtime config and the managed Recipe package store.
+	ReadonlyMode          bool
+	RuntimeConfigWritable bool
+	RecipeStoreWritable   bool
 
 	// SetupMode is the legacy --setup-mode / DASHBOARD_SETUP_MODE input. It no
 	// longer decides anything; setup mode resolves from the router config's
@@ -141,6 +146,8 @@ type parsedFlags struct {
 	envoyURL               *string
 	fleetSimURL            *string
 	readonlyMode           *bool
+	runtimeConfigWritable  *bool
+	recipeStoreWritable    *bool
 	setupMode              *bool
 	allowOpenBootstrap     *bool
 	platform               *string
@@ -171,6 +178,8 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.EnvoyURL = *flags.envoyURL
 	cfg.FleetSimURL = *flags.fleetSimURL
 	cfg.ReadonlyMode = *flags.readonlyMode
+	cfg.RuntimeConfigWritable = *flags.runtimeConfigWritable
+	cfg.RecipeStoreWritable = *flags.recipeStoreWritable
 	cfg.SetupMode = *flags.setupMode
 	cfg.AllowOpenBootstrap = *flags.allowOpenBootstrap
 	cfg.Platform = *flags.platform
@@ -218,7 +227,15 @@ func resolveConfigPaths(cfg *Config) error {
 		return err
 	}
 	cfg.AbsConfigPath = absConfigPath
-	cfg.ConfigDir = filepath.Dir(absConfigPath)
+	configDir := strings.TrimSpace(os.Getenv("DASHBOARD_CONFIG_DIR"))
+	if configDir == "" {
+		configDir = filepath.Dir(absConfigPath)
+	}
+	absConfigDir, err := filepath.Abs(configDir)
+	if err != nil {
+		return err
+	}
+	cfg.ConfigDir = absConfigDir
 	return nil
 }
 
@@ -242,6 +259,8 @@ func LoadConfig() (*Config, error) {
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
+	runtimeConfigWritable := flag.Bool("runtime-config-writable", env("DASHBOARD_RUNTIME_CONFIG_WRITABLE", "true") == "true", "allow runtime config mutation when the mounted config state is writable")
+	recipeStoreWritable := flag.Bool("recipe-store-writable", env("DASHBOARD_RECIPE_STORE_WRITABLE", "true") == "true", "allow Recipe package import when the package store is writable")
 	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true",
 		"DEPRECATED: setup mode is resolved from the setup.mode block in the router config. "+
 			"This flag is ignored except to warn when it disagrees with the config.")
@@ -285,6 +304,8 @@ func LoadConfig() (*Config, error) {
 		envoyURL:               envoyURL,
 		fleetSimURL:            fleetSimURL,
 		readonlyMode:           readonlyMode,
+		runtimeConfigWritable:  runtimeConfigWritable,
+		recipeStoreWritable:    recipeStoreWritable,
 		setupMode:              setupMode,
 		allowOpenBootstrap:     allowOpenBootstrap,
 		platform:               platform,

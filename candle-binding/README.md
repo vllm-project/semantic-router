@@ -1,51 +1,64 @@
-# candle-binding
+# Candle native binding
 
-This directory contains Go bindings and tests for the `candle_semantic_router` native library.
+`candle-binding` is the router's Rust/CGo inference layer for embeddings,
+classifiers, multimodal encoders, hallucination checks, and MLP model selection.
+It is a library used by the Go router, not a standalone server.
 
-## Prerequisites
+## Build and test
 
-- Go Version 1.24.1 or higher (matches the module requirements)
-- Rust Version 1.90.0 or higher (for Candle bindings, supports 2024 edition)
-- `cargo` (Rust's build tool)
+The module requires Go 1.24.1 or newer, Rust, Cargo, and a working C compiler.
+The default Cargo feature enables CUDA. Use an explicit CPU feature set on a
+machine without CUDA.
 
-## Build the Native Library
-
-Before running the Go tests, you must build the native library using Rust:
-
-```sh
+```bash
 cd candle-binding
+
+# Default CUDA build
 cargo build --release
+
+# CPU build on Linux
+cargo build --release --no-default-features
+
+# Rust tests
+cargo test --no-default-features
 ```
 
-This will produce the library file (e.g., `libcandle_semantic_router.dylib` on macOS) in `candle-binding/target/release/`.
+Go tests link against the native library:
 
-## Run the Go Tests
-
-After building the native library, run the Go tests:
-
-```sh
+```bash
 cd candle-binding
-# If needed, set the library path (macOS):
-export DYLD_LIBRARY_PATH=$(pwd)/target/release:$DYLD_LIBRARY_PATH
-
-go test -v
+export LD_LIBRARY_PATH="$PWD/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+go test ./...
 ```
 
-- The `-v` flag enables verbose output.
-- If you want to run a specific test, use:
+On macOS, use `DYLD_LIBRARY_PATH` instead of `LD_LIBRARY_PATH` and build with
+`--no-default-features --features accelerate` when Accelerate is available.
 
-  ```sh
-  go test -v -run TestName
-  ```
+From the repository root, the maintained test entry points are:
 
-  Replace `TestName` with the name of the test function.
+```bash
+make test-binding-minimal
+make test-binding-lora
+```
+
+The multimodal suite needs model files and is documented in
+[`tools/agent/docs/testing-strategy.md`](../tools/agent/docs/testing-strategy.md#model-gated-multimodal-tests).
+
+## Public Go surface
+
+[`semantic-router.go`](semantic-router.go) owns the supported Go wrappers. It
+includes model initialization, text and multimodal embeddings, similarity,
+intent and safety classifiers, LoRA classifiers, and MLP selection. Call each
+model's initialization function before inference and release returned native
+resources as documented by the wrapper.
 
 ## Troubleshooting
 
-- If you see an error like `library 'candle_semantic_router' not found`, make sure you have built the native library and that the library file exists in `target/release/`.
-- Ensure your `DYLD_LIBRARY_PATH` (macOS) or `LD_LIBRARY_PATH` (Linux) includes the path to the built library.
+- `library 'candle_semantic_router' not found`: build the release library and
+  add `target/release` to the platform library path.
+- CUDA build failures on a CPU host: use `--no-default-features`.
+- Model-loading or network failures: tests that use real models may download
+  artifacts; use the repository Make targets to get the expected fixtures.
 
-## Notes
-
-- The Go tests depend on the native library being present and correctly built.
-- Some tests may download data from the internet (e.g., from norvig.com).
+The feature matrix and dependency versions are defined in
+[`Cargo.toml`](Cargo.toml); do not duplicate them in this README.

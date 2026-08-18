@@ -1,58 +1,70 @@
-# Global
+# Global Configuration
 
 ## Overview
 
-`global:` is the router-wide override layer.
-
-Unlike `signal/`, `decision/`, `algorithm/`, and `plugin/`, this section is not route-local. It defines shared runtime behavior, shared backing services, built-in model assets, and shared capability modules.
+`global:` contains Router-wide settings and shared infrastructure. It is the
+counterpart to the route-local `routing:` tree: define a service or store once
+under `global:`, then opt individual routes into it with signals, algorithms,
+or plugins.
 
 ## Key Advantages
 
-- Gives the router one shared place for runtime overrides.
-- Avoids duplicating shared backing-service settings across routes.
-- Keeps route-local matching in `routing:` and runtime-wide behavior in `global:`.
-- Works with router-owned defaults, so users only override what they need.
+- Defines shared infrastructure once for all recipes and routes.
+- Keeps route-local policy separate from platform-wide services.
+- Makes model, storage, and external-service dependencies explicit.
 
 ## What Problem Does It Solve?
 
-Some configuration belongs to the whole router, not to any one route. If that state leaks into route-local config, it becomes harder to reuse routes and harder to understand what is shared versus local.
-
-`global:` solves that by holding sparse, router-wide overrides on top of built-in defaults.
+Embedding runtimes, APIs, storage backends, observability, and helper services
+are shared resources. Keeping them outside decisions avoids duplicated
+connections and makes the data and trust boundaries visible.
 
 ## When to Use
 
-Use `global:` when:
-
-- a setting should apply across multiple routes
-- a shared backing store or runtime service must be configured once
-- built-in system models or runtime policy need an override
-- the behavior is not specific to a single matched decision
+Use `global:` for behavior or infrastructure shared by several recipes. Keep
+route matching, candidate models, algorithms, and plugins in `routing:`. Global
+settings are shared across recipes; signals, projections, and decisions are
+recipe-scoped, while algorithms and plugins belong to individual decisions.
 
 ## Configuration
 
-Canonical placement:
-
 ```yaml
 global:
-  router:
-    config_source: file
   services:
     observability:
       metrics:
         enabled: true
+  stores:
+    response_cache:
+      enabled: true
+      backend_type: memory
 ```
 
-The latest global docs mirror the main runtime groupings:
+Global configuration has five groups:
 
-| Global area | Examples | Doc |
-|-------------|----------|-----|
-| router and services | `router.config_source`, `router.model_selection`, `services.api`, `services.response_api`, `services.observability`, `services.router_replay` | [API and Observability](./api-and-observability) |
-| stores and integrations | `stores.semantic_cache`, `stores.memory`, `stores.vector_store`, `integrations.tools`, `integrations.looper` | [Stores and Tools](./stores-and-tools) |
-| model catalog and modules | `model_catalog.embeddings`, `model_catalog.external`, `model_catalog.system`, `model_catalog.modules.prompt_guard`, `model_catalog.modules.classifier`, `model_catalog.modules.hallucination_mitigation` | [Safety, Models, and Policy](./safety-models-and-policy), [Remote Embedding Providers](./remote-embeddings) |
+| Group | Owns | Guide |
+|---|---|---|
+| `global.router` | Router engine controls, selection defaults, streamed-body policy, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
+| `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
+| `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
+| `global.integrations` | tool catalog and Looper endpoint/state | [Stores and Tools](./stores-and-tools) |
+| `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Safety, Models, and Policy](./safety-models-and-policy) |
 
-Keep these rules in mind:
+Entrypoints and named recipes are top-level objects rather than global
+settings; see [Virtual Models](./entrypoints-and-recipes).
+Remote text embeddings are covered in
+[Remote Embedding Providers](./remote-embeddings).
 
-- keep `global:` sparse; rely on router defaults when possible
-- keep `global.router.config_source` at `file` unless Kubernetes CRD reconciliation is intentionally driving runtime config
-- put shared backing services in `global:`
-- keep route-local matching in `routing:`
+## Operational Boundaries
+
+- Keep overrides sparse; omitted fields inherit Router defaults.
+- Put credentials in environment variables or Kubernetes Secrets, not literal
+  YAML values.
+- Persistent stores may contain prompts, responses, embeddings, memories, or
+  replay records. Set backend authentication, transport security, retention,
+  and tenant/user scope deliberately.
+- `providers.defaults.reasoning_families` and
+  `providers.models[].reasoning_family` are provider configuration, not
+  `global:` configuration.
+- See the complete configuration reference in
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

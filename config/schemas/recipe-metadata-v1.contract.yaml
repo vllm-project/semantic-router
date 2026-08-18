@@ -1,0 +1,150 @@
+schema_version: vllm-sr/recipe-metadata-contract/v1
+cases:
+  - name: minimal-valid
+    valid: true
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: example
+      name: Example Recipe
+      version: 1.2.3
+      description: A portable managed Recipe.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source
+  - name: full-valid
+    valid: true
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: example-full
+      name: Example Full Recipe
+      version: 1.2.3-rc.1+build.7
+      description: A managed Recipe with every optional identity field.
+      authors:
+        - name: Example Author
+          email: author@example.com
+          url: https://example.com/author
+      license: Apache-2.0
+      tags: [routing, tool-use]
+      links:
+        homepage: https://example.com
+        source: https://example.com/source
+        documentation: https://example.com/docs
+  - name: empty-email-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: empty-email
+      name: Empty Email
+      version: 1.0.0
+      description: Optional fields cannot be present with empty values.
+      authors:
+        - name: Example Author
+          email: ""
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source
+  - name: uppercase-scheme-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: uppercase-scheme
+      name: Uppercase Scheme
+      version: 1.0.0
+      description: Link schemes follow the canonical case-sensitive contract.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: HTTPS://example.com/source
+  - name: embedded-credentials-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: embedded-credentials
+      name: Embedded Credentials
+      version: 1.0.0
+      description: Metadata links cannot carry credentials.
+      authors:
+        - name: Example Author
+          url: https://author:secret@example.com/profile
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source
+  - name: query-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: query-link
+      name: Query Link
+      version: 1.0.0
+      description: Metadata links cannot carry query data.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source?token=secret
+  - name: fragment-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: fragment-link
+      name: Fragment Link
+      version: 1.0.0
+      description: Metadata links cannot carry fragments.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source#details
+  - name: numeric-prerelease-leading-zero-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: invalid-semver
+      name: Invalid Semantic Version
+      version: 1.0.0-01
+      description: Numeric prerelease identifiers cannot have leading zeroes.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source
+  - name: unknown-field-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: unknown-field
+      name: Unknown Field
+      version: 1.0.0
+      description: Unknown metadata fields are rejected.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source
+      credentials: forbidden
+  - name: duplicate-key-invalid
+    valid: false
+    document: |
+      schema_version: vllm-sr/recipe-metadata/v1
+      id: duplicate-key
+      name: Duplicate Key
+      name: Hidden Replacement
+      version: 1.0.0
+      description: Duplicate YAML keys are rejected before schema validation.
+      authors:
+        - name: Example Author
+      license: Apache-2.0
+      tags: [routing]
+      links:
+        source: https://example.com/source

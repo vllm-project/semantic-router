@@ -62,6 +62,11 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         description: 'Author and inspect the routing graph.',
         items: [
           { kind: 'route', label: 'Config Builder', to: '/builder' },
+          {
+            kind: 'config',
+            label: 'Mixture-of-Models',
+            configSection: 'entrypoints-recipes',
+          },
           { kind: 'route', label: 'Brain Topology', to: '/topology' },
         ],
       },
@@ -79,11 +84,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: [
           { kind: 'config', label: 'Decisions', configSection: 'decisions' },
           { kind: 'config', label: 'Models', configSection: 'models' },
-          {
-            kind: 'config',
-            label: 'Mixture-of-Models',
-            configSection: 'entrypoints-recipes',
-          },
         ],
       },
     ],
@@ -201,8 +201,7 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         description: 'Track router services and loaded model readiness.',
         items: [
           { kind: 'route', label: 'Status', to: '/status' },
-          { kind: 'route', label: 'Response Cache', to: '/response-cache' },
-          { kind: 'route', label: 'Context Compression', to: '/context-compression' },
+          { kind: 'route', label: 'Plugin Operations', to: '/plugins', matchMode: 'prefix' },
         ],
       },
       {

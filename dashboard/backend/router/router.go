@@ -52,13 +52,17 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	log.Printf("Workflow health API registered: /api/workflows/health")
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
+	recipeStore := newDashboardRecipeStore(cfg)
 
-	registerCoreRoutes(mux, cfg, setupResolver)
+	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{
+		recipeStore:              recipeStore,
+		modelVerificationAuditor: authSvc,
+	})
 	registerEvaluationRoutes(mux, cfg)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg)
+	registerProxyRoutes(mux, cfg, recipeStore)
 
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))

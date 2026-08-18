@@ -193,14 +193,14 @@ test.describe('Playground Chat Component', () => {
           object: 'list',
           data: [
             {
-              id: 'vllm-sr/mom-balanced-v1',
+              id: 'vllm-sr/mom-v1-blend',
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
               routing: { resolution: 'virtual', selectable: true, recipe: 'balanced' },
             },
             {
-              id: 'vllm-sr/mom-flash-v1',
+              id: 'vllm-sr/mom-v1-flash',
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Latency-first routing profile',
@@ -231,7 +231,7 @@ test.describe('Playground Chat Component', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     const selector = page.getByTestId('playground-composer-model-select');
-    await expect(selector).toContainText('vllm-sr/mom-balanced-v1');
+    await expect(selector).toContainText('vllm-sr/mom-v1-blend');
     await expect(selector).not.toContainText('MoM');
     await selector.click();
 
@@ -240,7 +240,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Latency-first routing profile', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('option')).toHaveCount(2);
     await page.getByRole('option', { name: /vllm-sr\/mom-flash-v1/ }).click();
-    await expect(selector).toContainText('vllm-sr/mom-flash-v1');
+    await expect(selector).toContainText('vllm-sr/mom-v1-flash');
   });
 
   test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {

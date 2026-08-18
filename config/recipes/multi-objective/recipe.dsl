@@ -95,27 +95,27 @@ MODEL local/qwen3.6-35b-flash {
 # =============================================================================
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-balanced-v1"]
+  model_names: ["vllm-sr/mom-v1-blend"]
   recipe: "balanced"
 }
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-flash-v1"]
+  model_names: ["vllm-sr/mom-v1-flash"]
   recipe: "speed-first"
 }
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-economy-v1"]
+  model_names: ["vllm-sr/mom-v1-lite"]
   recipe: "cost-first"
 }
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-frontier-v1"]
+  model_names: ["vllm-sr/mom-v1-ultra"]
   recipe: "accuracy-first"
 }
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-private-v1"]
+  model_names: ["vllm-sr/mom-v1-vault"]
   recipe: "privacy-first"
 }
 

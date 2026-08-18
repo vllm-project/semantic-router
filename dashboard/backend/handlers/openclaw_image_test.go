@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,6 +127,55 @@ func TestDetectContainerRuntimeUsesExplicitRuntimePath(t *testing.T) {
 	}
 	if got != runtimePath {
 		t.Fatalf("runtime path = %q, want %q", got, runtimePath)
+	}
+}
+
+func TestDetectContainerRuntimeRejectsExplicitDisabledState(t *testing.T) {
+	runtimePath, _ := writeFakeOpenClawRuntime(t)
+	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", runtimePath)
+	t.Setenv(openClawContainerRuntimeDisabledEnv, "true")
+
+	_, err := detectContainerRuntime()
+	if err == nil {
+		t.Fatal("expected disabled container runtime to be rejected")
+	}
+	const expected = "container runtime not available: Dashboard started without safe access to the container runtime socket"
+	if err.Error() != expected {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOpenClawStatusReportsDisabledRuntime(t *testing.T) {
+	t.Setenv(openClawContainerRuntimeDisabledEnv, "true")
+	t.Setenv("OPENCLAW_GATEWAY_HOST", "127.0.0.1")
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
+
+	status := h.checkContainerHealth(ContainerEntry{
+		Name: "openclaw-test",
+		Port: 18790,
+	})
+
+	if status.Running {
+		t.Fatal("disabled runtime must not report a running container")
+	}
+	if !strings.Contains(status.Error, "container runtime not available") {
+		t.Fatalf("status error = %q, want runtime unavailable", status.Error)
+	}
+}
+
+func TestOpenClawProvisionRejectsDisabledRuntime(t *testing.T) {
+	t.Setenv(openClawContainerRuntimeDisabledEnv, "true")
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
+	req := httptest.NewRequest(http.MethodPost, "/api/openclaw/provision", strings.NewReader("{}"))
+	recorder := httptest.NewRecorder()
+
+	h.ProvisionHandler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(recorder.Body.String(), "container runtime not available") {
+		t.Fatalf("response = %q, want runtime unavailable", recorder.Body.String())
 	}
 }
 

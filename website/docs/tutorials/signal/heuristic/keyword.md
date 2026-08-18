@@ -2,7 +2,8 @@
 
 ## Overview
 
-`keyword` matches explicit lexical patterns in the request. It maps to `config/fragments/signal/keyword/` and is declared under `routing.signals.keywords`.
+`keyword` matches explicit words and phrases in the request. Define keyword
+rules under `routing.signals.keywords`.
 
 This family is heuristic: it routes from configured words, phrases, or lightweight retrieval methods instead of learned intent classifiers.
 
@@ -30,8 +31,6 @@ Use `keyword` when:
 
 ## Configuration
 
-Source fragment family: `config/fragments/signal/keyword/`
-
 ```yaml
 routing:
   signals:
@@ -52,3 +51,12 @@ routing:
 ```
 
 Use plain keyword lists for simple matching, then add `method: bm25` or `method: ngram` when exact text matching becomes too brittle.
+
+## Dependencies and Limitations
+
+Keyword rules require no model, but they are sensitive to wording and can be
+triggered intentionally. Use them for routing hints, not security boundaries,
+and test false positives across supported languages. See complete examples for
+[`nlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/nlp.yaml)
+and
+[`regex.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/regex.yaml).
