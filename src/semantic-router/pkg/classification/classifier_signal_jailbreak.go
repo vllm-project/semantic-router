@@ -180,6 +180,43 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 	mu.Unlock()
 }
 
+// jailbreakCandidate is one cached result's contribution to
+// findBestJailbreakMatch's scan.
+type jailbreakCandidate struct {
+	// failClosed is set when config.PromptGuardOnErrorFail turned an
+	// inference error into an immediate, maximum-confidence match; the
+	// scan must stop rather than let a later successful result overwrite it.
+	failClosed    bool
+	matched       bool
+	jailbreakType string
+	riskScore     float32
+}
+
+// evaluateCachedJailbreakResult classifies a single cached result into a
+// jailbreakCandidate. Split out of findBestJailbreakMatch to keep its
+// cognitive complexity within the repo's lint gate (the same reason
+// assignScoreToMapping is split out of alignScoresToMapping).
+func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, cached cachedJailbreakResult) jailbreakCandidate {
+	if cached.err != nil {
+		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
+		if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorFail {
+			return jailbreakCandidate{failClosed: true}
+		}
+		return jailbreakCandidate{}
+	}
+	class, _ := deriveArgmax(cached.result.Probabilities)
+	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
+	if !ok {
+		logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
+		return jailbreakCandidate{}
+	}
+	aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
+	if !aboveThreshold {
+		return jailbreakCandidate{}
+	}
+	return jailbreakCandidate{matched: true, jailbreakType: jailbreakType, riskScore: riskScore}
+}
+
 // findBestJailbreakMatch scans cached BERT results and returns the highest
 // combined-positive-label-risk match, via the same isJailbreakRiskAboveThreshold
 // helper CheckForJailbreakWithRisk uses.
@@ -195,26 +232,13 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 			continue
 		}
 		for _, cached := range cachedResults {
-			if cached.err != nil {
-				logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
-				if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorFail {
-					return jailbreakClassificationErrorType, 1.0
-				}
-				continue
+			candidate := c.evaluateCachedJailbreakResult(rule, cached)
+			if candidate.failClosed {
+				return jailbreakClassificationErrorType, 1.0
 			}
-			class, _ := deriveArgmax(cached.result.Probabilities)
-			jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
-			if !ok {
-				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
-				continue
-			}
-			aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
-			if !aboveThreshold {
-				continue
-			}
-			if riskScore > bestScore {
-				bestScore = riskScore
-				bestType = jailbreakType
+			if candidate.matched && candidate.riskScore > bestScore {
+				bestScore = candidate.riskScore
+				bestType = candidate.jailbreakType
 			}
 		}
 	}
