@@ -16,13 +16,14 @@ type cachedJailbreakResult struct {
 }
 
 // jailbreakClassificationErrorType is the sentinel jailbreak type reported
-// when config.PromptGuardOnErrorBlock forces a rule to match because
-// inference itself failed (e.g. an unreachable http_chat/http_classify
-// endpoint), rather than because the content was actually classified as a
-// jailbreak. It is distinguishable from a real detected type in
-// results/logs. Without this fail-closed path (config.PromptGuardOnErrorAllow,
-// the default), a classify error is indistinguishable from a genuinely safe
-// request - see @adaamko's review on #2760.
+// when on_error: block forces a rule to match because inference itself
+// failed (e.g. an unreachable http_chat/http_classify endpoint), rather than
+// because the content was actually classified as a jailbreak. It is
+// distinguishable from a real detected type in results/logs. Without this
+// fail-closed path (on_error: allow, the default), a classify error is
+// indistinguishable from a genuinely safe request - see @adaamko's review on
+// #2760. validateJailbreakMapping rejects any configured jailbreak_mapping
+// label equal to this value, so a real detection can never collide with it.
 const jailbreakClassificationErrorType = "classification_error"
 
 // collectJailbreakClassifierContents returns the deduplicated set of text pieces
@@ -188,14 +189,14 @@ type jailbreakCandidateOutcome int
 
 const (
 	// jailbreakCandidateNone means this cached result contributed nothing:
-	// a classify error tolerated by on_error: skip, an unknown class index,
+	// a classify error tolerated by on_error: allow, an unknown class index,
 	// or a risk score below the rule's threshold. The zero value, so a
 	// zero-value jailbreakCandidate is safely "no contribution".
 	jailbreakCandidateNone jailbreakCandidateOutcome = iota
 	// jailbreakCandidateMatched means jailbreakType/riskScore are a genuine
 	// content-based match.
 	jailbreakCandidateMatched
-	// jailbreakCandidateFailClosed means on_error: fail turned a classify
+	// jailbreakCandidateFailClosed means on_error: block turned a classify
 	// error into an immediate, maximum-confidence match.
 	jailbreakCandidateFailClosed
 )
@@ -215,7 +216,7 @@ type jailbreakCandidate struct {
 func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, cached cachedJailbreakResult) jailbreakCandidate {
 	if cached.err != nil {
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
-		if c.Config.PromptGuard.OnError == config.PromptGuardOnErrorBlock {
+		if c.Config.PromptGuard.IsBlock() {
 			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
 		}
 		return jailbreakCandidate{}

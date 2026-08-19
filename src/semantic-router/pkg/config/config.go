@@ -52,27 +52,10 @@ const (
 	PromptGuardProtocolHTTPClassify = "http_classify"
 )
 
-// PromptGuardConfig.OnError values, selecting what a classifier-backend
-// failure (e.g. an unreachable http_chat/http_classify endpoint) does to the
-// jailbreak rule that failed to evaluate. Deliberately NOT named/valued
-// after this package's other on_error: skip|fail fields (fusion/remom/
-// workflows/confidence configs) - there, "fail" means "propagate the error
-// and halt"; here it means "treat as a positive detection and block", a
-// different behavior that the same word would misleadingly imply is the
-// same. allow/block names the actual effect on the request instead.
-const (
-	// PromptGuardOnErrorAllow preserves the historical behavior: a classify
-	// error is logged and the affected content is treated as not matching
-	// this rule, so other content/rules still evaluate normally. This is the
-	// default when OnError is unset.
-	PromptGuardOnErrorAllow = "allow"
-	// PromptGuardOnErrorBlock treats a classify error as if the rule matched
-	// at maximum confidence - fail-closed, because an inference failure
-	// means the content could not be verified safe. Without this, an
-	// unreachable classifier endpoint looks identical to a genuinely clean
-	// request (see @adaamko's review on #2760).
-	PromptGuardOnErrorBlock = "block"
-)
+// PromptGuardConfig.OnError values live in classifier_on_error.go as
+// OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
+// backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
+// guard.
 
 // Signal type constants for rule conditions.
 const (

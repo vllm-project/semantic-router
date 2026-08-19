@@ -103,12 +103,12 @@ func TestFindBestJailbreakMatch_OnErrorAllow_DefaultToleratesFailure(t *testing.
 }
 
 // TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch verifies
-// PromptGuardOnErrorBlock closes the gap @adaamko flagged on #2760: an
+// on_error: block closes the gap @adaamko flagged on #2760: an
 // unreachable classifier endpoint must not look identical to a genuinely
 // clean request. With on_error: block, the rule reports a match at maximum
 // confidence instead of silently skipping the failed content.
 func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) {
-	classifier := newJailbreakTestClassifier(t, config.PromptGuardOnErrorBlock)
+	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
 	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
 	cache := map[string][]cachedJailbreakResult{
 		"some text": {{err: errClassifyUnreachable}},
@@ -131,7 +131,7 @@ func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) 
 // threshold at or below 1.0 behaves identically regardless of which content
 // piece is examined first.
 func TestFindBestJailbreakMatch_OnErrorBlock_DoesNotOverrideARealMatch(t *testing.T) {
-	classifier := newJailbreakTestClassifier(t, config.PromptGuardOnErrorBlock)
+	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
 	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
 	cache := map[string][]cachedJailbreakResult{
 		"attack text": {{result: SequenceClassificationResult{Probabilities: []float32{0.0, 1.0}}}},

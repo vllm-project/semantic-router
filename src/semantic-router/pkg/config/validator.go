@@ -109,13 +109,6 @@ var validPromptGuardProtocols = map[string]bool{
 	PromptGuardProtocolHTTPClassify: true,
 }
 
-// validPromptGuardOnErrorValues is the set of recognized PromptGuardConfig.OnError values.
-var validPromptGuardOnErrorValues = map[string]bool{
-	"":                      true, // unset defaults to PromptGuardOnErrorAllow
-	PromptGuardOnErrorAllow: true,
-	PromptGuardOnErrorBlock: true,
-}
-
 // validatePromptGuardBackendConfig validates the prompt_guard backend selection.
 // external_models with model_role="guardrail" is required for Protocol; that
 // requirement is checked by IsPromptGuardEnabled/the main config validation,
@@ -125,9 +118,8 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 		return fmt.Errorf("prompt_guard: variant %q and protocol %q are mutually exclusive - "+
 			"variant selects a local model, protocol selects a remote one", cfg.Variant, cfg.Protocol)
 	}
-	if !validPromptGuardOnErrorValues[cfg.OnError] {
-		return fmt.Errorf("prompt_guard.on_error: unrecognized value %q, must be one of: %s, %s",
-			cfg.OnError, PromptGuardOnErrorAllow, PromptGuardOnErrorBlock)
+	if err := cfg.ClassifierOnErrorConfig.Validate(); err != nil {
+		return fmt.Errorf("prompt_guard.%w", err)
 	}
 	if cfg.Protocol != "" {
 		if !validPromptGuardProtocols[cfg.Protocol] {

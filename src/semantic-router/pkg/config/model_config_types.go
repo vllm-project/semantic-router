@@ -156,10 +156,10 @@ type PromptGuardConfig struct {
 	// model_role="guardrail".
 	Protocol string `yaml:"protocol,omitempty"`
 
-	// OnError selects what a classifier-backend failure does to the rule
-	// that failed to evaluate: PromptGuardOnErrorAllow (default) or
-	// PromptGuardOnErrorBlock. See the constants' doc comments.
-	OnError string `yaml:"on_error,omitempty"`
+	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
+	// every other pluggable classifier backend instead of being redeclared
+	// per struct.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type FeedbackDetectorConfig struct {
