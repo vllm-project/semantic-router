@@ -1,33 +1,20 @@
 package cache
 
 import (
-	"strings"
-
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // resolveMilvusConsistencyLevel maps a configured consistency level name to
-// the SDK constant. Names are matched case-insensitively with surrounding
-// whitespace trimmed. ok is false when the name is empty or unrecognized; the
-// caller then leaves the option unset so the Milvus SDK default (Bounded)
-// stays in effect, preserving today's behavior for deployments that do not
-// pin a level.
+// the SDK constant via the shared parser. ok is false when the name is empty
+// or unrecognized; the caller then leaves the option unset so the Milvus SDK
+// default (Bounded) stays in effect, preserving today's behavior for
+// deployments that do not pin a level.
 func resolveMilvusConsistencyLevel(name string) (entity.ConsistencyLevel, bool) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "strong":
-		return entity.ClStrong, true
-	case "session":
-		return entity.ClSession, true
-	case "bounded":
-		return entity.ClBounded, true
-	case "eventually":
-		return entity.ClEventually, true
-	default:
-		return entity.ClStrong, false
-	}
+	return milvuslifecycle.ParseConsistencyLevel(name)
 }
 
 // searchQueryOptions returns the read options that pin every Milvus search
@@ -57,7 +44,7 @@ func warnUnrecognizedMilvusConsistencyLevel(name string) {
 	if _, ok := resolveMilvusConsistencyLevel(name); ok {
 		return
 	}
-	logging.Warnf("MilvusCache: unrecognized consistency_level %q (valid: Strong, Session, Bounded, Eventually); leaving the Milvus SDK default in effect", name)
+	logging.Warnf("MilvusCache: unrecognized consistency_level %q (valid: %s); leaving the Milvus SDK default in effect", name, milvuslifecycle.ConsistencyLevelNames)
 }
 
 // createCollectionOptions returns the collection-creation options that pin a

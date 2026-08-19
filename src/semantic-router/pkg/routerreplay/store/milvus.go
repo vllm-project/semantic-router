@@ -40,23 +40,17 @@ type MilvusStore struct {
 }
 
 // resolveMilvusConsistencyLevel maps the configured consistency level name
-// (case-insensitive) to the SDK constant, falling back to
+// to the SDK constant via the shared parser, falling back to
 // DefaultMilvusConsistencyLevel ("Session") when the value is empty or
 // unrecognized.
 func resolveMilvusConsistencyLevel(name string) entity.ConsistencyLevel {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "strong":
-		return entity.ClStrong
-	case "session", "":
-		return entity.ClSession
-	case "bounded":
-		return entity.ClBounded
-	case "eventually":
-		return entity.ClEventually
-	default:
-		logging.Warnf("MilvusStore: unrecognized consistency_level %q (valid: Strong, Session, Bounded, Eventually); using default %q", name, DefaultMilvusConsistencyLevel)
-		return entity.ClSession
+	if level, ok := milvuslifecycle.ParseConsistencyLevel(name); ok {
+		return level
 	}
+	if strings.TrimSpace(name) != "" {
+		logging.Warnf("MilvusStore: unrecognized consistency_level %q (valid: %s); using default %q", name, milvuslifecycle.ConsistencyLevelNames, DefaultMilvusConsistencyLevel)
+	}
+	return entity.ClSession
 }
 
 // readLevel returns the consistency level for plain reads (Get, List). The
