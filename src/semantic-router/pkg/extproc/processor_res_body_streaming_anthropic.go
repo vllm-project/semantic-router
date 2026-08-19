@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -22,6 +23,11 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
 
+	// Always allocate IRExtensions when the backend is Anthropic so
+	// cache counters are captured even for OpenAI-protocol clients.
+	if ctx.IRExtensions == nil {
+		ctx.IRExtensions = &ir.IRExtensions{}
+	}
 	// Pass IRExtensions through so the merged Anthropic→OpenAI cell
 	// captures cache counters, stop_reason round-trip fields, and
 	// per-block thinking signatures onto the request-scoped sidecar.
