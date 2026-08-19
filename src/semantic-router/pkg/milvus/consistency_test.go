@@ -16,9 +16,7 @@ func TestParseConsistencyLevel(t *testing.T) {
 		{"Session", entity.ClSession, true},
 		{"Bounded", entity.ClBounded, true},
 		{"Eventually", entity.ClEventually, true},
-		{"strong", entity.ClStrong, true},
-		{"  session  ", entity.ClSession, true},
-		{"EVENTUALLY", entity.ClEventually, true},
+		{"  eVENTUALLY  ", entity.ClEventually, true}, // case-insensitive, trimmed
 		{"", entity.ClStrong, false},
 		{"   ", entity.ClStrong, false},
 		{"customized", entity.ClStrong, false},
@@ -26,11 +24,8 @@ func TestParseConsistencyLevel(t *testing.T) {
 
 	for _, tc := range cases {
 		got, ok := ParseConsistencyLevel(tc.name)
-		if ok != tc.valid {
-			t.Fatalf("ParseConsistencyLevel(%q) ok = %v, want %v", tc.name, ok, tc.valid)
-		}
-		if got != tc.want {
-			t.Fatalf("ParseConsistencyLevel(%q) = %v, want %v", tc.name, got, tc.want)
+		if got != tc.want || ok != tc.valid {
+			t.Errorf("ParseConsistencyLevel(%q) = (%v, %v), want (%v, %v)", tc.name, got, ok, tc.want, tc.valid)
 		}
 	}
 }
