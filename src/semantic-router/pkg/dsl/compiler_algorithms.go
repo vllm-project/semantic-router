@@ -428,6 +428,14 @@ func (c *Compiler) compileAutoMixAlgo(fields map[string]Value) *config.AutoMixSe
 	if v, ok := getBoolField(fields, "use_logprob_verification"); ok {
 		cfg.UseLogprobVerification = v
 	}
+	c.applyAutoMixExtraFields(fields, cfg)
+	return cfg
+}
+
+// applyAutoMixExtraFields maps the AutoMix fields added for full 15-field
+// coverage (POMDP routing, cascade, and self-verification tuning), split out
+// from compileAutoMixAlgo to keep cyclomatic complexity within limits.
+func (c *Compiler) applyAutoMixExtraFields(fields map[string]Value, cfg *config.AutoMixSelectionConfig) {
 	if v, ok := getBoolField(fields, "enable_self_verification"); ok {
 		cfg.EnableSelfVerification = v
 	}
@@ -452,7 +460,6 @@ func (c *Compiler) compileAutoMixAlgo(fields map[string]Value) *config.AutoMixSe
 	if v, ok := getBoolField(fields, "enable_cascade"); ok {
 		cfg.EnableCascade = v
 	}
-	return cfg
 }
 
 func (c *Compiler) compileHybridAlgo(fields map[string]Value) *config.HybridSelectionConfig {
