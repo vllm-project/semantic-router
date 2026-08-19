@@ -17,8 +17,13 @@ import (
 // (Condition.validate_node_shape).
 var ruleTreeOperators = []string{"AND", "OR", "NOT"}
 
-// decisionRuleRootPath names a decision's rule-tree root in validation errors.
-const decisionRuleRootPath = "rules"
+const (
+	// decisionRuleRootPath names a decision's rule-tree root in validation errors.
+	decisionRuleRootPath = "rules"
+	// ruleOperatorNot is strictly unary: evalNOT negates its single child and
+	// warns and reports a non-match for any other child count.
+	ruleOperatorNot = "NOT"
+)
 
 // validateDecisionRuleTree walks a decision's rule tree and reports the failing
 // node's location inside that tree, so an error identifies both the decision and
@@ -54,6 +59,10 @@ func validateRuleCombinationNode(decisionName, path string, node *RuleNode) erro
 		return ruleTreeError(decisionName, path, fmt.Sprintf(
 			"invalid rule operator %q (valid: %s)",
 			node.Operator, strings.Join(ruleTreeOperators, ", ")))
+	}
+	if operator == ruleOperatorNot && len(node.Conditions) != 1 {
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"NOT requires exactly one child condition, got %d", len(node.Conditions)))
 	}
 	return nil
 }

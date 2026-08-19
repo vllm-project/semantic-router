@@ -128,3 +128,31 @@ var ruleTreeOperatorCorpus = []ruleTreeCase{
 func TestDecisionRuleTreeOperatorCorpus(t *testing.T) {
 	runRuleTreeCorpus(t, ruleTreeOperatorCorpus)
 }
+
+// NOT is strictly unary. evalNOT logs a warning and reports a non-match for any
+// other child count, so a mis-shaped NOT turns its decision into one that can
+// never match instead of failing at load. (The IntelligentRoute CRD comment
+// promising NOR semantics for multiple children was never implemented.)
+var ruleTreeArityCorpus = []ruleTreeCase{
+	{
+		name:    "not_without_children",
+		rules:   "operator: NOT\nconditions: []",
+		wantErr: "NOT requires exactly one child condition, got 0",
+	},
+	{
+		name: "not_with_two_children",
+		rules: "operator: NOT\nconditions:\n  - type: keyword\n    name: k1\n" +
+			"  - type: keyword\n    name: k1",
+		wantErr: "NOT requires exactly one child condition, got 2",
+	},
+	{
+		name: "nested_not_with_two_children",
+		rules: "operator: AND\nconditions:\n  - operator: not\n    conditions:\n" +
+			"      - type: keyword\n        name: k1\n      - type: keyword\n        name: k1",
+		wantErr: "rules.conditions[0]: NOT requires exactly one child condition",
+	},
+}
+
+func TestDecisionRuleTreeArityCorpus(t *testing.T) {
+	runRuleTreeCorpus(t, ruleTreeArityCorpus)
+}
