@@ -171,6 +171,24 @@ def test_private_runtime_state_subdirectory_rejects_symlinked_child(
     assert list(outside_dir.iterdir()) == []
 
 
+def test_private_runtime_state_nested_directory_rejects_symlinked_child(
+    tmp_path: Path,
+):
+    state_root = tmp_path / "state"
+    outside_dir = tmp_path / "outside"
+    parent = state_root / ".vllm-sr" / "catalog-sources"
+    parent.mkdir(parents=True)
+    outside_dir.mkdir()
+    (parent / "recipe-deadbeef").symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        runtime_paths.private_runtime_state_nested_directory(
+            state_root, "catalog-sources", "recipe-deadbeef"
+        )
+
+    assert list(outside_dir.iterdir()) == []
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
 def test_private_runtime_state_subdirectory_hardens_existing_owned_directories(
     tmp_path: Path,
