@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -23,15 +26,68 @@ const (
 // MilvusStore implements Storage using Milvus as the backend.
 // Records are stored as entities in a Milvus collection.
 type MilvusStore struct {
-	client         client.Client
-	collectionName string
-	ttl            time.Duration
-	asyncWrites    bool
-	asyncChan      chan asyncOp
-	done           chan struct{}
-	writerDone     chan struct{}
-	updateMu       sync.Mutex
-	lifecycle      *storageLifecycle
+	client           client.Client
+	collectionName   string
+	consistencyLevel entity.ConsistencyLevel
+	wrote            atomic.Bool
+	ttl              time.Duration
+	asyncWrites      bool
+	asyncChan        chan asyncOp
+	done             chan struct{}
+	writerDone       chan struct{}
+	updateMu         sync.Mutex
+	lifecycle        *storageLifecycle
+}
+
+// resolveMilvusConsistencyLevel maps the configured consistency level name
+// (case-insensitive) to the SDK constant, falling back to
+// DefaultMilvusConsistencyLevel ("Session") when the value is empty or
+// unrecognized.
+func resolveMilvusConsistencyLevel(name string) entity.ConsistencyLevel {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "strong":
+		return entity.ClStrong
+	case "session", "":
+		return entity.ClSession
+	case "bounded":
+		return entity.ClBounded
+	case "eventually":
+		return entity.ClEventually
+	default:
+		logging.Warnf("MilvusStore: unrecognized consistency_level %q (valid: Strong, Session, Bounded, Eventually); using default %q", name, DefaultMilvusConsistencyLevel)
+		return entity.ClSession
+	}
+}
+
+// readLevel returns the consistency level for plain reads (Get, List). The
+// SDK degrades Session to Eventually until this client's first write on the
+// collection (no session timestamp exists yet), which would be weaker than
+// the Bounded these reads effectively ran at before the level was
+// configurable — so Session is floored at Bounded until this process has
+// written.
+func (m *MilvusStore) readLevel() entity.ConsistencyLevel {
+	if m.consistencyLevel == entity.ClSession && !m.wrote.Load() {
+		return entity.ClBounded
+	}
+	return m.consistencyLevel
+}
+
+// updateReadLevel returns the consistency level for the read feeding an
+// update's read-modify-write (updateRecordIf). updateMu serializes those
+// updates in-process, but the read must also see this process's own prior
+// upserts or the whole-document replace silently resurrects stale fields —
+// so it never runs weaker than Session, even when the configured level is
+// Bounded or Eventually; an explicit Strong is kept. Before this process's
+// first write Session carries no session timestamp (the SDK would degrade it
+// to Eventually), so Bounded applies instead.
+func (m *MilvusStore) updateReadLevel() entity.ConsistencyLevel {
+	if m.consistencyLevel == entity.ClStrong {
+		return entity.ClStrong
+	}
+	if m.wrote.Load() {
+		return entity.ClSession
+	}
+	return entity.ClBounded
 }
 
 // NewMilvusStore creates a new Milvus storage backend.
@@ -59,12 +115,13 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	}
 
 	store := &MilvusStore{
-		client:         milvusClient,
-		collectionName: collectionName,
-		ttl:            time.Duration(ttlSeconds) * time.Second,
-		asyncWrites:    asyncWrites,
-		done:           make(chan struct{}),
-		lifecycle:      newStorageLifecycle(),
+		client:           milvusClient,
+		collectionName:   collectionName,
+		consistencyLevel: resolveMilvusConsistencyLevel(cfg.ConsistencyLevel),
+		ttl:              time.Duration(ttlSeconds) * time.Second,
+		asyncWrites:      asyncWrites,
+		done:             make(chan struct{}),
+		lifecycle:        newStorageLifecycle(),
 	}
 
 	if err := milvuslifecycle.Retry(
@@ -142,9 +199,12 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 				shardNum = DefaultMilvusShardNum
 			}
 
-			// Create collection
+			// Create collection. The consistency level is stamped only when
+			// this call creates the collection; a pre-existing collection
+			// keeps its original level, and the per-query options carry the
+			// configured level for this store's reads instead.
 			//nolint:gosec // shardNum is validated to be within int32 range
-			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum)); err != nil {
+			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum), client.WithConsistencyLevel(m.consistencyLevel)); err != nil {
 				return err
 			}
 
@@ -247,7 +307,11 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 
 		// Insert
 		_, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn)
-		return err
+		if err != nil {
+			return err
+		}
+		m.wrote.Store(true)
+		return nil
 	}
 
 	if m.asyncWrites {
@@ -283,10 +347,10 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (Record, bool, error) 
 		return Record{}, false, err
 	}
 	defer release()
-	return m.getRecord(ctx, id)
+	return m.getRecord(ctx, id, m.readLevel())
 }
 
-func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
+func (m *MilvusStore) getRecord(ctx context.Context, id string, level entity.ConsistencyLevel) (Record, bool, error) {
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error { return nil }); err != nil {
 			return Record{}, false, err
@@ -295,7 +359,14 @@ func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, e
 
 	// Query by ID
 	expr := fmt.Sprintf("id == '%s'", id)
-	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"})
+	result, err := m.client.Query(
+		ctx,
+		m.collectionName,
+		nil,
+		expr,
+		[]string{"id", "timestamp", "data"},
+		client.WithSearchQueryConsistencyLevel(level),
+	)
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
 	}
@@ -350,6 +421,7 @@ func (m *MilvusStore) listRecords(ctx context.Context) ([]Record, error) {
 		"",
 		[]string{"id", "timestamp", "data"},
 		client.WithLimit(10000),
+		client.WithSearchQueryConsistencyLevel(m.readLevel()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
@@ -485,7 +557,7 @@ func (m *MilvusStore) updateRecordIf(ctx context.Context, id string, mutate func
 	defer release()
 	m.updateMu.Lock()
 	defer m.updateMu.Unlock()
-	record, found, err := m.getRecord(ctx, id)
+	record, found, err := m.getRecord(ctx, id, m.updateReadLevel())
 	if err != nil {
 		return err
 	}
@@ -513,6 +585,7 @@ func (m *MilvusStore) replaceRecord(ctx context.Context, record Record) error {
 	if _, err := m.client.Upsert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
 		return fmt.Errorf("failed to upsert updated record: %w", err)
 	}
+	m.wrote.Store(true)
 	return m.client.Flush(ctx, m.collectionName, false)
 }
 
