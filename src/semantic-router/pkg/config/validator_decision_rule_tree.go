@@ -6,27 +6,32 @@ import (
 	"strings"
 )
 
-// ruleTreeOperators is the closed set of combination operators understood by the
-// decision rule evaluator, pkg/decision.(*DecisionEngine).evalNode (and its
-// tracing twin in pkg/decision/trace.go). The slice order is the order used in
-// error messages.
-//
-// The evaluator's default branch is OR, so an unrecognized operator never fails
-// at runtime: it quietly widens the rule instead. The nested-node half of this
-// contract is already enforced by the CLI in src/vllm-sr/cli/models.py
-// (Condition.validate_node_shape).
-var ruleTreeOperators = []string{"AND", "OR", "NOT"}
-
+// Rule-tree combination operators. They are exported so the evaluators can be
+// pinned to the same set instead of restating it as literals: config validation
+// rejects everything outside RuleTreeOperators, which is only safe while every
+// member reaches its own branch in pkg/decision.(*DecisionEngine).evalNode. That
+// agreement is asserted by TestRuleTreeOperatorsAgreeWithEvaluator.
 const (
-	// decisionRuleRootPath names a decision's rule-tree root in validation errors.
-	decisionRuleRootPath = "rules"
-	// ruleOperatorNot is strictly unary: evalNOT negates its single child and
+	// RuleOperatorAnd matches when every condition matches. It is also the only
+	// operator that matches on zero children.
+	RuleOperatorAnd = "AND"
+	// RuleOperatorOr matches when at least one condition matches. It is the
+	// evaluator's default branch, so an unrecognized operator quietly widens the
+	// rule instead of failing at runtime.
+	RuleOperatorOr = "OR"
+	// RuleOperatorNot is strictly unary: evalNOT negates its single child and
 	// warns and reports a non-match for any other child count.
-	ruleOperatorNot = "NOT"
-	// ruleOperatorAnd is the only operator that matches on zero children:
-	// evalAND returns true for an empty condition list.
-	ruleOperatorAnd = "AND"
+	RuleOperatorNot = "NOT"
 )
+
+// RuleTreeOperators is the closed set of combination operators a decision rule
+// tree may use. The slice order is the order used in error messages. The
+// nested-node half of this contract is already enforced by the CLI in
+// src/vllm-sr/cli/models.py (Condition.validate_node_shape).
+var RuleTreeOperators = []string{RuleOperatorAnd, RuleOperatorOr, RuleOperatorNot}
+
+// decisionRuleRootPath names a decision's rule-tree root in validation errors.
+const decisionRuleRootPath = "rules"
 
 // validateDecisionRuleTree walks a decision's rule tree and reports the failing
 // node's location inside that tree, so an error identifies both the decision and
@@ -91,12 +96,12 @@ func ruleNodeHasLeafFields(node *RuleNode) bool {
 // fall through to the evaluator's default branch anyway.
 func validateRuleCombinationNode(decisionName, path string, node *RuleNode, isRoot bool) error {
 	operator := strings.ToUpper(node.Operator)
-	if operator != "" && !slices.Contains(ruleTreeOperators, operator) {
+	if operator != "" && !slices.Contains(RuleTreeOperators, operator) {
 		return ruleTreeError(decisionName, path, fmt.Sprintf(
 			"invalid rule operator %q (valid: %s)",
-			node.Operator, strings.Join(ruleTreeOperators, ", ")))
+			node.Operator, strings.Join(RuleTreeOperators, ", ")))
 	}
-	if operator == ruleOperatorNot && len(node.Conditions) != 1 {
+	if operator == RuleOperatorNot && len(node.Conditions) != 1 {
 		return ruleTreeError(decisionName, path, fmt.Sprintf(
 			"NOT requires exactly one child condition, got %d", len(node.Conditions)))
 	}
@@ -113,7 +118,7 @@ func validateRuleCombinationNode(decisionName, path string, node *RuleNode, isRo
 // operator, which IsEmpty short-circuits to a match, and AND. A childless OR
 // evaluates to false, i.e. a decision that can never match.
 func isMatchAllCombination(operator string, isRoot bool) bool {
-	return isRoot && (operator == "" || operator == ruleOperatorAnd)
+	return isRoot && (operator == "" || operator == RuleOperatorAnd)
 }
 
 func ruleTreeError(decisionName, path, message string) error {
