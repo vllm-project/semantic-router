@@ -274,13 +274,29 @@ func buildRouterDCSelectionConfig(
 func buildAutoMixSelectionConfig(cfg *config.RouterConfig) *selection.AutoMixConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	autoMixCfg := intelligentRouting.ModelSelection.AutoMix
+
+	// Fill documented defaults for any field left unset by the user before
+	// mapping, so an omitted key keeps its documented value instead of
+	// silently becoming a Go zero value (see #2946). This mirrors the
+	// ApplyDefaults() convention used elsewhere in this package (e.g.
+	// VectorStoreConfig.ApplyDefaults).
+	autoMixCfg.ApplyDefaults()
+
 	return &selection.AutoMixConfig{
-		VerificationThreshold:  autoMixCfg.VerificationThreshold,
-		MaxEscalations:         autoMixCfg.MaxEscalations,
-		CostAwareRouting:       autoMixCfg.CostAwareRouting,
-		CostQualityTradeoff:    autoMixCfg.CostQualityTradeoff,
-		DiscountFactor:         autoMixCfg.DiscountFactor,
-		UseLogprobVerification: autoMixCfg.UseLogprobVerification,
+		VerificationThreshold:   autoMixCfg.VerificationThreshold,
+		MaxEscalations:          autoMixCfg.MaxEscalations,
+		CostAwareRouting:        autoMixCfg.CostAwareRouting,
+		CostQualityTradeoff:     autoMixCfg.CostQualityTradeoff,
+		DiscountFactor:          autoMixCfg.DiscountFactor,
+		UseLogprobVerification:  autoMixCfg.UseLogprobVerification,
+		EnableSelfVerification:  autoMixCfg.EnableSelfVerification,
+		VerificationSamples:     autoMixCfg.VerificationSamples,
+		VerificationTemperature: autoMixCfg.VerificationTemperature,
+		UsePOMDPRouter:          autoMixCfg.UsePOMDPRouter,
+		BeliefParticles:         autoMixCfg.BeliefParticles,
+		CostLambda:              autoMixCfg.CostLambda,
+		VerifierServerURL:       autoMixCfg.VerifierServerURL,
+		EnableCascade:           autoMixCfg.EnableCascade,
 	}
 }
 

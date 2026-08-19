@@ -428,6 +428,30 @@ func (c *Compiler) compileAutoMixAlgo(fields map[string]Value) *config.AutoMixSe
 	if v, ok := getBoolField(fields, "use_logprob_verification"); ok {
 		cfg.UseLogprobVerification = v
 	}
+	if v, ok := getBoolField(fields, "enable_self_verification"); ok {
+		cfg.EnableSelfVerification = v
+	}
+	if v, ok := getIntField(fields, "verification_samples"); ok {
+		cfg.VerificationSamples = v
+	}
+	if v, ok := getFloat64Field(fields, "verification_temperature"); ok {
+		cfg.VerificationTemperature = v
+	}
+	if v, ok := getBoolField(fields, "use_pomdp_router"); ok {
+		cfg.UsePOMDPRouter = v
+	}
+	if v, ok := getIntField(fields, "belief_particles"); ok {
+		cfg.BeliefParticles = v
+	}
+	if v, ok := getFloat64Field(fields, "cost_lambda"); ok {
+		cfg.CostLambda = v
+	}
+	if v, ok := getStringField(fields, "verifier_server_url"); ok {
+		cfg.VerifierServerURL = v
+	}
+	if v, ok := getBoolField(fields, "enable_cascade"); ok {
+		cfg.EnableCascade = v
+	}
 	return cfg
 }
 
