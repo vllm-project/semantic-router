@@ -217,7 +217,6 @@ func handleMessageStart(
 	// Capture cache counters for the outbound message_delta
 	extractAnthropicUsageIntoExt(start.Message.Usage, ext)
 
-
 	if state.RoleSent {
 		return nil, false, nil
 	}
@@ -371,7 +370,7 @@ func handleMessageDelta(
 			ext.AnthropicStopSequence = deltaEvent.Delta.StopSequence
 		}
 	}
-	
+
 	// Keep cache counters: prefer non-zero values from message_delta,
 	// otherwise leave whatever message_start already stored in ext.
 	if ext != nil {
@@ -383,7 +382,6 @@ func handleMessageDelta(
 			ext.CacheCreationInputTokens = u.CacheCreationInputTokens
 		}
 	}
-
 
 	chunk, err := buildOpenAIStreamFinishChunk(state, model, finishReason, deltaEvent.Usage)
 	if err != nil {
