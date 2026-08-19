@@ -28,14 +28,8 @@ func (r *OpenAIRouter) resolveEntrypointForRequest(originalModel string, ctx *Re
 	}
 	trimmed := strings.TrimSpace(originalModel)
 
-	if r.Config.IsAutoModelName(trimmed) || r.Config.IsReMoMModelName(trimmed) ||
-		r.Config.IsFusionModelName(trimmed) || r.Config.IsFlowModelName(trimmed) {
-		recipe := r.Config.DefaultRecipe()
-		if recipe == nil {
-			ctx.Routing.SelectPassthrough()
-			return
-		}
-		ctx.Routing.SelectRecipe(recipe)
+	if isAutoOrAlgorithmAlias(r.Config, trimmed) {
+		r.selectDefaultRecipeOrPassthrough(ctx)
 		return
 	}
 
@@ -46,24 +40,54 @@ func (r *OpenAIRouter) resolveEntrypointForRequest(originalModel string, ctx *Re
 	}
 
 	if len(entrypoint.Rules) == 0 {
-		recipe, ok := r.Config.RecipeByName(entrypoint.Recipe)
-		if !ok {
-			// Unreachable once config validation requires every legacy
-			// entrypoint to reference a known recipe; fail closed rather
-			// than assume, in case this is ever reached anyway.
-			logging.Errorf("[Entrypoint] entrypoint %q references unknown recipe %q", trimmed, entrypoint.Recipe)
-			ctx.Routing.SelectDenied(500, "internal routing configuration error")
-			return
-		}
-		ctx.Routing.SelectRecipe(recipe)
-		logging.ComponentDebugEvent("extproc", "entrypoint_recipe_resolved", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      trimmed,
-			"recipe":     recipe.Name,
-		})
+		r.resolveLegacyEntrypoint(trimmed, entrypoint, ctx)
 		return
 	}
 
+	r.resolveConditionalEntrypoint(trimmed, ctx)
+}
+
+// isAutoOrAlgorithmAlias reports whether name is an auto-routing or
+// direct-looper algorithm slug — both select the default recipe rather than
+// an entrypoint-mapped one.
+func isAutoOrAlgorithmAlias(cfg *config.RouterConfig, name string) bool {
+	return cfg.IsAutoModelName(name) || cfg.IsReMoMModelName(name) ||
+		cfg.IsFusionModelName(name) || cfg.IsFlowModelName(name)
+}
+
+func (r *OpenAIRouter) selectDefaultRecipeOrPassthrough(ctx *RequestContext) {
+	recipe := r.Config.DefaultRecipe()
+	if recipe == nil {
+		ctx.Routing.SelectPassthrough()
+		return
+	}
+	ctx.Routing.SelectRecipe(recipe)
+}
+
+// resolveLegacyEntrypoint handles an entrypoint with no conditional rules:
+// it maps unconditionally to a single named recipe.
+func (r *OpenAIRouter) resolveLegacyEntrypoint(trimmed string, entrypoint *config.EntrypointMapping, ctx *RequestContext) {
+	recipe, ok := r.Config.RecipeByName(entrypoint.Recipe)
+	if !ok {
+		// Unreachable once config validation requires every legacy
+		// entrypoint to reference a known recipe; fail closed rather
+		// than assume, in case this is ever reached anyway.
+		logging.Errorf("[Entrypoint] entrypoint %q references unknown recipe %q", trimmed, entrypoint.Recipe)
+		ctx.Routing.SelectDenied(500, "internal routing configuration error")
+		return
+	}
+	ctx.Routing.SelectRecipe(recipe)
+	logging.ComponentDebugEvent("extproc", "entrypoint_recipe_resolved", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      trimmed,
+		"recipe":     recipe.Name,
+	})
+}
+
+// resolveConditionalEntrypoint handles an entrypoint with rules: it matches
+// the caller's headers/path against those rules to pick a recipe, and denies
+// a claimed-but-unmatched alias rather than falling through.
+func (r *OpenAIRouter) resolveConditionalEntrypoint(trimmed string, ctx *RequestContext) {
 	matchCtx := config.MatchContext{
 		Path:    config.NormalizeRequestPath(ctx.Headers[":path"]),
 		Headers: ctx.Headers,
