@@ -236,3 +236,29 @@ var ruleTreeShapeCorpus = []ruleTreeCase{
 func TestDecisionRuleTreeShapeCorpus(t *testing.T) {
 	runRuleTreeCorpus(t, ruleTreeShapeCorpus)
 }
+
+// Every rule-tree error names the decision and the node, including the leaf
+// checks that predate the tree walker: in a config with several similar leaves,
+// the message is what tells an operator which node to fix.
+var ruleTreeErrorLocationCorpus = []ruleTreeCase{
+	{
+		name: "nested_leaf_unknown_classifier_signal",
+		rules: "operator: AND\nconditions:\n  - type: keyword\n    name: k1\n" +
+			"  - type: classifier\n    name: nope",
+		wantErr: `rules.conditions[1]: signal classifier("nope") is not declared in this recipe`,
+	},
+	{
+		name:    "nested_leaf_on_error_outside_classifier",
+		rules:   "operator: AND\nconditions:\n  - type: keyword\n    name: k1\n    on_error: match",
+		wantErr: `rules.conditions[0]: condition keyword("k1") on_error is only supported for classifier conditions`,
+	},
+	{
+		name:    "root_leaf_carries_root_path",
+		rules:   "type: classifier\nname: nope",
+		wantErr: `rules: signal classifier("nope") is not declared in this recipe`,
+	},
+}
+
+func TestDecisionRuleTreeErrorLocationCorpus(t *testing.T) {
+	runRuleTreeCorpus(t, ruleTreeErrorLocationCorpus)
+}

@@ -61,41 +61,32 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 func validateDecisionLeafNode(
 	cfg *RouterConfig,
 	decisionName string,
+	path string,
 	node *RuleNode,
 ) error {
 	if node.Label != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
-		return fmt.Errorf("decision '%s': label is only supported on classifier conditions", decisionName)
+		return ruleTreeError(decisionName, path, "label is only supported on classifier conditions")
 	}
 	if strings.EqualFold(node.Type, SignalTypeClassifier) {
-		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+		if err := validateClassifierDecisionLeaf(cfg, decisionName, path, node); err != nil {
 			return err
 		}
 	}
 	if strings.EqualFold(node.Type, SignalTypeMetadata) &&
 		metadataRuleByName(cfg.MetadataRules, node.Name) == nil {
-		return fmt.Errorf(
-			"decision '%s': metadata condition references unknown signal %q",
-			decisionName,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"metadata condition references unknown signal %q", node.Name))
 	}
 	if node.OnError != "" && node.OnError != "no_match" && node.OnError != "match" {
-		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error must be no_match or match",
-			decisionName,
-			node.Type,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"condition %s(%q) on_error must be no_match or match", node.Type, node.Name))
 	}
 	if node.OnError != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
-		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier conditions",
-			decisionName,
-			node.Type,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"condition %s(%q) on_error is only supported for classifier conditions",
+			node.Type, node.Name))
 	}
-	return validateDecisionLeafPredicate(decisionName, node)
+	return validateDecisionLeafPredicate(decisionName, path, node)
 }
 
 func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
@@ -110,60 +101,51 @@ func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
 func validateClassifierDecisionLeaf(
 	cfg *RouterConfig,
 	decisionName string,
+	path string,
 	node *RuleNode,
 ) error {
 	rule := classifierSignalRuleByName(cfg.ClassifierRules, node.Name)
 	if rule == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition references unknown signal %q",
-			decisionName,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"classifier condition references unknown signal %q", node.Name))
 	}
 	if node.Label == "" || !stringSliceContains(rule.Labels, node.Label) {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a declared label",
-			decisionName,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"classifier condition %q requires a declared label", node.Name))
 	}
 	if node.Predicate == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a score predicate",
-			decisionName,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"classifier condition %q requires a score predicate", node.Name))
 	}
 	if rule.Type == "local" {
-		return validateLocalClassifierDecisionPredicate(decisionName, node)
+		return validateLocalClassifierDecisionPredicate(decisionName, path, node)
 	}
 	return nil
 }
 
 func validateLocalClassifierDecisionPredicate(
 	decisionName string,
+	path string,
 	node *RuleNode,
 ) error {
 	predicate := node.Predicate
 	if predicate.GTE == nil || *predicate.GTE < 0.5 ||
 		predicate.GT != nil || predicate.LT != nil || predicate.LTE != nil {
-		return fmt.Errorf(
-			"decision '%s': local classifier condition %q supports only predicate.gte >= 0.5",
-			decisionName,
-			node.Name,
-		)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"local classifier condition %q supports only predicate.gte >= 0.5", node.Name))
 	}
 	return nil
 }
 
-func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
+func validateDecisionLeafPredicate(decisionName, path string, node *RuleNode) error {
 	if node.Predicate == nil {
 		return nil
 	}
 	if err := validateNumericPredicateContract(node.Predicate); err != nil {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) %w",
+			"decision '%s': %s: condition %s(%q) %w",
 			decisionName,
+			path,
 			node.Type,
 			node.Name,
 			err,

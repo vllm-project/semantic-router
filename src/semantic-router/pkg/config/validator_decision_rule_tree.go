@@ -44,7 +44,7 @@ func validateDecisionRuleTree(cfg *RouterConfig, decisionName, path string, node
 		return err
 	}
 	if node.IsLeaf() {
-		return validateDecisionLeafNode(cfg, decisionName, node)
+		return validateDecisionLeafNode(cfg, decisionName, path, node)
 	}
 	if err := validateRuleCombinationNode(decisionName, path, node, isRoot); err != nil {
 		return err

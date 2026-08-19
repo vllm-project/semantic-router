@@ -17,7 +17,9 @@ func validateDecisionSignalReferences(cfg *RouterConfig) error {
 	strictReferences := cfg.RoutingScope != ""
 	for i := range cfg.Decisions {
 		decision := &cfg.Decisions[i]
-		if err := validateRuleNodeSignalReferences(decision.Name, &decision.Rules, declared, strictReferences); err != nil {
+		err := validateRuleNodeSignalReferences(
+			decision.Name, decisionRuleRootPath, &decision.Rules, declared, strictReferences)
+		if err != nil {
 			return err
 		}
 	}
@@ -26,6 +28,7 @@ func validateDecisionSignalReferences(cfg *RouterConfig) error {
 
 func validateRuleNodeSignalReferences(
 	decisionName string,
+	path string,
 	node *RuleNode,
 	declared map[string]map[string]struct{},
 	strictReferences bool,
@@ -34,10 +37,13 @@ func validateRuleNodeSignalReferences(
 		return nil
 	}
 	if node.IsLeaf() {
-		return validateLeafSignalReference(decisionName, node, declared, strictReferences)
+		return validateLeafSignalReference(decisionName, path, node, declared, strictReferences)
 	}
 	for i := range node.Conditions {
-		if err := validateRuleNodeSignalReferences(decisionName, &node.Conditions[i], declared, strictReferences); err != nil {
+		childPath := fmt.Sprintf("%s.conditions[%d]", path, i)
+		err := validateRuleNodeSignalReferences(
+			decisionName, childPath, &node.Conditions[i], declared, strictReferences)
+		if err != nil {
 			return err
 		}
 	}
@@ -46,6 +52,7 @@ func validateRuleNodeSignalReferences(
 
 func validateLeafSignalReference(
 	decisionName string,
+	path string,
 	node *RuleNode,
 	declared map[string]map[string]struct{},
 	strictReferences bool,
@@ -58,21 +65,18 @@ func validateLeafSignalReference(
 		return nil
 	}
 	if !IsSupportedSignalType(signalType) {
-		return fmt.Errorf("routing.decisions[%q]: unsupported signal type %q", decisionName, node.Type)
+		return ruleTreeError(decisionName, path, fmt.Sprintf("unsupported signal type %q", node.Type))
 	}
 	if !strictReferences {
 		return nil
 	}
 	if name == "" {
-		return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
+		return ruleTreeError(decisionName, path, fmt.Sprintf(
+			"signal condition of type %q requires a name", signalType))
 	}
 	if projectionInputDeclared(declared, signalType, name) {
 		return nil
 	}
-	return fmt.Errorf(
-		"routing.decisions[%q]: signal %s(%q) is not declared in this recipe",
-		decisionName,
-		signalType,
-		name,
-	)
+	return ruleTreeError(decisionName, path, fmt.Sprintf(
+		"signal %s(%q) is not declared in this recipe", signalType, name))
 }

@@ -52,6 +52,7 @@ func TestDecisionLeafRejectsUnknownMetadataReference(t *testing.T) {
 	err := validateDecisionLeafNode(
 		&RouterConfig{},
 		"metadata-route",
+		decisionRuleRootPath,
 		&RuleNode{Type: SignalTypeMetadata, Name: "missing"},
 	)
 	if err == nil {
