@@ -98,7 +98,7 @@ func TestValkeyCacheIntegration_ConnectionCheck(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
 
-	err := cache.CheckConnection()
+	err := cache.CheckConnection(context.Background())
 	assert.NoError(t, err, "Connection check should succeed")
 }
 
@@ -109,15 +109,15 @@ func TestValkeyCacheIntegration_ExactRoundTripAndPartitionIsolation(t *testing.T
 	fingerprint := fmt.Sprintf("exact-%d", time.Now().UnixNano())
 	require.NoError(
 		t,
-		cache.AddExact("tenant-a", fingerprint, []byte(`{"answer":"cached"}`), 60),
+		cache.AddExact(context.Background(), "tenant-a", fingerprint, []byte(`{"answer":"cached"}`), 60),
 	)
-	hit, err := cache.FindExact("tenant-a", fingerprint)
+	hit, err := cache.FindExact(context.Background(), "tenant-a", fingerprint)
 	require.NoError(t, err)
 	require.True(t, hit.Found)
 	assert.JSONEq(t, `{"answer":"cached"}`, string(hit.ResponseBody))
 	assert.Equal(t, float32(1), hit.Similarity)
 
-	miss, err := cache.FindExact("tenant-b", fingerprint)
+	miss, err := cache.FindExact(context.Background(), "tenant-b", fingerprint)
 	require.NoError(t, err)
 	assert.False(t, miss.Found)
 }
@@ -147,7 +147,7 @@ func TestValkeyCacheIntegration_AddEntry(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Paris is the capital of France."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	assert.NoError(t, err, "AddEntry should succeed")
 
 	// Wait for indexing
@@ -171,7 +171,7 @@ func TestValkeyCacheIntegration_FindSimilar(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Machine learning is a subset of AI."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing with retry logic
@@ -210,7 +210,7 @@ func TestValkeyCacheIntegration_FindSimilarWithThreshold(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Neural networks are computing systems."}}]}`)
 	ttlSeconds := 300
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing
@@ -376,7 +376,7 @@ func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
 	responseBody := []byte(`{"choices":[{"message":{"content":"Short lived response"}}]}`)
 	ttlSeconds := 2 // 2 seconds
 
-	err := cache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := cache.AddEntry(context.Background(), requestID, model, query, requestBody, responseBody, ttlSeconds)
 	require.NoError(t, err)
 
 	// Wait for indexing
@@ -404,7 +404,7 @@ func TestValkeyCacheIntegration_GetStats(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		requestID := fmt.Sprintf("req_stats_%d", i)
 		query := fmt.Sprintf("Test query %d", i)
-		err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte("{}"), 300)
+		err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte("{}"), 300)
 		require.NoError(t, err)
 	}
 
@@ -424,7 +424,7 @@ func TestValkeyCacheIntegration_Close(t *testing.T) {
 	err := cache.Close()
 	assert.NoError(t, err, "Close should succeed")
 
-	err = cache.CheckConnection()
+	err = cache.CheckConnection(context.Background())
 	assert.Error(t, err, "Connection check should fail after close")
 }
 
@@ -464,7 +464,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	defer func() { _ = cache.Close() }()
 
 	// All operations should return nil/false when disabled
-	err = cache.AddEntry("req_1", "gpt-4", "test", []byte("{}"), []byte("{}"), 300)
+	err = cache.AddEntry(context.Background(), "req_1", "gpt-4", "test", []byte("{}"), []byte("{}"), 300)
 	assert.NoError(t, err, "AddEntry should not error when disabled")
 
 	err = cache.AddPendingRequest("req_2", "gpt-4", "test", []byte("{}"), 300)
@@ -474,7 +474,7 @@ func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
 	assert.NoError(t, err, "FindSimilar should not error when disabled")
 	assert.False(t, hit, "FindSimilar should return false when disabled")
 
-	err = cache.CheckConnection()
+	err = cache.CheckConnection(context.Background())
 	assert.NoError(t, err, "CheckConnection should not error when disabled")
 }
 
@@ -484,7 +484,7 @@ func TestValkeyCacheIntegration_TTLZeroSkipsCaching(t *testing.T) {
 
 	// Test AddEntry with TTL=0 (should skip caching)
 	requestID := "req_ttl_zero_1"
-	err := cache.AddEntry(requestID, "gpt-4", "test query", []byte("{}"), []byte("{}"), 0)
+	err := cache.AddEntry(context.Background(), requestID, "gpt-4", "test query", []byte("{}"), []byte("{}"), 0)
 	assert.NoError(t, err, "AddEntry with TTL=0 should not error")
 
 	// Test AddPendingRequest with TTL=0 (should skip caching)
@@ -530,7 +530,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 	defer func() { _ = cache.Close() }()
 
 	// Add an entry and verify it works
-	err = cache.AddEntry("req_flat_1", "gpt-4", "test flat index", []byte("{}"), []byte(`{"result":"flat"}`), 300)
+	err = cache.AddEntry(context.Background(), "req_flat_1", "gpt-4", "test flat index", []byte("{}"), []byte(`{"result":"flat"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with FLAT index")
 
 	time.Sleep(200 * time.Millisecond)
@@ -558,7 +558,7 @@ func TestValkeyCacheIntegration_ConcurrentOperations(t *testing.T) {
 				requestID := fmt.Sprintf("req_concurrent_%d_%d", id, j)
 				query := fmt.Sprintf("concurrent query %d %d", id, j)
 
-				err := cache.AddEntry(requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, id)), 300)
+				err := cache.AddEntry(context.Background(), requestID, "gpt-4", query, []byte("{}"), []byte(fmt.Sprintf(`{"id":%d}`, id)), 300)
 				if err != nil {
 					errChan <- err
 				}
@@ -607,7 +607,7 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 
 	for i, entry := range entries {
 		storedResponses[i] = fmt.Sprintf(`{"response":"%s"}`, entry.response)
-		err := cache.AddEntry(
+		err := cache.AddEntry(context.Background(),
 			entry.requestID,
 			"gpt-4",
 			entry.query,
@@ -625,7 +625,7 @@ func TestValkeyCacheIntegration_MultipleEntries(t *testing.T) {
 	// conversion regression reports all three queries rather than aborting on
 	// the first one.
 	for i, entry := range entries {
-		result, err := cache.LookupSimilarWithThreshold("gpt-4", entry.query, 0.8)
+		result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", entry.query, 0.8)
 		if !assert.NoError(t, err, "FindSimilar should not error for %s", entry.query) {
 			continue
 		}
@@ -692,12 +692,12 @@ func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold fl
 func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 	cache := newIsolatedValkeyCache(t, "l2", "L2", 0.5)
 
-	err := cache.AddEntry("req_l2_1", "gpt-4", "test L2 metric", []byte("{}"), []byte(`{"result":"L2"}`), 300)
+	err := cache.AddEntry(context.Background(), "req_l2_1", "gpt-4", "test L2 metric", []byte("{}"), []byte(`{"result":"L2"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with L2 metric")
 
 	time.Sleep(200 * time.Millisecond)
 
-	result, err := cache.LookupSimilarWithThreshold("gpt-4", "test L2 metric", 0.5)
+	result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", "test L2 metric", 0.5)
 	require.NoError(t, err, "FindSimilar should work with L2 metric")
 	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
 		result.Similarity)
@@ -707,12 +707,12 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 	cache := newIsolatedValkeyCache(t, "ip", "IP", 0.5)
 
-	err := cache.AddEntry("req_ip_1", "gpt-4", "test IP metric", []byte("{}"), []byte(`{"result":"IP"}`), 300)
+	err := cache.AddEntry(context.Background(), "req_ip_1", "gpt-4", "test IP metric", []byte("{}"), []byte(`{"result":"IP"}`), 300)
 	assert.NoError(t, err, "AddEntry should work with IP metric")
 
 	time.Sleep(200 * time.Millisecond)
 
-	result, err := cache.LookupSimilarWithThreshold("gpt-4", "test IP metric", 0.5)
+	result, err := cache.LookupSimilarWithThreshold(context.Background(), "gpt-4", "test IP metric", 0.5)
 	require.NoError(t, err, "FindSimilar should work with IP metric")
 	require.True(t, result.Found, "repeating the cached query verbatim must hit (similarity=%.4f, threshold=0.5)",
 		result.Similarity)

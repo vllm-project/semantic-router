@@ -62,6 +62,54 @@ func TestRuntimeMutationCrossProcessLockIsNonBlocking(t *testing.T) {
 	}
 }
 
+func TestRuntimeMutationLockPreservesSharedGroupAccess(t *testing.T) {
+	storeDir := t.TempDir()
+	lockPath := filepath.Join(storeDir, runtimeConfigLockName)
+	if err := os.WriteFile(lockPath, nil, 0o660); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockPath, 0o660); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	if err != nil || !exists {
+		t.Fatalf("lock = %#v, %v", lock, err)
+	}
+	if closeErr := lock.close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o660 {
+		t.Fatalf("lock mode = %o, want 660", info.Mode().Perm())
+	}
+}
+
+func TestRuntimeMutationLockRejectsAccessForOtherUsers(t *testing.T) {
+	storeDir := t.TempDir()
+	lockPath := filepath.Join(storeDir, runtimeConfigLockName)
+	if err := os.WriteFile(lockPath, nil, 0o606); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockPath, 0o606); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	if lock != nil {
+		_ = lock.close()
+	}
+	if err == nil || exists {
+		t.Fatalf("lock = %#v, exists = %t, err = %v", lock, exists, err)
+	}
+	if err.Error() != "runtime config lock must not grant access to other users" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUpdateConfigManagedMarkerReturnsStable409AndPreservesConfig(t *testing.T) {
 	root := t.TempDir()
 	configPath := createValidTestConfig(t, root)

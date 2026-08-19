@@ -141,10 +141,7 @@ func (r *OpenAIRouter) updateExactResponseCache(
 	if identity.ExactFingerprint == "" {
 		identity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
 	}
-	writeContext := ctx.TraceContext
-	if writeContext == nil {
-		writeContext = context.Background()
-	}
+	writeContext := cacheWriteContext(ctx)
 	if err := service.StoreExact(writeContext, cache.CacheWrite{
 		Identity:     identity,
 		RequestID:    ctx.RequestID,
