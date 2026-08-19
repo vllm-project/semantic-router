@@ -55,7 +55,7 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 }
 
 func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode) error {
-	return validateDecisionRuleTree(cfg, decisionName, decisionRuleRootPath, node)
+	return validateDecisionRuleTree(cfg, decisionName, decisionRuleRootPath, node, true)
 }
 
 func validateDecisionLeafNode(

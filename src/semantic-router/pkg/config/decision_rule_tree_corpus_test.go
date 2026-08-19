@@ -156,3 +156,83 @@ var ruleTreeArityCorpus = []ruleTreeCase{
 func TestDecisionRuleTreeArityCorpus(t *testing.T) {
 	runRuleTreeCorpus(t, ruleTreeArityCorpus)
 }
+
+// A node is either a leaf (a signal reference) or a combination of children.
+// IsLeaf keys off `type`, so a node that mixes the shapes, or carries leaf
+// fields without a type, silently loses half of what the author wrote — and a
+// combination with no children is dead (OR) or unconditional (AND) rather than
+// the rule that was written.
+var ruleTreeShapeCorpus = []ruleTreeCase{
+	{
+		name:  "root_bare_leaf",
+		rules: "type: keyword\nname: k1",
+	},
+	{
+		name:  "root_without_rules",
+		rules: "{}",
+	},
+	{
+		name:  "root_match_all",
+		rules: "operator: AND\nconditions: []",
+	},
+	{
+		name: "leaf_and_combination_mixed",
+		rules: "type: keyword\nname: k1\noperator: OR\nconditions:\n" +
+			"  - type: keyword\n    name: k1",
+		wantErr: "must be either a leaf (type/name) or a combination (operator/conditions), not both",
+	},
+	{
+		name:    "combination_with_leaf_label",
+		rules:   "label: high\noperator: AND\nconditions:\n  - type: keyword\n    name: k1",
+		wantErr: "not both",
+	},
+	{
+		// Evaluates as an empty OR: a decision that can never match.
+		name:    "root_name_without_type",
+		rules:   "name: k1",
+		wantErr: "rules: leaf condition requires a type",
+	},
+	{
+		// Also satisfies IsEmpty, so the engine short-circuits it into an
+		// unconditional match.
+		name:    "root_label_without_type",
+		rules:   "label: high",
+		wantErr: "rules: leaf condition requires a type",
+	},
+	{
+		name:    "nested_leaf_without_type",
+		rules:   "operator: AND\nconditions:\n  - name: k1",
+		wantErr: "rules.conditions[0]: leaf condition requires a type",
+	},
+	{
+		name:    "leaf_with_children",
+		rules:   "type: keyword\nname: k1\nconditions:\n  - type: keyword\n    name: k1",
+		wantErr: "leaf condition cannot declare child conditions",
+	},
+	{
+		name: "nested_leaf_with_children",
+		rules: "operator: AND\nconditions:\n  - type: keyword\n    name: k1\n" +
+			"    conditions:\n      - type: keyword\n        name: k1",
+		wantErr: "rules.conditions[0]: leaf condition cannot declare child conditions",
+	},
+	{
+		// evalOR over zero children is false, so this root can never match.
+		name:    "root_or_without_children",
+		rules:   "operator: OR\nconditions: []",
+		wantErr: "rules: combination condition requires at least one child condition",
+	},
+	{
+		name:    "nested_combination_without_children",
+		rules:   "operator: AND\nconditions:\n  - operator: OR\n    conditions: []",
+		wantErr: "rules.conditions[0]: combination condition requires at least one child condition",
+	},
+	{
+		name:    "nested_empty_node",
+		rules:   "operator: AND\nconditions:\n  - {}",
+		wantErr: "rules.conditions[0]: combination condition requires at least one child condition",
+	},
+}
+
+func TestDecisionRuleTreeShapeCorpus(t *testing.T) {
+	runRuleTreeCorpus(t, ruleTreeShapeCorpus)
+}
