@@ -15,7 +15,10 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/jailbreak-onerror/values.yaml"
+const (
+	valuesFile           = "e2e/profiles/jailbreak-onerror/values.yaml"
+	mappingConfigMapYAML = "deploy/kubernetes/jailbreak-onerror/jailbreak-mapping-configmap.yaml"
+)
 
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/mock-vllm.yaml",
@@ -41,6 +44,7 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "jailbreak-onerror",
 			SemanticRouterValuesFile: valuesFile,
+			PrerequisiteManifests:    []string{mappingConfigMapYAML},
 			ResourceManifests:        resourceManifests,
 			WaitDeployments:          waitDeployments,
 		}),

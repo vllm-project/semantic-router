@@ -69,7 +69,13 @@ config:
         tracing:
           enabled: false
     stores:
+      # Caching/memory/vector-store embeddings are unrelated to on_error and
+      # would otherwise eagerly download an embedding model at pod startup
+      # (slow without HF_TOKEN, and risks the helm install readiness
+      # timeout) - disabled since this profile only needs the jailbreak
+      # signal path.
       response_cache:
+        enabled: false
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -86,6 +92,7 @@ config:
         - name: unreachable-guardrail
           llm_provider: openai
           model_role: guardrail
+          llm_model_name: unreachable-guardrail
           llm_endpoint:
             address: 127.0.0.1
             port: 1
@@ -115,13 +122,35 @@ config:
             use_mmbert_32k: false
         hallucination_mitigation:
           enabled: false
+# The router requires a jailbreak_type_mapping.json on disk even for
+# protocol: http_classify (IsJailbreakEnabled/LoadJailbreakMapping don't
+# special-case the external-classifier path) - this profile deliberately
+# never calls into local candle inference, so a minimal stand-in mapping
+# (from the ConfigMap in jailbreak-mapping-configmap.yaml, applied as a
+# prerequisite) is enough; no need to bake/download the real model.
+extraVolumes:
+  - name: jailbreak-mapping
+    configMap:
+      name: jailbreak-onerror-mapping
+extraVolumeMounts:
+  - name: jailbreak-mapping
+    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+    subPath: jailbreak_type_mapping.json
+    readOnly: true
+
 resources:
+  # 2Gi (copied from the hallucination profile) OOMKilled the router
+  # (exit 137) while it downloaded/loaded the embedding_model referenced by
+  # global.stores - confirmed via `kubectl get pod -o json` lastState. The
+  # actively-CI-running envoy-ai-gateway profile uses 12Gi/5Gi; this
+  # profile does far less, but still needs real headroom for that same
+  # startup-time model load.
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 6Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:

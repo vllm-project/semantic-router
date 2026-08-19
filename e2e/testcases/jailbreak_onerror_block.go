@@ -36,7 +36,12 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 
 	const benignPrompt = "What is the capital of France?"
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "openai/mock-model", benignPrompt, 30*time.Second)
+	// Must use the auto-routing model name, not a concrete backend model
+	// like "openai/mock-model" directly: concrete model IDs are passthrough
+	// requests that bypass every recipe-local signal, decision, and plugin
+	// (see performDecisionEvaluation), so they'd never reach the jailbreak
+	// signal or on_error: block being tested here.
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", benignPrompt, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
