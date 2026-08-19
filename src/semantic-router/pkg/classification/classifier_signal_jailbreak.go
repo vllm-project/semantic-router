@@ -22,8 +22,10 @@ type cachedJailbreakResult struct {
 // distinguishable from a real detected type in results/logs. Without this
 // fail-closed path (on_error: allow, the default), a classify error is
 // indistinguishable from a genuinely safe request - see @adaamko's review on
-// #2760. validateJailbreakMapping rejects any configured jailbreak_mapping
-// label equal to this value, so a real detection can never collide with it.
+// #2760. LoadJailbreakMapping rejects any configured jailbreak_mapping label
+// that resolves to this value, in any of the supported label_to_idx/
+// label_to_id/idx_to_label/id_to_label shapes, so a real detection can never
+// collide with it.
 const jailbreakClassificationErrorType = "classification_error"
 
 // collectJailbreakClassifierContents returns the deduplicated set of text pieces

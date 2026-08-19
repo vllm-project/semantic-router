@@ -43,9 +43,19 @@ func (c ClassifierOnErrorConfig) IsBlock() bool {
 	return c.OnError == OnErrorBlock
 }
 
-// Validate rejects any OnError value other than the empty default, allow, or
-// block.
-func (c ClassifierOnErrorConfig) Validate() error {
+// ValidateOnError rejects any OnError value other than the empty default,
+// allow, or block.
+//
+// Deliberately not named Validate: this struct is embedded, so a plain
+// Validate would be promoted onto every embedding config (PromptGuardConfig,
+// and CanonicalPromptGuardModule at depth 2). A caller reaching for
+// promptGuard.Validate() reasonably expects the whole prompt-guard config to
+// be checked, but would get a method that only inspects on_error and returns
+// nil for a genuinely invalid config (e.g. variant and protocol both set, or
+// an unrecognized protocol - both of which only
+// validatePromptGuardBackendConfig catches). The narrower name keeps the
+// promoted surface honest about what it verifies.
+func (c ClassifierOnErrorConfig) ValidateOnError() error {
 	switch c.OnError {
 	case "", OnErrorAllow, OnErrorBlock:
 		return nil

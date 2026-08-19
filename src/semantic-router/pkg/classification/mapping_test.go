@@ -113,28 +113,56 @@ func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
 // make a genuine detection indistinguishable from a classify failure - see
 // @adaamko's review on #2918/#2930. LoadJailbreakMapping must reject it
 // instead of loading it silently.
+//
+// Every supported mapping shape is covered on purpose. An earlier version of
+// this guard indexed LabelToIdx directly and only this test's first case
+// exercised it, so the three remaining shapes - including the idx_to_label /
+// id_to_label (HuggingFace) naming the shipped mmbert32k mapping actually
+// uses - loaded without error while GetJailbreakTypeFromIndex still resolved
+// the sentinel at runtime.
 func TestLoadJailbreakMapping_RejectsSentinelCollision(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
-	data := `{"label_to_idx":{"benign":0,"classification_error":1},"idx_to_label":{"0":"benign","1":"classification_error"}}`
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatalf("failed to write test mapping file: %v", err)
-	}
+	for name, data := range map[string]string{
+		"label_to_idx_and_idx_to_label": `{"label_to_idx":{"benign":0,"classification_error":1},"idx_to_label":{"0":"benign","1":"classification_error"}}`,
+		"idx_to_label_only":             `{"idx_to_label":{"0":"benign","1":"classification_error"}}`,
+		"id_to_label_only_huggingface":  `{"id_to_label":{"0":"benign","1":"classification_error"}}`,
+		"label_to_id_only_huggingface":  `{"label_to_id":{"benign":0,"classification_error":1}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatalf("failed to write test mapping file: %v", err)
+			}
 
-	if _, err := LoadJailbreakMapping(path); err == nil {
-		t.Error("expected an error when a configured label collides with the on_error: block sentinel")
+			mapping, err := LoadJailbreakMapping(path)
+			if err != nil {
+				return
+			}
+			resolved, _ := mapping.GetJailbreakTypeFromIndex(1)
+			t.Errorf("expected an error when a configured label collides with the on_error: block sentinel, "+
+				"but the mapping loaded and index 1 resolves to %q", resolved)
+		})
 	}
 }
 
 // TestLoadJailbreakMapping_AllowsOrdinaryLabels guards against the collision
-// check rejecting every mapping by mistake.
+// check rejecting every mapping by mistake - in every supported shape, so
+// widening the guard above cannot silently start rejecting real mappings
+// (notably the shipped label_to_id/id_to_label one).
 func TestLoadJailbreakMapping_AllowsOrdinaryLabels(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
-	data := `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign","1":"jailbreak"}}`
-	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
-		t.Fatalf("failed to write test mapping file: %v", err)
-	}
+	for name, data := range map[string]string{
+		"label_to_idx_and_idx_to_label": `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign","1":"jailbreak"}}`,
+		"idx_to_label_only":             `{"idx_to_label":{"0":"benign","1":"jailbreak"}}`,
+		"shipped_huggingface_shape":     `{"label_to_id":{"benign":0,"jailbreak":1},"id_to_label":{"0":"benign","1":"jailbreak"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatalf("failed to write test mapping file: %v", err)
+			}
 
-	if _, err := LoadJailbreakMapping(path); err != nil {
-		t.Errorf("unexpected error loading an ordinary mapping: %v", err)
+			if _, err := LoadJailbreakMapping(path); err != nil {
+				t.Errorf("unexpected error loading an ordinary mapping: %v", err)
+			}
+		})
 	}
 }

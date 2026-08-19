@@ -94,7 +94,17 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// that label indistinguishable from a classify failure - see @adaamko's
 	// review on #2918/#2930. Reject it here, once, rather than at every
 	// place that compares against the sentinel.
-	if _, collides := mapping.LabelToIdx[jailbreakClassificationErrorType]; collides {
+	//
+	// This deliberately probes via GetIndexForJailbreakType rather than
+	// indexing LabelToIdx directly: a mapping file may declare only
+	// idx_to_label or only id_to_label (the HuggingFace naming the shipped
+	// mmbert32k mapping uses), and the normalization above only back-fills
+	// label_to_id -> LabelToIdx, never idx_to_label -> LabelToIdx. A direct
+	// LabelToIdx lookup therefore misses those shapes while
+	// GetJailbreakTypeFromIndex still resolves the sentinel from
+	// IdxToLabel/IDToLabel at runtime. Probing through the same lookup the
+	// runtime uses keeps the guard from drifting from what it guards.
+	if _, collides := mapping.GetIndexForJailbreakType(jailbreakClassificationErrorType); collides {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
 			path, jailbreakClassificationErrorType)
