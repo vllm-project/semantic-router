@@ -4,6 +4,7 @@ set -eu
 # Fix ownership and permissions for config file before switching to nonroot user
 # This allows the dashboard to write to the mounted config.yaml file
 CONFIG_FILE_PATH=${ROUTER_CONFIG_PATH:-/app/config/config.yaml}
+PROVENANCE_FILE_PATH=${CONFIG_FILE_PATH%.*}.provenance.json
 STATE_DIR=$(dirname "$CONFIG_FILE_PATH")
 RECIPE_STORE_DIR=${VLLM_SR_RECIPE_STORE_DIR:-${STATE_DIR}/.vllm-sr/recipe-store}
 PERMISSION_HELPER=/app/entrypoint_permissions.py
@@ -83,6 +84,9 @@ if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; 
     fi
     if [ -f "$CONFIG_FILE_PATH" ]; then
         python3 "$PERMISSION_HELPER" prepare-file "$CONFIG_FILE_PATH" "$STATE_GID"
+    fi
+    if [ -f "$PROVENANCE_FILE_PATH" ]; then
+        python3 "$PERMISSION_HELPER" prepare-file "$PROVENANCE_FILE_PATH" "$STATE_GID"
     fi
     if [ -n "${VLLM_SR_ENVOY_CONFIG_PATH:-}" ] && [ -f "$VLLM_SR_ENVOY_CONFIG_PATH" ]; then
         ENVOY_STATE_DIR=$(dirname "$VLLM_SR_ENVOY_CONFIG_PATH")

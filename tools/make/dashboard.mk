@@ -117,7 +117,7 @@ dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: m
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_BACKEND_DIR) && go test ./...
 
-dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend tests, go mod tidy)
+dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 

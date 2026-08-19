@@ -23,6 +23,7 @@ MAX_PROVENANCE_BYTES = 64 * 1024
 _SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRIVATE_STATE_DIRECTORY = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PRIVATE_DIRECTORY_MODE = 0o700
+_RECIPE_ASSET_MODE = 0o644
 
 log = get_logger(__name__)
 
@@ -152,6 +153,21 @@ def private_runtime_state_subdirectory(state_root_dir: str | Path, name: str) ->
     return directory
 
 
+def private_runtime_state_nested_directory(
+    state_root_dir: str | Path, parent_name: str, name: str
+) -> Path:
+    """Create one private child below a validated runtime-state directory."""
+
+    if not _PRIVATE_STATE_DIRECTORY.fullmatch(name):
+        raise ValueError(f"Runtime state directory name is invalid: {name}")
+    parent = private_runtime_state_subdirectory(state_root_dir, parent_name)
+    directory = parent / name
+    _create_or_harden_private_directory(directory)
+    if directory.parent.resolve(strict=True) != parent.resolve(strict=True):
+        raise ValueError(f"Runtime state directory escapes {parent}: {directory}")
+    return directory
+
+
 def _runtime_config_filename(stack_name: str | None = None) -> str:
     stack_name = normalize_stack_name(
         stack_name if stack_name is not None else os.getenv(STACK_NAME_ENV)
@@ -207,7 +223,7 @@ def _fsync_directory(directory: Path) -> None:
         os.close(directory_fd)
 
 
-def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
+def _atomic_write_bytes(path: Path, data: bytes, mode: int) -> None:
     runtime_dir = path.parent
     _assert_direct_child(runtime_dir, path)
     fd, temp_name = tempfile.mkstemp(
@@ -215,7 +231,7 @@ def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
     )
     temp_path = Path(temp_name)
     try:
-        os.fchmod(fd, 0o600)
+        os.fchmod(fd, mode)
         handle = os.fdopen(fd, "wb")
         fd = -1
         with handle:
@@ -232,6 +248,10 @@ def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
             temp_path.unlink()
 
 
+def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
+    _atomic_write_bytes(path, data, 0o600)
+
+
 def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
     """Atomically replace an explicit runtime-owned config path."""
 
@@ -242,6 +262,22 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
             f"Runtime config parent must be an owned directory: {path.parent}"
         )
     _atomic_write_private_bytes(path, data)
+    return path
+
+
+def write_runtime_recipe_asset_bytes(path: Path, data: bytes) -> Path:
+    """Atomically write an embedded Recipe asset inside a private directory.
+
+    The containing runtime-state directories remain owner-only. Files use the
+    read-only asset mode expected by the non-root Dashboard after bind mount.
+    """
+
+    path = path.expanduser().absolute()
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise ValueError(
+            f"Runtime Recipe parent must be an owned directory: {path.parent}"
+        )
+    _atomic_write_bytes(path, data, _RECIPE_ASSET_MODE)
     return path
 
 

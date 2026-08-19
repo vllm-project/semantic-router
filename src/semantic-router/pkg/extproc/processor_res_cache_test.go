@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -38,7 +39,7 @@ type mockStreamingCache struct {
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
 
-func (m *mockStreamingCache) CheckConnection() error { return nil }
+func (m *mockStreamingCache) CheckConnection(context.Context) error { return nil }
 
 func (m *mockStreamingCache) AddPendingRequest(
 	_ string,
@@ -61,6 +62,7 @@ func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody [
 }
 
 func (m *mockStreamingCache) AddEntry(
+	_ context.Context,
 	_ string,
 	model string,
 	query string,
@@ -90,6 +92,7 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 }
 
 func (m *mockStreamingCache) LookupSimilarWithThreshold(
+	_ context.Context,
 	model string,
 	_ string,
 	_ float32,
@@ -101,7 +104,7 @@ func (m *mockStreamingCache) LookupSimilarWithThreshold(
 
 func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }
 
-func (m *mockStreamingCache) FindExact(_ string, _ string) (cache.LookupResult, error) {
+func (m *mockStreamingCache) FindExact(_ context.Context, _ string, _ string) (cache.LookupResult, error) {
 	m.exactFindCalled = true
 	return cache.LookupResult{
 		ResponseBody: m.exactResponse,
@@ -111,6 +114,7 @@ func (m *mockStreamingCache) FindExact(_ string, _ string) (cache.LookupResult, 
 }
 
 func (m *mockStreamingCache) AddExact(
+	_ context.Context,
 	_ string,
 	_ string,
 	_ []byte,
@@ -638,4 +642,24 @@ func TestBuildReconstructedStreamingResponsePreservesChoiceIndexes(t *testing.T)
 	assert.Equal(t, 0, decoded.Choices[0].Index)
 	assert.Equal(t, 1, decoded.Choices[1].Index)
 	assert.Equal(t, "length", decoded.Choices[1].FinishReason)
+}
+
+// The write path must outlive the request that produced it: the response is
+// already computed, so a client disconnect has no work left to save (#2473).
+func TestCacheWriteContextSurvivesRequestCancellation(t *testing.T) {
+	type ctxKey string
+	const traceKey ctxKey = "trace"
+
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), traceKey, "span-1"))
+	writeCtx := cacheWriteContext(&RequestContext{TraceContext: parent})
+	cancel()
+
+	require.NoError(t, writeCtx.Err(), "a cancelled request must not cancel its cache write")
+	assert.Equal(t, "span-1", writeCtx.Value(traceKey), "trace values must survive the detach")
+	assert.ErrorIs(t, parent.Err(), context.Canceled, "the request context itself still cancels")
+}
+
+func TestCacheWriteContextFallsBackToBackground(t *testing.T) {
+	assert.Equal(t, context.Background(), cacheWriteContext(nil))
+	assert.Equal(t, context.Background(), cacheWriteContext(&RequestContext{}))
 }

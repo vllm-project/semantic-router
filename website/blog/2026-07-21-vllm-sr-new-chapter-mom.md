@@ -179,7 +179,7 @@ To an application, the full system remains an ordinary model call:
 That identity may select one model, escalate through a cascade, compare parallel answers, require grounding, or run a bounded workflow—without changing the external interface, version, or response contract.
 
 <p align="center">
-  <img src="/img/blog/vllm/2026-07-21-vllm-sr-new-chapter/preference-models.png" alt="One Mixture-of-Models family exposes blend, lite, flash, ultra, and vault variants as individually versioned model identities" width="100%" />
+  <img src="/img/blog/vllm/2026-07-21-vllm-sr-new-chapter/preference-models.png" alt="The MoM V1 family exposes blend, lite, flash, ultra, and vault as individually versioned model identities" width="100%" />
   <br />
   <em>Figure 7: Preferences are published as bounded, versioned model contracts—not hidden application-side routing presets.</em>
 </p>
@@ -226,7 +226,7 @@ The target is a frontier across quality, latency, cost, safety, privacy, reliabi
 
 ### Evaluating the MoM as one model
 
-Evaluation must score the model identity end to end; backend benchmarks are inputs, not the result. A versioned scorecard should measure routing regret, collaboration gain, recovery, session continuity, tail latency, cost, safety, privacy, and energy. It should stress provider failures, device loss, model disagreement, workload drift, and preference changes. Each declared operating point also needs its own test: `flash` on its latency–quality frontier, `light` against its quality floor, and `ultra` within its budget.
+Evaluation must score the model identity end to end; backend benchmarks are inputs, not the result. A versioned scorecard should measure routing regret, collaboration gain, recovery, session continuity, tail latency, cost, safety, privacy, and energy. It should stress provider failures, device loss, model disagreement, workload drift, and preference changes. Each declared operating point also needs its own test: `blend` for balanced trade-offs and recovery, `lite` against its quality floor, `flash` on its latency–quality frontier, `ultra` within its budget, and `vault` for privacy and locality enforcement.
 
 The scientific test is stricter than asking whether more calls improve a benchmark. Under matched active compute, can a conditional system exploit complementary strengths and failure modes better than the best fixed model? Without that control, MoM can hide brute-force scaling behind a clever graph. Evaluations must report calls, tokens, cost, latency, and energy alongside quality—and publish when composition does not help.
 

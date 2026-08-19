@@ -103,7 +103,7 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		return
 	}
 	defer func() { _ = backend.Close() }()
-	healthErr := backend.CheckConnection()
+	healthErr := backend.CheckConnection(r.Context())
 	response := responseCacheTestResponse{
 		Valid:        true,
 		Healthy:      healthErr == nil,
