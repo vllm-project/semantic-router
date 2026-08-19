@@ -69,11 +69,14 @@ config:
         tracing:
           enabled: false
     stores:
-      # Caching/memory/vector-store embeddings are unrelated to on_error and
-      # would otherwise eagerly download an embedding model at pod startup
-      # (slow without HF_TOKEN, and risks the helm install readiness
-      # timeout) - disabled since this profile only needs the jailbreak
-      # signal path.
+      # Caching is unrelated to on_error, so it stays off - this profile only
+      # needs the jailbreak signal path.
+      #
+      # Note this does NOT stop the startup embedding-model download: that is
+      # gated only on !EmbeddingModels.UsesRemoteEmbeddingBackend() and the
+      # model_catalog.embeddings *_model_path values
+      # (pkg/modeldownload/feature_gates.go), which never consult
+      # stores.response_cache. See the resources comment below.
       response_cache:
         enabled: false
         embedding_model: mmbert
@@ -140,11 +143,19 @@ extraVolumeMounts:
 
 resources:
   # 2Gi (copied from the hallucination profile) OOMKilled the router
-  # (exit 137) while it downloaded/loaded the embedding_model referenced by
-  # global.stores - confirmed via `kubectl get pod -o json` lastState. The
-  # actively-CI-running envoy-ai-gateway profile uses 12Gi/5Gi; this
-  # profile does far less, but still needs real headroom for that same
-  # startup-time model load.
+  # (exit 137, confirmed via `kubectl get pod -o json` lastState) while it
+  # downloaded and loaded the local mmbert embedding model at startup. That
+  # load is what needs the headroom, and it happens because this profile uses
+  # a local embedding backend with non-empty *_model_path values - the
+  # tools_db warmup then embeds through it (mmbert, target_dimension 768).
+  # The actively-CI-running envoy-ai-gateway profile uses 12Gi/5Gi.
+  #
+  # A leaner option exists but is not taken here: remote-embedding's profile
+  # empties all five *_model_path values and points at a mock embedding
+  # service, which flips the download gate off entirely and lets it run in
+  # 2Gi. That needs an extra mock deployment and would change what the
+  # tools_db warmup exercises, so it is left as a possible follow-up rather
+  # than bundled into an on_error test.
   limits:
     cpu: '2'
     memory: 6Gi
