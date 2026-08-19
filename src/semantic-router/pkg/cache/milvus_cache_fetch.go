@@ -2,14 +2,18 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
+
+var errMilvusCacheEntryNotFound = errors.New("milvus cache entry not found")
 
 // GetAllEntries retrieves all entries from Milvus for HNSW index rebuilding
 // Returns slices of request_ids and embeddings for efficient bulk loading
@@ -113,23 +117,28 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]b
 	if !c.enabled {
 		return nil, fmt.Errorf("milvus cache is not enabled")
 	}
-
 	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
 
 	// Query Milvus by request_id (primary key)
 	// Filter for non-empty responses to avoid race condition with pending entries
-	queryResult, err := c.client.Query(
-		ctx,
-		c.collectionName,
-		[]string{}, // Empty partitions means search all
-		fmt.Sprintf(
-			"request_id == %s && model == %s && response_body != \"\"",
-			milvusStringLiteral(requestID),
-			milvusStringLiteral(model),
-		),
-		[]string{"response_body"}, // Only fetch document, not embedding!
-		c.searchQueryOptions()...,
-	)
+	var queryResult client.ResultSet
+	var err error
+	if c.queryByIDFn != nil {
+		queryResult, err = c.queryByIDFn(ctx, requestID, model)
+	} else {
+		queryResult, err = c.client.Query(
+			ctx,
+			c.collectionName,
+			[]string{}, // Empty partitions means search all
+			fmt.Sprintf(
+				"request_id == %s && model == %s && response_body != \"\"",
+				milvusStringLiteral(requestID),
+				milvusStringLiteral(model),
+			),
+			[]string{"response_body"}, // Only fetch document, not embedding!
+			c.searchQueryOptions()...,
+		)
+	}
 	if err != nil {
 		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
@@ -139,7 +148,7 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]b
 	if len(queryResult) == 0 {
 		logging.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("document not found: %s", requestID)
+		return nil, fmt.Errorf("%w: %s", errMilvusCacheEntryNotFound, requestID)
 	}
 
 	// Milvus automatically includes the primary key but the column order is non-deterministic
