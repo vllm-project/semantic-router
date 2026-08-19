@@ -1084,6 +1084,14 @@ routing:
           cost_quality_tradeoff: 0.35
           discount_factor: 0.9
           use_logprob_verification: true
+	  enable_self_verification: false
+          verification_samples: 5
+          verification_temperature: 0.7
+          use_pomdp_router: true
+          belief_particles: 100
+          cost_lambda: 0.5
+          verifier_server_url: ""
+          enable_cascade: false
       plugins:
         - type: response_jailbreak
           configuration:
@@ -1587,6 +1595,14 @@ global:
         cost_quality_tradeoff: 0.4
         discount_factor: 0.9
         use_logprob_verification: true
+	enable_self_verification: false
+        verification_samples: 5
+        verification_temperature: 0.7
+        use_pomdp_router: true
+        belief_particles: 100
+        cost_lambda: 0.5
+        verifier_server_url: ""
+        enable_cascade: false
       hybrid:
         experience_weight: 0.4
         router_dc_weight: 0.25
