@@ -55,18 +55,7 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 }
 
 func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode) error {
-	if node == nil {
-		return nil
-	}
-	if node.IsLeaf() {
-		return validateDecisionLeafNode(cfg, decisionName, node)
-	}
-	for i := range node.Conditions {
-		if err := validateDecisionRuleNode(cfg, decisionName, &node.Conditions[i]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return validateDecisionRuleTree(cfg, decisionName, decisionRuleRootPath, node)
 }
 
 func validateDecisionLeafNode(
