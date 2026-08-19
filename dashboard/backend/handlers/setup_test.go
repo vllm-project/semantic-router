@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -616,11 +615,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)

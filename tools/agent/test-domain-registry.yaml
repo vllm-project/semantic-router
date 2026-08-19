@@ -111,7 +111,18 @@ domains:
     workflow: .github/workflows/dashboard-test.yml
     cadence: [pr, main, nightly]
     resource_class: medium
-    paths: [dashboard/**]
+    # Also triggers on the router packages the dashboard backend imports, so a
+    # router-side change cannot break the dashboard without running its gate, and on
+    # the gate's own definition so changes to it are self-tested (see issue #2793).
+    paths:
+      - dashboard/**
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/modelinventory/**
+      - src/semantic-router/pkg/nlgen/**
+      - src/semantic-router/pkg/startupstatus/**
+      - tools/make/dashboard.mk
+      - .github/workflows/dashboard-test.yml
     local: {fast: [make dashboard-check], feature: []}
     image_receipts: []
     reporting: {kind: check}
