@@ -142,25 +142,38 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		threshold = 0.10
 	}
 	if analysisResult.MaxScore < threshold {
+		// Nothing scored above the threshold. If some message could not be
+		// embedded at all it was never checked, so under on_error: block the
+		// content is unverified rather than clean - the same policy the BERT
+		// path applies to a classify error.
+		if analysisResult.FailedMessages > 0 && c.Config.PromptGuard.IsBlock() {
+			logging.Errorf("[Signal Computation] Contrastive jailbreak rule %q: %d/%d messages could not be embedded; failing closed",
+				rule.Name, analysisResult.FailedMessages, analysisResult.TotalMessages)
+			c.recordJailbreakRuleMatch(rule, JailbreakClassificationErrorType, 1.0, start, results, mu)
+		}
 		return
 	}
 
+	c.recordJailbreakRuleMatch(rule, "contrastive", analysisResult.MaxScore, start, results, mu)
+
+	logging.Debugf("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
+		rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
+}
+
+// recordJailbreakRuleMatch records one matched jailbreak rule into results.
+func (c *Classifier) recordJailbreakRuleMatch(rule config.JailbreakRule, jailbreakType string, confidence float32, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
 	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
-	confidence := analysisResult.MaxScore
 	mu.Lock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
 	if confidence > results.JailbreakConfidence {
 		results.JailbreakDetected = true
-		results.JailbreakType = "contrastive"
+		results.JailbreakType = jailbreakType
 		results.JailbreakConfidence = confidence
 	}
 	results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
 	mu.Unlock()
-
-	logging.Debugf("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
-		rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
 }
 
 func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
