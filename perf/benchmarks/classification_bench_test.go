@@ -3,8 +3,10 @@
 package benchmarks
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -172,4 +174,51 @@ func BenchmarkCGOOverhead(b *testing.B) {
 			b.Fatalf("Classification failed: %v", err)
 		}
 	}
+}
+
+// BenchmarkLearnedSignalKernel is the model-backed counterpart to the Router
+// orchestration topology benchmark. The unified classifier currently produces
+// intent, PII, and security outputs in one native call, so the signal set and
+// count are explicit rather than pretending arbitrary learned families have
+// interchangeable cost.
+func BenchmarkLearnedSignalKernel(b *testing.B) {
+	initClassifier(b)
+	for _, contextTokens := range []int{128, 512, 2048} {
+		benchmarkLearnedSignalContext(b, contextTokens)
+	}
+}
+
+func benchmarkLearnedSignalContext(b *testing.B, contextTokens int) {
+	text := strings.Repeat("routing ", contextTokens)
+	for _, classifierBatch := range []int{1, 4, 16} {
+		batch := make([]string, classifierBatch)
+		for index := range batch {
+			batch[index] = text
+		}
+		name := fmt.Sprintf(
+			"classifier_batch=%d/context_tokens=%d/learned_signal_set=unified-intent-pii-security/learned_signals=3/signal_backend=native-unified",
+			classifierBatch,
+			contextTokens,
+		)
+		b.Run(name, func(b *testing.B) {
+			benchmarkLearnedSignalBatch(b, batch)
+		})
+	}
+}
+
+func benchmarkLearnedSignalBatch(b *testing.B, batch []string) {
+	b.ReportAllocs()
+	for b.Loop() {
+		results, err := benchClassifier.ClassifyBatch(batch)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if results == nil || results.BatchSize != len(batch) {
+			b.Fatalf("classified batch = %v, want %d", results, len(batch))
+		}
+	}
+	if elapsed := b.Elapsed().Seconds(); elapsed > 0 {
+		b.ReportMetric(float64(b.N*len(batch))/elapsed, "texts/s")
+	}
+	b.ReportMetric(float64(len(batch)), "texts/op")
 }

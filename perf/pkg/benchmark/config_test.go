@@ -47,8 +47,11 @@ func TestLoadManifest_ShippedConfigResolvesCPUCI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if len(resolved.Suites) != 5 {
-		t.Fatalf("CPU CI suites = %d, want 5", len(resolved.Suites))
+	if len(resolved.Suites) != 6 {
+		t.Fatalf("CPU CI suites = %d, want 6", len(resolved.Suites))
+	}
+	if len(resolved.Trends) != 4 {
+		t.Fatalf("CPU CI trends = %d, want 4", len(resolved.Trends))
 	}
 	if resolved.Profile.Count != 3 || resolved.Profile.BenchTime != "500ms" {
 		t.Fatalf("CPU CI profile = %+v", resolved.Profile)
@@ -97,5 +100,30 @@ func TestManifestRejectsNegativeProfileCount(t *testing.T) {
 	}
 	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "non-negative") {
 		t.Fatalf("negative count error = %v, want non-negative validation", err)
+	}
+}
+
+func TestManifestRejectsInvalidTrendMetric(t *testing.T) {
+	manifest := &Manifest{
+		SchemaVersion: ManifestSchemaVersion,
+		Environments: map[string]EnvironmentConfig{
+			"cpu": {Kind: "cpu", Capabilities: []string{"host"}},
+		},
+		Profiles: map[string]ProfileConfig{"ci": {Suites: []string{"core"}}},
+		Suites: map[string]SuiteConfig{
+			"core": {
+				Runner: "go_benchmark", Module: ".", Packages: []string{"./..."},
+				Benchmark: "BenchmarkCore", Environments: []string{"cpu"},
+			},
+		},
+		Trends: map[string]TrendConfig{
+			"core": {
+				Title: "Core", Suite: "core", Benchmark: "BenchmarkCore",
+				XDimension: "items", Metric: "not-a-metric",
+			},
+		},
+	}
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported metric") {
+		t.Fatalf("invalid trend metric error = %v", err)
 	}
 }

@@ -24,6 +24,7 @@ type Manifest struct {
 	Environments  map[string]EnvironmentConfig `yaml:"environments"`
 	Profiles      map[string]ProfileConfig     `yaml:"profiles"`
 	Suites        map[string]SuiteConfig       `yaml:"suites"`
+	Trends        map[string]TrendConfig       `yaml:"trends,omitempty"`
 }
 
 type EnvironmentConfig struct {
@@ -58,17 +59,37 @@ type SuiteConfig struct {
 	SourcePaths  []string            `yaml:"source_paths,omitempty"`
 }
 
+// TrendConfig describes one controlled scaling view over benchmark dimensions.
+// It is intentionally separate from suites: suites own execution, while trends
+// choose comparable points and presentation without expanding the run matrix.
+type TrendConfig struct {
+	Title           string `yaml:"title"`
+	Description     string `yaml:"description,omitempty"`
+	Suite           string `yaml:"suite"`
+	Benchmark       string `yaml:"benchmark"`
+	XDimension      string `yaml:"x_dimension"`
+	SeriesDimension string `yaml:"series_dimension,omitempty"`
+	Metric          string `yaml:"metric"`
+	XScale          string `yaml:"x_scale,omitempty"`
+}
+
 type ResolvedRun struct {
 	EnvironmentName string
 	Environment     EnvironmentConfig
 	ProfileName     string
 	Profile         ProfileConfig
 	Suites          []ResolvedSuite
+	Trends          []ResolvedTrend
 }
 
 type ResolvedSuite struct {
 	Name   string
 	Config SuiteConfig
+}
+
+type ResolvedTrend struct {
+	Name   string
+	Config TrendConfig
 }
 
 func LoadManifest(path string) (*Manifest, error) {
@@ -101,7 +122,47 @@ func (m *Manifest) Validate() error {
 	if err := m.validateSuites(); err != nil {
 		return err
 	}
+	if err := m.validateTrends(); err != nil {
+		return err
+	}
 	return m.validateProfiles()
+}
+
+func (m *Manifest) validateTrends() error {
+	for name, trend := range m.Trends {
+		if !manifestName.MatchString(name) {
+			return fmt.Errorf("invalid trend name %q", name)
+		}
+		if strings.TrimSpace(trend.Title) == "" || strings.TrimSpace(trend.XDimension) == "" {
+			return fmt.Errorf("trend %q requires title and x_dimension", name)
+		}
+		if _, ok := m.Suites[trend.Suite]; !ok {
+			return fmt.Errorf("trend %q references unknown suite %q", name, trend.Suite)
+		}
+		if _, err := regexp.Compile(trend.Benchmark); err != nil {
+			return fmt.Errorf("trend %q has invalid benchmark regexp: %w", name, err)
+		}
+		if trend.SeriesDimension == trend.XDimension {
+			return fmt.Errorf("trend %q cannot use %q for both x and series dimensions", name, trend.XDimension)
+		}
+		if !validTrendMetric(trend.Metric) {
+			return fmt.Errorf("trend %q has unsupported metric %q", name, trend.Metric)
+		}
+		if trend.XScale != "" && trend.XScale != "linear" && trend.XScale != "log2" {
+			return fmt.Errorf("trend %q has unsupported x_scale %q", name, trend.XScale)
+		}
+	}
+	return nil
+}
+
+func validTrendMetric(metric string) bool {
+	switch metric {
+	case "latency_us_per_op", "latency_ms_per_op", "allocs_per_op", "bytes_per_op",
+		"p50_latency_ms", "p95_latency_ms", "p99_latency_ms", "throughput_qps":
+		return true
+	default:
+		return strings.HasPrefix(metric, "custom:") && strings.TrimSpace(strings.TrimPrefix(metric, "custom:")) != ""
+	}
 }
 
 func (m *Manifest) validateEnvironments() error {
@@ -273,7 +334,19 @@ func (m *Manifest) Resolve(environmentName, profileName string) (*ResolvedRun, e
 		}
 		resolved.Suites = append(resolved.Suites, ResolvedSuite{Name: suiteName, Config: suite})
 	}
+	resolved.Trends = m.resolveTrends(profile)
 	return resolved, nil
+}
+
+func (m *Manifest) resolveTrends(profile ProfileConfig) []ResolvedTrend {
+	var trends []ResolvedTrend
+	for _, trendName := range sortedMapKeys(m.Trends) {
+		trend := m.Trends[trendName]
+		if contains(profile.Suites, trend.Suite) {
+			trends = append(trends, ResolvedTrend{Name: trendName, Config: trend})
+		}
+	}
+	return trends
 }
 
 func contains(values []string, wanted string) bool {

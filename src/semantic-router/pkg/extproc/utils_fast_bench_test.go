@@ -46,6 +46,29 @@ func BenchmarkExtractContentFast_ContextShape(b *testing.B) {
 	}
 }
 
+// BenchmarkExtractContentFast_ContextTrend holds message and tool topology
+// constant so the report can show an interpretable context-length curve. The
+// pairwise ContextShape benchmark above remains the production-like corner
+// coverage; these points answer the narrower scaling question.
+func BenchmarkExtractContentFast_ContextTrend(b *testing.B) {
+	for _, tokens := range []int{128, 512, 2048, 8192, 32768, 65536} {
+		shape := requestShape{tokens: tokens, messages: 1, tools: 0}
+		body := benchmarkRequestBody(shape)
+		name := fmt.Sprintf("context_tokens=%d/messages=1/tools=0", tokens)
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				result, err := extractContentFast(body)
+				if err != nil {
+					b.Fatal(err)
+				}
+				benchmarkFastExtractResult.Store(result)
+			}
+			b.ReportMetric(float64(len(body)), "input_bytes")
+		})
+	}
+}
+
 func BenchmarkExtractContentFast_Parallel(b *testing.B) {
 	body := benchmarkRequestBody(requestShape{tokens: 4096, messages: 8, tools: 8})
 	b.ReportAllocs()

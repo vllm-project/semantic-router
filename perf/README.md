@@ -32,6 +32,8 @@ comparison.json    baseline comparison and coverage inventory
 report.json        stable machine-readable report
 report.md          terminal and GitHub job summary
 report.html        standalone interactive review artifact
+trends.json        structured scaling series used by dashboards and automation
+charts/*.svg       dependency-free latency and throughput trend charts
 suites/*.log       raw output from every selected producer
 ```
 
@@ -45,18 +47,55 @@ This first gate protects deterministic Router overhead:
 | Suite | Real code path | Main dimensions |
 | --- | --- | --- |
 | `request-shape` | `pkg/extproc` request extraction and body handling | context tokens, JSON bytes, messages, tools, parallel requests |
+| `signal-topology` | learned-signal scheduling with deterministic inference stubs | context, request batch, enabled learned-signal count |
 | `decision-topology` | `pkg/decision` rule evaluation | decisions, match position, parallel requests |
 | `selection` | `pkg/selection` cache affinity and context fit | candidate models, context utilization |
 | `looper-core` | pure Looper/Fusion/ReMoM/Workflow helpers | algorithm, candidates, distribution |
 | `looper-orchestration` | real algorithm orchestration with deterministic localhost model stubs | fanout, rounds, workers, quorum overhead |
-| `classification` | model-backed CPU classification | classifier batch size and parallel calls |
+| `classification` | model-backed CPU classification | classifier batch, context, exact unified learned-signal set |
 | `semantic-cache` | semantic-cache operations | entries, hit/miss path, request concurrency |
 
-The PR profile runs the first five suites. Model-backed classification and
+The PR profile runs the first six suites, including the model-isolated signal
+topology sweep. Model-backed classification and
 cache suites remain opt-in in `cpu-full` until their model and store fixtures
 are made hermetic enough for the PR gate.
 
-Model time is a separate measurement layer. Future real-model suites must
+## Scaling reports: count and composition
+
+The framework answers two different performance questions and labels them
+separately:
+
+1. The **regression layer** compares every reviewed point with the checked-in
+   CPU baseline. Portable allocation growth is blocking; host timing is
+   advisory.
+2. The **capacity layer** groups current-run points into controlled curves. It
+   shows how latency or throughput changes as context, request batch, classifier
+   batch, or enabled signal count increases on the same host.
+
+The shipped CPU reports render these views:
+
+| View | X axis | Series | What it means |
+| --- | --- | --- | --- |
+| ExtProc context | context tokens | one fixed request shape | Real request extraction scaling |
+| Generic learned-classifier context | context tokens | enabled generic-classifier count | Router orchestration plus deterministic full-input stub work |
+| Generic learned-classifier request batch | concurrent request batch | enabled generic-classifier count | Router batch latency and throughput without model time |
+| Unified model kernel (`cpu-full`) | classifier batch | context tokens | Real intent + PII + security native inference |
+
+Signal count alone is not a portable workload definition. A domain classifier,
+an embedding lookup, a generative classifier, PII token classification, and a
+jailbreak scan have different execution and context-window behavior. Every
+model-backed point therefore records `learned_signal_set`, `learned_signals`,
+and `signal_backend`; future external CPU/GPU suites must do the same. Compare
+two curves only when their signal set, model revisions, warm/cold state,
+batching policy, and hardware metadata are compatible.
+
+The interaction matrix is intentionally bounded. Context sweeps hold batch and
+request shape constant; request-batch sweeps hold context constant; model
+kernel sweeps cross only a small classifier-batch × context grid. Add a new
+production corner or pairwise interaction when evidence calls for it instead
+of multiplying every dimension.
+
+Model time is a separate measurement layer. Real-model suites must
 record direct-backend and routed results together, then report the Router
 delta:
 
@@ -103,6 +142,14 @@ VSR_PERF_RESULT_FILE
 The external producer must write the `current.json` schema to
 `VSR_PERF_RESULT_FILE`. The framework then merges, compares, and reports it in
 exactly the same way as a Go benchmark.
+
+For trend charts, each benchmark metric should populate structured
+`dimensions` (for example `context_tokens`, `classifier_batch`,
+`learned_signals`, `learned_signal_set`, and `signal_backend`). Go benchmark names using
+`key=value` path segments are parsed automatically. A manifest `trends` entry
+selects the suite and benchmark pattern, x and series dimensions, metric, and
+linear or log2 x scale. The report renderer writes the same structured series
+to `trends.json` and dependency-free SVGs for local and CI artifacts.
 
 ## Profiles and overrides
 

@@ -38,9 +38,26 @@ func ParseBenchOutputForSuite(reader io.Reader, suite string) (*Baseline, error)
 
 	result := &Baseline{SchemaVersion: ResultSchemaVersion, Benchmarks: make(map[string]BenchmarkMetric, len(samples))}
 	for name, values := range samples {
-		result.Benchmarks[name] = aggregateMetrics(values)
+		metric := aggregateMetrics(values)
+		metric.Dimensions = benchmarkDimensions(name)
+		result.Benchmarks[name] = metric
 	}
 	return result, nil
+}
+
+func benchmarkDimensions(name string) map[string]string {
+	dimensions := make(map[string]string)
+	for _, segment := range strings.Split(name, "/") {
+		key, value, ok := strings.Cut(segment, "=")
+		if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		dimensions[key] = value
+	}
+	if len(dimensions) == 0 {
+		return nil
+	}
+	return dimensions
 }
 
 func parseBenchmarkLine(line string) (string, BenchmarkMetric, bool) {

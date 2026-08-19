@@ -13,7 +13,8 @@ implementations. Their results are not directly comparable.
 
 | Question | Suite | Starting point |
 |----------|-------|----------------|
-| Did a code change increase allocations or component latency? | Go microbenchmarks in `perf/` | `make perf-check` |
+| Did a code change increase allocations or component latency? | Go microbenchmarks and scaling trends in `perf/` | `make perf-check` |
+| How do context, batch, and enabled learned signals change Router latency? | Controlled trend charts in `perf/` | `make perf-bench-quick` |
 | Does routing preserve answer quality on reasoning datasets? | Reasoning evaluation in `bench/` | `vllm-semantic-router-bench compare --dataset arc-challenge` |
 | Does a session-aware route remain stable across turns or faults? | Live agentic routing | `bench/agentic_routing_live_benchmark.py` |
 | Can a routed model complete a multi-turn agent task? | Live agent task | `bench/agent_task_live_benchmark.py` |
@@ -28,9 +29,10 @@ implementations. Their results are not directly comparable.
 ## Component microbenchmarks
 
 The manifest-driven `perf/` framework runs benchmarks beside the Router package
-hot paths and writes the same JSON, Markdown, and HTML reports locally and in
-CI. The default profiles do not need a running Router. Model-dependent suites
-require the native libraries and benchmark model files.
+hot paths and writes the same JSON, Markdown, HTML, structured trend data, and
+SVG charts locally and in CI. The default profiles do not need a running
+Router. Model-dependent suites require the native libraries and benchmark model
+files.
 
 ```bash
 make perf-bench-quick
@@ -50,6 +52,22 @@ Reports are written under `reports/perf/<environment>-<profile>/`. The
 regression gate uses `allocs/op` and `B/op` for portable pass/fail decisions;
 `ns/op`, sample variation, and scaling dimensions remain visible in the report.
 Missing and unbaselined measurements fail the CI completeness gate.
+
+Open `report.html` for the current-run curves or consume `trends.json` from
+automation. The default CPU report includes real request-extraction context
+scaling and model-isolated generic learned-classifier curves over context,
+concurrent request batch, and enabled signal count. The model-isolated curves
+include Router scheduling and aggregation plus deterministic full-input stub
+work; they do not claim neural model latency or represent every learned-signal
+family.
+`make perf-bench` adds a model-backed unified
+classifier batch × context sweep when benchmark models are installed.
+
+Treat learned-signal composition as part of the workload. Signal count by
+itself is ambiguous because embedding, domain, PII, jailbreak, and generative
+classifier backends have different cost. Model-backed and external CPU/GPU
+producers record the exact `learned_signal_set` and `signal_backend` beside the
+count, model, and environment metadata.
 
 The manifest includes CPU, AMD GPU, and NVIDIA GPU environment adapters. The
 current required gate is CPU-only. Future GPU/model-serving commands write the

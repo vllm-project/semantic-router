@@ -112,6 +112,7 @@ func (r *Runner) Run(ctx context.Context, options RunOptions) (*Baseline, error)
 				return nil, fmt.Errorf("benchmark %q was emitted by more than one suite", name)
 			}
 			metric.Suite = suite.Name
+			metric.Dimensions = mergeBenchmarkDimensions(metric.Dimensions, benchmarkDimensions(name))
 			result.Benchmarks[name] = metric
 		}
 		result.Metadata.Suites = append(result.Metadata.Suites, SuiteRunMetadata{
@@ -129,6 +130,18 @@ func (r *Runner) Run(ctx context.Context, options RunOptions) (*Baseline, error)
 	}
 	fmt.Printf("\nCaptured %d benchmark measurements in %s\n", len(result.Benchmarks), currentPath)
 	return result, nil
+}
+
+func mergeBenchmarkDimensions(explicit, inferred map[string]string) map[string]string {
+	if explicit == nil {
+		return inferred
+	}
+	for key, value := range inferred {
+		if _, exists := explicit[key]; !exists {
+			explicit[key] = value
+		}
+	}
+	return explicit
 }
 
 func (r *Runner) runSuite(
@@ -208,7 +221,7 @@ func (r *Runner) moduleDir(module string) (string, error) {
 }
 
 func collectRunMetadata(repoRoot string, resolved *ResolvedRun) RunMetadata {
-	return RunMetadata{
+	metadata := RunMetadata{
 		GeneratedAt:     time.Now().UTC(),
 		GitCommit:       commandOutput(repoRoot, "git", "rev-parse", "HEAD"),
 		GitBranch:       commandOutput(repoRoot, "git", "rev-parse", "--abbrev-ref", "HEAD"),
@@ -222,6 +235,15 @@ func collectRunMetadata(repoRoot string, resolved *ResolvedRun) RunMetadata {
 		CPUModel:        cpuModel(),
 		CPUCount:        runtime.NumCPU(),
 	}
+	for _, trend := range resolved.Trends {
+		metadata.Trends = append(metadata.Trends, TrendMetadata{
+			Name: trend.Name, Title: trend.Config.Title, Description: trend.Config.Description,
+			Suite: trend.Config.Suite, Benchmark: trend.Config.Benchmark,
+			XDimension: trend.Config.XDimension, SeriesDimension: trend.Config.SeriesDimension,
+			Metric: trend.Config.Metric, XScale: trend.Config.XScale,
+		})
+	}
+	return metadata
 }
 
 func commandOutput(dir, name string, args ...string) string {

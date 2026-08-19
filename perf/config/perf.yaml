@@ -31,7 +31,7 @@ environments:
 profiles:
   quick:
     description: Fast local feedback over deterministic router hot paths.
-    suites: [request-shape, decision-topology, selection, looper-core]
+    suites: [request-shape, signal-topology, decision-topology, selection, looper-core]
     count: 1
     benchtime: 100ms
     timeout: 10m
@@ -40,6 +40,7 @@ profiles:
     description: CPU PR gate with repeated samples and stubbed algorithm fanout.
     suites:
       - request-shape
+      - signal-topology
       - decision-topology
       - selection
       - looper-core
@@ -52,6 +53,7 @@ profiles:
     description: Longer CPU trend run over the same fail-closed inventory.
     suites:
       - request-shape
+      - signal-topology
       - decision-topology
       - selection
       - looper-core
@@ -64,6 +66,7 @@ profiles:
     description: Opt-in CPU run including model-backed classification and cache suites.
     suites:
       - request-shape
+      - signal-topology
       - decision-topology
       - selection
       - looper-core
@@ -80,16 +83,33 @@ suites:
     runner: go_benchmark
     module: src/semantic-router
     packages: [./pkg/extproc]
-    benchmark: "^Benchmark(ExtractContentFast_ContextShape|ExtractContentFast_Parallel|Handler_ChunkProcessing_16K|RewriteModel_Fast_16K)$"
+    benchmark: "^Benchmark(ExtractContentFast_ContextShape|ExtractContentFast_ContextTrend|ExtractContentFast_Parallel|Handler_ChunkProcessing_16K|RewriteModel_Fast_16K)$"
     environments: [cpu, amd-gpu, nvidia-gpu]
     requires: [host]
     dimensions:
-      context_tokens: ["128", "4096", "16384", "65536"]
+      context_tokens: ["128", "512", "2048", "4096", "8192", "16384", "32768", "65536"]
       messages: ["1", "8", "64"]
       tools: ["0", "8", "64"]
       request_concurrency: ["1", "parallel"]
     source_paths:
       - src/semantic-router/pkg/extproc/**
+
+  signal-topology:
+    description: Learned-signal scheduling and aggregation scaling with deterministic inference stubs.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/classification]
+    benchmark: "^BenchmarkGenericClassifierSignalTopology$"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      context_tokens: ["128", "512", "2048", "8192", "32768"]
+      request_batch: ["1", "4", "16", "32"]
+      learned_signals: ["0", "1", "4", "8"]
+      learned_signal_set: [generic-classifier]
+      signal_backend: [deterministic_stub]
+    source_paths:
+      - src/semantic-router/pkg/classification/**
 
   decision-topology:
     description: Real decision evaluation scaling by rule count and match position.
@@ -154,11 +174,15 @@ suites:
     runner: go_benchmark
     module: perf
     packages: [./benchmarks]
-    benchmark: "^Benchmark(ClassifyBatch|CGOOverhead)"
+    benchmark: "^Benchmark(ClassifyBatch|CGOOverhead|LearnedSignalKernel)"
     environments: [cpu]
     requires: [host, cgo]
     dimensions:
-      classifier_batch: ["1", "10", "50", "100", parallel]
+      classifier_batch: ["1", "4", "10", "16", "50", "100", parallel]
+      context_tokens: ["128", "512", "2048"]
+      learned_signal_set: [unified-intent-pii-security]
+      learned_signals: ["3"]
+      signal_backend: [native-unified]
     source_paths:
       - src/semantic-router/pkg/classification/**
       - candle-binding/**
@@ -178,3 +202,63 @@ suites:
     source_paths:
       - src/semantic-router/pkg/cache/**
       - src/semantic-router/pkg/extproc/*cache*
+
+trends:
+  request-context-latency:
+    title: Request extraction latency by context length
+    description: Real ExtProc parsing with one message and no tools; the production-like pairwise request shapes remain separate regression points.
+    suite: request-shape
+    benchmark: "^BenchmarkExtractContentFast_ContextTrend/"
+    x_dimension: context_tokens
+    metric: latency_us_per_op
+    x_scale: log2
+
+  learned-signal-context-latency:
+    title: Model-isolated generic-classifier path by context and enabled count
+    description: CPU-safe view of generic learned classifier signals. The curve includes Router scheduling, score aggregation, synchronization, allocations, and deterministic full-input stub work; it does not claim neural inference latency or represent other learned-signal families.
+    suite: signal-topology
+    benchmark: "^BenchmarkGenericClassifierSignalTopology/Context/"
+    x_dimension: context_tokens
+    series_dimension: learned_signals
+    metric: latency_us_per_op
+    x_scale: log2
+
+  learned-signal-request-batch-latency:
+    title: Router batch latency by enabled generic-classifier count
+    description: Model-isolated concurrent request batches at a fixed 2K-token context using generic learned classifier signals. Use the throughput chart beside it to distinguish latency growth from useful parallelism.
+    suite: signal-topology
+    benchmark: "^BenchmarkGenericClassifierSignalTopology/RequestBatch/"
+    x_dimension: request_batch
+    series_dimension: learned_signals
+    metric: latency_us_per_op
+    x_scale: log2
+
+  learned-signal-request-batch-throughput:
+    title: Router throughput by request batch and generic-classifier count
+    description: Model-isolated requests per second from the same controlled generic learned classifier sweep; absolute values are advisory on shared CI hosts.
+    suite: signal-topology
+    benchmark: "^BenchmarkGenericClassifierSignalTopology/RequestBatch/"
+    x_dimension: request_batch
+    series_dimension: learned_signals
+    metric: custom:requests/s
+    x_scale: log2
+
+  learned-model-batch-latency:
+    title: Unified learned-model latency by classifier batch and context
+    description: Model-backed CPU-full curve for the native unified intent, PII, and security signal kernel. It is not part of the hermetic PR gate.
+    suite: classification
+    benchmark: "^BenchmarkLearnedSignalKernel/"
+    x_dimension: classifier_batch
+    series_dimension: context_tokens
+    metric: latency_ms_per_op
+    x_scale: log2
+
+  learned-model-batch-throughput:
+    title: Unified learned-model throughput by classifier batch and context
+    description: Model-backed texts per second for the exact unified learned-signal set recorded in each benchmark dimension.
+    suite: classification
+    benchmark: "^BenchmarkLearnedSignalKernel/"
+    x_dimension: classifier_batch
+    series_dimension: context_tokens
+    metric: custom:texts/s
+    x_scale: log2

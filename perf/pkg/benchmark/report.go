@@ -14,6 +14,7 @@ type Report struct {
 	BaselineMetadata RunMetadata   `json:"baseline_metadata"`
 	Summary          ReportSummary `json:"summary"`
 	Rows             []ReportRow   `json:"rows"`
+	Trends           []TrendReport `json:"trends,omitempty"`
 	Ungated          []string      `json:"ungated_benchmarks"`
 	Missing          []string      `json:"missing_benchmarks"`
 	HasRegressions   bool          `json:"has_regressions"`
@@ -32,6 +33,7 @@ type ReportSummary struct {
 type ReportRow struct {
 	Suite                      string             `json:"suite"`
 	Benchmark                  string             `json:"benchmark"`
+	Dimensions                 map[string]string  `json:"dimensions,omitempty"`
 	Samples                    int                `json:"samples"`
 	BaselineNsPerOp            float64            `json:"baseline_ns_per_op"`
 	CurrentNsPerOp             float64            `json:"current_ns_per_op"`
@@ -71,13 +73,19 @@ func GenerateReport(comparison *ComparisonDocument) *Report {
 		HasRegressions:   comparison.HasRegressions,
 		CoverageComplete: comparison.CoverageComplete,
 	}
-	for _, suite := range comparison.CurrentMetadata.Suites {
-		report.Summary.Measured += suite.BenchmarkCount
+	if len(comparison.CurrentBenchmarks) > 0 {
+		report.Summary.Measured = len(comparison.CurrentBenchmarks)
+	} else {
+		for _, suite := range comparison.CurrentMetadata.Suites {
+			report.Summary.Measured += suite.BenchmarkCount
+		}
 	}
 	report.Summary.Compared = len(comparison.Results)
 	report.Summary.Unbaselined = len(comparison.Ungated)
 	report.Summary.Missing = len(comparison.Missing)
+	compared := make(map[string]struct{}, len(comparison.Results))
 	for _, result := range comparison.Results {
+		compared[result.BenchmarkName] = struct{}{}
 		status := "ok"
 		if result.RegressionDetected {
 			status = "regression"
@@ -89,6 +97,7 @@ func GenerateReport(comparison *ComparisonDocument) *Report {
 		report.Rows = append(report.Rows, ReportRow{
 			Suite:                      result.Suite,
 			Benchmark:                  result.BenchmarkName,
+			Dimensions:                 result.Current.Dimensions,
 			Samples:                    result.Current.Samples,
 			BaselineNsPerOp:            result.Baseline.NsPerOp,
 			CurrentNsPerOp:             result.Current.NsPerOp,
@@ -119,6 +128,29 @@ func GenerateReport(comparison *ComparisonDocument) *Report {
 			Status:                     status,
 		})
 	}
+	for name, current := range comparison.CurrentBenchmarks {
+		if _, ok := compared[name]; ok {
+			continue
+		}
+		report.Rows = append(report.Rows, ReportRow{
+			Suite: current.Suite, Benchmark: name, Dimensions: current.Dimensions,
+			Samples: current.Samples, CurrentNsPerOp: current.NsPerOp,
+			NsStdDev: current.NsStdDevPct, CurrentAllocs: current.AllocsPerOp,
+			CurrentBytes: current.BytesPerOp, CurrentCustom: current.Custom,
+			CurrentP50Ms: current.P50LatencyMs, CurrentP95Ms: current.P95LatencyMs,
+			CurrentP99Ms: current.P99LatencyMs, CurrentQPS: current.ThroughputQPS,
+			CurrentUpstreamCalls:      current.UpstreamCalls,
+			CurrentTokenAmplification: current.TokenAmplification,
+			Status:                    "unbaselined",
+		})
+	}
+	sort.Slice(report.Rows, func(i, j int) bool {
+		if report.Rows[i].Suite != report.Rows[j].Suite {
+			return report.Rows[i].Suite < report.Rows[j].Suite
+		}
+		return report.Rows[i].Benchmark < report.Rows[j].Benchmark
+	})
+	report.Trends = buildTrendReports(comparison.CurrentMetadata.Trends, comparison.CurrentBenchmarks)
 	return report
 }
 
@@ -127,6 +159,9 @@ func (r *Report) SaveAll(outputDir string) error {
 		return err
 	}
 	if err := r.SaveMarkdown(filepath.Join(outputDir, "report.md")); err != nil {
+		return err
+	}
+	if err := r.SaveTrends(outputDir); err != nil {
 		return err
 	}
 	return r.SaveHTML(filepath.Join(outputDir, "report.html"))
@@ -171,6 +206,8 @@ func (r *Report) SaveMarkdown(path string) error {
 		output.WriteString("\n")
 	}
 
+	writeMarkdownTrends(&output, r.Trends)
+
 	output.WriteString("## Measurements\n\n")
 	output.WriteString("| Suite | Benchmark | Samples | ns/op base → current | Δ time | CV | allocs/op base → current | B/op base → current | custom metrics base → current | p95 ms base → current | QPS base → current | upstream calls | token amplification | Status |\n")
 	output.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |\n")
@@ -190,6 +227,44 @@ func (r *Report) SaveMarkdown(path string) error {
 		return fmt.Errorf("write Markdown report: %w", err)
 	}
 	return nil
+}
+
+func writeMarkdownTrends(output *strings.Builder, trends []TrendReport) {
+	if len(trends) == 0 {
+		return
+	}
+	output.WriteString("## Scaling trends\n\n")
+	output.WriteString("Trend charts compare current-run points on the same host. The endpoint table remains visible in the GitHub job summary; download the artifact for the SVGs and inline HTML charts. Read each description before comparing model-backed and model-isolated suites.\n\n")
+	for _, trend := range trends {
+		writeMarkdownTrend(output, trend)
+	}
+}
+
+func writeMarkdownTrend(output *strings.Builder, trend TrendReport) {
+	output.WriteString("### " + trend.Title + "\n\n")
+	if trend.Description != "" {
+		output.WriteString(trend.Description + "\n\n")
+	}
+	output.WriteString(fmt.Sprintf("![%s](charts/%s)\n\n", markdownCell(trend.Title), trend.File))
+	output.WriteString("| Series | First point | Last point | Endpoint Δ |\n")
+	output.WriteString("| --- | ---: | ---: | ---: |\n")
+	for _, series := range trend.Series {
+		first := series.Points[0]
+		last := series.Points[len(series.Points)-1]
+		change := trendEndpointChange(first.Value, last.Value)
+		output.WriteString(fmt.Sprintf("| %s | %s=%s: %s %s | %s=%s: %s %s | %+.1f%% |\n",
+			markdownCell(series.Name), trend.XDimension, first.XLabel,
+			formatTrendNumber(first.Value), trend.Unit, trend.XDimension, last.XLabel,
+			formatTrendNumber(last.Value), trend.Unit, change))
+	}
+	output.WriteString("\n")
+}
+
+func trendEndpointChange(first, last float64) float64 {
+	if first == 0 {
+		return 0
+	}
+	return (last - first) / first * 100
 }
 
 func markdownCell(value string) string {
@@ -252,6 +327,7 @@ func (r *Report) SaveHTML(path string) error {
 		"number": func(value float64) string { return fmt.Sprintf("%.1f", value) },
 		"pair":   optionalMetricPair,
 		"custom": optionalCustomMetricPairs,
+		"svg":    func(value string) template.HTML { return template.HTML(value) }, // #nosec G203 -- generated locally from escaped benchmark data.
 	}).Parse(reportHTMLTemplate)
 	if err != nil {
 		return fmt.Errorf("parse HTML report template: %w", err)
@@ -269,12 +345,14 @@ const reportHTMLTemplate = `<!doctype html>
 body{font:14px system-ui,sans-serif;margin:2rem;color:#172033}h1{margin-bottom:.3rem}.meta{color:#536079;margin-bottom:1.5rem}
 .cards{display:flex;gap:1rem;flex-wrap:wrap}.card{background:#f3f6fa;border-radius:8px;padding:.8rem 1.2rem;min-width:110px}.bad{color:#b42318;font-weight:700}.warn{color:#9a6700}.ok{color:#067647;font-weight:700}
 table{border-collapse:collapse;width:100%;margin-top:1.5rem}th,td{border-bottom:1px solid #d8dee9;padding:.55rem;text-align:right}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}code{font-size:12px}
+.trend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:1rem}.trend{border:1px solid #d8dee9;border-radius:8px;padding:1rem}.trend h3{margin:.1rem 0}.trend p{color:#536079}.trend svg{width:100%;height:auto}
 </style></head><body>
 <h1>Semantic Router performance report</h1>
 <div class="meta">{{.Metadata.Environment}} / {{.Metadata.Profile}} · {{.Metadata.GitCommit}} · {{.Metadata.GOOS}}/{{.Metadata.GOARCH}} · {{.Metadata.GoVersion}}</div>
 <div class="cards"><div class="card"><strong>{{.Summary.Measured}}</strong><br>measured</div><div class="card"><strong>{{.Summary.Compared}}</strong><br>compared</div><div class="card"><strong>{{.Summary.Regressions}}</strong><br>regressions</div><div class="card"><strong>{{.Summary.TimingAdvisories}}</strong><br>timing advisories</div></div>
 {{if .Ungated}}<h2 class="bad">Unbaselined measurements</h2><ul>{{range .Ungated}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
 {{if .Missing}}<h2 class="bad">Missing measurements</h2><ul>{{range .Missing}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+{{if .Trends}}<h2>Scaling trends</h2><p>Current-run curves from one host; model-isolated and model-backed suites are labeled separately.</p><div class="trend-grid">{{range .Trends}}<section class="trend"><h3>{{.Title}}</h3><p>{{.Description}}</p>{{svg .SVG}}</section>{{end}}</div>{{end}}
 <table><thead><tr><th>Suite</th><th>Benchmark</th><th>samples</th><th>base ns/op</th><th>current ns/op</th><th>Δ time</th><th>CV</th><th>allocs/op</th><th>B/op</th><th>custom metrics</th><th>p95 ms</th><th>QPS</th><th>upstream calls</th><th>token amp</th><th>status</th></tr></thead><tbody>
 {{range .Rows}}<tr><td>{{.Suite}}</td><td><code>{{.Benchmark}}</code></td><td>{{.Samples}}</td><td>{{number .BaselineNsPerOp}}</td><td>{{number .CurrentNsPerOp}}</td><td>{{change .NsChange}}</td><td>{{number .NsStdDev}}%</td><td>{{.BaselineAllocs}} → {{.CurrentAllocs}}</td><td>{{.BaselineBytes}} → {{.CurrentBytes}}</td><td>{{custom .BaselineCustom .CurrentCustom}}</td><td>{{pair .BaselineP95Ms .CurrentP95Ms}}</td><td>{{pair .BaselineQPS .CurrentQPS}}</td><td>{{pair .BaselineUpstreamCalls .CurrentUpstreamCalls}}</td><td>{{pair .BaselineTokenAmplification .CurrentTokenAmplification}}</td><td class="{{if eq .Status "regression"}}bad{{else if eq .Status "timing-advisory"}}warn{{else}}ok{{end}}">{{.Status}}</td></tr>{{end}}
 </tbody></table></body></html>`

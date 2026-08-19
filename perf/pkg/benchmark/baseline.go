@@ -42,6 +42,19 @@ type RunMetadata struct {
 	CPUModel        string             `json:"cpu_model,omitempty"`
 	CPUCount        int                `json:"cpu_count"`
 	Suites          []SuiteRunMetadata `json:"suites"`
+	Trends          []TrendMetadata    `json:"trends,omitempty"`
+}
+
+type TrendMetadata struct {
+	Name            string `json:"name"`
+	Title           string `json:"title"`
+	Description     string `json:"description,omitempty"`
+	Suite           string `json:"suite"`
+	Benchmark       string `json:"benchmark"`
+	XDimension      string `json:"x_dimension"`
+	SeriesDimension string `json:"series_dimension,omitempty"`
+	Metric          string `json:"metric"`
+	XScale          string `json:"x_scale,omitempty"`
 }
 
 type SuiteRunMetadata struct {
@@ -54,6 +67,7 @@ type SuiteRunMetadata struct {
 
 type BenchmarkMetric struct {
 	Suite              string             `json:"suite,omitempty"`
+	Dimensions         map[string]string  `json:"dimensions,omitempty"`
 	Iterations         int64              `json:"iterations,omitempty"`
 	Samples            int                `json:"samples,omitempty"`
 	NsPerOp            float64            `json:"ns_per_op"`
@@ -89,15 +103,16 @@ type ComparisonResult struct {
 }
 
 type ComparisonDocument struct {
-	SchemaVersion    int                `json:"schema_version"`
-	GeneratedAt      time.Time          `json:"generated_at"`
-	BaselineMetadata RunMetadata        `json:"baseline_metadata"`
-	CurrentMetadata  RunMetadata        `json:"current_metadata"`
-	Results          []ComparisonResult `json:"results"`
-	Ungated          []string           `json:"ungated_benchmarks"`
-	Missing          []string           `json:"missing_benchmarks"`
-	HasRegressions   bool               `json:"has_regressions"`
-	CoverageComplete bool               `json:"coverage_complete"`
+	SchemaVersion     int                        `json:"schema_version"`
+	GeneratedAt       time.Time                  `json:"generated_at"`
+	BaselineMetadata  RunMetadata                `json:"baseline_metadata"`
+	CurrentMetadata   RunMetadata                `json:"current_metadata"`
+	Results           []ComparisonResult         `json:"results"`
+	CurrentBenchmarks map[string]BenchmarkMetric `json:"current_benchmarks,omitempty"`
+	Ungated           []string                   `json:"ungated_benchmarks"`
+	Missing           []string                   `json:"missing_benchmarks"`
+	HasRegressions    bool                       `json:"has_regressions"`
+	CoverageComplete  bool                       `json:"coverage_complete"`
 }
 
 func LoadBaseline(path string) (*Baseline, error) {
@@ -192,15 +207,16 @@ func BuildComparison(current, baseline *Baseline, thresholds *ThresholdsConfig) 
 	ungated := UngatedBenchmarks(current, expectedBaseline)
 	missing := MissingBenchmarks(current, expectedBaseline)
 	return &ComparisonDocument{
-		SchemaVersion:    ResultSchemaVersion,
-		GeneratedAt:      time.Now().UTC(),
-		BaselineMetadata: baseline.Metadata,
-		CurrentMetadata:  current.Metadata,
-		Results:          results,
-		Ungated:          ungated,
-		Missing:          missing,
-		HasRegressions:   HasRegressions(results),
-		CoverageComplete: len(ungated) == 0 && len(missing) == 0,
+		SchemaVersion:     ResultSchemaVersion,
+		GeneratedAt:       time.Now().UTC(),
+		BaselineMetadata:  baseline.Metadata,
+		CurrentMetadata:   current.Metadata,
+		Results:           results,
+		CurrentBenchmarks: current.Benchmarks,
+		Ungated:           ungated,
+		Missing:           missing,
+		HasRegressions:    HasRegressions(results),
+		CoverageComplete:  len(ungated) == 0 && len(missing) == 0,
 	}, nil
 }
 
