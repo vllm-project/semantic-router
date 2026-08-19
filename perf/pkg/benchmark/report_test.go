@@ -48,11 +48,23 @@ func TestReportWritesJSONMarkdownAndHTML(t *testing.T) {
 			t.Errorf("%s does not contain custom metrics", name)
 		}
 	}
+	assertMarkdownHasNoArtifactRelativeCharts(t, filepath.Join(dir, "report.md"))
 	chart, err := os.ReadFile(filepath.Join(dir, "charts", "core-scaling.svg"))
 	if err != nil {
 		t.Fatalf("read trend chart: %v", err)
 	}
 	if !strings.Contains(string(chart), "items") {
 		t.Fatal("trend chart does not label its x dimension")
+	}
+}
+
+func assertMarkdownHasNoArtifactRelativeCharts(t *testing.T, path string) {
+	t.Helper()
+	markdown, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read Markdown report: %v", err)
+	}
+	if strings.Contains(string(markdown), "](charts/") {
+		t.Fatal("Markdown report contains an artifact-relative chart link")
 	}
 }

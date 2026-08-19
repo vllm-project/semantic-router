@@ -30,15 +30,18 @@ Generated artifacts are written to
 current.json       complete measurements and environment metadata
 comparison.json    baseline comparison and coverage inventory
 report.json        stable machine-readable report
-report.md          terminal and GitHub job summary
+report.md          portable terminal and GitHub job summary
 report.html        standalone interactive review artifact
 trends.json        structured scaling series used by dashboards and automation
 charts/*.svg       dependency-free latency and throughput trend charts
 suites/*.log       raw output from every selected producer
 ```
 
-Open `report.html` locally or read `report.md`. CI appends the Markdown report
-to the job summary and uploads the complete directory.
+Open `report.html` locally for the complete visual report or read `report.md`.
+CI uploads the complete directory first, links that artifact at the top of the
+job summary, and publishes the portable Markdown endpoint tables. GitHub job
+summaries cannot resolve files inside an artifact archive; download the bundle
+and open `report.html` to see the inline charts.
 
 ## Performance layers
 

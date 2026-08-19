@@ -81,19 +81,8 @@ jobs:
             PERF_OUTPUT_DIR="$PERF_OUTPUT_DIR" \
             2>&1 | tee reports/perf-run.log
 
-      - name: Publish job summary
-        if: always()
-        env:
-          REPORT: reports/perf/${{ inputs.environment }}-${{ inputs.profile }}/report.md
-        run: |
-          if [[ -f "$REPORT" ]]; then
-            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## Performance report unavailable" >> "$GITHUB_STEP_SUMMARY"
-            echo "The runner failed before producing a report. Inspect the raw workflow log." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
       - name: Upload performance artifacts
+        id: upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -103,3 +92,20 @@ jobs:
             reports/perf/${{ inputs.environment }}-${{ inputs.profile }}/
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Publish job summary
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          REPORT: reports/perf/${{ inputs.environment }}-${{ inputs.profile }}/report.md
+        run: |
+          if [[ -n "$ARTIFACT_URL" ]]; then
+            echo "> **Visual report:** [download the complete HTML, SVG, JSON, and raw logs]($ARTIFACT_URL), then open \`report.html\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -f "$REPORT" ]]; then
+            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Performance report unavailable" >> "$GITHUB_STEP_SUMMARY"
+            echo "The runner failed before producing a report. Inspect the raw workflow log." >> "$GITHUB_STEP_SUMMARY"
+          fi

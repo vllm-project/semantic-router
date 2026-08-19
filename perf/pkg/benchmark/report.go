@@ -245,7 +245,6 @@ func writeMarkdownTrend(output *strings.Builder, trend TrendReport) {
 	if trend.Description != "" {
 		output.WriteString(trend.Description + "\n\n")
 	}
-	output.WriteString(fmt.Sprintf("![%s](charts/%s)\n\n", markdownCell(trend.Title), trend.File))
 	output.WriteString("| Series | First point | Last point | Endpoint Δ |\n")
 	output.WriteString("| --- | ---: | ---: | ---: |\n")
 	for _, series := range trend.Series {
