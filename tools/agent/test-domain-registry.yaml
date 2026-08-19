@@ -278,6 +278,7 @@ domains:
     paths:
       - perf/**
       - tools/make/performance.mk
+      - src/semantic-router/pkg/classification/**
       - src/semantic-router/pkg/extproc/**
       - src/semantic-router/pkg/decision/**
       - src/semantic-router/pkg/selection/**

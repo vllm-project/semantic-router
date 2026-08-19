@@ -105,8 +105,8 @@ See [environments.md](environments.md) for the concrete commands.
   Memory adds `llm-katan`; Operator supplies `extproc`, `operator`, and
   `operator-bundle`; Recipe Conformance supplies `vllm-sr`.
 - Performance runs for non-documentation changes under `perf/**`, the
-  performance Make contract, and the covered ExtProc, decision, selection, and
-  Looper hot paths. Documentation-only changes stay lightweight. `ci/full`
+  performance Make contract, and the covered classification, ExtProc, decision,
+  selection, and Looper hot paths. Documentation-only changes stay lightweight. `ci/full`
   expands E2E and affected Operator coverage but does not independently enable
   Performance.
 - Native Candle, ML, NLP, and ONNX paths select the core/native receipt.

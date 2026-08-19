@@ -258,9 +258,9 @@ upstream-call count, and token amplification in the shared result schema.
 
 ## CI selection
 
-Performance CI is selected for changes under the covered ExtProc, decision,
-selection, and Looper hot paths, for `perf/**`, and for the performance Make
-contract. The reusable workflow is
+Performance CI is selected for changes under the covered classification,
+ExtProc, decision, selection, and Looper hot paths, for `perf/**`, and for the
+performance Make contract. The reusable workflow is
 [`performance-test.yml`](../.github/workflows/performance-test.yml); the nightly
 workflow calls it with the longer CPU profile.
 
