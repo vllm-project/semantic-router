@@ -355,9 +355,14 @@
 }
 
 @media (max-width: 680px) {
+  .stringRow,
   .keyValueRow,
   .objectGrid {
     grid-template-columns: 1fr;
+  }
+
+  .stringRow .removeButton {
+    width: 100%;
   }
 
   .iconRemoveButton {

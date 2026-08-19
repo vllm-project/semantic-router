@@ -216,25 +216,20 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 // ==================== Deploy: write canonical config.yaml ====================
 
 func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
-	// Acquire deploy lock (only one deploy at a time)
-	if !deployMu.TryLock() {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error":   "deploy_in_progress",
-			"message": "Another deploy operation is in progress. Please try again.",
-		})
+	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
+	if err != nil {
+		writeRuntimeConfigMutationError(w, err)
 		return
 	}
-	defer deployMu.Unlock()
+	defer release()
 
 	fragmentBytes := []byte(req.YAML)
-	if _, err := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes); err != nil {
+	if _, decodeErr := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes); decodeErr != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error":   "yaml_parse_error",
-			"message": fmt.Sprintf("Invalid YAML syntax: %v", err),
+			"message": fmt.Sprintf("Invalid YAML syntax: %v", decodeErr),
 		})
 		return
 	}
@@ -476,17 +471,12 @@ func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
 }
 
 func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
-	// Acquire deploy lock
-	if !deployMu.TryLock() {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error":   "deploy_in_progress",
-			"message": "Another deploy operation is in progress.",
-		})
+	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
+	if err != nil {
+		writeRuntimeConfigMutationError(w, err)
 		return
 	}
-	defer deployMu.Unlock()
+	defer release()
 
 	// Find backup file
 	backupData, err := readConfigBackup(configDir, version)

@@ -37,7 +37,7 @@ func (r *OpenAIRouter) performResponseJailbreakDetection(ctx *RequestContext, re
 
 	start := time.Now()
 	classifier := r.classifierForRequest(ctx)
-	isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreakWithThreshold(assistantContent, threshold)
+	isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreakWithThreshold(selectionRequestContext(ctx), assistantContent, threshold)
 	latency := time.Since(start).Seconds()
 
 	decisionName := requestDecisionStateKey(ctx)

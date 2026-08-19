@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -173,5 +174,87 @@ func TestSpecifiedModelBodyMutationUsesWorkingRequest(t *testing.T) {
 	got := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
 	if string(got) != string(compressed) {
 		t.Fatalf("specified-model route emitted stale body: %s", got)
+	}
+}
+
+func TestSpecifiedOpenAIModelTranslatesNativeAnthropicRequest(t *testing.T) {
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "test-model",
+			ModelConfig: map[string]config.ModelParams{
+				"test-model": {PreferredEndpoints: []string{"test-endpoint"}},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{{
+				Name:    "test-endpoint",
+				Address: "127.0.0.1",
+				Port:    8000,
+				Type:    "vllm",
+				Weight:  1,
+			}},
+		},
+	}
+	router := &OpenAIRouter{
+		Config:             cfg,
+		CredentialResolver: newTestCredentialResolver(cfg),
+	}
+	nativeBody := []byte(`{
+		"model":"test-model",
+		"max_tokens":256,
+		"messages":[{"role":"user","content":[{"type":"text","text":"Explain the incident."}]}],
+		"stream":true
+	}`)
+	ctx := &RequestContext{
+		Headers:                 map[string]string{},
+		TraceContext:            context.Background(),
+		ClientProtocol:          config.ClientProtocolAnthropic,
+		OriginalRequestBody:     nativeBody,
+		ExpectStreamingResponse: true,
+	}
+	request, err := parseRequestForProtocol(ctx, nativeBody)
+	if err != nil {
+		t.Fatalf("parseRequestForProtocol: %v", err)
+	}
+
+	response, err := router.handleSpecifiedModelRouting(request, "test-model", "", ctx)
+	if err != nil {
+		t.Fatalf("handleSpecifiedModelRouting: %v", err)
+	}
+	assertTranslatedAnthropicRoutingResponse(t, response)
+}
+
+func assertTranslatedAnthropicRoutingResponse(t *testing.T, response *ext_proc.ProcessingResponse) {
+	t.Helper()
+	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	if len(body) == 0 {
+		t.Fatal("specified OpenAI model did not receive translated body")
+	}
+	headers := headerValuesByName(response.GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders())
+	if headers[":path"] != "/v1/chat/completions" {
+		t.Fatalf("upstream path = %q, want /v1/chat/completions", headers[":path"])
+	}
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode translated body: %v", err)
+	}
+	if _, exists := decoded["system"]; exists {
+		t.Fatalf("translated body retained Anthropic top-level system: %s", body)
+	}
+	if string(decoded["stream"]) != "true" {
+		t.Fatalf("stream = %s", decoded["stream"])
+	}
+	var streamOptions map[string]json.RawMessage
+	if err := json.Unmarshal(decoded["stream_options"], &streamOptions); err != nil {
+		t.Fatalf("decode stream_options: %v", err)
+	}
+	if string(streamOptions["include_usage"]) != "true" {
+		t.Fatalf("stream_options.include_usage = %s", streamOptions["include_usage"])
+	}
+	var messages []map[string]json.RawMessage
+	if err := json.Unmarshal(decoded["messages"], &messages); err != nil {
+		t.Fatalf("decode translated messages: %v", err)
+	}
+	if len(messages) != 1 || string(messages[0]["role"]) != `"user"` ||
+		!strings.Contains(string(messages[0]["content"]), "Explain the incident.") {
+		t.Fatalf("translated messages = %#v", messages)
 	}
 }

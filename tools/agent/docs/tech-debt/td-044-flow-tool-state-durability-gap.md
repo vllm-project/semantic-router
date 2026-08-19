@@ -6,7 +6,7 @@ Mitigated; keep open for Redis integration validation and operator docs.
 
 ## Owner Plan
 
-[PL0035 Router Flow Workflows](../plans/pl-0035-router-flow-workflows.md)
+[PL-0032: Architecture Debt Consolidation](../plans/pl-0032-architecture-scorecard-ratchet.md)
 
 ## Release Relevance
 
@@ -33,15 +33,10 @@ exact requested `tool_call_id` set before routing the result back to the worker.
 
 ## Evidence
 
-- `workflowToolStateStore` is now an interface implemented by memory, file, and
-  Redis backends.
-- File-state tests cover cross-looper resume and preservation of prior step
-  outputs needed by `access_list` and final synthesis.
-- Access-list tests cover both role-level and agent-level visibility, so a
-  later worker can see one selected parallel worker output without seeing the
-  other worker's tool trajectory.
-- Redis state uses a consume-once Lua `GET`/`DEL` path but still needs an
-  integration test against a real Redis instance.
+- `workflowToolStateStore` has memory, file, and Redis implementations.
+- Unit tests cover file-backed resume and access-list isolation.
+- Redis uses an atomic consume-once path, but the repository has no integration
+  test that exercises expiry and duplicate consumption against Redis.
 
 ## Why It Matters
 

@@ -1,365 +1,175 @@
 # Contributing to vLLM Semantic Router
 
-Thank you for your interest in contributing to the vLLM Semantic Router project! This guide will help you get started with development and contributing to the project.
+Thank you for contributing. This guide covers the repository workflow; the
+public installation guide is at <https://vllm-sr.ai/docs/installation/>.
 
-## Table of Contents
+## Before you start
 
-- [Development Setup](#development-setup)
-- [Running Tests](#running-tests)
-- [Development Workflow](#development-workflow)
-- [Code Style and Standards](#code-style-and-standards)
-  - [Code Quality Checks](#code-quality-checks)
-- [Submitting Changes](#submitting-changes)
-- [Project Structure](#project-structure)
+Install:
 
-## Development Setup
+- Docker or Podman;
+- Make;
+- Git; and
+- Python 3.10 or newer for the CLI, tests, or training tools you plan to use.
 
-### Prerequisites
-
-Before you begin, ensure you have the following installed:
-
-- **Docker** (or Podman)
-- **Make** (for build automation)
-- **Python** 3.10+ (Optional: for training and testing)
-
-### Quick Start
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/vllm-project/semantic-router.git
-   cd semantic-router
-   ```
-
-2. **Use the canonical local image workflow:**
-
-   ```bash
-   make vllm-sr-dev
-   vllm-sr serve --image-pull-policy never
-   ```
-
-   For AMD ROCm development:
-
-   ```bash
-   make vllm-sr-dev VLLM_SR_PLATFORM=amd
-   vllm-sr serve --image-pull-policy never --platform amd
-   ```
-
-   This workflow:
-   - Rebuilds the local image
-   - Installs the `vllm-sr` CLI tool
-   - Uses the local image only, without pulling a remote fallback
-
-3. **Install Python dependencies (Optional):**
-
-   There is no repository-root `requirements.txt`. Use the file for the area you are working in, for example:
-
-   ```bash
-   # vllm-sr CLI and its Python dependencies (typical for local dev)
-   pip install -r src/vllm-sr/requirements.txt
-
-   # End-to-end testing
-   pip install -r e2e/testing/requirements.txt
-   ```
-
-   Training, benchmarks, and other subprojects each have their own `requirements.txt` under their directories (for example `bench/`, `src/training/**/`).
-
-## Running Tests
-
-### Agent Gates
-
-The repository-specific agent harness is indexed in [tools/agent/docs/README.md](tools/agent/docs/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `tools/agent/docs/*` plus `tools/agent/*` as the durable source of truth.
-If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [tools/agent/docs/tech-debt/README.md](tools/agent/docs/tech-debt/README.md).
-
-Read these first:
-
-- [tools/agent/docs/testing-strategy.md](tools/agent/docs/testing-strategy.md)
-- [tools/agent/docs/module-boundaries.md](tools/agent/docs/module-boundaries.md)
-
-Use the agent-specific gates for changed files:
+Clone the repository:
 
 ```bash
-make agent-bootstrap
-make agent-validate
-make agent-scorecard
+git clone https://github.com/vllm-project/semantic-router.git
+cd semantic-router
+```
+
+There is no repository-wide Python `requirements.txt`. Install dependencies
+from the subsystem you are changing, for example:
+
+```bash
+pip install -r src/vllm-sr/requirements.txt
+pip install -r e2e/testing/requirements.txt
+```
+
+## Understand the change surface
+
+[AGENTS.md](AGENTS.md) is the short entrypoint to the repository's development
+harness. The human-readable index is
+[tools/agent/docs/README.md](tools/agent/docs/README.md).
+
+Before a non-trivial change, ask the harness which subsystem rules and tests
+apply:
+
+```bash
 make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
+Then read the nearest `AGENTS.md` for any hotspot you touch. Useful design and
+test references are:
+
+- [Module boundaries](tools/agent/docs/module-boundaries.md)
+- [Change surfaces](tools/agent/docs/change-surfaces.md)
+- [Testing strategy](tools/agent/docs/testing-strategy.md)
+- [Feature-complete checklist](tools/agent/docs/feature-complete-checklist.md)
+
+If implementation and intended architecture still differ after your change,
+record the durable gap under
+[tools/agent/docs/tech-debt/](tools/agent/docs/tech-debt/README.md) rather than
+leaving it only in a PR discussion.
+
+## Run the local stack
+
+Use the repository's local image workflow:
+
+```bash
+make vllm-sr-dev
+vllm-sr serve --image-pull-policy never
+```
+
+For the AMD local image:
+
+```bash
+make vllm-sr-dev VLLM_SR_PLATFORM=amd
+vllm-sr serve --image-pull-policy never --platform amd
+```
+
+Use `vllm-sr logs <service>`, `vllm-sr status`, and `vllm-sr stop` to inspect
+and stop the stack.
+
+## Test your change
+
+Start with the tests returned by `agent-report`. Common targets are:
+
+| Change | Command |
+| --- | --- |
+| Harness or repository structure | `make agent-validate` |
+| Go router | `make test-semantic-router` |
+| Native bindings | `make test-binding` |
+| Python CLI | `make vllm-sr-test` |
+| Category, PII, or jailbreak classifier | `make test-category-classifier`, `make test-pii-classifier`, or `make test-jailbreak-classifier` |
+| Affected local E2E profiles | `make agent-e2e-affected CHANGED_FILES="..."` |
+
+Use the repository gates before submitting:
+
+```bash
 make agent-ci-lint CHANGED_FILES="path/one,path/two"
-make precommit-branch-gate
 make agent-ci-gate CHANGED_FILES="path/one,path/two"
-make agent-pr-gate
-make test-and-build-local
-make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
 
-Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
-Use `make precommit-branch-gate` when you want to run the local branch prelint bundle on demand before a push or PR update.
-Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
+`make agent-pr-gate` reproduces the baseline PR checks. Use
+`make agent-feature-gate ENV=cpu CHANGED_FILES="..."` when the harness reports
+feature tests or local smoke as required. Platform-specific changes use the
+matching environment, such as `ENV=amd`.
 
-`ENV=amd` is required when platform-specific behavior changed.
-
-### Unit Tests
-
-1. **Test Rust bindings:**
-
-   ```bash
-   make test-binding
-   ```
-
-2. **Test Go semantic router:**
-
-   ```bash
-   make test-semantic-router
-   ```
-
-3. **Test individual classifiers:**
-
-   ```bash
-   make test-category-classifier
-   make test-pii-classifier
-   make test-jailbreak-classifier
-   ```
-
-### Manual Testing
-
-Test different routing scenarios:
-
-```bash
-# Test model auto-selection
-make test-auto-prompt-reasoning
-make test-auto-prompt-no-reasoning
-
-# Test PII detection
-make test-pii
-
-# Test prompt guard (jailbreak detection)
-make test-prompt-guard
-
-# Test tools auto-selection
-make test-tools
-```
-
-### End-to-End Tests
-
-Ensure both Envoy and the router are running, then:
-
-```bash
-# Run all e2e tests
-python e2e/testing/run_all_tests.py
-
-# Run specific test
-python e2e/testing/00-client-request-test.py
-
-# Run tests matching a pattern
-python e2e/testing/run_all_tests.py --pattern "0*-*.py"
-
-# Check if services are running
-python e2e/testing/run_all_tests.py --check-only
-```
-
-The test suite includes:
-
-- Basic client request tests
-- Envoy ExtProc interaction tests
-- Router classification tests
-- Semantic cache tests
-- Category-specific tests
-- Metrics validation tests
-
-## Development Workflow
-
-### Making Changes
-
-1. **Create a feature branch:**
-
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make your changes** following the project structure and coding standards.
-
-3. **Build and test:**
-
-   ```bash
-   make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
-   make agent-ci-gate CHANGED_FILES="path/one,path/two"
-   make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
-   ```
-
-4. **Run end-to-end tests:**
-
-   ```bash
-   make agent-e2e-affected CHANGED_FILES="path/one,path/two"
-   # Or run a specific profile directly
-   make e2e-test E2E_PROFILE=ai-gateway
-   ```
-
-5. **Commit your changes:**
-
-   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**. The repository does not require commit messages to use the PR title classification prefixes.
-
-   ```bash
-   git add .
-   git commit -s -m "clarify PR title guidance"
-   ```
-
-### Debugging
-
-- **View logs:** Use `vllm-sr logs` to view service logs
-- **Rust library:** Use `RUST_LOG=debug` environment variable for detailed Rust logs
-- **Go library:** Use `SR_LOG_LEVEL=debug` environment variable for detailed Go logs
-
-## Code Style and Standards
-
-### Code Quality Checks
-
-Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
-
-#### Domain CI
-
-The `Pull Request` workflow classifies changed files once, then invokes affected
-domain workflows in parallel:
-
-- docs/website-only changes run the lightweight docs gate
-- router/core changes run full quality, core test/build, one Kubernetes smoke
-  profile, and only image builds not already supplied by that E2E receipt
-- dashboard changes run dashboard checks and the dashboard image build; owned
-  E2E profiles run when their contract files change
-- operator changes run the four operator compatibility checks plus one Kind
-  smoke backend and the complementary Kubernetes smoke; nightly retains the
-  full backend matrix
-- CLI and memory keep their path-scoped integration receipts, and their local
-  image builds are subtracted from the standalone PR image matrix
-- Candle, ML, NLP, and ONNX source changes use the existing core/native
-  validation path instead of a duplicate Candle-only workflow; the known ONNX
-  mandatory-coverage gap is tracked as TD046
-- OpenVINO runs only for `openvino-binding/**`, router-learning runs only for
-  its runtime/eval paths, and performance runs only for `perf/**`
-- workflow-only CI changes run static workflow validation plus one Kubernetes
-  smoke; Docker validator changes add one representative read-only image build
-
-`PR Gate` aggregates every affected domain. During the branch-protection
-transition, the dispatcher also reports these stable compatibility contexts:
-`Run pre-commit hooks check file lint`, `test-and-build`, `Lint`, `Unit Tests`,
-`Verify Manifests`, and `Validate OLM Bundle`.
-
-Reproduce the lightweight docs gate locally:
+For a docs-only change, the focused gate is:
 
 ```bash
 make agent-docs-ci-gate AGENT_BASE_REF=origin/main
 ```
 
-Maintainers can force the full baseline on a docs-only PR by adding the `ci/full` label.
+A failed gate is part of the work: fix the cause and rerun the smallest
+relevant command until it passes.
 
-Validate workflow YAML, local reusable-workflow contracts, inputs/outputs, and
-GitHub expression syntax locally:
+## Code quality
 
-```bash
-make workflow-ci-validate
-```
-
-**Step 1: Install pre-commit tool**
+Install the repository hooks once:
 
 ```bash
-# Using pip (recommended)
-pip install pre-commit
-
-# Or using conda
-conda install -c conda-forge pre-commit
-
-# Or using homebrew (macOS)
-brew install pre-commit
-```
-
-**Step 2: Install pre-commit hooks for this repository**
-
-```bash
-# Install the repo-native pre-commit + pre-push hooks
 make precommit-install
-
-# Run all checks
-pre-commit run --all-files
-# OR
-make precommit-branch-gate
-# OR
-make precommit-local
 ```
 
-### Go Code
+Run the branch preflight on demand with:
 
-- Follow standard Go formatting (`gofmt`)
-- Use meaningful variable and function names
-- Add comments for exported functions and types
-- Write unit tests for new functionality
-- **Keep Go modules tidy:** Run `make check-go-mod-tidy` to verify all modules are tidy
-- **Lint Go code:** Run `make go-lint` to check for issues, or `make go-lint-fix` to auto-fix
+```bash
+make precommit-branch-gate
+```
 
-### Rust Code
+Follow the language's standard formatter and keep modules focused:
 
-- Follow Rust formatting (`cargo fmt`)
-- Use `cargo clippy` for linting
-- Handle errors appropriately with `Result` types
-- Document public APIs
+- Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
+- Rust: `cargo fmt`, `cargo clippy`, explicit error handling, and public API
+  documentation.
+- Python: Ruff-compatible formatting, type hints where they improve the
+  interface, and tests for behavior changes.
 
-### Python Code
+Behavior-visible config, routing, CLI, Docker, startup, or API changes require
+matching E2E coverage unless they are pure refactors. Do not add a second source
+of truth for schemas, test selection, or public documentation.
 
-- Follow PEP 8 style guidelines
-- Use type hints where appropriate
-- Write docstrings for functions and classes
+## Submit a pull request
 
-## Submitting Changes
-
-1. **Ensure all tests pass:**
+1. Create a focused branch and make one coherent change.
+2. Update tests, examples, and public docs for behavior the user can observe.
+3. Run the harness-selected tests and record the commands and outcomes in the
+   PR template.
+4. Commit with a Developer Certificate of Origin sign-off:
 
    ```bash
-   make test
-   python e2e/testing/run_all_tests.py
+   git commit -s -m "describe the change"
    ```
 
-   The `make test` command includes:
-   - `go vet` for static analysis
-   - `check-go-mod-tidy` for Go module dependency verification
-   - Unit tests for all components
+5. Open a PR using the module prefixes and sections in
+   [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
-2. **Create a pull request** with:
-   - A module-aligned PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Docs][CI/Build] Align PR template with vLLM` or `[Router][Dashboard] Tighten route visibility in the console`
-   - A clear `Purpose` section describing the change and affected module(s)
-   - Reference to any related issues
-   - A `Test Plan` and `Test Result` section with the actual validation steps and outcomes
+Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
+the change is needed, which modules it affects, and how its user-visible
+behavior was verified.
 
-3. **Address review feedback** promptly
+## Repository map
 
-## Project Structure
+| Path | Responsibility |
+| --- | --- |
+| `src/semantic-router/` | Go router, config, routing, APIs, and Envoy ExtProc service |
+| `src/vllm-sr/` | Python CLI and local stack orchestration |
+| `config/` | Canonical reference, fragments, runtime examples, and Recipes |
+| `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/` | Native inference bindings |
+| `dashboard/` | Web console frontend and management backend |
+| `deploy/` | Helm, operator, Kubernetes, OpenShift, and local deployment assets |
+| `e2e/` | End-to-end framework and profiles |
+| `src/training/` | Training and evaluation utilities |
+| `tools/` | Build, release, CI, smoke, and agent tooling |
+| `website/` | Public documentation |
 
-```
-├── bench/                   # Benchmarking tools and workloads
-├── candle-binding/          # Rust library for BERT classification
-├── config/                  # Canonical config, fragments, recipes, runtime examples
-├── dashboard/               # Web UI and backend API
-├── deploy/                  # Deployable Helm, Kubernetes, OpenShift, and local assets
-├── e2e/                     # End-to-end test harness
-├── src/semantic-router/     # Go router (Envoy ExtProc)
-├── src/vllm-sr/             # Python CLI (`requirements.txt` for its deps)
-├── src/training/            # Model training scripts
-├── tools/                   # Build, development, smoke, model, and agent tooling
-├── website/                 # All public documentation (Docusaurus)
-└── Makefile                 # Build automation
-```
+## Get help
 
-### Key Components
+Use the [documentation](https://vllm-sr.ai/), GitHub Discussions, or an issue
+with a minimal reproduction. Security reports follow
+[SECURITY.md](SECURITY.md), not the public issue tracker.
 
-- **Candle Binding:** Rust library providing BERT-based classification
-- **Semantic Router:** Go service implementing the Envoy ExtProc interface
-- **vllm-sr CLI:** Python tooling and local dev workflow (`src/vllm-sr/`)
-- **Training Scripts:** Python scripts for fine-tuning classification models
-- **Dashboard:** Web console for operations and playground traffic
-- **Configuration:** YAML files defining routing rules and model endpoints
-
-## Getting Help
-
-- Check the [documentation](https://vllm-sr.ai/)
-- Review existing issues and pull requests
-- Ask questions in discussions or create a new issue
-
-## License
-
-By contributing to this project, you agree that your contributions will be licensed under the same license as the project (Apache 2.0).
+By contributing, you agree that your work is licensed under Apache 2.0.

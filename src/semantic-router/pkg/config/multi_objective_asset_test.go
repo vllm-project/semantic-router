@@ -19,11 +19,11 @@ func TestMultiObjectiveRecipeDefinesObjectiveProfiles(t *testing.T) {
 func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	expectedEntrypoints := map[string]string{
-		"vllm-sr/mom-balanced-v1": "balanced",
-		"vllm-sr/mom-flash-v1":    "speed-first",
-		"vllm-sr/mom-economy-v1":  "cost-first",
-		"vllm-sr/mom-frontier-v1": "accuracy-first",
-		"vllm-sr/mom-private-v1":  "privacy-first",
+		"vllm-sr/mom-v1-blend": "balanced",
+		"vllm-sr/mom-v1-flash": "speed-first",
+		"vllm-sr/mom-v1-lite":  "cost-first",
+		"vllm-sr/mom-v1-ultra": "accuracy-first",
+		"vllm-sr/mom-v1-vault": "privacy-first",
 	}
 	if len(cfg.Entrypoints) != len(expectedEntrypoints) {
 		t.Fatalf("entrypoint count = %d, want %d", len(cfg.Entrypoints), len(expectedEntrypoints))

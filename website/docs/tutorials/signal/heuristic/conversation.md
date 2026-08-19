@@ -2,7 +2,9 @@
 
 ## Overview
 
-`conversation` detects structural facts about the shape of the incoming chat-completion request: how many user messages, whether a developer message is present, how many tools are defined, assistant tool-call counts, completed tool cycles, and whether the current request is still inside an active tool loop. It maps to `config/fragments/signal/conversation/` and is declared under `routing.signals.conversation`.
+`conversation` routes on the structure of a chat, such as message count,
+developer instructions, available tools, or an active tool loop. Define these
+rules under `routing.signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
@@ -10,7 +12,7 @@ This family is heuristic: it inspects the request's `messages[]` and `tools[]` a
 
 - Routes agentic (tool-heavy) requests to capable models without keyword heuristics.
 - Distinguishes single-turn from multi-turn conversations at the structural level.
-- Zero latency: evaluation is a fast in-memory scan of already-parsed request fields.
+- Uses an in-memory scan of already-parsed request fields; no model inference is required.
 - Produces named signals that projections and decisions can consume like any other family.
 
 ## What Problem Does It Solve?
@@ -84,6 +86,8 @@ routing:
 routing:
   decisions:
     - name: agentic_routing
+      description: Send tool-heavy chats to an agent-capable model.
+      priority: 100
       rules:
         operator: AND
         conditions:
@@ -94,3 +98,10 @@ routing:
       modelRefs:
         - model: gpt-4o
 ```
+
+## Dependencies and Limitations
+
+The signal inspects the incoming `messages` and `tools` structure but does not
+persist it. It describes request shape, not tool safety or user intent. Apply
+authorization at the tool boundary. See a complete example:
+[`config/fragments/signal/conversation/agentic-shape.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/conversation/agentic-shape.yaml).

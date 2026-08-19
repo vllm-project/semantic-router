@@ -927,15 +927,15 @@ test.describe('Layout top navigation', () => {
 
     const decisionNode = page
       .locator('[class*="decisionNode"]')
-      .filter({ has: page.getByText('medium_business', { exact: true }) })
+      .filter({ has: page.locator('[title="medium_business"]') })
       .first()
 
     await expect(decisionNode).toBeVisible()
     await expect(decisionNode).toContainText('AND')
     await expect(decisionNode).toContainText('OR')
-    await expect(decisionNode).toContainText('domain: business')
-    await expect(decisionNode).toContainText('domain: economics')
-    await expect(decisionNode).toContainText('embedding: business_analysis')
+    await expect(decisionNode).toContainText('Domain: Business')
+    await expect(decisionNode).toContainText('Domain: Economics')
+    await expect(decisionNode).toContainText('Embedding: Business Analysis')
     await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0)
   })
 

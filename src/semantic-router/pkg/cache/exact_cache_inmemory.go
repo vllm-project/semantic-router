@@ -2,7 +2,10 @@
 
 package cache
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type exactMemoryEntry struct {
 	responseBody []byte
@@ -10,9 +13,12 @@ type exactMemoryEntry struct {
 }
 
 // FindExact returns a response without running embedding inference.
-func (c *InMemoryCache) FindExact(partition string, fingerprint string) (LookupResult, error) {
+func (c *InMemoryCache) FindExact(ctx context.Context, partition string, fingerprint string) (LookupResult, error) {
 	if !c.enabled || fingerprint == "" {
 		return LookupResult{}, nil
+	}
+	if err := ctxErr(ctx); err != nil {
+		return LookupResult{}, err
 	}
 	key := exactCacheStorageKey(partition, fingerprint)
 	c.mu.RLock()
@@ -35,7 +41,9 @@ func (c *InMemoryCache) FindExact(partition string, fingerprint string) (LookupR
 }
 
 // AddExact stores a complete exact response under the normalized request hash.
+// It rechecks cancellation under the lock so cancelled writes publish nothing.
 func (c *InMemoryCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -44,12 +52,19 @@ func (c *InMemoryCache) AddExact(
 	if !c.enabled || fingerprint == "" || ttlSeconds == 0 {
 		return nil
 	}
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
 	entry := exactMemoryEntry{responseBody: append([]byte(nil), responseBody...)}
 	if effectiveTTL > 0 {
 		entry.expiresAt = time.Now().Add(time.Duration(effectiveTTL) * time.Second)
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
 	if c.maxEntries > 0 && len(c.exactEntries) >= c.maxEntries {
 		for key := range c.exactEntries {
 			delete(c.exactEntries, key)
@@ -57,6 +72,5 @@ func (c *InMemoryCache) AddExact(
 		}
 	}
 	c.exactEntries[exactCacheStorageKey(partition, fingerprint)] = entry
-	c.mu.Unlock()
 	return nil
 }

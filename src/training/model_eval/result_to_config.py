@@ -24,7 +24,7 @@ DEFAULT_EMBEDDINGS = {
     }
 }
 
-DEFAULT_SEMANTIC_CACHE = {
+DEFAULT_RESPONSE_CACHE = {
     "enabled": True,
     "embedding_model": "mmbert",
     "max_entries": 1000,
@@ -313,8 +313,8 @@ def generate_config_yaml(
         },
         "global": {
             "stores": {
-                "semantic_cache": {
-                    **DEFAULT_SEMANTIC_CACHE,
+                "response_cache": {
+                    **DEFAULT_RESPONSE_CACHE,
                     "similarity_threshold": similarity_threshold,
                 }
             },

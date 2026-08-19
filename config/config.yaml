@@ -17,6 +17,9 @@ providers:
       gpt:
         type: reasoning_effort
         parameter: reasoning.effort
+      mistral:
+        type: top_level_reasoning_effort
+        parameter: reasoning_effort
   models:
     - name: qwen3-8b
       reasoning_family: qwen3
@@ -761,7 +764,7 @@ routing:
           on_error: skip
           escalation_order: small_to_large
           cost_quality_tradeoff: 0.45
-          token_filter: alpha_numeric
+          token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
       plugins:
@@ -1120,6 +1123,12 @@ routing:
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            strip_tool_history: true
     - name: spanish_adaptive_route
       description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
       priority: 135
@@ -1734,16 +1743,17 @@ global:
         user_id_header: x-user-id
         user_groups_header: x-user-groups
       providers:
-        - type: header
+        - type: header-injection
           headers:
             X-Plan: premium
             X-Role: admin
     ratelimit:
       fail_open: false
       providers:
-        - type: redis
-          address: redis:6379
+        - type: envoy-ratelimit
+          address: ratelimit.default.svc.cluster.local:8081
           domain: api
+        - type: local-limiter
           rules:
             - name: premium-per-minute
               match:
@@ -1775,6 +1785,7 @@ global:
             - metrics.read
             - classify.invoke
             - config.read
+            - replay.read
             - data.read
             - cache.read
             - compression.read
@@ -1787,6 +1798,8 @@ global:
             - config.read
             - config.write
             - learning.ingest
+            - replay.read
+            - replay.detail
             - data.read
             - data.write
             - cache.read
@@ -2316,10 +2329,9 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
+        variant: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        use_vllm: false
+        positive_labels: [jailbreak]
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is

@@ -121,12 +121,8 @@ test.beforeEach(async ({ page }) => {
 test('dashboard and managers expose recipe-owned routing state', async ({ page }) => {
   await page.goto('/dashboard')
 
-  await expect(
-    page.getByRole('button').filter({ hasText: 'Decisions' }).first(),
-  ).toContainText('2')
-  await expect(
-    page.getByRole('button').filter({ hasText: 'Signals' }).first(),
-  ).toContainText('2')
+  await expect(page.getByRole('button').filter({ hasText: 'Decisions' }).first()).toContainText('2')
+  await expect(page.getByRole('button').filter({ hasText: 'Signals' }).first()).toContainText('2')
   await expect(page.getByText('balanced-route')).toBeVisible()
   await expect(page.getByText('private-route')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Routing objectives' })).toBeVisible()
@@ -137,10 +133,10 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await page.goto('/config/signals')
   const signalScope = page.getByLabel('Routing profile')
   await expect(signalScope).toHaveValue('balanced')
-  await expect(page.getByText('balanced-keyword')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toBeVisible()
   await signalScope.selectOption('privacy')
-  await expect(page.getByText('private-pii')).toBeVisible()
-  await expect(page.getByText('balanced-keyword')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'View PII-private-pii' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View Keywords-balanced-keyword' })).toHaveCount(0)
 
   await page.goto('/config/projections')
   const projectionScope = page.getByLabel('Routing profile')
@@ -153,9 +149,9 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await page.goto('/config/decisions')
   const decisionScope = page.getByLabel('Routing profile')
   await expect(decisionScope).toHaveValue('balanced')
-  await expect(page.getByText('balanced-route')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View balanced-route' })).toBeVisible()
   await decisionScope.selectOption('privacy')
-  await expect(page.getByText('private-route')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'View private-route' })).toBeVisible()
 })
 
 test('topology switches the complete graph and test model by entrypoint recipe', async ({
@@ -175,8 +171,6 @@ test('topology switches the complete graph and test model by entrypoint recipe',
 
   await scope.selectOption('privacy')
   await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
-  await expect(
-    page.getByTestId('rf__node-signal-group-pii').getByText('private-pii'),
-  ).toBeVisible()
+  await expect(page.getByTestId('rf__node-signal-group-pii').getByText('private-pii')).toBeVisible()
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
 })

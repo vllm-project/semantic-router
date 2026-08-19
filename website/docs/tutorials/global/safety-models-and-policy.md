@@ -1,57 +1,81 @@
-# Safety, Models, and Policy
+# Safety Models and Shared Policy
 
 ## Overview
 
-This page covers the shared runtime model and policy blocks inside `global:`.
-
-These settings define shared safety behavior, shared runtime model settings, and router-wide policy defaults.
-
-## Key Advantages
-
-- Keeps shared policy separate from route-local safety plugins.
-- Centralizes built-in classifier and embedding model overrides.
-- Makes authz, ratelimit, and selection defaults consistent.
-- Gives the router one place to override system model bindings.
+`global.model_catalog` declares shared model assets and the modules that
+use them. `global.services.authz` and `global.services.ratelimit` declare shared
+identity and rate policy. Route-specific thresholds and actions still belong in
+signals, decisions, and plugins.
 
 ## What Problem Does It Solve?
 
-The router depends on shared runtime models and shared policy defaults that are not tied to one route. If those settings are scattered across routes, the resulting behavior is hard to reason about and hard to change safely.
+Jailbreak, PII, domain, fact-check, hallucination, and feedback capabilities
+reuse model runtimes across routes. Defining those dependencies once keeps
+route policy small and makes local versus remote processing visible.
 
-These `global:` blocks solve that by collecting shared model and policy overrides in one layer.
+## Key Advantages
+
+- Reuses one model runtime across many route-local safety rules.
+- Makes local and remote processing choices explicit.
+- Separates shared identity/rate services from decision policy.
 
 ## When to Use
 
-Use these blocks when:
-
-- built-in safety and classification models need shared runtime settings
-- signal or algorithm layers depend on shared embedding or external model settings
-- authz or rate limits should apply router-wide
-- one system capability should bind to a different internal model
+Override these settings when you need a different system model, execution
+backend, threshold baseline, identity source, or rate-limit provider. Keep the
+defaults when the bundled local models and policies meet your requirements.
 
 ## Configuration
 
-### Prompt Guard and Classifier
+### Local prompt guard
+
+`variant` selects the local Candle-backed implementation. `mmbert32k` is the
+canonical default; choose `candle` explicitly when that is the intended model.
 
 ```yaml
 global:
   model_catalog:
     modules:
       prompt_guard:
-        model_ref: prompt_guard
-        use_mmbert_32k: true
-      classifier:
-        domain:
-          model_ref: domain_classifier
-          threshold: 0.5
-          use_mmbert_32k: true
+        enabled: true
+        variant: mmbert32k
+        threshold: 0.7
 ```
 
-### Hallucination Detector Backend
+### Remote prompt guard
 
-The hallucination detector supports two backends via `hallucination_mitigation.detector.backend`:
+Use `protocol` instead of `variant` for a remote guardrail. The two fields are
+mutually exclusive. A remote guardrail also requires an entry under
+`global.model_catalog.external` with `model_role: guardrail`.
 
-- `candle` (default): the in-process Candle token classifier. Used when `backend` is unset or `candle`.
-- `endpoint`: a generative span detector served behind any OpenAI-compatible server (for example, vLLM). One structured `json_schema` call returns typed spans and an optional explanation.
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        protocol: http_classify
+        threshold: 0.7
+        positive_labels: [INJECTION]
+    external:
+      - name: guardrail-service
+        model_role: guardrail
+        llm_endpoint:
+          address: guardrail.example.com
+          port: 443
+          protocol: https
+        llm_model_name: prompt-guard
+        llm_timeout_seconds: 5
+```
+
+`http_classify` expects the Router's supported classification contract;
+`http_chat` uses a chat-completions prompt. Both send request text to the
+configured service.
+
+### Hallucination mitigation
+
+The local detector uses `backend: candle`. An OpenAI-compatible remote detector
+uses `backend: endpoint` with an absolute endpoint and model ID.
 
 ```yaml
 global:
@@ -60,53 +84,18 @@ global:
       hallucination_mitigation:
         enabled: true
         detector:
-          backend: endpoint                     # default: candle
-          endpoint: http://127.0.0.1:8077/v1    # required for endpoint; absolute http(s) URL
+          backend: endpoint
+          endpoint: https://hallucination.example.com/v1
           model_id: KRLabsOrg/lettucedect-v2-qwen-2b
-          include_explanation: true             # request per-span explanations
+          include_explanation: true
 ```
 
-Notes:
+The endpoint path does not provide the local NLI explainer used by some
+cross-response checks. Configure route-local failure behavior accordingly.
 
-- The `endpoint` backend requires an absolute `http(s)` endpoint and a `model_id`; the config is rejected at load time otherwise. An unknown `backend` value is rejected rather than silently falling back to `candle`.
-- The endpoint backend does not ship a local NLI explainer, so panel-mode fusion grounding (which needs NLI) gracefully skips under its `on_error` policy. NLI readiness (`/classify/nli`) stays reported as unavailable for this backend.
-- If the endpoint is unreachable or returns a malformed response, detection fails open: the response passes through and the failure is recorded on the detection-error path rather than as a clean verdict.
+### System model bindings
 
-### Embedding and External Models
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/mom-embedding-ultra
-        use_cpu: true
-```
-
-### Authz and Rate Limit
-
-```yaml
-global:
-  services:
-    authz:
-      enabled: true
-    ratelimit:
-      enabled: true
-```
-
-### Model Selection and Looper Defaults
-
-```yaml
-global:
-  router:
-    model_selection:
-      enabled: true
-  integrations:
-    looper:
-      enabled: true
-```
-
-### System Models
+Signals and plugins resolve stable capability names through this catalog:
 
 ```yaml
 global:
@@ -114,4 +103,51 @@ global:
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      hallucination_detector: models/mom-halugate-detector
+      hallucination_explainer: models/mom-halugate-explainer
+      feedback_detector: models/mmbert32k-feedback-detector-merged
 ```
+
+### Identity and rate limiting
+
+```yaml
+global:
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-user-id
+        user_groups_header: x-user-groups
+      providers:
+        - type: header-injection
+          headers:
+            openai: x-user-openai-key
+    ratelimit:
+      fail_open: false
+      providers:
+        - type: local-limiter
+          rules:
+            - name: premium-per-minute
+              match:
+                group: premium
+              requests_per_unit: 120
+              unit: minute
+```
+
+Only trust identity headers set or sanitized by an authenticated upstream.
+`fail_open: true` trades availability for weaker enforcement and should be a
+deliberate policy choice.
+
+## Data and Security
+
+- Local model variants keep inference in the Router process. Remote modules
+  send the text they classify to their configured endpoints.
+- Detector output is probabilistic. Calibrate thresholds on your corpus and
+  keep least-privilege tool, provider, and storage controls in place.
+- Store endpoint credentials in environment variables or Secrets. Do not place
+  them in route descriptions or model IDs.
+- See the
+  [complete configuration example](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+  for all available model and policy groups.

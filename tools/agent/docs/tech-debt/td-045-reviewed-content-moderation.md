@@ -6,7 +6,7 @@ Open
 
 ## Owner Plan
 
-[PL-0039 Domain CI Architecture](../plans/pl-0039-domain-ci-architecture.md)
+[PL-0032: Architecture Debt Consolidation](../plans/pl-0032-architecture-scorecard-ratchet.md)
 
 ## Release Relevance
 
@@ -21,9 +21,9 @@ GitHub issue, pull request, and comment moderation automation.
 
 The previous content moderation and cleanup workflows evaluated JavaScript
 stored in `SPAM_DETECTION_SCRIPT`. The repository did not contain the
-implementation, tests, review history, or a stable behavior contract. The
-unsafe hidden-code execution path is quarantined by PL-0039; automatic
-moderation remains disabled until a reviewed implementation exists.
+implementation, tests, review history, or a stable behavior contract. That
+hidden-code path is disabled; automatic moderation remains off until a reviewed
+implementation exists.
 
 ## Evidence
 

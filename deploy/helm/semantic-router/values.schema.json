@@ -151,6 +151,15 @@
         }
       }
     },
+    "configOverride": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true,
+      "minProperties": 1,
+      "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
+    },
     "dashboard": {
       "type": "object",
       "additionalProperties": true,

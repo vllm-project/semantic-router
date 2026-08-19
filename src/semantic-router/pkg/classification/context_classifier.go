@@ -47,9 +47,20 @@ func NewContextClassifier(tokenCounter TokenCounter, rules []config.ContextRule)
 // Classify determines which context rules match the given text's token count
 // Returns matched rule names, the actual token count, and any error
 func (c *ContextClassifier) Classify(text string) ([]string, int, error) {
+	return c.ClassifyWithTokenFloor(text, 0)
+}
+
+// ClassifyWithTokenFloor applies the larger of the calibrated text estimate
+// and a conservative request-envelope floor. The floor lets routing account
+// for prompt-bearing components that must not be copied into semantic signal
+// text (tool schemas/results and image payloads, for example).
+func (c *ContextClassifier) ClassifyWithTokenFloor(text string, tokenFloor int) ([]string, int, error) {
 	tokenCount, err := c.tokenCounter.CountTokens(text)
 	if err != nil {
 		return nil, 0, err
+	}
+	if tokenFloor > tokenCount {
+		tokenCount = tokenFloor
 	}
 
 	var matchedRules []string
