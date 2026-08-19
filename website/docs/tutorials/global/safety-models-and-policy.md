@@ -94,6 +94,13 @@ global:
 Applies to any prompt guard backend, local or remote - not only the remote
 protocols above.
 
+`block` only closes a request if a decision actually consumes the jailbreak
+signal (`type: jailbreak`) and acts on it, typically with `fast_response`.
+Without one, the signal still fires at maximum confidence on a classifier
+failure, but no decision blocks the request - it looks like a no-op. See the
+`jailbreak-onerror` e2e profile's `block_on_classifier_error` decision for a
+complete example.
+
 ### Hallucination mitigation
 
 The local detector uses `backend: candle`. An OpenAI-compatible remote detector
