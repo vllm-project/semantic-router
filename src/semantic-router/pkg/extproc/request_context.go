@@ -1,12 +1,14 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
@@ -46,17 +48,48 @@ type StreamingToolCallState struct {
 	Arguments string
 }
 
+type StreamingChoiceState struct {
+	Content      string
+	Reasoning    string
+	Refusal      string
+	FinishReason string
+	ToolCalls    map[int]*StreamingToolCallState
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
-	Headers             map[string]string
-	RequestID           string
+	Headers   map[string]string
+	RequestID string
+	// OriginalRequestBody is the immutable canonical request used by routing,
+	// cache identity, replay, and diagnostics. Response API requests store their
+	// translated Chat Completions representation here.
 	OriginalRequestBody []byte
-	RequestModel        string
-	RequestQuery        string
+	// WorkingRequestBody is the provider-bound request after RAG, memory, and
+	// route-local plugin mutation. Empty means the original body is unchanged.
+	WorkingRequestBody []byte
+	RequestModel       string
+	RequestQuery       string
+	CacheRequestModel  string
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
-	CacheQuery          string
-	StartTime           time.Time
-	ProcessingStartTime time.Time
+	CacheQuery                    string
+	CacheExactFingerprint         string
+	CacheCompatibilityFingerprint string
+	CacheIdentity                 cache.CacheIdentity
+	CacheSelectedModel            string
+	CacheSemanticSafe             bool
+	CacheReadBypass               bool
+	CacheWriteBypass              bool
+	CacheMaxAgeSeconds            *int
+	CacheWriteTTLSeconds          *int
+	ContextCompressionApplied     bool
+	ContextCompressionBefore      int
+	ContextCompressionAfter       int
+	ContextCompressionMessages    int
+	ContextCompressionFormat      string
+	ContextCompressionOmitted     int
+	ContextCompressionSkipReason  string
+	StartTime                     time.Time
+	ProcessingStartTime           time.Time
 
 	// Streaming detection
 	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
@@ -86,8 +119,9 @@ type RequestContext struct {
 	StreamingRefusal   string                          // Accumulated refusal text from delta.refusal
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
-	StreamingComplete  bool                            // True when [DONE] marker received
-	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
+	StreamingChoices   map[int]*StreamingChoiceState
+	StreamingComplete  bool // True when [DONE] marker received
+	StreamingAborted   bool // True if stream ended abnormally (EOF, cancel, timeout)
 
 	// Response API streaming translation state. When /v1/responses is backed by
 	// an upstream Chat Completions stream, these fields track the outbound
@@ -139,22 +173,36 @@ type RequestContext struct {
 	// HistoryTokenCount is zero (server-side conversation state).
 	PreviousResponseID string
 
+	// Routing is the single source of truth for entrypoint resolution. A
+	// resolved context with no recipe represents concrete-model passthrough.
+	Routing RequestRoutingContext
+
 	// VSR decision tracking
-	VSRSelectedCategory            string                                      // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName        string                                      // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence  float64                                     // Confidence score from DecisionEngine evaluation
-	VSRReasoningMode               string                                      // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel               string                                      // The model selected by VSR
-	VSRSelectionMethod             string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
-	VSRLearningPolicy              *routerLearningPolicy                       // Primary Router Learning trace
-	VSRLearningPolicies            routerLearningPolicies                      // Router Learning traces by component
-	VSRLearningProtectionPreflight *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
-	VSRLearningSessionID           string                                      // Router Learning memory key used for this request
-	VSRLearningConversationID      string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                    bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity             float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRInjectedSystemPrompt        bool                                        // Whether a system prompt was injected into the request
-	VSRSelectedDecision            *config.Decision                            // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory             string                                      // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName         string                                      // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence   float64                                     // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode                string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel                string                                      // The model selected by VSR
+	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
+	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
+	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
+	VSRPromptHelperTotalTokens      int64                                       // Total helper tokens
+	VSRPromptHelperLatencyMs        int64                                       // Helper model round-trip latency
+	VSRLearningPolicy               *routerLearningPolicy                       // Primary Router Learning trace
+	VSRLearningPolicies             routerLearningPolicies                      // Router Learning traces by component
+	VSRLearningProtectionPreflight  *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
+	VSRLearningSessionID            string                                      // Router Learning memory key used for this request
+	VSRLearningConversationID       string                                      // Client-declared conversation identity used by Router Learning
+	VSRCacheHit                     bool                                        // Whether this request hit the cache
+	VSRCacheSimilarity              float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRCacheHitKind                 string
+	VSRCacheSource                  string
+	VSRCacheEntryAgeSeconds         float64
+	VSRCacheTTLSeconds              int
+	VSRInjectedSystemPrompt         bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision             *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -167,32 +215,37 @@ type RequestContext struct {
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
 	// VSR signal tracking - stores all matched signals for response headers
-	VSRMatchedKeywords     []string // Matched keyword rule names
-	VSRMatchedEmbeddings   []string // Matched embedding rule names
-	VSRMatchedDomains      []string // Matched domain rule names
-	VSRMatchedFactCheck    []string // Matched fact-check signals
-	VSRMatchedUserFeedback []string // Matched user feedback signals
-	VSRMatchedReask        []string // Matched repeated-question dissatisfaction signals
-	VSRMatchedPreference   []string // Matched preference signals
-	VSRMatchedLanguage     []string // Matched language signals
-	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
-	VSRContextTokenCount   int      // Actual token count for the request
-	VSRContextTextBytes    int      // Byte length of text used for context token estimation
-	VSRMatchedStructure    []string // Matched structure rule names
-	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
-	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
-	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
-	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
-	VSRMatchedKB           []string // Matched knowledge-base signal names
-	VSRMatchedConversation []string // Matched conversation-shape signal names
-	VSRMatchedEvent        []string // Matched event signal names
-	VSRConversationFacts   classification.ConversationFacts
-	VSRMatchedProjection   []string // Matched projection mapping outputs
-	VSRProjectionScores    map[string]float64
-	VSRSignalConfidences   map[string]float64
-	VSRSignalValues        map[string]float64
-	VSRProjectionTrace     *projectiontrace.Trace
+	VSRMatchedKeywords        []string // Matched keyword rule names
+	VSRMatchedEmbeddings      []string // Matched embedding rule names
+	VSRMatchedDomains         []string // Matched domain rule names
+	VSRMatchedFactCheck       []string // Matched fact-check signals
+	VSRMatchedUserFeedback    []string // Matched user feedback signals
+	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
+	VSRMatchedPreference      []string // Matched preference signals
+	VSRMatchedLanguage        []string // Matched language signals
+	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
+	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
+	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
+	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
+	VSRMatchedStructure       []string // Matched structure rule names
+	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
+	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
+	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
+	VSRMatchedKB              []string // Matched knowledge-base signal names
+	VSRMatchedConversation    []string // Matched conversation-shape signal names
+	VSRMatchedEvent           []string // Matched event signal names
+	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
+	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRConversationFacts      classification.ConversationFacts
+	VSRMatchedProjection      []string // Matched projection mapping outputs
+	VSRProjectionScores       map[string]float64
+	VSRSignalConfidences      map[string]float64
+	VSRSignalValues           map[string]float64
+	VSRSignalErrors           map[string]string
+	VSRProjectionTrace        *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
@@ -242,7 +295,7 @@ type RequestContext struct {
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
-	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
+	LooperRequest   bool // True only for token-authenticated in-process looper requests
 	LooperIteration int  // The iteration number if this is a looper request
 
 	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI
@@ -272,6 +325,7 @@ type RequestContext struct {
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
 	RAGSimilarityScore  float32 // Best similarity score from retrieval
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
+	RAGToolCallIDs      map[string]struct{}
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
@@ -282,6 +336,18 @@ type RequestContext struct {
 	MemoryFallbackReason string
 	MemoryFailOpen       bool
 	MemoryResultCount    int
+	MemoryMessageIndexes map[int]struct{}
+
+	ContextCompressionTargetTokens *int
+	ContextCompressionRecoveryKeys []string
+	ContextCompressionStrategy     string
+	ContextCompressionBudgetMode   string
+	ContextCompressionTokenSource  string
+	ContextCompressionTrigger      string
+	ContextCompressionRevision     string
+	ContextCompressionQuality      string
+	ContextCompressionFallback     string
+	ContextCompressionCostSaved    float64
 
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
@@ -294,6 +360,33 @@ type RequestContext struct {
 	// so that any later mutation does not poison the read-only config tree.
 	// nil means the matched decision had no EMIT retention block.
 	EmittedRetention *config.RetentionDirective
+}
+
+func (ctx *RequestContext) setWorkingRequestBody(body []byte) {
+	if ctx == nil {
+		return
+	}
+	if bytes.Equal(body, ctx.OriginalRequestBody) {
+		ctx.WorkingRequestBody = nil
+		return
+	}
+	ctx.WorkingRequestBody = body
+}
+
+func (ctx *RequestContext) workingRequestBody() []byte {
+	if ctx == nil {
+		return nil
+	}
+	if len(ctx.WorkingRequestBody) > 0 {
+		return ctx.WorkingRequestBody
+	}
+	return ctx.OriginalRequestBody
+}
+
+func (ctx *RequestContext) requestBodyMutated() bool {
+	return ctx != nil &&
+		len(ctx.WorkingRequestBody) > 0 &&
+		!bytes.Equal(ctx.WorkingRequestBody, ctx.OriginalRequestBody)
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific

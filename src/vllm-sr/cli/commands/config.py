@@ -12,6 +12,7 @@ from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
+from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
@@ -47,21 +48,20 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
 
     # Parse user config
     try:
-        user_config = parse_user_config(config_path)
+        user_config = parse_user_config(config_path, log_summary=False)
     except ConfigParseError as e:
         log.error(f"Failed to parse configuration: {e}")
         sys.exit(1)
 
     # Validate user config
-    errors = validate_user_config(user_config)
+    errors = validate_user_config(user_config, log_summary=False)
     if errors:
-        log.error("Configuration validation failed:")
         print_validation_errors(errors)
         sys.exit(1)
 
     if config_type == "router":
         # Router now reads canonical config.yaml directly.
-        print(Path(config_path).read_text())
+        echo(Path(config_path).read_text(), nl=False)
 
     elif config_type == "envoy":
         # Generate envoy config
@@ -71,11 +71,15 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             ) as f:
                 temp_path = f.name
 
-            generate_envoy_config_from_user_config(user_config, temp_path)
+            generate_envoy_config_from_user_config(
+                user_config,
+                temp_path,
+                log_summary=False,
+            )
 
             # Read and print
             with open(temp_path) as f:
-                print(f.read())
+                echo(f.read(), nl=False)
 
             # Clean up
             Path(temp_path).unlink()
@@ -121,9 +125,14 @@ def migrate_config_command(
         encoding="utf-8",
     )
 
-    log.info("Migrated configuration written successfully")
-    log.info(f"  Source: {source_path}")
-    log.info(f"  Output: {destination}")
+    success("Configuration migrated")
+    heading("Files")
+    fields(
+        (
+            ("Source", source_path),
+            ("Output", destination),
+        )
+    )
     return destination
 
 

@@ -1,8 +1,0 @@
-plugin:
-  type: hallucination
-  configuration:
-    enabled: true
-    use_nli: true
-    hallucination_action: annotate
-    unverified_factual_action: warn
-    include_hallucination_details: true

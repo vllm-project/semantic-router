@@ -55,8 +55,34 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if ctx.IsStreamingResponse {
 		return r.handleStreamingResponseBody(responseBody, ctx), nil
 	}
+	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
+		ctx.TraceContext,
+		responseBody,
+		ctx,
+	)
+	if recoveryErr != nil {
+		logging.ComponentWarnEvent("extproc", "context_recovery_followup_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      recoveryErr.Error(),
+		})
+		if contextRecoveryFailClosed(ctx) {
+			return r.createErrorResponse(502, "Context recovery followup failed"), nil
+		}
+		responseBody = redactContextRecoveryToolCalls(responseBody)
+	} else {
+		responseBody = recoveredBody
+	}
 
 	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency, anthropicTransformed), nil
+}
+
+func contextRecoveryFailClosed(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return false
+	}
+	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
+	return plugin != nil &&
+		plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }
 
 func (r *OpenAIRouter) handleLooperResponseBody(

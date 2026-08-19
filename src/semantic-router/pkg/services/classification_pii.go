@@ -49,7 +49,8 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 		return nil, ErrEmptyText
 	}
 
-	if s.classifier == nil {
+	classifier := s.classifierSnapshot()
+	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &PIIResponse{
 			HasPII:                 false,
@@ -62,9 +63,9 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 	var detections []classification.PIIDetection
 	var err error
 	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
-		detections, err = s.classifier.ClassifyPIIWithDetailsAndThreshold(req.Text, float32(req.Options.ConfidenceThreshold))
+		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(req.Text, float32(req.Options.ConfidenceThreshold))
 	} else {
-		detections, err = s.classifier.ClassifyPIIWithDetails(req.Text)
+		detections, err = classifier.ClassifyPIIWithDetails(req.Text)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)

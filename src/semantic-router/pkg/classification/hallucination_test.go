@@ -474,8 +474,12 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 	Describe("IsFactCheckEnabled", func() {
 		It("should return true when properly configured", func() {
 			cfg = &config.RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "test-model"
+			cfg.FactCheckRules = []config.FactCheckRule{{Name: "verification-needed"}}
+			cfg.Decisions = []config.Decision{{
+				Name:  "verified-route",
+				Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+			}}
 
 			classifier = &Classifier{Config: cfg}
 			Expect(classifier.IsFactCheckEnabled()).To(BeTrue())
@@ -493,8 +497,17 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 	Describe("IsHallucinationDetectionEnabled", func() {
 		It("should return true when properly configured", func() {
 			cfg = &config.RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
+			cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "test-model"
+			cfg.Decisions = []config.Decision{{
+				Name: "verified-route",
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHallucination,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			classifier = &Classifier{Config: cfg}
 			Expect(classifier.IsHallucinationDetectionEnabled()).To(BeTrue())

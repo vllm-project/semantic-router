@@ -31,7 +31,7 @@ describe('layout mega-menu geometry', () => {
 
     expect(getLayoutMegaMenuGeometry(routing)).toEqual({
       density: 'standard',
-      itemCount: 6,
+      itemCount: 7,
       sectionCount: 3,
     })
   })

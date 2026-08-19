@@ -164,16 +164,12 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 
 		ensureSetupGlobalDefaults(candidate)
 
-		if !deployMu.TryLock() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error":   "deploy_in_progress",
-				"message": "Another config operation is in progress. Please try again.",
-			})
+		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
 			return
 		}
-		defer deployMu.Unlock()
+		defer release()
 
 		yamlData, err := marshalYAMLBytes(candidate.CanonicalConfig)
 		if err != nil {
@@ -318,76 +314,6 @@ func hasSetupMode(configFile *setupConfigFile) bool {
 	return configFile != nil && configFile.Setup != nil && configFile.Setup.Mode
 }
 
-func summarizeSetupConfig(configData *routerconfig.CanonicalConfig) setupConfigSummary {
-	cfg, err := parseSetupRouterConfig(configData)
-	if err != nil {
-		return summarizeSetupConfigFallback(configData)
-	}
-
-	routing := routerconfig.CanonicalRoutingFromRouterConfig(cfg)
-	return setupConfigSummary{
-		Models:    len(routing.ModelCards),
-		Decisions: len(routing.Decisions),
-		Signals:   countCanonicalSignals(routing.Signals),
-	}
-}
-
-func parseSetupRouterConfig(configData *routerconfig.CanonicalConfig) (*routerconfig.RouterConfig, error) {
-	yamlData, err := marshalYAMLBytes(configData)
-	if err != nil {
-		return nil, err
-	}
-	return routerconfig.ParseYAMLBytes(yamlData)
-}
-
-func summarizeSetupConfigFallback(configData *routerconfig.CanonicalConfig) setupConfigSummary {
-	return setupConfigSummary{
-		Models:    countConfiguredModelsFallback(configData),
-		Decisions: countConfiguredDecisionsFallback(configData),
-		Signals:   countConfiguredSignalsFallback(configData),
-	}
-}
-
-func countConfiguredModelsFallback(configData *routerconfig.CanonicalConfig) int {
-	if configData == nil {
-		return 0
-	}
-	if len(configData.Routing.ModelCards) > 0 {
-		return len(configData.Routing.ModelCards)
-	}
-	return len(configData.Providers.Models)
-}
-
-func countConfiguredDecisionsFallback(configData *routerconfig.CanonicalConfig) int {
-	if configData == nil {
-		return 0
-	}
-	return len(configData.Routing.Decisions)
-}
-
-func countConfiguredSignalsFallback(configData *routerconfig.CanonicalConfig) int {
-	if configData == nil {
-		return 0
-	}
-	return countCanonicalSignals(configData.Routing.Signals)
-}
-
-func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
-	return len(signals.Keywords) +
-		len(signals.Embeddings) +
-		len(signals.Domains) +
-		len(signals.FactCheck) +
-		len(signals.UserFeedbacks) +
-		len(signals.Preferences) +
-		len(signals.Language) +
-		len(signals.Context) +
-		len(signals.Complexity) +
-		len(signals.Modality) +
-		len(signals.RoleBindings) +
-		len(signals.Jailbreak) +
-		len(signals.PII)
-}
-
 func firstListenerPort(configFile *setupConfigFile) int {
 	if configFile == nil || len(configFile.Listeners) == 0 {
 		return 0
@@ -462,7 +388,9 @@ func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
 		parsed.Global == nil &&
 		len(parsed.Routing.ModelCards) == 0 &&
 		len(parsed.Routing.Decisions) == 0 &&
-		countCanonicalSignals(parsed.Routing.Signals) == 0 {
+		countCanonicalSignals(parsed.Routing.Signals) == 0 &&
+		len(parsed.Entrypoints) == 0 &&
+		len(parsed.Recipes) == 0 {
 		return nil, fmt.Errorf("remote config is empty")
 	}
 	parsed.Setup = nil
@@ -536,8 +464,17 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 	}
 	if len(patch.Routing.ModelCards) > 0 ||
 		len(patch.Routing.Decisions) > 0 ||
-		countCanonicalSignals(patch.Routing.Signals) > 0 {
+		countCanonicalSignals(patch.Routing.Signals) > 0 ||
+		len(patch.Routing.Projections.Partitions) > 0 ||
+		len(patch.Routing.Projections.Scores) > 0 ||
+		len(patch.Routing.Projections.Mappings) > 0 {
 		merged.Routing = patch.Routing
+	}
+	if len(patch.Entrypoints) > 0 {
+		merged.Entrypoints = patch.Entrypoints
+	}
+	if len(patch.Recipes) > 0 {
+		merged.Recipes = patch.Recipes
 	}
 	if patch.Global != nil {
 		merged.Global = patch.Global

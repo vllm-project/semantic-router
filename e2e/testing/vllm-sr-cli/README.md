@@ -1,77 +1,48 @@
-# vLLM-SR CLI Tests
+# vLLM Semantic Router CLI tests
 
-End-to-end tests for the `vllm-sr` command-line interface.
+This suite checks the `vllm-sr` command surface and its local container
+topology. Unit tests inspect generated commands without starting services;
+integration tests start the split Router, Envoy, dashboard, and simulator
+images and exercise live APIs.
 
-## Quick Start
+## Run through Make
+
+From the repository root:
 
 ```bash
-# From project root:
-make vllm-sr-test              # Unit tests only (fast)
-make vllm-sr-test-integration  # Unit + Integration tests
+make vllm-sr-test
+make vllm-sr-test-integration
 ```
 
-## Make Targets
+`vllm-sr-test` bootstraps the editable CLI and runs without a container
+daemon. `vllm-sr-test-integration` builds the required local images and needs
+Docker or Podman access.
 
-| Target | Description | Requires |
-|--------|-------------|----------|
-| `make vllm-sr-test` | Run unit tests only | Python (bootstraps local `vllm-sr` CLI) |
-| `make vllm-sr-test-integration` | Run unit + integration tests | Docker image (builds automatically) |
+## What the suite covers
 
-## Test Files
+| File | Scope |
+| --- | --- |
+| `test_unit_serve.py` | Config bootstrap, mounts, ports, image pull policy, tokens, and read-only mode. |
+| `test_unit_lifecycle.py` | `status`, `logs`, `stop`, `dashboard`, and `config` command construction. |
+| `test_unit_runtime_topology.py` | Split-runtime discovery, cleanup, timeouts, and Docker/Podman selection. |
+| `test_integration.py` | Live health, management APIs, model visibility, path rewrites, sidecars, lifecycle, and pull policies. |
+| `cli_test_base.py` | Shared command and container helpers. |
+| `run_cli_tests.py` | Prerequisite checks, discovery, filtering, and reporting. |
 
-| File | Type | Description |
-|------|------|-------------|
-| `test_unit_serve.py` | Unit | Tests `serve` flags |
-| `test_unit_lifecycle.py` | Unit | Tests `status/logs/stop/dashboard/config` flags |
-| `test_integration.py` | **Integration** | Real container tests (strong validation) |
-| `cli_test_base.py` | Helper | Base class with utilities |
-| `run_cli_tests.py` | Helper | Test runner |
+The test files are the source of truth for individual assertions; this README
+describes stable areas instead of duplicating every test name.
 
-## Integration Tests (Strong Validation)
+## Run the test runner directly
 
-These tests start real containers and verify with `docker inspect`:
-
-| Test | What it verifies |
-|------|------------------|
-| `test_running_container_contracts` | canonical config → serve → router container running → health |
-| `test_fleet_sim_sidecar_contracts` | `vllm-sr serve` starts the simulator sidecar and exposes `/healthz` |
-| `test_env_var_passed_to_container` | HF_TOKEN inside container |
-| `test_volume_mounting` | config.yaml + models/ mounted |
-| `test_status_shows_running_container` | `status` reports running |
-| `test_logs_retrieves_container_logs` | `logs` gets actual output |
-| `test_stop_terminates_container` | `stop` actually stops container |
-| `test_image_pull_policy_never_fails_with_missing_image` | `never` policy rejects missing image |
-| `test_image_pull_policy_always_attempts_pull` | `always` policy attempts pull |
-
-## Unit Tests (Flag Validation)
-
-| Command | Options Tested |
-|---------|----------------|
-| `serve` | `--config`, `--image`, `--image-pull-policy`, `--readonly-dashboard` |
-| `status` | `all`, `envoy`, `router`, `dashboard`, `simulator` |
-| `logs` | `envoy`, `router`, `dashboard`, `simulator`, `-f/--follow` |
-| `stop` | default |
-| `dashboard` | default, `--no-open` |
-| `config` | `envoy`, `router` |
-
-## Running Tests
+Install the editable CLI first, then run from this directory:
 
 ```bash
-cd e2e/testing/vllm-sr-cli
-
-# All unit tests
 python run_cli_tests.py --verbose
-
-# Include integration tests
 python run_cli_tests.py --verbose --integration
-
-# Filter by pattern
 python run_cli_tests.py --pattern lifecycle
 ```
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `RUN_INTEGRATION_TESTS` | Set to `true` to enable integration tests |
-| `CONTAINER_RUNTIME` | Override runtime (`docker` only; `podman` is rejected) |
+Set `CONTAINER_RUNTIME=docker` or `CONTAINER_RUNTIME=podman` to select a
+runtime. `RUN_INTEGRATION_TESTS=true` also enables integration discovery, but
+the `--integration` flag is clearer for direct runs. The Make target supplies
+the local image names used by the full integration suite.

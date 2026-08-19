@@ -54,6 +54,7 @@ config:
         embedding_model: mmbert
         embedding_dimension: 384
         ingestion_workers: 2
+        ingestion_drain_timeout_seconds: 30
         supported_formats:
           - .txt
           - .md
@@ -62,7 +63,7 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:

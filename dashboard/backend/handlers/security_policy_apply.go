@@ -8,14 +8,20 @@ import (
 
 // applySecurityFragment merges the generated fragment into config.yaml and
 // triggers a runtime hot-reload. Returns true if the apply succeeded.
-func applySecurityFragment(fragment *GeneratedRouterFragment) bool {
+func applySecurityFragment(fragment *GeneratedRouterFragment) (bool, error) {
 	if securityPolicyConfigPath == "" {
-		return false
+		return false, nil
 	}
 
-	deployMu.Lock()
-	defer deployMu.Unlock()
+	release, err := beginOrdinaryRuntimeConfigMutation(securityPolicyConfigDir)
+	if err != nil {
+		return false, err
+	}
+	defer release()
+	return applySecurityFragmentLocked(fragment), nil
+}
 
+func applySecurityFragmentLocked(fragment *GeneratedRouterFragment) bool {
 	yamlBytes, err := toCanonicalYAML(fragment)
 	if err != nil {
 		log.Printf("[SecurityPolicy] failed to marshal canonical YAML: %v", err)

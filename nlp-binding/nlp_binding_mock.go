@@ -38,6 +38,11 @@ func (c *BM25Classifier) Classify(text string) MatchResult {
 	return MatchResult{}
 }
 
+// ClassifyAll returns no matches in non-CGO builds.
+func (c *BM25Classifier) ClassifyAll(text string) []MatchResult {
+	return nil
+}
+
 // Free releases resources (mock - no-op).
 func (c *BM25Classifier) Free() {}
 
@@ -61,6 +66,11 @@ func (c *NgramClassifier) AddRule(name, operator string, keywords []string, thre
 // Classify runs classification (mock - always returns no match).
 func (c *NgramClassifier) Classify(text string) MatchResult {
 	return MatchResult{}
+}
+
+// ClassifyAll returns no matches in non-CGO builds.
+func (c *NgramClassifier) ClassifyAll(text string) []MatchResult {
+	return nil
 }
 
 // Free releases resources (mock - no-op).

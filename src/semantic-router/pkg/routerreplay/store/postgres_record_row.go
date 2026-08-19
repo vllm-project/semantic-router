@@ -13,6 +13,7 @@ const postgresRecordSelectColumns = `
 	original_model, selected_model, reasoning_mode,
 	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy, route_diagnostics, learning, outcomes,
 	request_body, response_body, response_status,
+	lifecycle_state, ended_at, duration_ms, terminal_reason,
 	from_cache, streaming, request_body_truncated, response_body_truncated,
 	guardrails_enabled, jailbreak_enabled, pii_enabled,
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
@@ -21,7 +22,7 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count
+	cache_similarity, context_token_count, hallucination_span_details, recipe
 `
 
 type postgresRowScanner interface {
@@ -29,49 +30,54 @@ type postgresRowScanner interface {
 }
 
 type postgresInsertRecord struct {
-	record                 Record
-	signalsJSON            []byte
-	projectionsJSON        []byte
-	projectionScoresJSON   []byte
-	signalConfidencesJSON  []byte
-	signalValuesJSON       []byte
-	toolTraceJSON          []byte
-	projectionTraceJSON    []byte
-	sessionPolicyJSON      []byte
-	routeDiagnosticsJSON   []byte
-	learningJSON           []byte
-	outcomesJSON           []byte
-	hallucinationSpansJSON []byte
+	record                       Record
+	signalsJSON                  []byte
+	projectionsJSON              []byte
+	projectionScoresJSON         []byte
+	signalConfidencesJSON        []byte
+	signalValuesJSON             []byte
+	toolTraceJSON                []byte
+	projectionTraceJSON          []byte
+	sessionPolicyJSON            []byte
+	routeDiagnosticsJSON         []byte
+	learningJSON                 []byte
+	outcomesJSON                 []byte
+	hallucinationSpansJSON       []byte
+	hallucinationSpanDetailsJSON []byte
 }
 
 type postgresRecordRow struct {
-	record                 Record
-	signalsJSON            []byte
-	projectionsJSON        []byte
-	projectionScoresJSON   []byte
-	signalConfidencesJSON  []byte
-	signalValuesJSON       []byte
-	toolTraceJSON          []byte
-	projectionTraceJSON    []byte
-	sessionPolicyJSON      []byte
-	routeDiagnosticsJSON   []byte
-	learningJSON           []byte
-	outcomesJSON           []byte
-	hallucinationSpansJSON []byte
-	promptTokens           sql.NullInt64
-	cachedPromptTokens     sql.NullInt64
-	cacheWriteTokens       sql.NullInt64
-	completionTokens       sql.NullInt64
-	totalTokens            sql.NullInt64
-	actualCost             sql.NullFloat64
-	baselineCost           sql.NullFloat64
-	costSavings            sql.NullFloat64
-	currency               sql.NullString
-	baselineModel          sql.NullString
-	sessionID              sql.NullString
-	turnIndex              sql.NullInt64
-	previousResponseID     sql.NullString
-	conversationID         sql.NullString
+	record                       Record
+	signalsJSON                  []byte
+	projectionsJSON              []byte
+	projectionScoresJSON         []byte
+	signalConfidencesJSON        []byte
+	signalValuesJSON             []byte
+	toolTraceJSON                []byte
+	projectionTraceJSON          []byte
+	sessionPolicyJSON            []byte
+	routeDiagnosticsJSON         []byte
+	learningJSON                 []byte
+	outcomesJSON                 []byte
+	hallucinationSpansJSON       []byte
+	hallucinationSpanDetailsJSON []byte
+	promptTokens                 sql.NullInt64
+	cachedPromptTokens           sql.NullInt64
+	cacheWriteTokens             sql.NullInt64
+	completionTokens             sql.NullInt64
+	totalTokens                  sql.NullInt64
+	actualCost                   sql.NullFloat64
+	baselineCost                 sql.NullFloat64
+	costSavings                  sql.NullFloat64
+	currency                     sql.NullString
+	baselineModel                sql.NullString
+	sessionID                    sql.NullString
+	turnIndex                    sql.NullInt64
+	previousResponseID           sql.NullString
+	conversationID               sql.NullString
+	recipe                       sql.NullString
+	endedAt                      sql.NullTime
+	terminalReason               sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -105,6 +111,7 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		{"learning diagnostics", &out.learningJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Learning) }},
 		{"outcomes", &out.outcomesJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Outcomes) }},
 		{"hallucination spans", &out.hallucinationSpansJSON, func() ([]byte, error) { return json.Marshal(record.HallucinationSpans) }},
+		{"hallucination span details", &out.hallucinationSpanDetailsJSON, func() ([]byte, error) { return json.Marshal(record.HallucinationSpanDetails) }},
 	}
 	for _, field := range fields {
 		encoded, err := field.marshal()
@@ -126,6 +133,9 @@ func preparePostgresInsertRecord(record Record) (Record, error) {
 	}
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
+	}
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
 	}
 	return record, nil
 }
@@ -156,6 +166,10 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.RequestBody,
 		record.record.ResponseBody,
 		record.record.ResponseStatus,
+		record.record.LifecycleState,
+		record.record.EndedAt,
+		record.record.DurationMS,
+		record.record.TerminalReason,
 		record.record.FromCache,
 		record.record.Streaming,
 		record.record.RequestBodyTruncated,
@@ -191,6 +205,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		emptyStringSQL(record.record.ConversationID),
 		record.record.CacheSimilarity,
 		record.record.ContextTokenCount,
+		record.hallucinationSpanDetailsJSON,
+		emptyStringSQL(record.record.Recipe),
 	}
 }
 
@@ -247,6 +263,10 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.RequestBody,
 		&row.record.ResponseBody,
 		&row.record.ResponseStatus,
+		&row.record.LifecycleState,
+		&row.endedAt,
+		&row.record.DurationMS,
+		&row.terminalReason,
 		&row.record.FromCache,
 		&row.record.Streaming,
 		&row.record.RequestBodyTruncated,
@@ -282,6 +302,8 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.conversationID,
 		&row.record.CacheSimilarity,
 		&row.record.ContextTokenCount,
+		&row.hallucinationSpanDetailsJSON,
+		&row.recipe,
 	}
 }
 
@@ -291,6 +313,9 @@ func (row *postgresRecordRow) decode() (Record, error) {
 	}
 	if len(row.hallucinationSpansJSON) > 0 {
 		_ = json.Unmarshal(row.hallucinationSpansJSON, &row.record.HallucinationSpans)
+	}
+	if len(row.hallucinationSpanDetailsJSON) > 0 {
+		_ = json.Unmarshal(row.hallucinationSpanDetailsJSON, &row.record.HallucinationSpanDetails)
 	}
 	assignUsageCostFields(
 		&row.record,
@@ -306,6 +331,13 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.baselineModel,
 	)
 	row.assignReplaySessionIdentifiers()
+	row.assignReplayRecipe()
+	if row.endedAt.Valid {
+		row.record.EndedAt = cloneTimePtr(&row.endedAt.Time)
+	}
+	if row.terminalReason.Valid {
+		row.record.TerminalReason = row.terminalReason.String
+	}
 	return row.record, nil
 }
 
@@ -358,5 +390,13 @@ func (row *postgresRecordRow) assignReplaySessionIdentifiers() {
 	}
 	if row.conversationID.Valid {
 		row.record.ConversationID = row.conversationID.String
+	}
+}
+
+// assignReplayRecipe restores routing recipe identity. Rows written before the
+// recipe column existed scan as NULL and leave Record.Recipe empty.
+func (row *postgresRecordRow) assignReplayRecipe() {
+	if row.recipe.Valid {
+		row.record.Recipe = row.recipe.String
 	}
 }

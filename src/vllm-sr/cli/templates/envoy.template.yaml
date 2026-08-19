@@ -32,11 +32,12 @@ static_resources:
               # ext_proc (authoritative); this is defense-in-depth. Keep in sync
               # with headers.ReservedInternalHeaders.
               request_headers_to_remove:
+              - "x-vsr-internal-auth"
               - "x-vsr-looper-request"
-              - "x-vsr-looper-authorization"
               - "x-vsr-looper-decision"
               - "x-vsr-looper-iteration"
               - "x-vsr-fusion-depth"
+              - "x-vsr-selected-recipe"
               - "x-vsr-inbound-authorization"
               - "x-authz-user-id"
               - "x-authz-user-groups"
@@ -62,14 +63,20 @@ static_resources:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
                   idleTimeout: 1200s
+                  {% if model.reliability.retry_count | default(0) > 0 %}
+                  retry_policy:
+                    retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
+                    num_retries: {{ model.reliability.retry_count }}
+                  {% endif %}
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% if model.path_prefix %}
-                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
+                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
+                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^/v1(.*)$"
+                      regex: "^/v1([/?].*)?$"
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
@@ -107,16 +114,22 @@ static_resources:
                   cluster: vllm_static_cluster
                   {% endif %}
                   timeout: {{ listener.timeout | default('1200s') }}
+                  {% if models and models[0].reliability.retry_count | default(0) > 0 %}
+                  retry_policy:
+                    retry_on: {{ models[0].reliability.retry_on | default('connect-failure,refused-stream') }}
+                    num_retries: {{ models[0].reliability.retry_count }}
+                  {% endif %}
                   {% if models %}
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
                   {% endif %}
                   {% if models and models[0].path_prefix %}
-                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
+                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
+                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^/v1(.*)$"
+                      regex: "^/v1([/?].*)?$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:
@@ -223,12 +236,42 @@ static_resources:
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 1200s
+    connect_timeout: 10s
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
     {% endif %}
+    {% if model.reliability.lb_policy | default('round_robin') == 'least_request' %}
+    lb_policy: LEAST_REQUEST
+    least_request_lb_config:
+      choice_count: 2
+    {% else %}
     lb_policy: ROUND_ROBIN
+    {% endif %}
+    {% if model.reliability.retry_count | default(0) > 0 or model.reliability.consecutive_5xx | default(0) > 0 %}
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 1024
+        max_pending_requests: 1024
+        max_requests: 4096
+    {% endif %}
+    {% if model.reliability.consecutive_5xx | default(0) > 0 and model.endpoints | length > 1 %}
+    outlier_detection:
+      consecutive_5xx: {{ model.reliability.consecutive_5xx }}
+      interval: 10s
+      base_ejection_time: {{ model.reliability.base_ejection_time | default('30s') }}
+      max_ejection_percent: {{ model.reliability.max_ejection_percent | default(50) }}
+    {% endif %}
+    {% if model.reliability.health_check_path | default('') %}
+    health_checks:
+    - timeout: {{ model.reliability.health_check_timeout | default('2s') }}
+      interval: {{ model.reliability.health_check_interval | default('10s') }}
+      unhealthy_threshold: 3
+      healthy_threshold: 1
+      http_health_check:
+        path: {{ model.reliability.health_check_path | tojson }}
+    {% endif %}
     load_assignment:
       cluster_name: {{ model.cluster_name }}_cluster
       endpoints:
@@ -262,7 +305,7 @@ static_resources:
   - name: anthropic_api_cluster
     type: LOGICAL_DNS
     dns_lookup_family: V4_ONLY
-    connect_timeout: 1200s
+    connect_timeout: 10s
     lb_policy: ROUND_ROBIN
     load_assignment:
       cluster_name: anthropic_api_cluster

@@ -6,20 +6,31 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 type routerReplayAggregateResponse struct {
 	Object               string                            `json:"object"`
 	RecordCount          int                               `json:"record_count"`
+	Lifecycle            routerReplayLifecycleSummary      `json:"lifecycle"`
 	Summary              routerReplayAggregateCostSummary  `json:"summary"`
 	ModelSelection       []routerReplayAggregateValue      `json:"model_selection"`
 	DecisionDistribution []routerReplayAggregateValue      `json:"decision_distribution"`
 	SignalDistribution   []routerReplayAggregateValue      `json:"signal_distribution"`
 	TokenVolume          routerReplayAggregateTokenVolume  `json:"token_volume"`
 	TokenBreakdown       routerReplayAggregateTokenBuckets `json:"token_breakdown"`
+	AvailableRecipes     []string                          `json:"available_recipes"`
 	AvailableDecisions   []string                          `json:"available_decisions"`
 	AvailableModels      []string                          `json:"available_models"`
+}
+
+type routerReplayLifecycleSummary struct {
+	Completed  int `json:"completed"`
+	Failed     int `json:"failed"`
+	Aborted    int `json:"aborted"`
+	InProgress int `json:"in_progress"`
+	Unknown    int `json:"unknown"`
 }
 
 type routerReplayAggregateCostSummary struct {
@@ -85,15 +96,38 @@ func buildRouterReplayAggregatePayload(
 	return routerReplayAggregateResponse{
 		Object:               "router_replay.aggregate",
 		RecordCount:          len(filteredRecords),
+		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
 		TokenVolume:          buildRouterReplayTokenVolume(filteredRecords),
 		TokenBreakdown:       buildRouterReplayTokenBreakdown(filteredRecords),
+		AvailableRecipes:     collectRouterReplayRecipeOptions(allRecords),
 		AvailableDecisions:   collectRouterReplayDecisionOptions(allRecords),
 		AvailableModels:      collectRouterReplayModelOptions(allRecords),
 	}
+}
+
+func buildRouterReplayLifecycleSummary(
+	records []routerreplay.RoutingRecord,
+) routerReplayLifecycleSummary {
+	summary := routerReplayLifecycleSummary{}
+	for _, record := range records {
+		switch record.LifecycleState {
+		case routerreplay.LifecycleCompleted:
+			summary.Completed++
+		case routerreplay.LifecycleFailed:
+			summary.Failed++
+		case routerreplay.LifecycleAborted:
+			summary.Aborted++
+		case routerreplay.LifecycleInProgress:
+			summary.InProgress++
+		default:
+			summary.Unknown++
+		}
+	}
+	return summary
 }
 
 func buildRouterReplayAggregateCostSummary(
@@ -101,6 +135,9 @@ func buildRouterReplayAggregateCostSummary(
 ) routerReplayAggregateCostSummary {
 	summary := routerReplayAggregateCostSummary{}
 	for _, record := range records {
+		if record.LifecycleState != routerreplay.LifecycleCompleted {
+			continue
+		}
 		if record.ActualCost == nil || record.BaselineCost == nil || record.CostSavings == nil {
 			continue
 		}
@@ -136,7 +173,7 @@ func buildRouterReplayDecisionDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := record.Decision
+		name := config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)
 		if name == "" {
 			name = "Unknown"
 		}
@@ -220,7 +257,7 @@ func buildRouterReplayTokenBreakdown(
 
 		accumulateRouterReplayTokenEntry(
 			decisionBuckets,
-			routerReplayFallbackName(record.Decision),
+			routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)),
 			promptTokens,
 			completionTokens,
 			totalTokens,
@@ -323,6 +360,16 @@ func collectRouterReplayDecisionOptions(records []routerreplay.RoutingRecord) []
 	for _, record := range records {
 		if record.Decision != "" {
 			values[record.Decision] = struct{}{}
+		}
+	}
+	return sortRouterReplayOptionSet(values)
+}
+
+func collectRouterReplayRecipeOptions(records []routerreplay.RoutingRecord) []string {
+	values := make(map[string]struct{})
+	for _, record := range records {
+		if record.Recipe != "" {
+			values[record.Recipe] = struct{}{}
 		}
 	}
 	return sortRouterReplayOptionSet(values)

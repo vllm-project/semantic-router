@@ -7,6 +7,7 @@ from cli.container_images import _normalize_platform
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+ORDINARY_PORT_MAPPING_LENGTH = 2
 
 
 def build_base_run_command(
@@ -90,14 +91,46 @@ def append_mount_specs(cmd, mount_specs: list[str]):
         cmd.extend(["-v", mount_spec])
 
 
-def append_port_mappings(cmd, port_mappings: list[tuple[int, int]]):
-    for host_port, container_port in port_mappings:
-        cmd.extend(["-p", f"{host_port}:{container_port}"])
+def append_supplemental_gids(cmd, gids: list[int], runtime: str):
+    """Grant only the resolved host groups needed by a service."""
+
+    if gids and runtime == "podman" and os.geteuid() != 0:
+        # Rootless Podman remaps numeric container GIDs. keep-groups asks crun
+        # to retain the invoking user's real supplementary groups, including
+        # the private spool GID, without making the host file world-writable.
+        cmd.extend(["--group-add", "keep-groups"])
+        return
+    for gid in dict.fromkeys(gids):
+        if gid <= 0:
+            raise ValueError("supplemental container GIDs must be positive")
+        cmd.extend(["--group-add", str(gid)])
 
 
-def append_env_vars(cmd, env_vars: dict[str, str]):
+def append_port_mappings(
+    cmd,
+    port_mappings: list[tuple[int, int] | tuple[str, int, int]],
+):
+    """Append ordinary or explicitly host-bound published ports."""
+    for mapping in port_mappings:
+        if len(mapping) == ORDINARY_PORT_MAPPING_LENGTH:
+            host_port, container_port = mapping
+            rendered = f"{host_port}:{container_port}"
+        else:
+            host_address, host_port, container_port = mapping
+            if ":" in host_address and not host_address.startswith("["):
+                host_address = f"[{host_address}]"
+            rendered = f"{host_address}:{host_port}:{container_port}"
+        cmd.extend(["-p", rendered])
+
+
+def append_env_vars(
+    cmd,
+    env_vars: dict[str, str],
+    inherited_env_keys: set[str] | None = None,
+):
+    inherited_env_keys = inherited_env_keys or set()
     for key, value in env_vars.items():
-        cmd.extend(["-e", f"{key}={value}"])
+        cmd.extend(["-e", key if key in inherited_env_keys else f"{key}={value}"])
 
 
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):

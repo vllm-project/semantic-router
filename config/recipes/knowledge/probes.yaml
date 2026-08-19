@@ -1,0 +1,91 @@
+schema_version: v1
+name: knowledge
+description: >
+  Eval API probes for KB-guided domain routing. Questions from domains with
+  measured frontier uplift escalate; domains with limited uplift remain local.
+routing_assets:
+  yaml: config/recipes/knowledge/config.yaml
+  dsl: config/recipes/knowledge/recipe.dsl
+router_eval_endpoint: /api/v1/eval
+evaluation:
+  request_timeout_seconds: 300
+  concurrency: 4
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 27.8
+  min_projection_assertion_percent: 50.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 100.0
+  required_request_shapes: [text]
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
+decisions:
+  - id: escalate_72b
+    expected_decision: escalate_72b
+    expected_algorithm: static
+    expected_alias: cloud/frontier-72b
+    variants:
+      - id: biology
+        query: Which organelle is primarily responsible for ATP production in eukaryotic cells?
+        tags: [domain:biology, escalation]
+      - id: business
+        query: Which financial statement reports assets, liabilities, and shareholder equity at a point in time?
+        tags: [domain:business, escalation]
+      - id: computing
+        query: What is the amortized time complexity of appending to a dynamically resized array?
+        tags: [domain:computer-science, escalation]
+      - id: economics
+        query: In a competitive market, what happens to quantity demanded when price rises, all else equal?
+        tags: [domain:economics, escalation]
+      - id: history
+        query: Which event directly triggered the start of World War I in Europe?
+        tags: [domain:history, escalation]
+      - id: mathematics
+        query: If a matrix has a zero determinant, what does that imply about its invertibility?
+        expected_signals:
+          keywords: [escalation_domain_override]
+        tags: [domain:math, escalation]
+      - id: philosophy
+        query: Which ethical theory evaluates actions primarily by their consequences?
+        tags: [domain:philosophy, escalation]
+      - id: psychology
+        query: What reinforcement schedule typically produces the greatest resistance to extinction?
+        tags: [domain:psychology, escalation]
+      - id: other_geography
+        query: How many stars are on the flag of the United States?
+        expected_signals:
+          kb: [best_other]
+        tags: [domain:other, escalation, kb-label]
+      - id: ambiguous_keyword_override
+        query: In a generic data table, what does a zero determinant indicate about invertibility?
+        expected_signals:
+          keywords: [escalation_domain_override]
+        tags: [boundary, keyword-override, escalation]
+
+  - id: keep_7b
+    expected_decision: keep_7b
+    expected_algorithm: static
+    expected_alias: local/small-7b
+    variants:
+      - id: engineering
+        query: In an ideal transformer, how does the turns ratio relate primary and secondary voltage?
+        tags: [domain:engineering, local]
+      - id: health
+        query: Which blood cells are primarily responsible for transporting oxygen?
+        expected_signals:
+          keywords: [local_domain_override]
+        tags: [domain:health, local]
+      - id: law
+        query: In contract law, what is consideration?
+        tags: [domain:law, local]
+      - id: physics
+        query: Which physical quantity is measured in joules?
+        tags: [domain:physics, local]
+      - id: chemistry
+        query: Calculate the pH of a 0.5 M acetic-acid and sodium-acetate buffer.
+        expected_signals:
+          kb: [best_chemistry]
+          projection: [no_escalation]
+        tags: [domain:chemistry, local]

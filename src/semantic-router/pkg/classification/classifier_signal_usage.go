@@ -6,16 +6,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used.
-// This allows us to skip evaluation of unused signals for performance optimization.
+// getUsedSignals analyzes this classifier's isolated routing profile and
+// returns which signals (type:name) are actually used. This allows us to skip
+// evaluation of unused local signals.
 // Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords").
 func (c *Classifier) getUsedSignals() map[string]bool {
+	return c.getUsedSignalsForDecisions(c.Config.AllRoutingDecisions())
+}
+
+// getUsedSignalsForDecisions computes usage for an explicit local decision
+// subset, such as a direct-looper algorithm view.
+func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map[string]bool {
 	usedSignals := make(map[string]bool)
 
-	for _, decision := range c.Config.Decisions {
+	for _, decision := range decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
-	c.expandProjectionDependencies(usedSignals)
+	c.expandTransitiveSignalDependencies(usedSignals)
 
 	return usedSignals
 }
@@ -50,14 +57,50 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeEvent, c.Config.EventRules, func(r config.EventRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeClassifier, c.Config.ClassifierRules, func(r config.ClassifierSignalRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
 		}
 	}
-	c.expandProjectionDependencies(allSignals)
+	c.expandTransitiveSignalDependencies(allSignals)
 
 	return allSignals
+}
+
+func (c *Classifier) expandTransitiveSignalDependencies(usedSignals map[string]bool) {
+	for {
+		before := len(usedSignals)
+		c.expandProjectionDependencies(usedSignals)
+		c.expandComplexityComposerDependencies(usedSignals)
+		if len(usedSignals) == before {
+			return
+		}
+	}
+}
+
+func (c *Classifier) expandComplexityComposerDependencies(usedSignals map[string]bool) {
+	for _, rule := range c.Config.ComplexityRules {
+		key := strings.ToLower(config.SignalTypeComplexity + ":" + rule.Name)
+		if !signalKeyOrLabelUsed(usedSignals, key) || rule.Composer == nil {
+			continue
+		}
+		c.analyzeRuleCombination(*rule.Composer, usedSignals)
+	}
+}
+
+func signalKeyOrLabelUsed(usedSignals map[string]bool, key string) bool {
+	if usedSignals[key] {
+		return true
+	}
+	prefix := key + ":"
+	for usedKey := range usedSignals {
+		if strings.HasPrefix(usedKey, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.

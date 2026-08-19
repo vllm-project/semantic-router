@@ -18,8 +18,22 @@ const (
 	runtimeAlgorithmEnv  = "VLLM_SR_ALGORITHM_OVERRIDE"
 	runtimePlatformEnv   = "VLLM_SR_PLATFORM"
 	dashboardPlatformEnv = "DASHBOARD_PLATFORM"
+	configBaseDirEnv     = "VLLM_SR_CONFIG_BASE_DIR"
 	defaultPythonCLIPath = "/app"
 )
+
+func configPersistenceBaseDir(sourceConfigPath string) string {
+	if configured := strings.TrimSpace(os.Getenv(configBaseDirEnv)); configured != "" && filepath.IsAbs(configured) {
+		return filepath.Clean(configured)
+	}
+	cleaned := filepath.Clean(sourceConfigPath)
+	parent := filepath.Dir(cleaned)
+	base := filepath.Base(cleaned)
+	if filepath.Base(parent) == ".vllm-sr" && strings.HasPrefix(base, "runtime-config") && strings.HasSuffix(base, ".yaml") {
+		return filepath.Dir(parent)
+	}
+	return parent
+}
 
 type configPersistencePaths struct {
 	activePath  string
@@ -115,12 +129,21 @@ func syncRuntimeConfigForCurrentRuntime(sourceConfigPath string) (string, error)
 
 func detectPythonCLIRoot() string {
 	if configured := strings.TrimSpace(os.Getenv("VLLM_SR_CLI_PATH")); configured != "" {
-		return configured
+		if hasRuntimeSyncModule(configured) {
+			return configured
+		}
+		return ""
 	}
-	if info, err := os.Stat(defaultPythonCLIPath); err == nil && info.IsDir() {
+	if hasRuntimeSyncModule(defaultPythonCLIPath) {
 		return defaultPythonCLIPath
 	}
 	return ""
+}
+
+func hasRuntimeSyncModule(cliRoot string) bool {
+	modulePath := filepath.Join(cliRoot, "cli", "commands", "runtime_support.py")
+	info, err := os.Stat(modulePath)
+	return err == nil && !info.IsDir()
 }
 
 func runRuntimeSyncPython(timeout time.Duration, cliRoot string, configPath string, workDir string) (string, error) {

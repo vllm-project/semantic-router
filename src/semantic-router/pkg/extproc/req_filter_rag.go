@@ -110,7 +110,7 @@ func handleRAGRetrievalError(
 ) error {
 	tracing.RecordError(ragSpan, err)
 	ragSpan.SetStatus(codes.Error, err.Error())
-	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "error", latency)
+	metrics.RecordRAGRetrieval(ragConfig.Backend, requestDecisionStateKey(ctx), "error", latency)
 
 	switch ragFailureMode(ragConfig) {
 	case "block":
@@ -147,16 +147,17 @@ func (r *OpenAIRouter) finalizeRAGRetrieval(
 	}
 
 	ragSpan.SetStatus(codes.Ok, "Retrieval successful")
-	metrics.RecordRAGRetrieval(ragConfig.Backend, decisionName, "success", latency)
-	metrics.RecordRAGContextLength(ragConfig.Backend, decisionName, len(retrievedContext))
+	metricDecision := requestDecisionStateKey(ctx)
+	metrics.RecordRAGRetrieval(ragConfig.Backend, metricDecision, "success", latency)
+	metrics.RecordRAGContextLength(ragConfig.Backend, metricDecision, len(retrievedContext))
 	if ctx.RAGSimilarityScore > 0 {
-		metrics.RecordRAGSimilarityScore(ragConfig.Backend, decisionName, ctx.RAGSimilarityScore)
+		metrics.RecordRAGSimilarityScore(ragConfig.Backend, metricDecision, ctx.RAGSimilarityScore)
 	}
 
 	if err := r.injectRAGContext(ctx, retrievedContext, ragConfig); err != nil {
 		logging.Errorf("[RAG] Failed to inject context for decision '%s' (backend=%s): %v",
 			decisionName, ragConfig.Backend, err)
-		metrics.RecordPluginExecution("rag", decisionName, "injection_error", 0)
+		metrics.RecordPluginExecution("rag", metricDecision, "injection_error", 0)
 		return nil
 	}
 
@@ -172,7 +173,7 @@ func (r *OpenAIRouter) getCachedRAGContext(query string, ragConfig *config.RAGPl
 
 	if cached, found := r.getRAGCache(query, ragConfig); found {
 		metrics.RecordRAGCacheHit(ragConfig.Backend)
-		logging.Debugf("RAG cache hit for query: %s", query[:min(50, len(query))])
+		logging.Debugf("RAG cache hit for query: %s", logging.ContentDescriptor(query))
 		return cached, true
 	}
 
@@ -219,7 +220,7 @@ func (r *OpenAIRouter) retrieveContextFromBackend(
 func (r *OpenAIRouter) logEmptyRAGContext(backend string, query string, retrievedContext string) {
 	if retrievedContext == "" {
 		logging.Debugf("[RAG] Backend '%s' returned empty context for query: %s",
-			backend, query[:min(60, len(query))])
+			backend, logging.ContentDescriptor(query))
 	}
 }
 
@@ -241,7 +242,7 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 
 	// Parse request body
 	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
+	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
 		return fmt.Errorf("failed to parse request: %w", err)
 	}
 
@@ -309,6 +310,10 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 	if ctx.RequestID != "" {
 		toolCallID = fmt.Sprintf("rag_%s_%d", ctx.RequestID, time.Now().UnixNano())
 	}
+	if ctx.RAGToolCallIDs == nil {
+		ctx.RAGToolCallIDs = make(map[string]struct{})
+	}
+	ctx.RAGToolCallIDs[toolCallID] = struct{}{}
 	toolMessage := map[string]interface{}{
 		"role":         "tool",
 		"tool_call_id": toolCallID,
@@ -329,7 +334,7 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx.OriginalRequestBody = updatedBody
+	ctx.setWorkingRequestBody(updatedBody)
 	ctx.RAGRetrievedContext = context
 	ctx.HasToolsForFactCheck = true
 	ctx.ToolResultsContext = context // Store for hallucination detection
@@ -388,7 +393,7 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	ctx.OriginalRequestBody = updatedBody
+	ctx.setWorkingRequestBody(updatedBody)
 	ctx.RAGRetrievedContext = context
 	// Note: For system_prompt mode, we don't set HasToolsForFactCheck
 	// as context is in system prompt, not tool messages
@@ -412,7 +417,7 @@ func (r *OpenAIRouter) resolveRAGPluginConfig(ctx *RequestContext, decisionName 
 
 	if ragConfig.Backend == "" {
 		logging.Warnf("[RAG] Decision '%s' has RAG enabled but no backend configured, skipping", decisionName)
-		metrics.RecordRAGRetrieval("unknown", decisionName, "config_error", 0)
+		metrics.RecordRAGRetrieval("unknown", requestDecisionStateKey(ctx), "config_error", 0)
 		return nil, false
 	}
 

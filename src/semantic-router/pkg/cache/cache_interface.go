@@ -1,8 +1,7 @@
 package cache
 
 import (
-	"math"
-	"sync/atomic"
+	"context"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,6 +22,49 @@ type CacheEntry struct {
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
+// LookupResult carries the request-owned outcome of one lookup. A hit includes
+// the matched score; a below-threshold miss may include its rejected candidate's
+// score. Errors carry no score.
+type LookupResult struct {
+	ResponseBody []byte
+	Found        bool
+	Similarity   float32
+}
+
+// ExactCacheBackend is an optional exact-response fast path implemented by
+// key-value-capable cache backends.
+type ExactCacheBackend interface {
+	FindExact(ctx context.Context, partition string, fingerprint string) (LookupResult, error)
+	AddExact(ctx context.Context, partition string, fingerprint string, responseBody []byte, ttlSeconds int) error
+}
+
+// ctxErr treats a nil context as having no error.
+//
+// Embedding cannot be interrupted mid-flight; callers check before embedding
+// and before publishing state.
+func ctxErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
+}
+
+func contextErrorOnFailure(ctx context.Context, operationErr error) error {
+	if operationErr == nil {
+		return nil
+	}
+	return ctxErr(ctx)
+}
+
+// releaseOnFailure releases a partially constructed client when setup fails.
+func releaseOnFailure(step func() error, release func()) error {
+	if err := step(); err != nil {
+		release()
+		return err
+	}
+	return nil
+}
+
 // CacheBackend defines the interface for semantic cache implementations
 type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
@@ -31,30 +73,16 @@ type CacheBackend interface {
 	// CheckConnection verifies the cache backend connection is healthy
 	// Returns nil if the connection is healthy, error otherwise
 	// For local caches (in-memory), this may be a no-op
-	CheckConnection() error
-
-	// AddPendingRequest stores a request awaiting its response
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
-
-	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
+	CheckConnection(ctx context.Context) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
+	AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
-	// FindSimilar searches for semantically similar cached requests
-	// Returns the cached response, match status, and any error
-	FindSimilar(model string, query string) ([]byte, bool, error)
-
-	// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-	// This allows category-specific similarity thresholds
-	// Returns the cached response, match status, and any error
-	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
-
-	// LastSimilarity returns the similarity score from the most recent
-	// FindSimilarWithThreshold call. Returns 0 if no lookup has been performed.
-	// Used by the extproc layer to set the x-vsr-cache-similarity response header.
-	LastSimilarity() float32
+	// LookupSimilarWithThreshold returns response data and similarity from the
+	// same lookup operation. Request paths should use this method instead of
+	// backend-global similarity state. A canceled or expired context is
+	// reported as an error rather than as a miss.
+	LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
@@ -63,30 +91,47 @@ type CacheBackend interface {
 	GetStats() CacheStats
 }
 
-// SimilarityTracker provides thread-safe storage for the last similarity score.
-// Embed this in cache backends to satisfy the LastSimilarity() interface method.
-type SimilarityTracker struct {
-	lastSimilarity uint64 // atomic; stores float32 bits
+// LegacyCacheBackend is the temporary backend-implementation seam. New request
+// paths depend on TypedCacheStore; only backend tests and migration adapters
+// should use these two-phase and convenience methods.
+//
+// These methods stay context-free on purpose: they are not on a request path,
+// so there is no caller context to honor. Implementations forward
+// context.Background() to the context-aware core.
+type LegacyCacheBackend interface {
+	CacheBackend
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
+	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
+	FindSimilar(model string, query string) ([]byte, bool, error)
+	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 }
 
-// StoreSimilarity records a similarity score (thread-safe).
-func (t *SimilarityTracker) StoreSimilarity(similarity float32) {
-	atomic.StoreUint64(&t.lastSimilarity, uint64(math.Float32bits(similarity)))
-}
-
-// LastSimilarity returns the most recently stored similarity score.
-func (t *SimilarityTracker) LastSimilarity() float32 {
-	bits := atomic.LoadUint64(&t.lastSimilarity)
-	return math.Float32frombits(uint32(bits & 0xFFFFFFFF)) //nolint:gosec // intentional: float32 bits fit in 32 bits
-}
+// Compile-time assertions keep production implementations aligned with CacheBackend.
+var (
+	_ CacheBackend = (*InMemoryCache)(nil)
+	_ CacheBackend = (*HybridCache)(nil)
+	_ CacheBackend = (*MilvusCache)(nil)
+	_ CacheBackend = (*QdrantCache)(nil)
+	_ CacheBackend = (*RedisCache)(nil)
+	_ CacheBackend = (*ValkeyCache)(nil)
+)
 
 // CacheStats holds performance metrics and usage statistics for cache operations
 type CacheStats struct {
-	TotalEntries    int        `json:"total_entries"`
-	HitCount        int64      `json:"hit_count"`
-	MissCount       int64      `json:"miss_count"`
-	HitRatio        float64    `json:"hit_ratio"`
-	LastCleanupTime *time.Time `json:"last_cleanup_time,omitempty"`
+	TotalEntries        int        `json:"total_entries"`
+	HitCount            int64      `json:"hit_count"`
+	MissCount           int64      `json:"miss_count"`
+	HitRatio            float64    `json:"hit_ratio"`
+	LastCleanupTime     *time.Time `json:"last_cleanup_time,omitempty"`
+	ExactHitCount       int64      `json:"exact_hit_count"`
+	SemanticHitCount    int64      `json:"semantic_hit_count"`
+	L1HitCount          int64      `json:"l1_hit_count"`
+	L2HitCount          int64      `json:"l2_hit_count"`
+	L1Entries           int        `json:"l1_entries"`
+	SingleflightWaiters int64      `json:"singleflight_waiters"`
+	InvalidationCount   int64      `json:"invalidation_count"`
+	StaleMissCount      int64      `json:"stale_miss_count"`
+	FailOpenCount       int64      `json:"fail_open_count"`
 }
 
 // CacheBackendType defines the available cache backend implementations

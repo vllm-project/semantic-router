@@ -2,7 +2,8 @@
 
 ## Overview
 
-`fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. It maps to `config/signal/fact-check/` and is declared under `routing.signals.fact_check`.
+`fact-check` decides whether a prompt should be treated as evidence-sensitive
+traffic. Define its labels under `routing.signals.fact_check`.
 
 This family is learned: it relies on the fact-check classification path under `global.model_catalog.modules.hallucination_mitigation.fact_check`.
 
@@ -30,8 +31,6 @@ Use `fact-check` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/fact-check/`
-
 ```yaml
 routing:
   signals:
@@ -43,3 +42,11 @@ routing:
 ```
 
 Define only the labels your decisions will reference. The learned classifier decides which one fires.
+
+## Dependencies and Limitations
+
+The fact-check classifier processes request text through
+`global.model_catalog.modules.hallucination_mitigation.fact_check`. It predicts
+whether verification is useful; it does not verify a claim. See a complete
+example:
+[`config/fragments/signal/fact-check/needs-verification.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/fact-check/needs-verification.yaml).

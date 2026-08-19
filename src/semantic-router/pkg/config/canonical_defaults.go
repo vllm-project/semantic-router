@@ -51,14 +51,15 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			Enabled:      true,
-			StoreBackend: "postgres",
+			Enabled:      false,
+			StoreBackend: "memory",
 			TTLSeconds:   2592000,
 			AsyncWrites:  false,
 		},
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
 		},
+		ManagementAPI: DefaultManagementAPIConfig(),
 		Observability: ObservabilityConfig{
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
@@ -95,7 +96,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			DefaultSimilarityThreshold: 0.70,
 			ExtractionBatchSize:        10,
 		},
-		SemanticCache: SemanticCache{
+		ResponseCache: SemanticCache{
 			Enabled:        true,
 			BackendType:    "memory",
 			MaxEntries:     1000,
@@ -233,7 +234,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 			Enabled:              true,
 			Threshold:            0.7,
 			UseCPU:               true,
-			UseMmBERT32K:         true,
+			Variant:              PromptGuardVariantMmBERT32K,
 			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 		},
 	}

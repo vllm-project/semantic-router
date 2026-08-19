@@ -26,8 +26,8 @@ const (
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
 	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See docs/sessions.md for the
-	// full priority order.
+	// and the message-fingerprint fallbacks. See the session identification API
+	// documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
@@ -62,6 +62,10 @@ const (
 	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
 	// This is the final routing decision made by the DecisionEngine.
@@ -346,6 +350,19 @@ const (
 	//   oauth2-proxy:      "x-forwarded-groups"
 	// Used by the authz signal classifier for group-level routing.
 	AuthzUserGroups = "x-authz-user-groups"
+
+	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
+	// response-cache partitioning. Client-provided values must be stripped by
+	// the gateway before authorization.
+	AuthzTeamID   = "x-authz-team-id"
+	AuthzTenantID = "x-authz-tenant-id"
+)
+
+// Internal Request Authentication
+const (
+	// VSRInternalAuth authenticates in-process request context that must not
+	// be accepted from external callers or forwarded to model backends.
+	VSRInternalAuth = "x-vsr-internal-auth"
 )
 
 // Looper Request Headers
@@ -375,30 +392,24 @@ const (
 	// keeping the caller credential separate from any static service key on the
 	// Authorization header. It is stripped before the request reaches the upstream.
 	VSRInboundAuthorization = "x-vsr-inbound-authorization"
-
-	// VSRLooperAuthorization authenticates the internal looper leg. The looper
-	// client stamps it with a per-process secret so extproc can distinguish a
-	// genuine internal re-dispatch from a client that spoofs the looper markers.
-	// It is validated and then stripped at the trusted ingress and never reaches
-	// an upstream. See ReservedInternalHeaders.
-	VSRLooperAuthorization = "x-vsr-looper-authorization"
 )
 
 // ReservedInternalHeaders are router-internal headers that carry looper
 // identity or caller-credential state across the authenticated internal
-// re-dispatch leg. They are trusted ONLY on a request whose internal-leg
-// authentication succeeds; on any client-facing (untrusted) ingress they are
+// re-dispatch leg. They are trusted ONLY on a request whose VSRInternalAuth
+// credential authenticates; on any client-facing (untrusted) ingress they are
 // stripped so a caller cannot spoof the internal looper path or inject a
 // caller-identity carrier. They are also rejected in LooperConfig.Headers so an
 // operator cannot smuggle one onto the internal leg via configuration. Matched
 // case-insensitively at every enforcement point.
 var ReservedInternalHeaders = []string{
+	VSRInternalAuth,
 	VSRLooperRequest,
 	VSRLooperIteration,
 	VSRLooperDecision,
 	VSRFusionDepth,
+	VSRSelectedRecipe,
 	VSRInboundAuthorization,
-	VSRLooperAuthorization,
 }
 
 // Looper Response Headers
@@ -419,4 +430,27 @@ const (
 	// VSRLooperAlgorithm indicates the algorithm used by the looper.
 	// Value: "confidence", "ratings", "cost-aware"
 	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
+
+	// VSRLooperLatencyMs indicates the wall-clock latency, in milliseconds,
+	// of the full looper execution (all model calls plus algorithm overhead).
+	// Value: "842" (example)
+	VSRLooperLatencyMs = "x-vsr-looper-latency-ms"
+
+	// VSRLooperPromptTokens indicates the aggregate prompt token count
+	// across all model calls made during looper execution.
+	// Value: "512" (example)
+	//nolint:gosec
+	VSRLooperPromptTokens = "x-vsr-looper-prompt-tokens"
+
+	// VSRLooperCompletionTokens indicates the aggregate completion token
+	// count across all model calls made during looper execution.
+	// Value: "256" (example)
+	//nolint:gosec
+	VSRLooperCompletionTokens = "x-vsr-looper-completion-tokens"
+
+	// VSRLooperTotalTokens indicates the aggregate total token count across
+	// all model calls made during looper execution.
+	// Value: "768" (example)
+	//nolint:gosec
+	VSRLooperTotalTokens = "x-vsr-looper-total-tokens"
 )

@@ -158,7 +158,7 @@ func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir
 // stop_reason, cache usage, and server-tool counts survive the
 // flattening that the OpenAI envelope cannot represent.
 func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExtensions) ([]byte, error) {
-	logging.Debugf("Raw Anthropic response (%d bytes): %s", len(anthropicResponse), string(anthropicResponse))
+	logging.Debugf("Raw Anthropic response: %s", logging.ContentDescriptorBytes(anthropicResponse))
 
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {
@@ -195,7 +195,41 @@ func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExte
 		},
 	}
 
-	return json.Marshal(openAIResp)
+	encoded, err := json.Marshal(openAIResp)
+	if err != nil {
+		return nil, err
+	}
+	return embedAnthropicCacheUsage(encoded, resp.Usage, ext)
+}
+
+func embedAnthropicCacheUsage(
+	encoded []byte,
+	usage anthropic.Usage,
+	ext *ir.IRExtensions,
+) ([]byte, error) {
+	if ext == nil ||
+		(usage.CacheReadInputTokens == 0 &&
+			usage.CacheCreationInputTokens == 0) {
+		return encoded, nil
+	}
+	var response map[string]interface{}
+	if err := json.Unmarshal(encoded, &response); err != nil {
+		return nil, err
+	}
+	usageMap, ok := response["usage"].(map[string]interface{})
+	if !ok {
+		return encoded, nil
+	}
+	totalInput := usage.InputTokens +
+		usage.CacheReadInputTokens +
+		usage.CacheCreationInputTokens
+	usageMap["prompt_tokens"] = totalInput
+	usageMap["total_tokens"] = totalInput + usage.OutputTokens
+	usageMap["prompt_tokens_details"] = map[string]int64{
+		"cached_tokens":      usage.CacheReadInputTokens,
+		"cache_write_tokens": usage.CacheCreationInputTokens,
+	}
+	return json.Marshal(response)
 }
 
 // openAIFinishReasonFromAnthropic maps Anthropic's StopReason alphabet

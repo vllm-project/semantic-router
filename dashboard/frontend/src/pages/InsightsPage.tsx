@@ -11,6 +11,7 @@ import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
   createInsightsTableColumns,
+  formatInsightsDecisionName,
   getInsightsRecordPath,
 } from './insightsPageSupport'
 import type {
@@ -27,11 +28,15 @@ const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 interface ReplayQueryFilters {
   searchTerm: string
   filter: InsightsFilterType
+  recipeFilter: string
   decisionFilter: string
   modelFilter: string
 }
 
-function buildReplayQueryString(filters: ReplayQueryFilters, pagination?: { limit: number; offset: number }) {
+function buildReplayQueryString(
+  filters: ReplayQueryFilters,
+  pagination?: { limit: number; offset: number },
+) {
   const params = new URLSearchParams()
 
   if (pagination) {
@@ -46,6 +51,9 @@ function buildReplayQueryString(filters: ReplayQueryFilters, pagination?: { limi
   }
   if (filters.filter !== 'all') {
     params.set('cache_status', filters.filter)
+  }
+  if (filters.recipeFilter !== 'all') {
+    params.set('recipe', filters.recipeFilter)
   }
   if (filters.decisionFilter !== 'all') {
     params.set('decision', filters.decisionFilter)
@@ -70,6 +78,7 @@ export default function InsightsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [filter, setFilter] = useState<InsightsFilterType>('all')
+  const [recipeFilter, setRecipeFilter] = useState('all')
   const [decisionFilter, setDecisionFilter] = useState('all')
   const [modelFilter, setModelFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
@@ -81,10 +90,11 @@ export default function InsightsPage() {
     () => ({
       searchTerm: debouncedSearchTerm,
       filter,
+      recipeFilter,
       decisionFilter,
       modelFilter,
     }),
-    [debouncedSearchTerm, filter, decisionFilter, modelFilter],
+    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter],
   )
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / insightsPageSize))
@@ -124,7 +134,9 @@ export default function InsightsPage() {
       }
 
       setRecords(listResponse.data || [])
-      setTotalRecords(typeof listResponse.total === 'number' ? listResponse.total : listResponse.count)
+      setTotalRecords(
+        typeof listResponse.total === 'number' ? listResponse.total : listResponse.count,
+      )
       setAggregate(aggregateResponse)
       setError(null)
       setReplayUnavailable(false)
@@ -161,10 +173,13 @@ export default function InsightsPage() {
     return () => window.clearTimeout(debounceTimer)
   }, [searchTerm])
 
-  useEffect(() => () => {
-    requestSequenceRef.current += 1
-    requestAbortControllerRef.current?.abort()
-  }, [])
+  useEffect(
+    () => () => {
+      requestSequenceRef.current += 1
+      requestAbortControllerRef.current?.abort()
+    },
+    [],
+  )
 
   useEffect(() => {
     void fetchRecords()
@@ -186,11 +201,13 @@ export default function InsightsPage() {
     }
   }, [currentPage, totalPages])
 
+  const availableRecipes = aggregate?.available_recipes ?? []
   const availableDecisions = aggregate?.available_decisions ?? []
   const availableModels = aggregate?.available_models ?? []
   const hasReplayData =
     totalRecords > 0 ||
     (aggregate?.record_count ?? 0) > 0 ||
+    availableRecipes.length > 0 ||
     availableDecisions.length > 0 ||
     availableModels.length > 0
 
@@ -200,6 +217,11 @@ export default function InsightsPage() {
 
   const handleDecisionFilterChange = useCallback((value: string) => {
     setDecisionFilter(value)
+    setCurrentPage(1)
+  }, [])
+
+  const handleRecipeFilterChange = useCallback((value: string) => {
+    setRecipeFilter(value)
     setCurrentPage(1)
   }, [])
 
@@ -213,9 +235,12 @@ export default function InsightsPage() {
     setCurrentPage(1)
   }, [])
 
-  const handleViewRecord = useCallback((record: InsightsRecord) => {
-    navigate(getInsightsRecordPath(record.id))
-  }, [navigate])
+  const handleViewRecord = useCallback(
+    (record: InsightsRecord) => {
+      navigate(getInsightsRecordPath(record.id))
+    },
+    [navigate],
+  )
 
   if (loading && !hasReplayData && records.length === 0) {
     return (
@@ -271,7 +296,11 @@ export default function InsightsPage() {
                 />
                 <span>Auto-refresh</span>
               </label>
-              <button type="button" onClick={() => void fetchRecords()} className={styles.refreshButton}>
+              <button
+                type="button"
+                onClick={() => void fetchRecords()}
+                className={styles.refreshButton}
+              >
                 Refresh
               </button>
             </div>
@@ -289,6 +318,20 @@ export default function InsightsPage() {
           <div className={styles.filterRow}>
             <select
               className={styles.filterSelect}
+              value={recipeFilter}
+              onChange={(event) => handleRecipeFilterChange(event.target.value)}
+              disabled={availableRecipes.length === 0}
+            >
+              <option value="all">All Recipes</option>
+              {availableRecipes.map((recipe) => (
+                <option key={recipe} value={recipe}>
+                  {recipe}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className={styles.filterSelect}
               value={decisionFilter}
               onChange={(event) => handleDecisionFilterChange(event.target.value)}
               disabled={availableDecisions.length === 0}
@@ -296,7 +339,7 @@ export default function InsightsPage() {
               <option value="all">All Decisions</option>
               {availableDecisions.map((decision) => (
                 <option key={decision} value={decision}>
-                  {decision}
+                  {formatInsightsDecisionName(decision)}
                 </option>
               ))}
             </select>
@@ -318,7 +361,9 @@ export default function InsightsPage() {
             <select
               className={styles.filterSelect}
               value={filter}
-              onChange={(event) => handleCacheFilterChange(event.target.value as InsightsFilterType)}
+              onChange={(event) =>
+                handleCacheFilterChange(event.target.value as InsightsFilterType)
+              }
             >
               <option value="all">Cache Status</option>
               <option value="cached">Cached Only</option>
@@ -330,14 +375,22 @@ export default function InsightsPage() {
             <div className={styles.emptyState}>
               {replayUnavailable ? (
                 <div className={styles.emptyHint}>
-                  <p>Insights stay empty until router replay is enabled and requests flow through the router.</p>
+                  <p>
+                    Insights stay empty until router replay is enabled and requests flow through the
+                    router.
+                  </p>
                   <p className={styles.emptySubtext}>
-                    Enable `global.services.router_replay.enabled`, or override a specific decision with `router_replay.enabled: true`. Use `enabled: false` on a decision only when you need to turn replay off for that route.
+                    Enable `global.services.router_replay.enabled`, or override a specific decision
+                    with `router_replay.enabled: true`. Use `enabled: false` on a decision only when
+                    you need to turn replay off for that route.
                   </p>
                 </div>
               ) : error ? (
                 <div className={styles.emptyHint}>
-                  <p>Unable to load insights. If replay is disabled, enable router replay globally or on the affected decision, then send traffic through the router.</p>
+                  <p>
+                    Unable to load insights. If replay is disabled, enable router replay globally or
+                    on the affected decision, then send traffic through the router.
+                  </p>
                   <pre className={styles.configHint}>{`global:
   services:
     router_replay:
@@ -351,12 +404,16 @@ routing:
         - type: router_replay
           configuration:
             enabled: false  # optional per-decision opt-out`}</pre>
-                  <p className={styles.emptySubtext}>Then restart the router and send some requests.</p>
+                  <p className={styles.emptySubtext}>
+                    Then restart the router and send some requests.
+                  </p>
                 </div>
               ) : (
                 <div className={styles.emptyHint}>
                   <p>Insights records will appear here once requests are processed.</p>
-                  <p className={styles.emptySubtext}>Send chat completion traffic through the router to populate this view.</p>
+                  <p className={styles.emptySubtext}>
+                    Send chat completion traffic through the router to populate this view.
+                  </p>
                 </div>
               )}
             </div>
@@ -375,7 +432,12 @@ routing:
 
       {totalRecords > insightsPageSize ? (
         <div className={styles.pagination}>
-          <button type="button" className={styles.paginationButton} onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+          <button
+            type="button"
+            className={styles.paginationButton}
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+          >
             First
           </button>
           <button

@@ -305,9 +305,13 @@ func buildStreamingCacheBody(cachedResponse []byte) []byte {
 		return []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
 	}
 
-	if len(cachedCompletion.Choices) == 0 || cachedCompletion.Choices[0].Message.Content == "" {
-		logging.Errorf("Cached response has no valid choices or content")
-		return []byte("data: {\"error\": \"Cached response has no content\"}\n\ndata: [DONE]\n\n")
+	extraDelta, cachedUsage := cachedStreamingExtras(cachedResponse)
+	if replayError := cachedStreamingReplayError(cachedCompletion, extraDelta); replayError != "" {
+		logging.Errorf("Cached streaming replay rejected: %s", replayError)
+		return []byte(fmt.Sprintf(
+			"data: {\"error\": %q}\n\ndata: [DONE]\n\n",
+			replayError,
+		))
 	}
 
 	unixTimeStep := time.Now().Unix()
@@ -319,6 +323,22 @@ func buildStreamingCacheBody(cachedResponse []byte) []byte {
 	}
 
 	var sseChunks []string
+	if len(extraDelta) > 0 {
+		extraChunk := map[string]interface{}{
+			"id":      newID,
+			"object":  "chat.completion.chunk",
+			"created": unixTimeStep,
+			"model":   cachedCompletion.Model,
+			"choices": []map[string]interface{}{{
+				"index":         cachedCompletion.Choices[0].Index,
+				"delta":         extraDelta,
+				"finish_reason": nil,
+			}},
+		}
+		if chunkJSON, err := json.Marshal(extraChunk); err == nil {
+			sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", chunkJSON))
+		}
+	}
 	for i, chunkContent := range chunks {
 		streamChunk := map[string]interface{}{
 			"id":      newID,
@@ -357,6 +377,9 @@ func buildStreamingCacheBody(cachedResponse []byte) []byte {
 			},
 		},
 	}
+	if cachedUsage != nil {
+		finalChunk["usage"] = cachedUsage
+	}
 	finalChunkJSON, err := json.Marshal(finalChunk)
 	if err != nil {
 		logging.Errorf("Error marshaling final streaming chunk: %v", err)
@@ -371,6 +394,68 @@ func buildStreamingCacheBody(cachedResponse []byte) []byte {
 		buf.WriteString(chunk)
 	}
 	return buf.Bytes()
+}
+
+func cachedStreamingReplayError(
+	completion openai.ChatCompletion,
+	extraDelta map[string]interface{},
+) string {
+	if len(completion.Choices) == 0 {
+		return "Cached response has no content"
+	}
+	if len(completion.Choices) > 1 {
+		return "Cached response has multiple choices"
+	}
+	if completion.Choices[0].Message.Content == "" && len(extraDelta) == 0 {
+		return "Cached response has no content"
+	}
+	return ""
+}
+
+func cachedStreamingExtras(cachedResponse []byte) (map[string]interface{}, interface{}) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(cachedResponse, &raw); err != nil {
+		return nil, nil
+	}
+	extras := map[string]interface{}{}
+	choices, ok := raw["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return nil, raw["usage"]
+	}
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return nil, raw["usage"]
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return nil, raw["usage"]
+	}
+	for _, field := range []string{"reasoning_content", "reasoning", "refusal", "tool_calls"} {
+		value, exists := message[field]
+		if !exists || value == nil {
+			continue
+		}
+		if !cacheReplayFieldPresent(value) {
+			continue
+		}
+		extras[field] = value
+	}
+	if len(extras) == 0 {
+		return nil, raw["usage"]
+	}
+	extras["role"] = "assistant"
+	return extras, raw["usage"]
+}
+
+func cacheReplayFieldPresent(value interface{}) bool {
+	switch typed := value.(type) {
+	case string:
+		return typed != ""
+	case []interface{}:
+		return len(typed) > 0
+	default:
+		return value != nil
+	}
 }
 
 // buildNonStreamingCacheBody regenerates ID/timestamp on a cached response.

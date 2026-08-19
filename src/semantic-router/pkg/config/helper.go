@@ -96,8 +96,8 @@ func (c *RouterConfig) EffectiveAutoModelNames() []string {
 	if c == nil {
 		return DefaultAutoModelNames()
 	}
-	if names := normalizeAutoModelNames(c.AutoModelNames); len(names) > 0 {
-		return names
+	if c.AutoModelNames != nil {
+		return normalizeAutoModelNames(c.AutoModelNames)
 	}
 	return normalizeAutoModelNames([]string{
 		DefaultVSRAutoModelName,
@@ -290,12 +290,12 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 
 // IsPIIClassifierEnabled checks if PII classification is enabled
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	return c.PIIModel.ModelID != "" && c.PIIMappingPath != ""
+	return c.PIIModel.Active() && c.PIIModel.ModelID != "" && c.PIIMappingPath != ""
 }
 
 // IsCategoryClassifierEnabled checks if category classification is enabled
 func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
+	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
 }
 
 // IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
@@ -314,9 +314,9 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return false
 	}
 
-	// Check configuration based on whether using vLLM or Candle
-	if c.PromptGuard.UseVLLM {
-		// For vLLM: need external model with role="guardrail"
+	// Check configuration based on the selected backend
+	if c.PromptGuard.Protocol != "" {
+		// For remote backends: need external model with role="guardrail"
 		externalCfg := c.FindExternalModelByRole(ModelRoleGuardrail)
 		return externalCfg != nil &&
 			externalCfg.ModelEndpoint.Address != "" &&
@@ -450,7 +450,9 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 	return nil
 }
 
-// GetDecisionByName returns a decision by name
+// GetDecisionByName returns a decision from the default routing profile. Names
+// are recipe-local; request-time callers should retain the selected Decision
+// object instead of performing a global bare-name lookup.
 func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 	for i := range c.Decisions {
 		if c.Decisions[i].Name == name {
@@ -464,38 +466,50 @@ func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 // Returns true only if the decision has an explicit semantic-cache plugin configured with enabled: true
 // This ensures per-decision scoping - decisions without semantic-cache plugin won't execute caching
 func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
-	decision := c.GetDecisionByName(decisionName)
+	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// IsCacheEnabled resolves response_cache policy from a scoped decision.
+func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
+		config := decision.GetResponseCacheConfig()
 		if config != nil {
 			return config.Enabled
 		}
 	}
-	// No explicit semantic-cache plugin configured for this decision
+	// No explicit response_cache plugin configured for this decision
 	// Return false to respect per-decision plugin scoping
 	return false
 }
 
 // GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
 func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
+func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
-		if config != nil && config.SimilarityThreshold != nil {
-			return *config.SimilarityThreshold
+		config := decision.GetResponseCacheConfig()
+		if config != nil && config.EffectiveSimilarityThreshold() != nil {
+			return *config.EffectiveSimilarityThreshold()
 		}
 	}
-	// Fall back to global cache threshold or bert threshold
-	return c.GetCacheSimilarityThreshold()
+	// Route policy does not cascade the backend's global threshold.
+	return 0.8
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision
 // Returns 0 if caching should be skipped for this decision
 // Returns -1 to use the global default TTL when not specified at decision level
 func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
-	decision := c.GetDecisionByName(decisionName)
+	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
+}
+
+// GetCacheTTLSeconds resolves TTL from a scoped decision.
+func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
 	if decision != nil {
-		config := decision.GetSemanticCacheConfig()
+		config := decision.GetResponseCacheConfig()
 		if config != nil && config.TTLSeconds != nil {
 			return *config.TTLSeconds
 		}

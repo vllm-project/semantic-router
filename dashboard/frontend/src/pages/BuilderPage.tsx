@@ -1,31 +1,34 @@
-import React, {
-  useEffect,
-  useCallback,
-  useState,
-  useMemo,
-  useRef,
-} from "react";
+import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 
-import { useDSLStore } from "@/stores/dslStore";
-import type { DSLFieldObject } from "@/types/dsl";
-import type { EditorMode } from "@/types/dsl";
-import type { RouteInput } from "@/lib/dslMutations";
+import { useDSLStore } from '@/stores/dslStore'
+import type { EditorMode } from '@/types/dsl'
 
-import styles from "./BuilderPage.module.css";
-import DslEditorPage from "./DslEditorPage";
-import { BuilderDeployConfirmModal, BuilderDeployToast, BuilderDragOverlay } from "./builderPageDeployOverlays";
-import { VisualMode } from "./builderPageVisualShell";
-import { BuilderGuideDrawer } from "./builderPageGuideDrawer";
-import { BuilderImportModal } from "./builderPageImportModal";
-import { BuilderNaturalLanguagePanel } from "./builderPageNaturalLanguagePanel";
-import { BuilderOutputPanel } from "./builderPageOutputPanel";
-import { useResizableWidth } from "./builderPageResizeHooks";
-import { BuilderStatusBar } from "./builderPageStatusBar";
-import { BuilderToolbar } from "./builderPageToolbar";
-import { useReadonly } from "@/contexts/ReadonlyContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { canDeployConfig } from "@/utils/accessControl";
-import type { EntityKind, SectionState, Selection } from "./builderPageTypes";
+import styles from './BuilderPage.module.css'
+import DslEditorPage from './DslEditorPage'
+import {
+  BuilderDeployConfirmModal,
+  BuilderDeployToast,
+  BuilderDragOverlay,
+} from './builderPageDeployOverlays'
+import { VisualMode } from './builderPageVisualShell'
+import { BuilderGuideDrawer } from './builderPageGuideDrawer'
+import { BuilderImportModal } from './builderPageImportModal'
+import { BuilderNaturalLanguagePanel } from './builderPageNaturalLanguagePanel'
+import { BuilderOutputPanel } from './builderPageOutputPanel'
+import { useResizableWidth } from './builderPageResizeHooks'
+import { BuilderStatusBar } from './builderPageStatusBar'
+import { BuilderToolbar } from './builderPageToolbar'
+import {
+  chooseDefaultBuilderRoutingScope,
+  listBuilderRoutingScopes,
+  resolveBuilderRoutingScope,
+  summarizeBuilderRoutingScopes,
+} from './builderPageRoutingScopeSupport'
+import { useBuilderScopedEntityMutations } from './useBuilderScopedEntityMutations'
+import { useReadonly } from '@/contexts/ReadonlyContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { canDeployConfig } from '@/utils/accessControl'
+import type { EntityKind, SectionState, Selection } from './builderPageTypes'
 
 // ---------- Component ----------
 
@@ -41,6 +44,7 @@ const BuilderPage: React.FC = () => {
     loading,
     mode,
     dirty,
+    renderedYamlOutput,
     yamlOutput,
     crdOutput,
     compileError,
@@ -53,27 +57,6 @@ const BuilderPage: React.FC = () => {
     setMode,
     importYaml,
     loadFromRouter,
-    mutateModel,
-    addModel,
-    deleteModel,
-    mutateSignal,
-    addSignal,
-    deleteSignal,
-    mutateProjectionPartition,
-    addProjectionPartition,
-    deleteProjectionPartition,
-    mutateProjectionScore,
-    addProjectionScore,
-    deleteProjectionScore,
-    mutateProjectionMapping,
-    addProjectionMapping,
-    deleteProjectionMapping,
-    mutatePlugin,
-    addPlugin,
-    deletePlugin,
-    deleteRoute,
-    mutateRoute,
-    addRoute,
     requestDeploy,
     executeDeploy,
     dismissDeploy,
@@ -92,12 +75,12 @@ const BuilderPage: React.FC = () => {
     generateFromNaturalLanguage,
     applyNaturalLanguageDraft,
     discardNaturalLanguageDraft,
-  } = useDSLStore();
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly();
-  const { user } = useAuth();
-  const hasDeployPermission = canDeployConfig(user);
+  } = useDSLStore()
+  const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
+  const { user } = useAuth()
+  const hasDeployPermission = canDeployConfig(user)
 
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null)
   const [sections, setSections] = useState<SectionState>({
     models: true,
     signals: true,
@@ -106,342 +89,237 @@ const BuilderPage: React.FC = () => {
     projectionMappings: true,
     routes: true,
     plugins: true,
-  });
-  const [addingEntity, setAddingEntity] = useState<EntityKind | null>(null);
-  const [outputPanelOpen, setOutputPanelOpen] = useState(true);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
+  })
+  const [addingEntity, setAddingEntity] = useState<EntityKind | null>(null)
+  const [activeRoutingScopeId, setActiveRoutingScopeId] = useState('__auto__')
+  const [outputPanelOpen, setOutputPanelOpen] = useState(true)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
 
-  const contentRef = useRef<HTMLDivElement>(null);
-  const { width: guideWidth, isDragging: isGuideDragging, handleDragStart: handleGuideDragStart } =
-    useResizableWidth({
-      initialWidth: 420,
-      minWidth: 300,
-      getMaxWidth: () => 800,
-      stopPropagation: true,
-    });
-  const { width: outputWidth, isDragging, handleDragStart } = useResizableWidth({
+  const contentRef = useRef<HTMLDivElement>(null)
+  const {
+    width: guideWidth,
+    isDragging: isGuideDragging,
+    handleDragStart: handleGuideDragStart,
+  } = useResizableWidth({
+    initialWidth: 420,
+    minWidth: 300,
+    getMaxWidth: () => 800,
+    stopPropagation: true,
+  })
+  const {
+    width: outputWidth,
+    isDragging,
+    handleDragStart,
+  } = useResizableWidth({
     initialWidth: 380,
     minWidth: 200,
-    getMaxWidth: () =>
-      Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.6),
-  });
-  const [importText, setImportText] = useState("");
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importUrl, setImportUrl] = useState("");
-  const [importUrlLoading, setImportUrlLoading] = useState(false);
-  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const autoLoadedDefaultConfigRef = useRef(false);
-  const autoLoadingDefaultConfigRef = useRef(false);
-  const isNaturalLanguageMode = mode === "nl";
+    getMaxWidth: () => Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.6),
+  })
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importUrl, setImportUrl] = useState('')
+  const [importUrlLoading, setImportUrlLoading] = useState(false)
+  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const autoLoadedDefaultConfigRef = useRef(false)
+  const autoLoadingDefaultConfigRef = useRef(false)
+  const isNaturalLanguageMode = mode === 'nl'
+  const routingScopes = useMemo(() => listBuilderRoutingScopes(ast), [ast])
+  const activeRoutingScope = useMemo(
+    () => routingScopes.find((scope) => scope.id === activeRoutingScopeId) ?? null,
+    [activeRoutingScopeId, routingScopes],
+  )
+  const visualAst = useMemo(
+    () => resolveBuilderRoutingScope(ast, activeRoutingScopeId) ?? ast,
+    [activeRoutingScopeId, ast],
+  )
+
+  useEffect(() => {
+    if (!ast || routingScopes.length === 0) return
+    if (!routingScopes.some((scope) => scope.id === activeRoutingScopeId)) {
+      setActiveRoutingScopeId(chooseDefaultBuilderRoutingScope(ast))
+      setSelection(null)
+      setAddingEntity(null)
+    }
+  }, [activeRoutingScopeId, ast, routingScopes])
 
   // Initialize WASM on mount
   useEffect(() => {
-    initWasm();
-  }, [initWasm]);
+    initWasm()
+  }, [initWasm])
 
-  // Always land on the DSL editor when entering the builder page.
+  // The visual workspace is the primary authoring entrypoint. DSL remains one
+  // click away for precision edits and round-trip inspection.
   useEffect(() => {
-    setMode("dsl");
-  }, [setMode]);
+    setMode('visual')
+  }, [setMode])
 
   // Parse AST when entering visual mode or when dslSource changes in visual mode
   useEffect(() => {
-    if (mode === "visual" && wasmReady && dslSource.trim()) {
-      parseAST();
+    if (mode === 'visual' && wasmReady && dslSource.trim()) {
+      parseAST()
     }
-  }, [mode, wasmReady, dslSource, parseAST]);
+  }, [mode, wasmReady, dslSource, parseAST])
 
   useEffect(() => {
     if (!isNaturalLanguageMode) {
-      return;
+      return
     }
-    setGuideOpen(false);
-    setOutputPanelOpen(false);
-  }, [isNaturalLanguageMode]);
+    setGuideOpen(false)
+    setOutputPanelOpen(false)
+  }, [isNaturalLanguageMode])
 
   const toggleSection = useCallback((key: keyof SectionState) => {
-    setSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+    setSections((prev) => ({ ...prev, [key]: !prev[key] }))
+  }, [])
 
   const handleModeSwitch = useCallback(
     (newMode: EditorMode) => {
-      setMode(newMode);
-      setOutputPanelOpen(newMode !== "nl");
+      setMode(newMode)
+      setOutputPanelOpen(newMode !== 'nl')
       // When switching to visual, parse AST
-      if (newMode === "visual" && wasmReady && dslSource.trim()) {
-        parseAST();
+      if (newMode === 'visual' && wasmReady && dslSource.trim()) {
+        parseAST()
       }
     },
     [setMode, wasmReady, dslSource, parseAST],
-  );
-  const hasPendingNLDraft = nlStagedDraft !== null;
+  )
+  const hasPendingNLDraft = nlStagedDraft !== null
   const deployDisabled =
-    readonlyLoading || isReadonly || !hasDeployPermission || hasPendingNLDraft;
+    readonlyLoading ||
+    serverReadonly ||
+    !runtimeConfigWritable ||
+    !hasDeployPermission ||
+    hasPendingNLDraft
 
-  // --- Entity CRUD handlers ---
-
-  const handleDeleteEntity = useCallback(
-    (kind: EntityKind, name: string, subType?: string) => {
-      switch (kind) {
-        case "model":
-          deleteModel(name);
-          break;
-        case "signal":
-          if (subType) deleteSignal(subType, name);
-          break;
-        case "projection-partition":
-          deleteProjectionPartition(name);
-          break;
-        case "projection-score":
-          deleteProjectionScore(name);
-          break;
-        case "projection-mapping":
-          deleteProjectionMapping(name);
-          break;
-        case "route":
-          deleteRoute(name);
-          break;
-        case "plugin":
-          if (subType) deletePlugin(name, subType);
-          break;
-      }
-      setSelection(null);
-    },
-    [
-      deleteModel,
-      deleteSignal,
-      deleteProjectionPartition,
-      deleteProjectionScore,
-      deleteProjectionMapping,
-      deleteRoute,
-      deletePlugin,
-    ],
-  );
-
-  const handleUpdateModelFields = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      mutateModel(name, fields);
-    },
-    [mutateModel],
-  );
-
-  const handleAddModel = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      addModel(name, fields);
-      setSelection({ kind: "model", name });
-      setAddingEntity(null);
-    },
-    [addModel],
-  );
-
-  const handleUpdateSignalFields = useCallback(
-    (signalType: string, name: string, fields: DSLFieldObject) => {
-      mutateSignal(signalType, name, fields);
-    },
-    [mutateSignal],
-  );
-
-  const handleUpdatePluginFields = useCallback(
-    (name: string, pluginType: string, fields: DSLFieldObject) => {
-      mutatePlugin(name, pluginType, fields);
-    },
-    [mutatePlugin],
-  );
-
-  const handleUpdateProjectionPartitionFields = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      mutateProjectionPartition(name, fields);
-    },
-    [mutateProjectionPartition],
-  );
-
-  const handleUpdateProjectionScoreFields = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      mutateProjectionScore(name, fields);
-    },
-    [mutateProjectionScore],
-  );
-
-  const handleUpdateProjectionMappingFields = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      mutateProjectionMapping(name, fields);
-    },
-    [mutateProjectionMapping],
-  );
-
-  const handleAddSignal = useCallback(
-    (signalType: string, name: string, fields: DSLFieldObject) => {
-      addSignal(signalType, name, fields);
-      setSelection({ kind: "signal", name });
-      setAddingEntity(null);
-    },
-    [addSignal],
-  );
-
-  const handleAddPlugin = useCallback(
-    (name: string, pluginType: string, fields: DSLFieldObject) => {
-      addPlugin(name, pluginType, fields);
-      setSelection({ kind: "plugin", name });
-      setAddingEntity(null);
-    },
-    [addPlugin],
-  );
-
-  const handleAddProjectionPartition = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      addProjectionPartition(name, fields);
-      setSelection({ kind: "projection-partition", name });
-      setAddingEntity(null);
-    },
-    [addProjectionPartition],
-  );
-
-  const handleAddProjectionScore = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      addProjectionScore(name, fields);
-      setSelection({ kind: "projection-score", name });
-      setAddingEntity(null);
-    },
-    [addProjectionScore],
-  );
-
-  const handleAddProjectionMapping = useCallback(
-    (name: string, fields: DSLFieldObject) => {
-      addProjectionMapping(name, fields);
-      setSelection({ kind: "projection-mapping", name });
-      setAddingEntity(null);
-    },
-    [addProjectionMapping],
-  );
-
-  const handleUpdateRoute = useCallback(
-    (name: string, input: RouteInput) => {
-      mutateRoute(name, input);
-    },
-    [mutateRoute],
-  );
-
-  const handleAddRoute = useCallback(
-    (name: string, input: RouteInput) => {
-      addRoute(name, input);
-      setSelection({ kind: "route", name });
-      setAddingEntity(null);
-    },
-    [addRoute],
-  );
+  const {
+    handleAddModel,
+    handleAddPlugin,
+    handleAddProjectionMapping,
+    handleAddProjectionPartition,
+    handleAddProjectionScore,
+    handleAddRoute,
+    handleAddSignal,
+    handleDeleteEntity,
+    handleUpdateModelFields,
+    handleUpdatePluginFields,
+    handleUpdateProjectionMappingFields,
+    handleUpdateProjectionPartitionFields,
+    handleUpdateProjectionScoreFields,
+    handleUpdateRoute,
+    handleUpdateSignalFields,
+  } = useBuilderScopedEntityMutations({
+    recipeName: activeRoutingScope?.recipeName ?? null,
+    setAddingEntity,
+    setSelection,
+  })
 
   // --- Import Config handlers ---
 
   const handleOpenImport = useCallback(() => {
-    setImportText("");
-    setImportError(null);
-    setImportUrl("");
-    setImportUrlLoading(false);
-    setShowImportModal(true);
-    setTimeout(() => importTextareaRef.current?.focus(), 50);
-  }, []);
+    setImportText('')
+    setImportError(null)
+    setImportUrl('')
+    setImportUrlLoading(false)
+    setShowImportModal(true)
+    setTimeout(() => importTextareaRef.current?.focus(), 50)
+  }, [])
 
   const handleImportConfirm = useCallback(() => {
-    const yaml = importText.trim();
+    const yaml = importText.trim()
     if (!yaml) {
-      setImportError("Please paste YAML content");
-      return;
+      setImportError('Please paste YAML content')
+      return
     }
     try {
-      importYaml(yaml);
-      compile();
-      setShowImportModal(false);
-      setImportText("");
-      setImportError(null);
+      importYaml(yaml)
+      compile()
+      setShowImportModal(false)
+      setImportText('')
+      setImportError(null)
     } catch {
       setImportError(
-        "Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.",
-      );
+        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
+      )
     }
-  }, [importText, importYaml, compile]);
+  }, [importText, importYaml, compile])
 
-  const handleImportFile = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result;
-        if (typeof text === "string") {
-          setImportText(text);
-          setImportError(null);
-        }
-      };
-      reader.readAsText(file);
-      e.target.value = "";
-    },
-    [],
-  );
+  const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result
+      if (typeof text === 'string') {
+        setImportText(text)
+        setImportError(null)
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }, [])
 
   const handleImportUrl = useCallback(async () => {
-    const url = importUrl.trim();
+    const url = importUrl.trim()
     if (!url) {
-      setImportError("Please enter a URL");
-      return;
+      setImportError('Please enter a URL')
+      return
     }
     try {
-      new URL(url);
+      new URL(url)
     } catch {
-      setImportError("Invalid URL format");
-      return;
+      setImportError('Invalid URL format')
+      return
     }
-    setImportUrlLoading(true);
-    setImportError(null);
+    setImportUrlLoading(true)
+    setImportError(null)
     try {
-      const resp = await fetch("/api/tools/fetch-raw", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const resp = await fetch('/api/tools/fetch-raw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
-      });
-      const data = await resp.json();
+      })
+      const data = await resp.json()
       if (data.error) {
-        throw new Error(data.error);
+        throw new Error(data.error)
       }
       if (!data.content?.trim()) {
-        throw new Error("Remote returned empty content");
+        throw new Error('Remote returned empty content')
       }
-      setImportText(data.content);
-      setImportError(null);
+      setImportText(data.content)
+      setImportError(null)
     } catch (err) {
-      setImportError(
-        `Failed to fetch: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      setImportError(`Failed to fetch: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
-      setImportUrlLoading(false);
+      setImportUrlLoading(false)
     }
-  }, [importUrl]);
+  }, [importUrl])
 
-  const [loadingFromRouter, setLoadingFromRouter] = useState(false);
+  const [loadingFromRouter, setLoadingFromRouter] = useState(false)
   const handleLoadFromRouter = useCallback(async () => {
-    setLoadingFromRouter(true);
-    setImportError(null);
+    setLoadingFromRouter(true)
+    setImportError(null)
     try {
-      await loadFromRouter();
-      compile();
-      setShowImportModal(false);
-      setImportText("");
+      await loadFromRouter()
+      compile()
+      setShowImportModal(false)
+      setImportText('')
     } catch (err) {
       setImportError(
         `Failed to load from router: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      )
     } finally {
-      setLoadingFromRouter(false);
+      setLoadingFromRouter(false)
     }
-  }, [loadFromRouter, compile]);
+  }, [loadFromRouter, compile])
 
   const handleRequestDeploy = useCallback(() => {
     if (deployDisabled) {
-      return;
+      return
     }
-    requestDeploy();
-  }, [deployDisabled, requestDeploy]);
+    requestDeploy()
+  }, [deployDisabled, requestDeploy])
 
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
@@ -452,79 +330,86 @@ const BuilderPage: React.FC = () => {
       autoLoadedDefaultConfigRef.current ||
       autoLoadingDefaultConfigRef.current
     ) {
-      return;
+      return
     }
 
-    autoLoadingDefaultConfigRef.current = true;
-    let cancelled = false;
+    autoLoadingDefaultConfigRef.current = true
+    let cancelled = false
     const loadDefaultConfig = async () => {
-      setLoadingFromRouter(true);
-      setImportError(null);
+      setLoadingFromRouter(true)
+      setImportError(null)
       try {
-        await loadFromRouter();
+        await loadFromRouter()
         if (!cancelled) {
-          compile();
-          autoLoadedDefaultConfigRef.current = true;
+          compile()
+          autoLoadedDefaultConfigRef.current = true
         }
       } catch (err) {
-        console.error(
-          "[BuilderPage] Failed to load default router config:",
-          err,
-        );
+        console.error('[BuilderPage] Failed to load default router config:', err)
       } finally {
-        autoLoadingDefaultConfigRef.current = false;
+        autoLoadingDefaultConfigRef.current = false
         if (!cancelled) {
-          setLoadingFromRouter(false);
+          setLoadingFromRouter(false)
         }
       }
-    };
-    void loadDefaultConfig();
+    }
+    void loadDefaultConfig()
     return () => {
-      cancelled = true;
-    };
-  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
+      cancelled = true
+    }
+  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile])
 
   // Diagnostic counts
-  const validationErrorCount = diagnostics.filter((d) => d.level === "error").length;
-  const errorCount = validationErrorCount + (compileError ? 1 : 0);
-  const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
+  const validationErrorCount = diagnostics.filter((d) => d.level === 'error').length
+  const errorCount = validationErrorCount + (compileError ? 1 : 0)
+  const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0
   const currentModelNames = useMemo(() => {
-    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? [];
-    return Array.from(
-      new Set(rawNames.map((name) => name.trim()).filter(Boolean)),
-    );
-  }, [ast?.models, symbols?.models]);
-  const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
-  const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
-  const projectionScoreCount = ast?.projectionScores?.length ?? 0;
-  const projectionMappingCount = ast?.projectionMappings?.length ?? 0;
-  const routeCount = ast?.routes?.length ?? symbols?.routes?.length ?? 0;
-  const pluginCount = ast?.plugins?.length ?? symbols?.plugins?.length ?? 0;
-  const isValid = errorCount === 0 && wasmReady;
-  const lineCount = dslSource.split("\n").length;
+    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? []
+    return Array.from(new Set(rawNames.map((name) => name.trim()).filter(Boolean)))
+  }, [ast?.models, symbols?.models])
+  const totalRoutingSummary = useMemo(
+    () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),
+    [ast, symbols, dslSource],
+  )
+  const {
+    signalCount,
+    projectionPartitionCount,
+    projectionScoreCount,
+    projectionMappingCount,
+    routeCount,
+    pluginCount,
+  } = useMemo(() => summarizeBuilderRoutingScopes(visualAst, null), [visualAst])
+  const { recipeCount, entrypointCount } = totalRoutingSummary
+  const isValid = errorCount === 0 && wasmReady
+  const lineCount = dslSource.split('\n').length
 
   // Memoize selected entity from AST
   const selectedEntity = useMemo(() => {
-    if (!selection || !ast) return null;
+    if (!selection || !visualAst) return null
     switch (selection.kind) {
-      case "model":
-        return ast.models?.find((m) => m.name === selection.name) ?? null;
-      case "signal":
-        return ast.signals?.find((s) => s.name === selection.name) ?? null;
-      case "projection-partition":
-        return ast.projectionPartitions?.find((partition) => partition.name === selection.name) ?? null;
-      case "projection-score":
-        return ast.projectionScores?.find((score) => score.name === selection.name) ?? null;
-      case "projection-mapping":
-        return ast.projectionMappings?.find((mapping) => mapping.name === selection.name) ?? null;
-      case "route":
-        return ast.routes?.find((r) => r.name === selection.name) ?? null;
-      case "plugin":
-        return ast.plugins?.find((p) => p.name === selection.name) ?? null;
+      case 'model':
+        return visualAst.models?.find((m) => m.name === selection.name) ?? null
+      case 'signal':
+        return visualAst.signals?.find((s) => s.name === selection.name) ?? null
+      case 'projection-partition':
+        return (
+          visualAst.projectionPartitions?.find((partition) => partition.name === selection.name) ??
+          null
+        )
+      case 'projection-score':
+        return visualAst.projectionScores?.find((score) => score.name === selection.name) ?? null
+      case 'projection-mapping':
+        return (
+          visualAst.projectionMappings?.find((mapping) => mapping.name === selection.name) ?? null
+        )
+      case 'route':
+        return visualAst.routes?.find((r) => r.name === selection.name) ?? null
+      case 'plugin':
+        return visualAst.plugins?.find((p) => p.name === selection.name) ?? null
       default:
-        return null;
+        return null
     }
-  }, [selection, ast]);
+  }, [selection, visualAst])
 
   return (
     <div className={styles.page}>
@@ -538,15 +423,17 @@ const BuilderPage: React.FC = () => {
         deploying={deploying}
         deployDisabled={deployDisabled}
         deployDisabledReason={
-          isReadonly
-            ? "Deploy is unavailable in read-only mode"
-            : !hasDeployPermission
-              ? "Deploy requires the config.deploy permission"
-              : hasPendingNLDraft
-                ? "Apply or discard the staged NL draft before deploying the live Builder config"
-                : readonlyLoading
-                  ? "Checking deploy permissions..."
-                  : undefined
+          readonlyLoading
+            ? 'Checking deploy permissions...'
+            : serverReadonly
+              ? 'Deploy is disabled by the server-wide read-only policy'
+              : !runtimeConfigWritable
+                ? 'Deploy requires a writable runtime configuration mount'
+                : !hasDeployPermission
+                  ? 'Deploy requires the config.deploy permission'
+                  : hasPendingNLDraft
+                    ? 'Apply or discard the staged NL draft before deploying the live Builder config'
+                    : undefined
         }
         showBuilderSecondaryActions={!isNaturalLanguageMode}
         guideOpen={guideOpen}
@@ -566,9 +453,9 @@ const BuilderPage: React.FC = () => {
       <div className={styles.content} ref={contentRef}>
         {/* Editor area (switches by mode) */}
         <div className={styles.editorArea}>
-          {mode === "visual" && (
+          {mode === 'visual' && (
             <VisualMode
-              ast={ast}
+              ast={visualAst}
               dslSource={dslSource}
               diagnostics={diagnostics}
               selection={selection}
@@ -605,14 +492,21 @@ const BuilderPage: React.FC = () => {
               errorCount={errorCount}
               isValid={isValid}
               onModeSwitch={handleModeSwitch}
+              routingScopes={routingScopes}
+              activeRoutingScopeId={activeRoutingScopeId}
+              onRoutingScopeChange={(scopeId) => {
+                setActiveRoutingScopeId(scopeId)
+                setSelection(null)
+                setAddingEntity(null)
+              }}
             />
           )}
-          {mode === "dsl" && (
+          {mode === 'dsl' && (
             <div className={styles.dslModeContainer}>
               <DslEditorPage embedded hideOutput />
             </div>
           )}
-          {mode === "nl" && (
+          {mode === 'nl' && (
             <BuilderNaturalLanguagePanel
               currentDsl={dslSource}
               baseConfigYaml={baseConfigYaml}
@@ -634,7 +528,7 @@ const BuilderPage: React.FC = () => {
           <BuilderOutputPanel
             open={outputPanelOpen}
             width={outputWidth}
-            yamlOutput={yamlOutput}
+            yamlOutput={renderedYamlOutput || yamlOutput}
             crdOutput={crdOutput}
             dslSource={dslSource}
             dslTabLabel="DSL"
@@ -653,6 +547,8 @@ const BuilderPage: React.FC = () => {
         signalCount={signalCount}
         routeCount={routeCount}
         pluginCount={pluginCount}
+        recipeCount={recipeCount}
+        entrypointCount={entrypointCount}
         lineCount={lineCount}
         mode={mode}
       />
@@ -662,7 +558,7 @@ const BuilderPage: React.FC = () => {
         ref={fileInputRef}
         type="file"
         accept=".yaml,.yml,.json"
-        style={{ display: "none" }}
+        style={{ display: 'none' }}
         onChange={handleImportFile}
       />
 
@@ -676,12 +572,12 @@ const BuilderPage: React.FC = () => {
         importTextareaRef={importTextareaRef}
         onClose={() => setShowImportModal(false)}
         onImportUrlChange={(value) => {
-          setImportUrl(value);
-          setImportError(null);
+          setImportUrl(value)
+          setImportError(null)
         }}
         onImportTextChange={(value) => {
-          setImportText(value);
-          setImportError(null);
+          setImportText(value)
+          setImportError(null)
         }}
         onImportUrl={handleImportUrl}
         onSelectFile={() => fileInputRef.current?.click()}
@@ -696,13 +592,11 @@ const BuilderPage: React.FC = () => {
         onClose={() => setGuideOpen(false)}
         onDragStart={handleGuideDragStart}
         onInsertSnippet={(snippet) => {
-          if (mode !== "dsl") setMode("dsl");
-          const store = useDSLStore.getState();
-          const src = store.dslSource;
-          store.setDslSource(
-            src ? src.trimEnd() + "\n\n" + snippet + "\n" : snippet + "\n",
-          );
-          setGuideOpen(false);
+          if (mode !== 'dsl') setMode('dsl')
+          const store = useDSLStore.getState()
+          const src = store.dslSource
+          store.setDslSource(src ? src.trimEnd() + '\n\n' + snippet + '\n' : snippet + '\n')
+          setGuideOpen(false)
         }}
       />
 
@@ -725,8 +619,7 @@ const BuilderPage: React.FC = () => {
 
       <BuilderDragOverlay active={isDragging || isGuideDragging} />
     </div>
-  );
-};
+  )
+}
 
-
-export default BuilderPage;
+export default BuilderPage

@@ -79,8 +79,8 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
     def test_resolve_e2e_profiles_does_not_mutate_default_profiles(self) -> None:
         e2e_map = {
             "full_ci_triggers": ["src/**"],
-            "default_local_profiles": ["kubernetes"],
-            "full_ci_profiles": ["kubernetes", "dashboard"],
+            "default_local_profiles": ["envoy-ai-gateway"],
+            "full_ci_profiles": ["envoy-ai-gateway", "dashboard"],
             "profile_rules": {},
             "manual_profile_rules": {
                 "manual-smoke": {"paths": ["src/semantic-router/**"]}
@@ -94,8 +94,8 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
             set(),
         )
 
-        self.assertEqual(local_profiles, ["kubernetes", "manual-smoke"])
-        self.assertEqual(e2e_map["default_local_profiles"], ["kubernetes"])
+        self.assertEqual(local_profiles, ["envoy-ai-gateway", "manual-smoke"])
+        self.assertEqual(e2e_map["default_local_profiles"], ["envoy-ai-gateway"])
 
 
 class RunAgentPrecommitLintTests(unittest.TestCase):

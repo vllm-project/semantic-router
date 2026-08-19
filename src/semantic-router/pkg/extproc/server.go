@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -43,9 +44,22 @@ var (
 		if router == nil {
 			return nil
 		}
-		_, err := modelruntime.WarmupToolsDatabase(context.Background(), state.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
+			{
+				Name:       "tools_database",
+				Ready:      state.ToolsReady,
+				SkipReason: "embedding_runtime_not_ready_for_tools",
+				Load:       router.LoadToolsDatabase,
+			},
+			{
+				Name:       "knowledge_bases",
+				Ready:      state.AnyReady,
+				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+				Load:       router.PreloadKnowledgeBases,
+			},
+		}, modelruntime.WarmupRouterOptions{
 			Component:      "extproc",
-			MaxParallelism: 1,
+			MaxParallelism: 2,
 			OnEvent:        logReloadRuntimeLifecycleEvent,
 		})
 		return err
@@ -54,13 +68,18 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
-	configPath string
-	service    *RouterService
-	server     *grpc.Server
-	port       int
-	secure     bool
-	certPath   string
-	runtime    *routerruntime.Registry
+	configPath  string
+	service     *RouterService
+	server      *grpc.Server
+	port        int
+	secure      bool
+	certPath    string
+	runtime     *routerruntime.Registry
+	stopOnce    sync.Once
+	reloadMu    sync.Mutex
+	stopping    atomic.Bool
+	watchMu     sync.Mutex
+	watchCancel context.CancelFunc
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -98,6 +117,7 @@ func (s *Server) GetRouter() *OpenAIRouter {
 func (s *Server) Start() error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
+		s.Stop()
 		return fmt.Errorf("failed to listen on port %d: %w", s.port, err)
 	}
 
@@ -114,6 +134,8 @@ func (s *Server) Start() error {
 			keyFile := filepath.Join(s.certPath, "tls.key")
 			cert, err = tls.LoadX509KeyPair(certFile, keyFile)
 			if err != nil {
+				_ = lis.Close()
+				s.Stop()
 				return fmt.Errorf("failed to load TLS certificate from %s: %w", s.certPath, err)
 			}
 			logging.ComponentEvent("extproc", "tls_certificate_loaded", map[string]interface{}{
@@ -123,6 +145,8 @@ func (s *Server) Start() error {
 			// Create self-signed certificate
 			cert, err = tlsutil.CreateSelfSignedTLSCertificate()
 			if err != nil {
+				_ = lis.Close()
+				s.Stop()
 				return fmt.Errorf("failed to create self-signed certificate: %w", err)
 			}
 			logging.ComponentEvent("extproc", "tls_certificate_created", map[string]interface{}{
@@ -161,12 +185,25 @@ func (s *Server) Start() error {
 
 	// Start config file watcher in background
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	s.watchMu.Lock()
+	if s.stopping.Load() {
+		cancel()
+	} else {
+		s.watchCancel = cancel
+	}
+	s.watchMu.Unlock()
+	defer func() {
+		cancel()
+		s.watchMu.Lock()
+		s.watchCancel = nil
+		s.watchMu.Unlock()
+	}()
 	go s.watchConfigAndReload(ctx)
 
 	// Wait for interrupt signal to gracefully shut down the server
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signalChan)
 
 	// Wait for either server error or shutdown signal
 	select {
@@ -176,6 +213,7 @@ func (s *Server) Start() error {
 				"port":  s.port,
 				"error": err.Error(),
 			})
+			s.Stop()
 			return err
 		}
 	case <-signalChan:
@@ -190,37 +228,137 @@ func (s *Server) Start() error {
 
 // Stop stops the gRPC server
 func (s *Server) Stop() {
-	if s.server != nil {
-		s.server.GracefulStop()
-		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
-			"port": s.port,
-		})
-	}
+	s.stopOnce.Do(func() {
+		s.stopping.Store(true)
+		s.watchMu.Lock()
+		if s.watchCancel != nil {
+			s.watchCancel()
+		}
+		s.watchMu.Unlock()
+		if s.server != nil {
+			s.server.GracefulStop()
+			logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
+				"port": s.port,
+			})
+		}
+		s.reloadMu.Lock()
+		defer s.reloadMu.Unlock()
+		if s.service != nil {
+			_ = s.service.Close()
+		}
+	})
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
 type RouterService struct {
-	current atomic.Pointer[OpenAIRouter]
+	current atomic.Pointer[routerGeneration]
+	mu      sync.Mutex
+	closed  bool
+	retired sync.WaitGroup
+	errMu   sync.Mutex
+	errors  []error
+}
+
+type routerGeneration struct {
+	router  *OpenAIRouter
+	refs    sync.WaitGroup
+	retired atomic.Bool
 }
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(r)
+	rs.current.Store(&routerGeneration{router: r})
 	return rs
 }
 
-// Swap replaces the current router implementation.
-func (rs *RouterService) Swap(r *OpenAIRouter) { rs.current.Store(r) }
+// Swap replaces the current router implementation and closes the retired
+// generation after every stream that leased it has returned. The current
+// pointer is swapped before publish, but Process must take rs.mu and therefore
+// cannot observe the new generation until the management snapshot is also
+// published and this critical section ends.
+func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
+	rs.mu.Lock()
+	if rs.closed {
+		rs.mu.Unlock()
+		if r != nil {
+			_ = r.Close()
+		}
+		return errors.New("router service is shutting down")
+	}
+	old := rs.current.Swap(&routerGeneration{router: r})
+	if publish != nil {
+		publish()
+	}
+	if old != nil {
+		old.retired.Store(true)
+		rs.retired.Add(1)
+	}
+	rs.mu.Unlock()
+	if old != nil {
+		go rs.closeRetiredGeneration(old)
+	}
+	return nil
+}
 
 // GetRouter returns the current router implementation.
 func (rs *RouterService) GetRouter() *OpenAIRouter {
-	return rs.current.Load()
+	generation := rs.current.Load()
+	if generation == nil {
+		return nil
+	}
+	return generation.router
 }
 
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	r := rs.current.Load()
-	return r.Process(stream)
+	rs.mu.Lock()
+	generation := rs.current.Load()
+	if generation == nil || generation.retired.Load() {
+		rs.mu.Unlock()
+		return errors.New("router is shutting down")
+	}
+	generation.refs.Add(1)
+	rs.mu.Unlock()
+	defer generation.refs.Done()
+	return generation.router.Process(stream)
+}
+
+func (rs *RouterService) Close() error {
+	rs.mu.Lock()
+	if !rs.closed {
+		rs.closed = true
+		generation := rs.current.Swap(nil)
+		if generation != nil {
+			generation.retired.Store(true)
+			rs.retired.Add(1)
+			go rs.closeRetiredGeneration(generation)
+		}
+	}
+	rs.mu.Unlock()
+	rs.retired.Wait()
+	rs.errMu.Lock()
+	defer rs.errMu.Unlock()
+	return errors.Join(rs.errors...)
+}
+
+func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
+	defer rs.retired.Done()
+	if err := closeRouterGeneration(generation); err != nil {
+		rs.errMu.Lock()
+		rs.errors = append(rs.errors, err)
+		rs.errMu.Unlock()
+		logging.ComponentErrorEvent("extproc", "retired_router_close_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+}
+
+func closeRouterGeneration(generation *routerGeneration) error {
+	if generation == nil || generation.router == nil {
+		return nil
+	}
+	generation.refs.Wait()
+	return generation.router.Close()
 }
 
 func (s *Server) reloadRouterFromFile(configPath string) error {
@@ -237,6 +375,11 @@ func (s *Server) reloadRouterFromConfig(
 	configPath string,
 	candidateCfg *config.RouterConfig,
 ) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+	if s.stopping.Load() {
+		return errors.New("router server is shutting down")
+	}
 	if source == "file" {
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
@@ -257,6 +400,7 @@ func (s *Server) reloadRouterFromConfig(
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
+	inheritRouterLearningState(s.service.GetRouter(), newRouter)
 
 	// Kubernetes updates are already published through config.Replace in the
 	// controller callback. Replacing again here would re-enqueue the same config
@@ -265,12 +409,11 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
-	oldRouter := s.service.GetRouter()
-	s.service.Swap(newRouter)
-	if oldRouter != nil {
-		_ = oldRouter.Close()
+	if err := s.service.Swap(newRouter, func() {
+		publishRouterState(candidateCfg, newRouter, s.runtime)
+	}); err != nil {
+		return err
 	}
-	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
 }
 
@@ -337,10 +480,19 @@ func publishRouterState(
 	if router == nil {
 		return
 	}
+	publishRouterLearningStateStore(router)
 	if runtimeRegistry != nil {
-		runtimeRegistry.PublishRouterRuntime(cfg, router.ClassificationService, router.MemoryStore)
-		runtimeRegistry.SetModelSelector(router.ModelSelector)
-		runtimeRegistry.SetLearningRuntime(router.routerLearningRuntimeState())
+		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+			Config:                cfg,
+			ClassificationService: router.ClassificationService,
+			MemoryStore:           router.MemoryStore,
+			ModelSelector:         router.ModelSelector,
+			LearningRuntime:       router.routerLearningRuntimeState(),
+			ReplayRuntime:         router,
+			ResponseCache:         router.responseCacheService(),
+			ContextCompression:    router.contextCompressionService(),
+			CompressionRecovery:   router.CompressionRecovery,
+		})
 		return
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)

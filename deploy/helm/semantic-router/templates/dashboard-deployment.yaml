@@ -79,6 +79,11 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "{{ .Values.dashboard.persistence.mountPath }}/recipe-store"
+        {{- else }}
+        - name: VLLM_SR_RECIPE_STORE_DIR
+          value: "/app/data/recipe-store"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL

@@ -1,10 +1,10 @@
 version: 2
 
 default_local_profiles:
-  - kubernetes
+  - envoy-ai-gateway
 
 full_ci_profiles:
-  - kubernetes
+  - envoy-ai-gateway
   - dashboard
   - remote-embedding
 
@@ -25,7 +25,7 @@ full_ci_triggers:
   - e2e/config/**
 
 profile_rules:
-  kubernetes:
+  envoy-ai-gateway:
     owner: e2e
     coverage_role: baseline-router-contract
     selection_mode: default-local,full-ci
@@ -96,9 +96,10 @@ profile_rules:
     owner: e2e
     coverage_role: istio-service-mesh-contracts
     selection_mode: full-ci
-    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router.
+    summary: Istio sidecar, mTLS, and tracing behavior around the router.
     paths:
       - e2e/profiles/istio/**
+      - e2e/testcases/istio_*.go
       - deploy/kubernetes/istio/**
   agentgateway:
     owner: e2e
@@ -135,7 +136,7 @@ profile_rules:
     paths:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
-      - scripts/multi-endpoint/**
+      - tools/demos/multi-endpoint.sh
   authz-rbac:
     owner: e2e
     coverage_role: authz-and-rate-limit-contracts
@@ -156,10 +157,10 @@ profile_rules:
     paths:
       - e2e/profiles/forward-auth/**
       - e2e/testcases/forward_authorization.go
-      - src/semantic-router/pkg/extproc/req_filter_internal_trust*.go
+      - src/semantic-router/pkg/extproc/processor_req_header_internal.go
       - src/semantic-router/pkg/extproc/processor_req_body_routing.go
       - src/semantic-router/pkg/extproc/req_filter_looper*.go
-      - src/semantic-router/pkg/looper/internal_auth.go
+      - src/semantic-router/pkg/internalauth/**
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
@@ -169,18 +170,17 @@ profile_rules:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+manual_profile_rules:
   anthropic-shim:
     owner: e2e
     coverage_role: anthropic-shape-backend-translation-contracts
-    selection_mode: full-ci
-    summary: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle synthesis, stop-reason mapping, and request-side field preservation.
+    selection_mode: manual-only
+    summary: Manual diagnostic for the incomplete llama.cpp + Anthropic shim backend route; unit translation contracts remain blocking.
     paths:
       - e2e/profiles/anthropic-shim/**
       - e2e/testing/anthropic-shim/**
       - deploy/kubernetes/anthropic-backend/**
       - src/semantic-router/pkg/anthropic/outbound*.go
-
-manual_profile_rules:
   response-api:
     owner: e2e
     coverage_role: responses-api-memory
@@ -208,14 +208,16 @@ manual_profile_rules:
       - deploy/kubernetes/response-api/redis-cluster.yaml
   router-replay:
     owner: e2e
-    coverage_role: router-replay-restart-recovery
+    coverage_role: router-replay-management-boundary-and-restart-recovery
     selection_mode: manual-only
-    summary: Router Replay restart-recovery coverage with Postgres backend, validating that replay records survive pod restarts.
+    summary: Authenticated Router Replay management access, public-listener denial, and Postgres restart recovery.
     paths:
       - e2e/profiles/router-replay/**
       - deploy/kubernetes/router-replay/**
       - src/semantic-router/pkg/routerreplay/**
-      - src/semantic-router/pkg/extproc/router_replay_setup.go
+      - src/semantic-router/pkg/extproc/router_replay*.go
+      - src/semantic-router/pkg/apiserver/route_router_replay*.go
+      - dashboard/backend/router/router_replay*.go
   dynamo:
     owner: e2e
     coverage_role: dynamo-gpu-and-batching
@@ -240,36 +242,75 @@ manual_profile_rules:
     summary: Llama Stack-backed RAG vector-store and hybrid-search behavior that runs outside the standard CI profile matrix.
     paths:
       - e2e/profiles/rag-hybrid-search/**
+  hallucination:
+    owner: e2e
+    coverage_role: hallucination-detection
+    selection_mode: manual-only
+    summary: Pluggable endpoint hallucination detection backend coverage, verifying fact-check gating and response warnings.
+    paths:
+      - e2e/profiles/hallucination/**
+      - e2e/testcases/hallucination_detection*.go
+      - deploy/kubernetes/hallucination/**
+      - e2e/testcases/testdata/hallucination_detection_cases.json
 
 workflow_suite_rules:
+  recipe-conformance-live:
+    owner: router-core
+    kind: workflow-integration
+    summary: Auto-discovered maintained recipe probes against a live CPU router.
+    workflow: .github/workflows/recipe-conformance.yml
+    change_filter: recipe_conformance
+    local_command: make recipe-conformance-live-cpu-all
+    paths:
+      - config/recipes/**
+      - config/schemas/recipe-metadata-v1.schema.json
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/decision/**
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/projection/**
+      - src/semantic-router/pkg/services/classification*
+      - src/semantic-router/pkg/apiserver/route_classify*
+      - tools/agent/scripts/recipe_conformance*
+      - tools/agent/scripts/router_calibration_*
+      - tools/agent/schemas/recipe-probes-v1.schema.json
+      - tools/make/recipe-conformance.mk
+      - e2e/testing/run_recipe_conformance.sh
+      - .github/workflows/recipe-conformance.yml
   vllm-sr-cli-integration:
     owner: vllm-sr-cli
     kind: workflow-integration
     summary: Real-container CLI integration coverage for serve, status, logs, stop, and image-pull behavior.
     workflow: .github/workflows/integration-test-vllm-sr-cli.yml
+    change_filter: cli
     local_command: make vllm-sr-test-integration
     paths:
       - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
       - tools/make/docker.mk
       - e2e/testing/vllm-sr-cli/**
-      - .github/workflows/integration-test-vllm-sr-cli.yml
   memory-integration:
     owner: router-core
     kind: workflow-integration
     summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack.
     workflow: .github/workflows/integration-test-memory.yml
+    change_filter: memory
     local_command: make memory-test-integration
     paths:
       - src/semantic-router/pkg/memory/**
       - src/semantic-router/pkg/extproc/*memory*
       - src/semantic-router/pkg/responseapi/**
-      - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
-      - tools/make/docker.mk
+      - src/semantic-router/pkg/responsestore/**
+      - src/semantic-router/pkg/apiserver/*memory*
+      - src/semantic-router/pkg/sessiontelemetry/*memory*
+      - src/semantic-router/pkg/vectorstore/*memory*
+      - src/semantic-router/pkg/cache/*memory*
+      - src/vllm-sr/**/*memory*
       - tools/make/milvus.mk
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
       - e2e/testing/llm-katan/**
       - e2e/config/config.memory*.yaml
-      - .github/workflows/integration-test-memory.yml
+      - e2e/profiles/response-api/**
+      - e2e/profiles/response-api-redis/**
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/**

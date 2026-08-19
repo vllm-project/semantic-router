@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -12,6 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -21,17 +24,28 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	Config                *config.RouterConfig
-	CategoryDescriptions  []string
-	Classifier            *classification.Classifier
+	Config               *config.RouterConfig
+	CategoryDescriptions []string
+	Classifier           *classification.Classifier
+	// RecipeClassifiers selects the isolated classifier graph for each routing
+	// request. Classifier is the default-recipe accessor.
+	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
+	ResponseCache         *cache.ResponseCacheService
+	responseCacheMu       sync.Mutex
+	ContextCompression    *contextcompression.Service
+	CompressionRecovery   contextcompression.RecoveryStore
+	CompressionEmbedding  embedding.Provider
+	CompressionScorer     contextcompression.RelevanceScorer
+	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
 	toolSelectionDBMu     sync.Mutex
@@ -41,11 +55,14 @@ type OpenAIRouter struct {
 	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
-	ModelSelector   *selection.Registry
-	LookupTable     lookuptable.LookupTable
-	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     memory.Store
-	MemoryExtractor *memory.MemoryExtractor
+	ModelSelector *selection.Registry
+	// RecipeModelSelectors keeps mutable algorithm state (Elo, RL, ML adapters,
+	// and similar selectors) isolated even when recipes reuse decision names.
+	RecipeModelSelectors map[config.RecipeName]*selection.Registry
+	LookupTable          lookuptable.LookupTable
+	ReplayRecorders      map[string]*routerreplay.Recorder
+	MemoryStore          memory.Store
+	MemoryExtractor      *memory.MemoryExtractor
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
@@ -59,9 +76,10 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	routerLearningMu      sync.Mutex
-	routerLearningRuntime *routerLearningRuntime
-	lookupTableCancel     func()
+	routerLearningMu        sync.Mutex
+	routerLearningRuntime   *routerLearningRuntime
+	lookupTableCancel       func()
+	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 }
 
 // Close releases background resources held by the router (e.g. lookup table
@@ -73,7 +91,49 @@ func (r *OpenAIRouter) Close() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
 	}
-	return nil
+	r.routerLearningMu.Lock()
+	learningRuntime := r.routerLearningRuntime
+	r.routerLearningMu.Unlock()
+	if learningRuntime != nil {
+		learningRuntime.RetireAndWait()
+	}
+	var closeErrors []error
+	if r.CompressionRecovery != nil {
+		closeErrors = append(closeErrors, r.CompressionRecovery.Close())
+	}
+	if r.routerSessionStateStore != nil {
+		sessiontelemetry.UnpublishRouterSessionStateStore(r.routerSessionStateStore)
+		closeErrors = append(closeErrors, r.routerSessionStateStore.RetireAndClose())
+	}
+	closeErrors = append(closeErrors, r.closeReplayRecorders())
+	return errors.Join(closeErrors...)
+}
+
+func (r *OpenAIRouter) closeReplayRecorders() error {
+	if r.ReplayStoreShared {
+		if r.ReplayRecorder == nil {
+			return nil
+		}
+		return r.ReplayRecorder.Close()
+	}
+	seen := make(map[*routerreplay.Recorder]struct{}, len(r.ReplayRecorders)+1)
+	var closeErrors []error
+	for _, recorder := range r.ReplayRecorders {
+		if recorder == nil {
+			continue
+		}
+		if _, duplicate := seen[recorder]; duplicate {
+			continue
+		}
+		seen[recorder] = struct{}{}
+		closeErrors = append(closeErrors, recorder.Close())
+	}
+	if r.ReplayRecorder != nil {
+		if _, duplicate := seen[r.ReplayRecorder]; !duplicate {
+			closeErrors = append(closeErrors, r.ReplayRecorder.Close())
+		}
+	}
+	return errors.Join(closeErrors...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.
@@ -204,6 +264,21 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
 
 	return nil
+}
+
+// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
+// request and into startup/reload readiness.
+func (r *OpenAIRouter) PreloadKnowledgeBases() error {
+	if r == nil {
+		return nil
+	}
+	if r.RecipeClassifiers != nil {
+		return r.RecipeClassifiers.PreloadKnowledgeBases()
+	}
+	if r.Classifier == nil {
+		return nil
+	}
+	return r.Classifier.PreloadKnowledgeBases()
 }
 
 func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {

@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -45,6 +46,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	// OriginalRequestBody is the immutable canonical request. Response API
+	// requests use their translated Chat Completions body so routing and cache
+	// identity share one stable representation; later mutations use the working
+	// body carried separately on the request context.
+	ctx.OriginalRequestBody = requestBody
+	ctx.WorkingRequestBody = nil
 	if validationResp := r.validateRequestBody(requestBody, ctx); validationResp != nil {
 		return validationResp, nil
 	}
@@ -76,6 +83,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
+	requestBody = requestBodyAfterPreRouting(requestBody, ctx)
 
 	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
 	if earlyResponse != nil {
@@ -87,7 +95,25 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if err != nil {
 		return nil, err
 	}
+	return r.handleModelRoutingWithPersonalizedCache(
+		openAIRequest,
+		originalModel,
+		decisionState,
+		ctx,
+	)
+}
 
+func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	decisionState requestDecisionState,
+	ctx *RequestContext,
+) (*ext_proc.ProcessingResponse, error) {
+	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
+		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return response, nil
+	}
 	return r.handleModelRouting(
 		openAIRequest,
 		originalModel,
@@ -98,9 +124,26 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	)
 }
 
+func requestBodyAfterPreRouting(requestBody []byte, ctx *RequestContext) []byte {
+	if ctx != nil {
+		if workingBody := ctx.workingRequestBody(); len(workingBody) > 0 {
+			return workingBody
+		}
+	}
+	return requestBody
+}
+
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if changed, err := r.applyPreDispatchToolsPolicy(openAIRequest, ctx); err != nil {
+		return nil, err
+	} else if changed {
+		logging.ComponentDebugEvent("extproc", "pre_dispatch_tools_policy_applied", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decisionName,
+		})
+	}
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
@@ -111,7 +154,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		},
 	}
 
-	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
+	isAutoModel := r.requestModelActsAsAuto(originalModel)
 
 	targetModel := originalModel
 	if isAutoModel && selectedModel != "" {
@@ -127,38 +170,63 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)
 	}
 
-	// OpenAI-compatible routing
-	switch {
-	case !isAutoModel:
+	if !isAutoModel {
 		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, decisionName, ctx)
-	case r.shouldUseLooper(ctx.VSRSelectedDecision):
+	}
+	return r.handleAutoRouting(
+		openAIRequest,
+		originalModel,
+		decisionName,
+		reasoningDecision,
+		selectedModel,
+		ctx,
+		response,
+	)
+}
+
+func (r *OpenAIRouter) handleAutoRouting(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	decisionName string,
+	reasoningDecision entropy.ReasoningDecision,
+	selectedModel string,
+	ctx *RequestContext,
+	response *ext_proc.ProcessingResponse,
+) (*ext_proc.ProcessingResponse, error) {
+	if r.shouldUseLooper(ctx.VSRSelectedDecision) {
 		logging.ComponentDebugEvent("extproc", "looper_execution_selected", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   ctx.VSRSelectedDecision.Name,
 			"algorithm":  ctx.VSRSelectedDecision.Algorithm.Type,
 		})
+		// Track VSR decision information the same way handleAutoModelRouting's
+		// trackVSRDecision does for non-looper decisions, and the direct
+		// fusion/remom/workflows dispatchers already do for their algorithm
+		// types; otherwise x-vsr-selected-decision comes back empty.
+		ctx.VSRSelectedDecisionName = ctx.VSRSelectedDecision.Name
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
-	case selectedModel != "":
-		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
-	default:
-		// Auto model selected no concrete model (e.g. empty or contentless
-		// messages). Fall back to the configured default model instead of
-		// forwarding the unresolved auto-model name, which would reach the
-		// backend without resolvable credentials and surface as a misleading
-		// upstream "401 No api key" rather than a clear client error.
-		if r.Config.DefaultModel != "" {
-			logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"model":      r.Config.DefaultModel,
-			})
-			return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
-		}
-		logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
-			"request_id": ctx.RequestID,
-		})
-		metrics.RecordRequestError(originalModel, "no_model_selected")
-		return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 	}
+	if selectedModel != "" {
+		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
+	}
+
+	// Auto model selected no concrete model (e.g. empty or contentless
+	// messages). Fall back to the configured default model instead of
+	// forwarding the unresolved auto-model name, which would reach the
+	// backend without resolvable credentials and surface as a misleading
+	// upstream "401 No api key" rather than a clear client error.
+	if r.Config.DefaultModel != "" {
+		logging.ComponentDebugEvent("extproc", "auto_routing_default_fallback", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      r.Config.DefaultModel,
+		})
+		return r.handleSpecifiedModelRouting(openAIRequest, r.Config.DefaultModel, decisionName, ctx)
+	}
+	logging.ComponentWarnEvent("extproc", "auto_routing_no_selection", map[string]interface{}{
+		"request_id": ctx.RequestID,
+	})
+	metrics.RecordRequestError(originalModel, "no_model_selected")
+	return r.createErrorResponse(http.StatusBadRequest, "unable to route request: no model selected and no default model configured"), nil
 }
 
 func (r *OpenAIRouter) handleDirectLoopModel(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool, error) {
@@ -192,9 +260,10 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	matchedModel := selectedModel
 
 	if matchedModel == originalModel || matchedModel == "" {
-		// No model change needed
+		// No model change is needed, but route-local request plugins may still
+		// have changed the provider-bound body.
 		ctx.RequestModel = originalModel
-		return response, nil
+		return attachWorkingBodyMutation(response, ctx), nil
 	}
 
 	// Record routing decision with tracing
@@ -281,12 +350,11 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 		return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", originalModel)), nil
 	}
 
-	// Track VSR decision information for non-auto models
+	// Concrete backend models bypass every recipe-local signal, decision, and
+	// plugin. They still use shared provider/backend infrastructure.
 	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
-	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
-	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Resolve backend metadata for provider-specific request shaping. This is
 	// not an endpoint routing decision; Envoy owns endpoint load balancing.
@@ -297,6 +365,16 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 
 	// Resolve model name alias to the real model name expected by the backend
 	upstreamModel := r.resolveModelNameForBackend(originalModel, backendName)
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		// The canonical request is an OpenAI-compatible IR. Concrete models bypass
+		// recipe decisions, but they must not bypass inbound protocol translation:
+		// an Anthropic /v1/messages document is not valid for an OpenAI backend.
+		providerBody, serializeErr := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+		if serializeErr != nil {
+			return nil, fmt.Errorf("translate Anthropic request for specified model: %w", serializeErr)
+		}
+		ctx.setWorkingRequestBody(providerBody)
+	}
 
 	// Create response with headers (and body mutation if model name changed)
 	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, backendAddress, backendName, ctx)

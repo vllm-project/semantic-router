@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import styles from './HeaderReveal.module.css'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
+import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 interface HeaderRevealProps {
   headers: Record<string, string>
@@ -166,14 +167,30 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Algorithm',
     description: 'The multi-model algorithm used (confidence, ratings, remom, fusion, workflows)',
   },
+  'x-vsr-looper-latency-ms': {
+    label: 'Latency (ms)',
+    description: 'Wall-clock latency of the full looper execution, in milliseconds',
+  },
+  'x-vsr-looper-prompt-tokens': {
+    label: 'Prompt Tokens',
+    description: 'Aggregate prompt token count across all model calls',
+  },
+  'x-vsr-looper-completion-tokens': {
+    label: 'Completion Tokens',
+    description: 'Aggregate completion token count across all model calls',
+  },
+  'x-vsr-looper-total-tokens': {
+    label: 'Total Tokens',
+    description: 'Aggregate total token count across all model calls',
+  },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
     label: 'Retention: Drop',
-    description: 'Matched decision asked to skip the semantic-cache write',
+    description: 'Matched decision asked to skip the response-cache write',
   },
   'x-vsr-retention-ttl-turns': {
     label: 'Retention TTL (turns)',
-    description: 'Per-entry semantic-cache lifetime override, in conversation turns',
+    description: 'Per-entry response-cache lifetime override, in conversation turns',
   },
   'x-vsr-retention-keep-current-model': {
     label: 'Keep Current Model',
@@ -269,6 +286,9 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
             const displayValue = isLearningHeader(key)
               ? formatLearningHeaderValue(key, value)
               : value
+                  .split(',')
+                  .map((item) => formatRoutingMetadataValue(key, item))
+                  .join(', ')
             return (
               <div
                 key={key}

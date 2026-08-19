@@ -46,7 +46,50 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
+}
+
+func assertReferenceConfigManagementAPICoverage(t testingT, managementAPI map[string]interface{}) {
+	assertMapCoversStructFields(t, managementAPI, reflect.TypeOf(ManagementAPIConfig{}), "global.services.management_api")
+	assertMapCoversStructFields(t, mustMapAt(t, managementAPI, "auth"), reflect.TypeOf(ManagementAPIAuthConfig{}), "global.services.management_api.auth")
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, managementAPI, "auth", "tokens"),
+		reflect.TypeOf(ManagementAPITokenRef{}),
+		"global.services.management_api.auth.tokens",
+	)
+	assertReferenceConfigManagementAPIRolesAlign(t, mustMapAt(t, managementAPI, "auth", "roles"))
+}
+
+// assertReferenceConfigManagementAPIRolesAlign keeps the exhaustive reference
+// YAML role lists in sync with DefaultManagementAPIRoles so copying the sample
+// into a bearer deployment does not silently weaken operator permissions.
+func assertReferenceConfigManagementAPIRolesAlign(t testingT, roles map[string]interface{}) {
+	defaults := DefaultManagementAPIRoles()
+	for role, wantPerms := range defaults {
+		raw, ok := roles[role]
+		if !ok {
+			t.Fatalf("global.services.management_api.auth.roles missing %q", role)
+		}
+		gotList, ok := raw.([]interface{})
+		if !ok {
+			t.Fatalf("global.services.management_api.auth.roles.%s must be a list", role)
+		}
+		got := make(map[string]struct{}, len(gotList))
+		for _, item := range gotList {
+			perm, ok := item.(string)
+			if !ok {
+				t.Fatalf("global.services.management_api.auth.roles.%s entries must be strings", role)
+			}
+			got[perm] = struct{}{}
+		}
+		for _, want := range wantPerms {
+			if _, ok := got[want]; !ok {
+				t.Fatalf("global.services.management_api.auth.roles.%s missing permission %q (must match DefaultManagementAPIRoles)", role, want)
+			}
+		}
+	}
 }
 
 func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interface{}) {
@@ -121,17 +164,25 @@ func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[stri
 
 func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]interface{}) {
 	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores")
-	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "semantic_cache"))
+	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
 }
 
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
-	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(SemanticCache{}), "global.stores.semantic_cache")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "redis"), reflect.TypeOf(RedisConfig{}), "global.stores.semantic_cache.redis")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "valkey"), reflect.TypeOf(ValkeyConfig{}), "global.stores.semantic_cache.valkey")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.semantic_cache.milvus")
-	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "qdrant"), reflect.TypeOf(QdrantConfig{}), "global.stores.semantic_cache.qdrant")
+	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(responseCacheStoreReference{}), "global.stores.response_cache")
+	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.response_cache.milvus")
+}
+
+type responseCacheStoreReference struct {
+	BackendType         string        `yaml:"backend_type,omitempty"`
+	Enabled             bool          `yaml:"enabled"`
+	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
+	MaxEntries          int           `yaml:"max_entries,omitempty"`
+	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
+	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
+	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
@@ -242,7 +293,10 @@ func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
 func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
 	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
 	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard")
+	// protocol is mutually exclusive with variant (PromptGuardConfig); the
+	// reference config demonstrates the local variant path, so protocol has
+	// no reference-config key to cover here.
+	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "protocol")
 	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
 	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
 	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))

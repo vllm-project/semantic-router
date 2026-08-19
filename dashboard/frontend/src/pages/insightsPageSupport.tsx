@@ -1,28 +1,36 @@
 import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
+import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDate } from '../types/evaluation'
 import { Link } from 'react-router-dom'
 
-import type {
-  InsightsCostSummary,
-  InsightsFilterType,
-  InsightsRecord,
-  Signal,
-} from './insightsPageTypes'
+import type { InsightsCostSummary, InsightsRecord, Signal } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
-import {
-  buildToolTraceFields,
-  renderToolNamesCell,
-} from './insightsPageToolTrace'
+import { buildToolTraceFields, renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
-interface InsightsFilterState {
-  searchTerm: string
-  filter: InsightsFilterType
-  decisionFilter: string
-  modelFilter: string
+export { filterInsightsRecords } from './insightsPageFilters'
+
+export const formatInsightsDecisionName = (decision: string): string =>
+  formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+
+export function getInsightsLifecyclePresentation(record: InsightsRecord) {
+  const state = record.lifecycle_state || 'unknown'
+  const successful =
+    state === 'completed' && Boolean(record.response_status && record.response_status < 400)
+  const errored =
+    state === 'failed' ||
+    state === 'aborted' ||
+    (state === 'completed' && Boolean(record.response_status && record.response_status >= 400))
+  const pending = state === 'in_progress'
+  const label = record.response_status
+    ? `${record.response_status} · ${state.replace('_', ' ')}`
+    : state.replace('_', ' ')
+
+  return { state, successful, errored, pending, label }
 }
+
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -44,34 +52,6 @@ export function getUniqueModels(records: InsightsRecord[]) {
     }
   })
   return Array.from(models).sort()
-}
-
-export function filterInsightsRecords(records: InsightsRecord[], filters: InsightsFilterState) {
-  const searchTerm = filters.searchTerm.trim().toLowerCase()
-
-  return records.filter((record) => {
-    if (filters.filter === 'cached' && !record.from_cache) {
-      return false
-    }
-    if (filters.filter === 'streamed' && !record.streaming) {
-      return false
-    }
-    if (filters.decisionFilter !== 'all' && record.decision !== filters.decisionFilter) {
-      return false
-    }
-    if (
-      filters.modelFilter !== 'all' &&
-      record.selected_model !== filters.modelFilter &&
-      record.original_model !== filters.modelFilter
-    ) {
-      return false
-    }
-    if (searchTerm && !record.request_id?.toLowerCase().includes(searchTerm)) {
-      return false
-    }
-
-    return true
-  })
 }
 
 export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSummary {
@@ -116,7 +96,7 @@ export function buildInsightsRecordTitle(record: InsightsRecord | null | undefin
     return `Record: ${record.request_id.substring(0, 8)}...`
   }
 
-  return `Record: ${record.decision || record.id}`
+  return `Record: ${record.decision ? formatInsightsDecisionName(record.decision) : record.id}`
 }
 
 function formatCompactIdentifier(value: string) {
@@ -165,11 +145,22 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       render: (row) => <span className={styles.timestamp}>{formatDate(row.timestamp)}</span>,
     },
     {
+      key: 'recipe',
+      header: 'Recipe',
+      width: '140px',
+      sortable: true,
+      render: (row) => <span className={styles.decision}>{row.recipe || 'default'}</span>,
+    },
+    {
       key: 'decision',
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => <span className={styles.decision}>{row.decision || '-'}</span>,
+      render: (row) => (
+        <span className={styles.decision}>
+          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
+        </span>
+      ),
     },
     {
       key: 'signals',
@@ -243,9 +234,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
             <strong className={styles.costValuePositive}>
               {formatCurrency(row.cost_savings ?? 0, row.currency)}
             </strong>
-            <span className={styles.costSubtle}>
-              Baseline: {row.baseline_model}
-            </span>
+            <span className={styles.costSubtle}>Baseline: {row.baseline_model}</span>
           </div>
         )
       },
@@ -253,19 +242,26 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'response_status',
       header: 'Status',
-      width: '80px',
+      width: '150px',
       align: 'center',
-      render: (row) => (
-        <span
-          className={`${styles.statusBadge} ${
-            row.response_status && row.response_status < 400
-              ? styles.statusSuccess
-              : styles.statusError
-          }`}
-        >
-          {row.response_status || '-'}
-        </span>
-      ),
+      render: (row) => {
+        const lifecycle = getInsightsLifecyclePresentation(row)
+        return (
+          <span
+            className={`${styles.statusBadge} ${
+              lifecycle.successful
+                ? styles.statusSuccess
+                : lifecycle.errored
+                  ? styles.statusError
+                  : lifecycle.pending
+                    ? styles.statusPending
+                    : styles.statusUnknown
+            }`}
+          >
+            {lifecycle.label}
+          </span>
+        )
+      },
     },
     {
       key: 'flags',
@@ -273,8 +269,12 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '160px',
       render: (row) => (
         <div className={styles.indicators}>
-          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>Cache</span>
-          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>Stream</span>
+          <span className={`${styles.indicator} ${row.from_cache ? styles.indicatorActive : ''}`}>
+            Cache
+          </span>
+          <span className={`${styles.indicator} ${row.streaming ? styles.indicatorActive : ''}`}>
+            Stream
+          </span>
         </div>
       ),
     },
@@ -288,14 +288,34 @@ export function buildInsightsRecordSections(
   const sections: ViewSection[] = []
 
   sections.push({
+    title: 'Lifecycle',
+    fields: [
+      { label: 'State', value: record.lifecycle_state || 'unknown' },
+      { label: 'HTTP status', value: record.response_status || '-' },
+      { label: 'Ended at', value: record.ended_at ? formatDate(record.ended_at) : '-' },
+      {
+        label: 'Duration',
+        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+      },
+      { label: 'Terminal reason', value: record.terminal_reason || '-' },
+    ],
+  })
+
+  sections.push({
     title: 'Decision Information',
     fields: [
-      { label: 'Decision name', value: record.decision || '-' },
+      { label: 'Recipe', value: record.recipe || 'default' },
+      {
+        label: 'Decision name',
+        value: record.decision ? formatInsightsDecisionName(record.decision) : '-',
+      },
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
         label: 'Category',
-        value: record.signals?.domain?.length ? record.signals.domain.join(', ') : record.category || '-',
+        value: record.signals?.domain?.length
+          ? record.signals.domain.join(', ')
+          : record.category || '-',
       },
       {
         label: 'Confidence score',
@@ -353,7 +373,10 @@ export function buildInsightsRecordSections(
       { label: 'Baseline model', value: record.baseline_model || '-' },
       { label: 'Actual cost', value: formatCurrencyOrNA(record.actual_cost, record.currency) },
       { label: 'Baseline cost', value: formatCurrencyOrNA(record.baseline_cost, record.currency) },
-      { label: 'Saved vs baseline', value: formatCurrencyOrNA(record.cost_savings, record.currency) },
+      {
+        label: 'Saved vs baseline',
+        value: formatCurrencyOrNA(record.cost_savings, record.currency),
+      },
     ],
   })
 
@@ -390,27 +413,38 @@ export function buildInsightsRecordSections(
 
 export function collectSignals(signals: Signal): string[] {
   const allSignals: string[] = []
-  if (signals.keyword?.length) allSignals.push(...signals.keyword)
-  if (signals.embedding?.length) allSignals.push(...signals.embedding)
-  if (signals.domain?.length) allSignals.push(...signals.domain)
-  if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
-  if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
-  if (signals.reask?.length) allSignals.push(...signals.reask)
-  if (signals.preference?.length) allSignals.push(...signals.preference)
-  if (signals.language?.length) allSignals.push(...signals.language)
-  if (signals.context?.length) allSignals.push(...signals.context)
-  if (signals.structure?.length) allSignals.push(...signals.structure)
-  if (signals.complexity?.length) allSignals.push(...signals.complexity)
-  if (signals.modality?.length) allSignals.push(...signals.modality)
-  if (signals.authz?.length) allSignals.push(...signals.authz)
-  if (signals.jailbreak?.length) allSignals.push(...signals.jailbreak)
-  if (signals.pii?.length) allSignals.push(...signals.pii)
-  if (signals.kb?.length) allSignals.push(...signals.kb)
+  const append = (key: keyof Signal) => {
+    allSignals.push(
+      ...(signals[key] ?? []).map((value) =>
+        formatRoutingMetadataValue(`x-vsr-matched-${key.replace(/_/g, '-')}`, value),
+      ),
+    )
+  }
+  const signalKeys: Array<keyof Signal> = [
+    'keyword',
+    'embedding',
+    'domain',
+    'fact_check',
+    'user_feedback',
+    'reask',
+    'preference',
+    'language',
+    'context',
+    'structure',
+    'complexity',
+    'modality',
+    'authz',
+    'jailbreak',
+    'pii',
+    'kb',
+  ]
+  signalKeys.forEach(append)
   return allSignals
 }
 
 export function hasCompleteCostData(record: InsightsRecord) {
   return (
+    (record.lifecycle_state === undefined || record.lifecycle_state === 'completed') &&
     typeof record.actual_cost === 'number' &&
     typeof record.baseline_cost === 'number' &&
     typeof record.cost_savings === 'number' &&
@@ -452,11 +486,11 @@ function buildSignalFields(signals: Signal): ViewField[] {
         value: (
           <div className={styles.modalSignalList}>
             {values.map((value) => (
-              <span
-                key={`${label}-${value}`}
-                className={styles.modalSignalPill}
-              >
-                {value}
+              <span key={`${label}-${value}`} className={styles.modalSignalPill}>
+                {formatRoutingMetadataValue(
+                  `x-vsr-matched-${String(key).replace(/_/g, '-')}`,
+                  value,
+                )}
               </span>
             ))}
           </div>
@@ -486,19 +520,24 @@ function buildGuardrailsValue(record: InsightsRecord) {
       <div className={styles.alertList}>
         {record.jailbreak_detected ? (
           <span className={styles.alertDanger}>
-            Jailbreak: {record.jailbreak_type || 'detected'} ({((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
+            Jailbreak: {record.jailbreak_type || 'detected'} (
+            {((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
           </span>
         ) : null}
         {record.pii_detected ? (
           <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
-            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}: {record.pii_entities?.join(', ') || 'detected'}
+            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}:{' '}
+            {record.pii_entities?.join(', ') || 'detected'}
           </span>
         ) : null}
       </div>
     )
   }
 
-  const enabledChecks = [record.jailbreak_enabled ? 'Jailbreak' : null, record.pii_enabled ? 'PII' : null]
+  const enabledChecks = [
+    record.jailbreak_enabled ? 'Jailbreak' : null,
+    record.pii_enabled ? 'PII' : null,
+  ]
     .filter(Boolean)
     .join(', ')
 
@@ -514,8 +553,8 @@ function buildRagValue(record: InsightsRecord) {
     <div className={styles.pluginStack}>
       <span className={styles.alertInfo}>Context Retrieved</span>
       <span className={styles.costSubtle}>
-        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars | Score:{' '}
-        {record.rag_similarity_score?.toFixed(3) || '-'}
+        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars
+        | Score: {record.rag_similarity_score?.toFixed(3) || '-'}
       </span>
     </div>
   )
@@ -538,7 +577,9 @@ function buildHallucinationValue(record: InsightsRecord) {
       {record.hallucination_spans?.length ? (
         <span className={styles.costSubtle}>
           Unsupported spans: {record.hallucination_spans.slice(0, 2).join(' | ')}
-          {record.hallucination_spans.length > 2 ? ` (+${record.hallucination_spans.length - 2})` : ''}
+          {record.hallucination_spans.length > 2
+            ? ` (+${record.hallucination_spans.length - 2})`
+            : ''}
         </span>
       ) : null}
     </div>
@@ -567,14 +608,24 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
   if (record.request_body) {
     fields.push({
       label: 'Request body',
-      value: renderBodyField(`request-${record.id}`, 'request body', record.request_body, record.request_body_truncated || false),
+      value: renderBodyField(
+        `request-${record.id}`,
+        'request body',
+        record.request_body,
+        record.request_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
   if (record.response_body) {
     fields.push({
       label: 'Response body',
-      value: renderBodyField(`response-${record.id}`, 'response body', record.response_body, record.response_body_truncated || false),
+      value: renderBodyField(
+        `response-${record.id}`,
+        'response body',
+        record.response_body,
+        record.response_body_truncated || false,
+      ),
       fullWidth: true,
     })
   }
@@ -603,10 +654,7 @@ function renderReadonlyLock() {
   )
 }
 
-function buildTagField(
-  label: string,
-  values: string[] | undefined,
-): ViewField | null {
+function buildTagField(label: string, values: string[] | undefined): ViewField | null {
   if (!values?.length) {
     return null
   }
@@ -616,10 +664,7 @@ function buildTagField(
     value: (
       <div className={styles.modalSignalList}>
         {values.map((value) => (
-          <span
-            key={`${label}-${value}`}
-            className={styles.modalSignalPill}
-          >
+          <span key={`${label}-${value}`} className={styles.modalSignalPill}>
             {value}
           </span>
         ))}

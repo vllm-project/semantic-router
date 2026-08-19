@@ -17,7 +17,7 @@ var balanceAMDLocalAliases = []string{
 }
 
 func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
-	const asset = "deploy/recipes/balance.yaml"
+	const asset = "config/recipes/balance/config.yaml"
 
 	var recipe CanonicalConfig
 	if err := yamlv3.Unmarshal(mustReadRepoFile(t, asset), &recipe); err != nil {
@@ -86,8 +86,8 @@ func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 		if index > 0 && calibratedLanes[index-1].Priority <= decision.Priority {
 			t.Fatalf("expected calibrated lane priorities to descend, got %d before %d", calibratedLanes[index-1].Priority, decision.Priority)
 		}
-		if len(decision.ModelRefs) != 1 {
-			t.Fatalf("expected calibrated lane %q to select exactly one local alias, got %d model refs", decision.Name, len(decision.ModelRefs))
+		if len(decision.ModelRefs) < 2 {
+			t.Fatalf("expected calibrated lane %q to expose a primary and learning candidate, got %d model refs", decision.Name, len(decision.ModelRefs))
 		}
 		for _, modelRef := range decision.ModelRefs {
 			decisionModelNames = append(decisionModelNames, modelRef.Model)
@@ -110,8 +110,8 @@ func assertBalanceTerminalDecision(t *testing.T, terminal Decision) {
 	if terminal.Rules.Operator != "AND" || terminal.Rules.Type != "" || terminal.Rules.Name != "" || len(terminal.Rules.Conditions) != 0 {
 		t.Fatalf("expected casual_chat to remain an unconditional terminal fallback, got %+v", terminal.Rules)
 	}
-	if len(terminal.ModelRefs) != 1 || terminal.ModelRefs[0].Model != "qwen/qwen3.5-rocm" {
-		t.Fatalf("expected casual_chat to select only the local Qwen alias, got %+v", terminal.ModelRefs)
+	if len(terminal.ModelRefs) < 2 || terminal.ModelRefs[0].Model != "qwen/qwen3.5-rocm" {
+		t.Fatalf("expected casual_chat to keep local Qwen first and expose a learning candidate, got %+v", terminal.ModelRefs)
 	}
 }
 

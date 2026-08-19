@@ -16,15 +16,11 @@ func (c *RouterConfig) IsHallucinationMitigationEnabled() bool {
 	return c.HallucinationMitigation.Enabled
 }
 
-// IsFactCheckClassifierEnabled reports whether a fact-check model is bound.
+// IsFactCheckClassifierEnabled reports whether the configured fact-check model
+// has a default API or request-reachable routing consumer.
 func (c *RouterConfig) IsFactCheckClassifierEnabled() bool {
-	if c.HallucinationMitigation.FactCheckModel.ModelID == "" {
-		return false
-	}
-	if c.HallucinationMitigation.Enabled {
-		return true
-	}
-	return len(c.FactCheckRules) > 0
+	return c != nil &&
+		(c.NeedsFactCheckModelForAPI() || c.NeedsFactCheckModelForRouting())
 }
 
 // GetFactCheckRules returns all configured fact_check_rules.
@@ -32,21 +28,11 @@ func (c *RouterConfig) GetFactCheckRules() []FactCheckRule {
 	return c.FactCheckRules
 }
 
-// IsHallucinationModelEnabled reports whether hallucination detection should run.
+// IsHallucinationModelEnabled reports whether the configured detector has a
+// default-runtime or request-reachable routing consumer.
 func (c *RouterConfig) IsHallucinationModelEnabled() bool {
-	if c.HallucinationMitigation.HallucinationModel.ModelID == "" {
-		return false
-	}
-	if c.HallucinationMitigation.Enabled {
-		return true
-	}
-	for _, decision := range c.Decisions {
-		halConfig := decision.GetHallucinationConfig()
-		if halConfig != nil && halConfig.Enabled {
-			return true
-		}
-	}
-	return false
+	return c != nil &&
+		(c.NeedsHallucinationDetectorForDefaultRuntime() || c.NeedsHallucinationDetectorForRouting())
 }
 
 // GetFactCheckThreshold returns the configured or default fact-check threshold.
@@ -73,9 +59,9 @@ func (c *RouterConfig) GetHallucinationAction() string {
 	return "warn"
 }
 
-// IsFeedbackDetectorEnabled reports whether feedback detection is configured.
+// IsFeedbackDetectorEnabled reports whether the configured feedback detector
+// has a default API or request-reachable routing consumer.
 func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
-	return c.FeedbackDetector.Enabled &&
-		c.FeedbackDetector.ModelID != "" &&
-		len(c.UserFeedbackRules) > 0
+	return c != nil &&
+		(c.NeedsFeedbackModelForAPI() || c.NeedsFeedbackModelForRouting())
 }

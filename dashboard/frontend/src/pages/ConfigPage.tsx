@@ -5,21 +5,27 @@ import EditModal, { type EditFormData, FieldConfig } from '../components/EditMod
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
-import { canWriteConfig } from '../utils/accessControl'
+import { canDeployConfig, canRunEvaluation, canWriteConfig } from '../utils/accessControl'
+import { getActiveRecipe } from '../utils/recipeApi'
+import type { RecipeDescriptor } from '../types/recipe'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import ConfigPageModelsSection from './ConfigPageModelsSection'
 import ConfigPageSignalsSection from './ConfigPageSignalsSection'
 import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
+import ConfigPageEntrypointsRecipesSection from './ConfigPageEntrypointsRecipesSection'
 import ConfigPageMCPSection from './ConfigPageMCPSection'
+import ConfigPageManagedRecipeBanner from './ConfigPageManagedRecipeBanner'
+import {
+  resolveManagedRecipeProtection,
+  resolveRecipePackageCapabilities,
+  presentRuntimeConfigMutationError,
+} from './configPageMoMPackagesSupport'
 import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
 } from './configPageCanonicalization'
-import {
-  ConfigFormat,
-  detectConfigFormat,
-} from '../types/config'
+import { ConfigFormat, detectConfigFormat } from '../types/config'
 import {
   CanonicalGlobalConfig,
   ConfigData,
@@ -38,14 +44,23 @@ interface ConfigPageProps {
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
-  const { isReadonly } = useReadonly()
+  const { isReadonly, serverReadonly, runtimeConfigWritable } = useReadonly()
   const { user } = useAuth()
   const isMCPSection = activeSection === 'mcp'
   const configReadonly = isReadonly || !canWriteConfig(user)
+  const recipePackageCapabilities = resolveRecipePackageCapabilities(
+    serverReadonly,
+    runtimeConfigWritable,
+    canDeployConfig(user),
+  )
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
+  const [recipeDescriptor, setRecipeDescriptor] = useState<RecipeDescriptor | null>(null)
+  const [recipeProtectionLoading, setRecipeProtectionLoading] = useState(!isMCPSection)
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
+  const managedRecipeProtection = resolveManagedRecipeProtection(recipeDescriptor)
+  const configEditorReadonly = configReadonly || managedRecipeProtection !== null
 
   // Effective global runtime config resolved from router defaults + config.yaml overrides
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -63,7 +78,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [editModalData, setEditModalData] = useState<EditFormData | null>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
-  const [editModalCallback, setEditModalCallback] = useState<((data: EditFormData) => Promise<void>) | null>(null)
+  const [editModalCallback, setEditModalCallback] = useState<
+    ((data: EditFormData) => Promise<void>) | null
+  >(null)
 
   // View modal state
   const [viewModalOpen, setViewModalOpen] = useState(false)
@@ -82,13 +99,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   useEffect(() => {
     if (isMCPSection) {
       setLoading(false)
+      setRecipeProtectionLoading(false)
       setError(null)
       return
     }
 
-    fetchConfig()
-    fetchRouterDefaults()
+    void fetchConfig()
+    void fetchManagedRecipeProtection()
+    void fetchRouterDefaults()
   }, [isMCPSection])
+
+  useEffect(() => {
+    if (!managedRecipeProtection) return
+    setEditModalOpen(false)
+    setEditModalCallback(null)
+    setViewModalEditCallback(null)
+  }, [managedRecipeProtection])
 
   // Fetch tools database when config is loaded
   useEffect(() => {
@@ -109,8 +135,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     isMCPSection,
   ])
 
-  const fetchConfig = async () => {
-    setLoading(true)
+  const fetchConfig = async (showLoading = true): Promise<boolean> => {
+    if (showLoading) setLoading(true)
     setError(null)
     try {
       const response = await fetch('/api/router/config/all')
@@ -126,12 +152,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       if (format === 'legacy') {
         console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
       }
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
+      return false
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
+  }
+
+  const fetchManagedRecipeProtection = async (showLoading = true): Promise<boolean> => {
+    if (showLoading) setRecipeProtectionLoading(true)
+    try {
+      const descriptor = await getActiveRecipe()
+      setRecipeDescriptor(descriptor)
+      return true
+    } catch {
+      if (showLoading) setRecipeDescriptor(null)
+      return false
+    } finally {
+      if (showLoading) setRecipeProtectionLoading(false)
+    }
+  }
+
+  const refreshAfterRecipeLifecycleChange = async (): Promise<boolean> => {
+    const [configRefreshed, protectionRefreshed] = await Promise.all([
+      fetchConfig(false),
+      fetchManagedRecipeProtection(false),
+    ])
+    return configRefreshed && protectionRefreshed
   }
 
   const fetchRouterDefaults = async () => {
@@ -170,6 +220,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
   const saveConfig = async (updatedConfig: ConfigData) => {
     // Prevent save in read-only mode
+    if (managedRecipeProtection) {
+      throw new Error(
+        'This runtime configuration is controlled by a managed Recipe. Use package activation, repair, or Restore source instead.',
+      )
+    }
     if (configReadonly) {
       throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
     }
@@ -192,7 +247,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           try {
             const errorJson = JSON.parse(errorText)
             if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.error || errorJson.message
+              errorMessage =
+                presentRuntimeConfigMutationError(errorJson.error) ||
+                errorJson.message ||
+                errorJson.error
             } else {
               errorMessage = errorText
             }
@@ -216,7 +274,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     data: TForm,
     fields: FieldConfig<TForm>[],
     callback: (data: TForm) => Promise<void>,
-    mode: 'edit' | 'add' = 'edit'
+    mode: 'edit' | 'add' = 'edit',
   ) => {
     setEditModalTitle(title)
     setEditModalData(data as EditFormData)
@@ -240,10 +298,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setViewModalOpen(true)
   }
 
-  const listInputToArray = (input: string) => input
-    .split(/[\n,]/)
-    .map(item => item.trim())
-    .filter(Boolean)
+  const listInputToArray = (input: string) =>
+    input
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
 
   const removeSignalByName = (cfg: ConfigData, type: SignalType, targetName: string) => {
     // match by type and name to remove the signal from the config
@@ -251,52 +310,66 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
     switch (type) {
       case 'Keywords':
-        cfg.signals.keywords = (cfg.signals.keywords || []).filter(s => s.name !== targetName)
+        cfg.signals.keywords = (cfg.signals.keywords || []).filter((s) => s.name !== targetName)
         break
       case 'Embeddings':
-        cfg.signals.embeddings = (cfg.signals.embeddings || []).filter(s => s.name !== targetName)
+        cfg.signals.embeddings = (cfg.signals.embeddings || []).filter((s) => s.name !== targetName)
         break
       case 'Domain':
-        cfg.signals.domains = (cfg.signals.domains || []).filter(s => s.name !== targetName)
+        cfg.signals.domains = (cfg.signals.domains || []).filter((s) => s.name !== targetName)
         break
       case 'Preference':
-        cfg.signals.preferences = (cfg.signals.preferences || []).filter(s => s.name !== targetName)
+        cfg.signals.preferences = (cfg.signals.preferences || []).filter(
+          (s) => s.name !== targetName,
+        )
         break
       case 'Fact Check':
-        cfg.signals.fact_check = (cfg.signals.fact_check || []).filter(s => s.name !== targetName)
+        cfg.signals.fact_check = (cfg.signals.fact_check || []).filter((s) => s.name !== targetName)
         break
       case 'User Feedback':
-        cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
+        cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(
+          (s) => s.name !== targetName,
+        )
         break
       case 'Reask':
-        cfg.signals.reasks = (cfg.signals.reasks || []).filter(s => s.name !== targetName)
+        cfg.signals.reasks = (cfg.signals.reasks || []).filter((s) => s.name !== targetName)
         break
       case 'Language':
-        cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
+        cfg.signals.language = (cfg.signals.language || []).filter((s) => s.name !== targetName)
         break
       case 'Context':
-        cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
+        cfg.signals.context = (cfg.signals.context || []).filter((s) => s.name !== targetName)
         break
       case 'Structure':
-        cfg.signals.structure = (cfg.signals.structure || []).filter(s => s.name !== targetName)
+        cfg.signals.structure = (cfg.signals.structure || []).filter((s) => s.name !== targetName)
         break
       case 'Complexity':
-        cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
+        cfg.signals.complexity = (cfg.signals.complexity || []).filter((s) => s.name !== targetName)
         break
       case 'Modality':
-        cfg.signals.modality = (cfg.signals.modality || []).filter(s => s.name !== targetName)
+        cfg.signals.modality = (cfg.signals.modality || []).filter((s) => s.name !== targetName)
         break
       case 'Authz':
-        cfg.signals.role_bindings = (cfg.signals.role_bindings || []).filter(s => s.name !== targetName)
+        cfg.signals.role_bindings = (cfg.signals.role_bindings || []).filter(
+          (s) => s.name !== targetName,
+        )
         break
       case 'Jailbreak':
-        cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter(s => s.name !== targetName)
+        cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter((s) => s.name !== targetName)
         break
       case 'PII':
-        cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
+        cfg.signals.pii = (cfg.signals.pii || []).filter((s) => s.name !== targetName)
         break
       case 'KB':
-        cfg.signals.kb = (cfg.signals.kb || []).filter(s => s.name !== targetName)
+        cfg.signals.kb = (cfg.signals.kb || []).filter((s) => s.name !== targetName)
+        break
+      case 'Metadata':
+        cfg.signals.metadata = (cfg.signals.metadata || []).filter((s) => s.name !== targetName)
+        break
+      case 'Classifier':
+        cfg.signals.classifiers = (cfg.signals.classifiers || []).filter(
+          (s) => s.name !== targetName,
+        )
         break
       default:
         break
@@ -304,7 +377,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   }
 
   const removeDecisionByName = (cfg: ConfigData, targetName: string) => {
-    cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
+    cfg.decisions = (cfg.decisions || []).filter((d) => d.name !== targetName)
   }
 
   const handleCloseViewModal = () => {
@@ -332,7 +405,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageSignalsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       signalsSearch={signalsSearch}
       onSignalsSearchChange={setSignalsSearch}
       saveConfig={saveConfig}
@@ -347,7 +420,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageDecisionsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       decisionsSearch={decisionsSearch}
       onDecisionsSearchChange={setDecisionsSearch}
       saveConfig={saveConfig}
@@ -361,7 +434,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const renderProjectionsSection = () => (
     <ConfigPageProjectionsSection
       config={config}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
       saveConfig={saveConfig}
       openEditModal={openEditModal}
       openViewModal={openViewModal}
@@ -372,7 +445,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     <ConfigPageModelsSection
       config={config}
       isPythonCLI={isPythonCLI}
-      isReadonly={configReadonly}
+      isReadonly={configEditorReadonly}
+      canVerifyModels={canRunEvaluation(user)}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -387,19 +461,35 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     />
   )
 
+  const renderEntrypointsRecipesSection = () =>
+    config ? (
+      <ConfigPageEntrypointsRecipesSection
+        config={config}
+        isReadonly={configEditorReadonly}
+        models={models}
+        packageCapabilities={recipePackageCapabilities}
+        refreshConfig={refreshAfterRecipeLifecycleChange}
+        saveConfig={saveConfig}
+        openEditModal={openEditModal}
+        openViewModal={openViewModal}
+      />
+    ) : null
+
   // Global Config section - canonical global override editor backed by effective router defaults
   const renderGlobalConfigSection = () => (
-          <ConfigPageRouterConfigSection
-            config={config}
-            toolsData={toolsData}
-            toolsLoading={toolsLoading}
-            toolsError={toolsError}
-            isReadonly={configReadonly}
-            openEditModal={openEditModal}
-            saveConfig={saveConfig}
-            refreshConfig={fetchConfig}
-            showLegacyCategories={!isPythonCLI}
-          />
+    <ConfigPageRouterConfigSection
+      config={config}
+      toolsData={toolsData}
+      toolsLoading={toolsLoading}
+      toolsError={toolsError}
+      isReadonly={configEditorReadonly}
+      openEditModal={openEditModal}
+      saveConfig={saveConfig}
+      refreshConfig={async () => {
+        await fetchConfig()
+      }}
+      showLegacyCategories={!isPythonCLI}
+    />
   )
 
   const renderActiveSection = () => {
@@ -412,6 +502,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         return renderProjectionsSection()
       case 'models':
         return renderModelsSection()
+      case 'entrypoints-recipes':
+        return renderEntrypointsRecipesSection()
       case 'global-config':
         return renderGlobalConfigSection()
       case 'mcp':
@@ -421,17 +513,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
   }
 
+  const pageLoading = loading || recipeProtectionLoading
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        {!isMCPSection && loading && (
+        {!isMCPSection && pageLoading && (
           <div className={styles.loading}>
             <div className={styles.spinner}></div>
             <p>Loading configuration...</p>
           </div>
         )}
 
-        {!isMCPSection && error && !loading && (
+        {!isMCPSection && error && !pageLoading && (
           <div className={styles.error}>
             <span className={styles.errorIcon}></span>
             <div>
@@ -447,8 +541,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           </div>
         )}
 
-        {!isMCPSection && config && !loading && !error && (
+        {!isMCPSection && config && !pageLoading && !error && (
           <div className={styles.contentArea}>
+            {managedRecipeProtection ? (
+              <ConfigPageManagedRecipeBanner
+                recipeName={recipeDescriptor?.metadata?.name}
+                state={managedRecipeProtection}
+              />
+            ) : null}
             {renderActiveSection()}
           </div>
         )}
@@ -458,7 +558,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       <EditModal
         isOpen={editModalOpen}
         onClose={closeEditModal}
-        onSave={editModalCallback || (async () => { })}
+        onSave={editModalCallback || (async () => {})}
         title={editModalTitle}
         data={editModalData}
         fields={editModalFields}
@@ -469,7 +569,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={configReadonly ? undefined : (viewModalEditCallback || undefined)}
+        onEdit={configEditorReadonly ? undefined : viewModalEditCallback || undefined}
         title={viewModalTitle}
         sections={viewModalSections}
       />

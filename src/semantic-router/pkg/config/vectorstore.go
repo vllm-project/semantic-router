@@ -46,6 +46,20 @@ type VectorStoreConfig struct {
 	// Default: 2
 	IngestionWorkers int `json:"ingestion_workers,omitempty" yaml:"ingestion_workers,omitempty"`
 
+	// IngestionDrainTimeoutSeconds bounds how long shutdown waits for in-flight
+	// ingestion jobs to drain before cancelling them. This is a shutdown grace
+	// window, not a per-file ingest budget: on shutdown the pipeline stops
+	// accepting new jobs, waits up to this long for currently-running jobs to
+	// finish, then cancels the rest so a wedged embedder or backend cannot block
+	// process shutdown indefinitely.
+	//
+	// Size it to comfortably exceed the typical single-job latency (file size ×
+	// chunk count × per-chunk embed + backend insert), while staying *below* the
+	// deployment's shutdown grace period (e.g. Kubernetes
+	// terminationGracePeriodSeconds, default 30s) so the drain actually runs
+	// before the platform force-kills the process. Default: 30.
+	IngestionDrainTimeoutSeconds int `json:"ingestion_drain_timeout_seconds,omitempty" yaml:"ingestion_drain_timeout_seconds,omitempty"`
+
 	// SupportedFormats lists the allowed file extensions for upload.
 	// Default: [".txt", ".md", ".json", ".csv", ".html"]
 	SupportedFormats []string `json:"supported_formats,omitempty" yaml:"supported_formats,omitempty"`
@@ -301,6 +315,9 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2
+	}
+	if c.IngestionDrainTimeoutSeconds <= 0 {
+		c.IngestionDrainTimeoutSeconds = 30
 	}
 	if len(c.SupportedFormats) == 0 {
 		c.SupportedFormats = []string{".txt", ".md", ".json", ".csv", ".html"}

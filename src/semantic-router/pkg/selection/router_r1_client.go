@@ -117,6 +117,8 @@ type AutoMixVerifierClient struct {
 	httpClient *http.Client
 }
 
+const maxAutoMixVerifierErrorBodyBytes int64 = 8 * 1024
+
 // AutoMixVerifyResponse is the response from the AutoMix verifier
 type AutoMixVerifyResponse struct {
 	Confidence     float64  `json:"confidence"`
@@ -176,8 +178,14 @@ func (c *AutoMixVerifierClient) Verify(ctx context.Context, question, answer, op
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+		errorBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxAutoMixVerifierErrorBodyBytes+1))
+		truncated := int64(len(errorBody)) > maxAutoMixVerifierErrorBodyBytes
+		return nil, fmt.Errorf(
+			"server returned status %d (error_body_bytes=%d, truncated=%t)",
+			resp.StatusCode,
+			min(len(errorBody), int(maxAutoMixVerifierErrorBodyBytes)),
+			truncated,
+		)
 	}
 
 	var result AutoMixVerifyResponse

@@ -7,6 +7,7 @@ export type LayoutConfigSection =
   | 'signals'
   | 'projections'
   | 'decisions'
+  | 'entrypoints-recipes'
   | 'global-config'
   | 'mcp'
 
@@ -61,6 +62,11 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         description: 'Author and inspect the routing graph.',
         items: [
           { kind: 'route', label: 'Config Builder', to: '/builder' },
+          {
+            kind: 'config',
+            label: 'Mixture-of-Models',
+            configSection: 'entrypoints-recipes',
+          },
           { kind: 'route', label: 'Brain Topology', to: '/topology' },
         ],
       },
@@ -193,7 +199,10 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
-        items: [{ kind: 'route', label: 'Status', to: '/status' }],
+        items: [
+          { kind: 'route', label: 'Status', to: '/status' },
+          { kind: 'route', label: 'Plugin Operations', to: '/plugins', matchMode: 'prefix' },
+        ],
       },
       {
         title: 'Diagnostics',

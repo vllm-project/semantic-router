@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConfigData } from './configPageSupport'
 import {
   getSignalReferenceCount,
+  getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
   normalizeStringList,
   normalizeStructureFeature,
@@ -94,5 +95,76 @@ describe('signal form support', () => {
 
     expect(getSignalReferenceCount(config, 'Domain', 'finance')).toBe(3)
     expect(getSignalReferenceCount(config, 'Domain', 'legal')).toBe(0)
+  })
+
+  it('counts recipe-only references before deleting shared signals', () => {
+    const config: ConfigData = {
+      recipes: [
+        {
+          name: 'private',
+          routing: {
+            decisions: [
+              {
+                name: 'private-route',
+                description: '',
+                priority: 1,
+                rules: {
+                  operator: 'AND',
+                  conditions: [{ type: 'metadata', name: 'private-cohort' }],
+                },
+                modelRefs: [],
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    expect(getSignalReferenceCount(config, 'Metadata', 'private-cohort')).toBe(1)
+  })
+
+  it('keeps deletion references local to the selected recipe', () => {
+    const config: ConfigData = {
+      recipes: [
+        {
+          name: 'alpha',
+          routing: {
+            decisions: [],
+          },
+        },
+        {
+          name: 'beta',
+          routing: {
+            decisions: [
+              {
+                name: 'beta-route',
+                description: '',
+                priority: 100,
+                rules: {
+                  operator: 'AND',
+                  conditions: [{ type: 'metadata', name: 'shared-local-name' }],
+                },
+                modelRefs: [],
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    expect(
+      getSignalReferenceCountInRoutingProfile(
+        config.recipes?.[0].routing,
+        'Metadata',
+        'shared-local-name',
+      ),
+    ).toBe(0)
+    expect(
+      getSignalReferenceCountInRoutingProfile(
+        config.recipes?.[1].routing,
+        'Metadata',
+        'shared-local-name',
+      ),
+    ).toBe(1)
   })
 })

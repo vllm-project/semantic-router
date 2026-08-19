@@ -1,17 +1,17 @@
 package classification
 
 import (
+	"context"
 	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type MockJailbreakInferenceResponse struct {
-	classifyResult candle_binding.ClassResult
+	classifyResult SequenceClassificationResult
 	classifyError  error
 }
 
@@ -20,17 +20,25 @@ type MockJailbreakInference struct {
 	responseMap map[string]MockJailbreakInferenceResponse
 }
 
+// binaryProbs builds a 2-class distribution (matching every test mapping in
+// this file, {jailbreak: 0, benign: 1}) with confidence at class and the
+// remaining mass at the other class.
+func binaryProbs(class int, confidence float32) []float32 {
+	probs := []float32{1 - confidence, 1 - confidence}
+	probs[class] = confidence
+	return probs
+}
+
 func (m *MockJailbreakInference) setMockResponse(text string, class int, confidence float32, err error) {
 	m.responseMap[text] = MockJailbreakInferenceResponse{
-		classifyResult: candle_binding.ClassResult{
-			Class:      class,
-			Confidence: confidence,
+		classifyResult: SequenceClassificationResult{
+			Probabilities: binaryProbs(class, confidence),
 		},
 		classifyError: err,
 	}
 }
 
-func (m *MockJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+func (m *MockJailbreakInference) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
 	if response, exists := m.responseMap[text]; exists {
 		return response.classifyResult, response.classifyError
 	}
@@ -134,7 +142,7 @@ var _ = Describe("jailbreak detection configuration", func() {
 			classifier.Config.PromptGuard.JailbreakMappingPath = row.jailbreakMappingPath
 			classifier.JailbreakMapping = row.jailbreakMapping
 
-			isJailbreak, _, _, err := classifier.CheckForJailbreak("Some text")
+			isJailbreak, _, _, err := classifier.CheckForJailbreak(context.Background(), "Some text")
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("jailbreak detection is not enabled or properly configured"))
@@ -147,7 +155,7 @@ var _ = Describe("jailbreak detection configuration", func() {
 	)
 
 	It("should ignore empty text", func() {
-		isJailbreak, _, _, err := classifier.CheckForJailbreak("")
+		isJailbreak, _, _, err := classifier.CheckForJailbreak(context.Background(), "")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(isJailbreak).To(BeFalse())
@@ -165,9 +173,9 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return jailbreak results above the configured threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 0, Confidence: 0.9}
+		mockModel.classifyResult = SequenceClassificationResult{Probabilities: binaryProbs(0, 0.9)}
 
-		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("This is a jailbreak attempt")
+		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak(context.Background(), "This is a jailbreak attempt")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(isJailbreak).To(BeTrue())
@@ -176,9 +184,9 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return benign results above the threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 1, Confidence: 0.9}
+		mockModel.classifyResult = SequenceClassificationResult{Probabilities: binaryProbs(1, 0.9)}
 
-		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("This is a normal question")
+		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak(context.Background(), "This is a normal question")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(isJailbreak).To(BeFalse())
@@ -187,9 +195,9 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should return false when the jailbreak confidence is below the threshold", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 0, Confidence: 0.5}
+		mockModel.classifyResult = SequenceClassificationResult{Probabilities: binaryProbs(0, 0.5)}
 
-		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("Ambiguous text")
+		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak(context.Background(), "Ambiguous text")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(isJailbreak).To(BeFalse())
@@ -200,7 +208,7 @@ var _ = Describe("jailbreak detection classification", func() {
 	It("should surface inference failures", func() {
 		mockModel.classifyError = errors.New("model inference failed")
 
-		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("Some text")
+		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak(context.Background(), "Some text")
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("jailbreak classification failed"))
@@ -210,9 +218,9 @@ var _ = Describe("jailbreak detection classification", func() {
 	})
 
 	It("should fail when the predicted class is unknown", func() {
-		mockModel.classifyResult = candle_binding.ClassResult{Class: 9, Confidence: 0.9}
+		mockModel.classifyResult = SequenceClassificationResult{Probabilities: []float32{0, 0, 0, 0, 0, 0, 0, 0, 0, 0.9}}
 
-		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak("Some text")
+		isJailbreak, jailbreakType, confidence, err := classifier.CheckForJailbreak(context.Background(), "Some text")
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unknown jailbreak class index"))
@@ -235,7 +243,7 @@ var _ = Describe("jailbreak detection content analysis", func() {
 	It("should fail when the jailbreak mapping is missing", func() {
 		classifier.JailbreakMapping = nil
 
-		hasJailbreak, _, err := classifier.AnalyzeContentForJailbreak([]string{"Some text"})
+		hasJailbreak, _, err := classifier.AnalyzeContentForJailbreak(context.Background(), []string{"Some text"})
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("jailbreak detection is not enabled or properly configured"))
@@ -244,12 +252,15 @@ var _ = Describe("jailbreak detection content analysis", func() {
 
 	It("should skip empty texts and inference failures while retaining valid results", func() {
 		mockModel.setMockResponse("text0", 0, 0.9, errors.New("model inference failed"))
-		mockModel.setMockResponse("text1", 0, 0.3, nil)
+		// A real 2-class argmax can never be below 0.5 (the other class would
+		// win instead), so this uses 0.6 - still under the 0.7 threshold - to
+		// exercise "predicted jailbreak, but not confident enough to flag".
+		mockModel.setMockResponse("text1", 0, 0.6, nil)
 		mockModel.setMockResponse("text2", 1, 0.9, nil)
 		mockModel.setMockResponse("text3", 0, 0.9, nil)
 		mockModel.setMockResponse("", 0, 0.9, nil)
 
-		hasJailbreak, results, err := classifier.AnalyzeContentForJailbreak([]string{"text0", "text1", "text2", "text3", ""})
+		hasJailbreak, results, err := classifier.AnalyzeContentForJailbreak(context.Background(), []string{"text0", "text1", "text2", "text3", ""})
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(hasJailbreak).To(BeTrue())
@@ -257,7 +268,7 @@ var _ = Describe("jailbreak detection content analysis", func() {
 		Expect(results[0].Content).To(Equal("text1"))
 		Expect(results[0].IsJailbreak).To(BeFalse())
 		Expect(results[0].JailbreakType).To(Equal("jailbreak"))
-		Expect(results[0].Confidence).To(BeNumerically("~", 0.3, 0.001))
+		Expect(results[0].Confidence).To(BeNumerically("~", 0.6, 0.001))
 		Expect(results[1].Content).To(Equal("text2"))
 		Expect(results[1].IsJailbreak).To(BeFalse())
 		Expect(results[1].JailbreakType).To(Equal("benign"))

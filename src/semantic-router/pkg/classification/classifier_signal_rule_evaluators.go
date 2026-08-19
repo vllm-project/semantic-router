@@ -7,17 +7,21 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
+	matches, err := c.keywordClassifier.MatchAll(text)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
-	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeKeyword, category, latencySeconds)
+	primaryCategory := ""
+	if len(matches) > 0 {
+		primaryCategory = matches[0].RuleName
+	}
+	// Extraction latency is measured once per classifier invocation. Match
+	// counters below still retain the individual rule labels.
+	c.recordSignalExtraction(config.SignalTypeKeyword, primaryCategory, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -26,14 +30,28 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	logging.Debugf("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("keyword rule evaluation failed: %v", err)
-	} else if category != "" {
-		// Record signal match
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, category)
+		return
+	}
 
-		mu.Lock()
-		results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
-		results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
-		mu.Unlock()
+	for _, match := range matches {
+		c.recordSignalMatch(config.SignalTypeKeyword, match.RuleName)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	seenKeywords := make(map[string]struct{}, len(results.MatchedKeywords))
+	for _, keyword := range results.MatchedKeywords {
+		seenKeywords[keyword] = struct{}{}
+	}
+	for _, match := range matches {
+		results.MatchedKeywordRules = append(results.MatchedKeywordRules, match.RuleName)
+		for _, keyword := range match.Keywords {
+			if _, seen := seenKeywords[keyword]; seen {
+				continue
+			}
+			seenKeywords[keyword] = struct{}{}
+			results.MatchedKeywords = append(results.MatchedKeywords, keyword)
+		}
 	}
 }
 
@@ -64,7 +82,7 @@ func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex
 		}
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
 
 	// Record metrics
 	results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -79,7 +97,7 @@ func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex
 		matched := c.matchDomainCategories(domainResult, categoryName)
 		mu.Lock()
 		for _, cat := range matched {
-			metrics.RecordSignalMatch(config.SignalTypeDomain, cat.Category)
+			c.recordSignalMatch(config.SignalTypeDomain, cat.Category)
 			results.MatchedDomainRules = append(results.MatchedDomainRules, cat.Category)
 			results.SignalConfidences["domain:"+cat.Category] = float64(cat.Probability)
 		}
@@ -100,7 +118,7 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 	}
 
 	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -116,7 +134,7 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 		for _, rule := range c.Config.FactCheckRules {
 			if rule.Name == signalName {
 				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeFactCheck, rule.Name)
+				c.recordSignalMatch(config.SignalTypeFactCheck, rule.Name)
 
 				mu.Lock()
 				results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
@@ -145,7 +163,7 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 	}
 
 	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -161,7 +179,7 @@ func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync
 		for _, rule := range c.Config.UserFeedbackRules {
 			if rule.Name == signalName {
 				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
+				c.recordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
 
 				mu.Lock()
 				results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
@@ -194,8 +212,8 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 		if match.MinSimilarity > bestConfidence {
 			bestConfidence = match.MinSimilarity
 		}
-		metrics.RecordSignalExtraction(config.SignalTypeReask, match.RuleName, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeReask, match.RuleName)
+		c.recordSignalExtraction(config.SignalTypeReask, match.RuleName, elapsed.Seconds())
+		c.recordSignalMatch(config.SignalTypeReask, match.RuleName)
 		results.MatchedReaskRules = append(results.MatchedReaskRules, match.RuleName)
 		results.SignalConfidences["reask:"+match.RuleName] = match.MinSimilarity
 		results.SignalValues["reask:"+match.RuleName] = float64(match.MatchedTurns)
@@ -204,9 +222,17 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	mu.Unlock()
 }
 
-func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mutex, contextText string) {
+func (c *Classifier) evaluateContextSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	contextText string,
+	contextTokenFloor int,
+) {
 	start := time.Now()
-	matchedRules, count, err := c.contextClassifier.Classify(contextText)
+	matchedRules, count, err := c.contextClassifier.ClassifyWithTokenFloor(
+		contextText,
+		contextTokenFloor,
+	)
 	elapsed := time.Since(start)
 
 	// Record metrics (use microseconds for better precision)

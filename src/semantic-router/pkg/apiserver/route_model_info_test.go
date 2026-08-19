@@ -65,7 +65,7 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 			PromptGuard: config.PromptGuardConfig{
 				Enabled:              true,
 				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				UseMmBERT32K:         true,
+				Variant:              config.PromptGuardVariantMmBERT32K,
 				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
 			},
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -105,10 +105,26 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				Categories: []config.Category{
 					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
 				},
+				FactCheckRules: []config.FactCheckRule{
+					{Name: "verification-needed"},
+				},
 				UserFeedbackRules: []config.UserFeedbackRule{
 					{Name: "satisfied"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name: "model-backed-route",
+				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+				}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHallucination,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}},
 		},
 	}
 }
@@ -267,6 +283,31 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 
 	for name, path := range expected {
 		requireReadyModel(t, modelsByName, name, path)
+	}
+}
+
+func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
+	cfg := buildAuxiliaryModelsConfig()
+	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+
+	models := buildHallucinationModels(cfg, classifierModelAvailability{})
+	detector := requireModelInfo(t, models, "hallucination_detector")
+	if detector.Metadata["backend"] != config.HallucinationBackendEndpoint ||
+		detector.Metadata["model_type"] != "openai_compatible_endpoint" ||
+		detector.Metadata["lifecycle"] != "external" {
+		t.Fatalf("endpoint detector metadata is not truthful: %+v", detector.Metadata)
+	}
+	if _, ok := detector.Metadata["use_cpu"]; ok {
+		t.Fatalf("endpoint detector must not advertise local runtime fields: %+v", detector.Metadata)
+	}
+	enriched := enrichModelInfo(detector, nil)
+	if enriched.Registry != nil || enriched.ResolvedModelPath != "" {
+		t.Fatalf("endpoint detector must not acquire local model metadata: %+v", enriched)
+	}
+	for _, model := range models {
+		if model.Name == "hallucination_explainer" {
+			t.Fatal("endpoint backend must not advertise the local hallucination explainer")
+		}
 	}
 }
 

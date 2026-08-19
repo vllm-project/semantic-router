@@ -314,7 +314,7 @@ global:
         max_batch_size: 32
         max_concurrency: 4
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8

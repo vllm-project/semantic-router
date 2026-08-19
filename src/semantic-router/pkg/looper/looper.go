@@ -21,11 +21,11 @@ package looper
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // Request contains the input for looper execution
@@ -49,6 +49,11 @@ type Request struct {
 	// DecisionName is the name of the decision that triggered this looper execution
 	// Used by extproc to lookup decision configuration and apply plugins
 	DecisionName string
+
+	// RecipeName is the routing namespace that owns DecisionName. It is
+	// propagated on router-generated model calls so internal requests retain
+	// the parent request's recipe scope.
+	RecipeName config.RecipeName
 
 	// OutputContract is the decision-scoped final response contract. The looper
 	// merges it with any output format already present in the original request.
@@ -99,6 +104,13 @@ type Response struct {
 	// this execution. It mirrors the usage block embedded in Body so callers
 	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
 	Usage TokenUsage `json:"usage,omitempty"`
+
+	// LatencyMs is the wall-clock latency, in milliseconds, of the full
+	// looper execution (all model calls plus algorithm overhead). It is set
+	// by ExecuteWithLatency rather than by individual Looper implementations,
+	// so it reflects real elapsed time regardless of whether the algorithm
+	// dispatches its model calls sequentially or concurrently.
+	LatencyMs int64 `json:"latency_ms,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies
@@ -112,33 +124,41 @@ type Looper interface {
 	SetInboundAuthorization(authorization string)
 }
 
-// Factory creates a Looper instance based on the algorithm type
-func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
-	return FactoryWithSelectionRegistry(cfg, algorithmType, nil)
+// UnsupportedAlgorithmError reports an algorithm that cannot be constructed
+// by the Looper runtime.
+type UnsupportedAlgorithmError struct {
+	AlgorithmType string
 }
 
-// FactoryWithSelectionRegistry creates a Looper using runtime-owned model
-// selectors when an algorithm needs selector state.
-func FactoryWithSelectionRegistry(
-	cfg *config.LooperConfig,
-	algorithmType string,
-	selectorRegistry *selection.Registry,
-) Looper {
-	switch algorithmType {
-	case "confidence":
+func (e *UnsupportedAlgorithmError) Error() string {
+	return fmt.Sprintf("unsupported Looper algorithm %q", e.AlgorithmType)
+}
+
+type algorithmConstructor func(*config.LooperConfig) Looper
+
+var algorithmConstructors = map[string]algorithmConstructor{
+	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig) Looper {
 		return NewConfidenceLooper(cfg)
-	case "ratings":
-		return NewRatingsLooper(cfg)
-	case "remom":
-		return NewReMoMLooper(cfg)
-	case "fusion":
+	},
+	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig) Looper {
 		return NewFusionLooper(cfg)
-	case "workflows":
+	},
+	config.DecisionAlgorithmRatings: func(cfg *config.LooperConfig) Looper {
+		return NewRatingsLooper(cfg)
+	},
+	config.DecisionAlgorithmReMoM: func(cfg *config.LooperConfig) Looper {
+		return NewReMoMLooper(cfg)
+	},
+	config.DecisionAlgorithmWorkflows: func(cfg *config.LooperConfig) Looper {
 		return NewWorkflowsLooper(cfg)
-	case "rl_driven":
-		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
-	default:
-		// Default to simple looper that just calls models sequentially
-		return NewBaseLooper(cfg)
+	},
+}
+
+// Factory creates a Looper instance based on the authoritative config catalog.
+func Factory(cfg *config.LooperConfig, algorithmType string) (Looper, error) {
+	constructor, ok := algorithmConstructors[algorithmType]
+	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
+		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
+	return constructor(cfg), nil
 }

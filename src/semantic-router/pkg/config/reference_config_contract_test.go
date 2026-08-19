@@ -33,6 +33,7 @@ func TestReferenceConfigCoversCanonicalPublicSurface(t *testing.T) {
 	assertReferenceConfigTopLevelCoverage(t, root)
 	assertReferenceConfigProviderCoverage(t, root)
 	assertReferenceConfigRoutingCoverage(t, root)
+	assertReferenceConfigRecipeCoverage(t, root)
 	assertReferenceConfigGlobalCoverage(t, root)
 }
 

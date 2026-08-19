@@ -11,7 +11,7 @@ import (
 
 func TestBuildRequestParamsMutationsNilDecision(t *testing.T) {
 	r := &OpenAIRouter{}
-	out, err := r.buildRequestParamsMutations(nil, []byte(`{"model":"x"}`), nil)
+	out, err := r.buildRequestParamsMutations(nil, []byte(`{"model":"x"}`), nil, config.DefaultRecipeName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestBuildRequestParamsMutationsBlockedAndCaps(t *testing.T) {
 	out, err := r.buildRequestParamsMutations(decision, raw, &config.ProviderProfile{
 		Type:    "openai",
 		BaseURL: "http://localhost:8000/v1",
-	})
+	}, config.DefaultRecipeName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestBuildRequestParamsMutationsPreservesThinkingForOfficialDeepSeek(t *test
 	out, err := r.buildRequestParamsMutations(decision, raw, &config.ProviderProfile{
 		Type:    "openai",
 		BaseURL: "https://api.deepseek.com",
-	})
+	}, config.DefaultRecipeName)
 	if err != nil {
 		t.Fatal(err)
 	}

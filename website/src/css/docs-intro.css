@@ -1,0 +1,32 @@
+.docs-intro-brand {
+  margin: 2.75rem auto 2.5rem;
+  text-align: center;
+}
+
+.docs-intro-brand__logo {
+  display: block;
+  width: min(60%, 42rem);
+  height: auto;
+  aspect-ratio: 2202 / 720;
+  object-fit: contain;
+  margin: 0 auto 1.25rem;
+}
+
+.docs-intro-brand__tagline {
+  margin: 0;
+  color: var(--ifm-heading-color);
+  font-size: clamp(1rem, 0.94rem + 0.25vw, 1.125rem);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 576px) {
+  .docs-intro-brand {
+    margin-block: 2rem 2.25rem;
+  }
+
+  .docs-intro-brand__logo {
+    width: min(88%, 42rem);
+    margin-bottom: 1rem;
+  }
+}

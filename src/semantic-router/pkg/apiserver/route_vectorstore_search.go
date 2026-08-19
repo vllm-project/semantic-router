@@ -55,7 +55,7 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	queryEmbedding, err := embedder.Embed(params.request.Query)
+	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return

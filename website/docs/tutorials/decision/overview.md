@@ -1,10 +1,9 @@
-# Decision Tutorials
+# Decisions
 
 ## Overview
 
-Latest decision tutorials mirror the boolean-case catalog under `config/decision/`.
-
-Signals tell the router what it detected. Decisions tell the router what to do with those detections:
+Signals tell the Router what it detected. Decisions turn those detections into
+a route policy:
 
 - which route matched
 - which models are candidates
@@ -16,7 +15,6 @@ Signals tell the router what it detected. Decisions tell the router what to do w
 - Keeps route policy readable even when multiple signals must cooperate.
 - Makes boolean logic explicit and reviewable.
 - Separates route matching from deployment bindings, algorithms, and plugins.
-- Maps directly to reusable fragment directories under `config/decision/`.
 
 ## What Problem Does It Solve?
 
@@ -26,7 +24,7 @@ Decisions solve that by turning named signals into clear route policies with sta
 
 ## When to Use
 
-Use `decision/` when:
+Use a decision when:
 
 - a route should activate from one or more signals
 - the same model policy should be reused across several signal combinations
@@ -41,6 +39,7 @@ In v0.3, decisions live under `routing.decisions`:
 routing:
   decisions:
     - name: business_route
+      description: Route business requests to the business model.
       priority: 110
       rules:
         operator: AND
@@ -58,15 +57,26 @@ Decision matching stays separate from:
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 
-Use the case-shape catalog below in the same order as the fragment tree:
+Choose the smallest shape that expresses the policy clearly:
 
-| Decision shape | Fragment example | Best for | Tutorial |
-|----------------|------------------|----------|----------|
-| `single` | `config/decision/single/domain-business.yaml` | one decisive signal | [Single Condition](./single) |
-| `and` | `config/decision/and/urgent-business.yaml` | multiple required signals | [AND Decisions](./and) |
-| `or` | `config/decision/or/business-or-law.yaml` | shared route across alternatives | [OR Decisions](./or) |
-| `not` | `config/decision/not/exclude-jailbreak.yaml` | explicit exclusion or safety guard | [NOT Decisions](./not) |
-| `composite` | `config/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
-| `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
+| Decision shape | Best for | Guide |
+|----------------|----------|-------|
+| Single condition | One decisive signal | [Single Condition](./single) |
+| `AND` | Several conditions that must all match | [AND Decisions](./and) |
+| `OR` | One route shared by several alternative conditions | [OR Decisions](./or) |
+| `NOT` | An explicit exclusion or safety guard | [NOT Decisions](./not) |
+| Composite | Nested combinations of `AND`, `OR`, and `NOT` | [Composite Decisions](./composite) |
+| Retention directives | Cache or session side effects after a decision matches | [Retention Directives](./retention) |
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
+
+## Operational Boundaries
+
+- Every leaf must reference a signal or projection output declared in the same
+  recipe.
+- Higher `priority` wins when more than one decision matches. Keep an explicit
+  unconditional fallback or configure `providers.defaults.default_model`.
+- Decision names and route diagnostics can become operational metadata; avoid
+  secrets or personal identifiers in names and descriptions.
+- Boolean logic is policy, not authentication. Use trusted identity through
+  the `authz` service and signal for access-sensitive routes.

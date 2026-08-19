@@ -77,6 +77,83 @@ def join_tool_result_content(body: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
+def anthropic_to_openai(body: dict[str, Any]) -> dict[str, Any]:
+    """Translate the Messages subset used by E2E into chat completions."""
+    translated: dict[str, Any] = {
+        "model": body.get("model"),
+        "messages": [],
+    }
+    system = body.get("system")
+    if isinstance(system, str) and system:
+        translated["messages"].append({"role": "system", "content": system})
+    for message in body.get("messages") or []:
+        if not isinstance(message, dict):
+            continue
+        translated["messages"].append(
+            {
+                "role": message.get("role"),
+                "content": _openai_message_content(message.get("content")),
+            }
+        )
+    field_map = {
+        "max_tokens": "max_tokens",
+        "temperature": "temperature",
+        "top_p": "top_p",
+        "stream": "stream",
+        "stop_sequences": "stop",
+    }
+    for source, target in field_map.items():
+        if source in body:
+            translated[target] = body[source]
+    return translated
+
+
+def openai_to_anthropic(
+    response: dict[str, Any], request_body: dict[str, Any]
+) -> dict[str, Any]:
+    """Translate a chat-completions response into Messages wire shape."""
+    if response.get("type") == "message":
+        return response
+    choices = response.get("choices") or []
+    choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+    message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+    text = str(message.get("content") or "")
+    finish_reason = str(choice.get("finish_reason") or "")
+    stop_sequences = request_body.get("stop_sequences") or []
+    stop_reason = {
+        "length": "max_tokens",
+        "tool_calls": "tool_use",
+    }.get(finish_reason, "end_turn")
+    if finish_reason == "stop" and stop_sequences:
+        stop_reason = "stop_sequence"
+    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    return {
+        "id": response.get("id", "msg_shim"),
+        "type": "message",
+        "role": "assistant",
+        "model": response.get("model") or request_body.get("model"),
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": stop_reason,
+        "stop_sequence": stop_sequences[0] if stop_reason == "stop_sequence" else None,
+        "usage": {
+            "input_tokens": int(usage.get("prompt_tokens") or 0),
+            "output_tokens": int(usage.get("completion_tokens") or 0),
+        },
+    }
+
+
+def _openai_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        str(block.get("text") or "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    )
+
+
 def has_cache_control(body: dict[str, Any]) -> bool:
     """Return True when any block in the request carries a ``cache_control`` marker."""
     system = body.get("system")

@@ -24,6 +24,10 @@ const TOOL_TRACE_STYLES: Record<string, { tint: string; accent: string }> = {
     tint: 'rgba(255, 255, 255, 0.08)',
     accent: 'rgba(255, 255, 255, 0.96)',
   },
+  assistant_reasoning_complete: {
+    tint: 'rgba(129, 140, 248, 0.12)',
+    accent: 'rgba(199, 210, 254, 0.96)',
+  },
 }
 
 export function renderToolNamesCell(record: InsightsRecord): ReactNode {
@@ -34,9 +38,10 @@ export function renderToolNamesCell(record: InsightsRecord): ReactNode {
 
   const visibleToolNames = toolNames.slice(0, 2)
   const hiddenCount = toolNames.length - visibleToolNames.length
-  const summary = hiddenCount > 0
-    ? `${visibleToolNames.join(' · ')} · +${hiddenCount}`
-    : visibleToolNames.join(' · ')
+  const summary =
+    hiddenCount > 0
+      ? `${visibleToolNames.join(' · ')} · +${hiddenCount}`
+      : visibleToolNames.join(' · ')
 
   return (
     <span className={styles.tableSummaryText} title={toolNames.join(', ')}>
@@ -143,7 +148,9 @@ function renderToolTraceFlow(trace: ToolTrace, canViewFlowDetails: boolean) {
   if (steps.length === 0) {
     return (
       <div className={styles.pluginStack}>
-        <span className={styles.costSubtle}>No detailed tool steps were captured for this request.</span>
+        <span className={styles.costSubtle}>
+          No detailed tool steps were captured for this request.
+        </span>
         {trace.flow ? <pre className={styles.toolTraceBlock}>{trace.flow}</pre> : null}
       </div>
     )
@@ -152,94 +159,96 @@ function renderToolTraceFlow(trace: ToolTrace, canViewFlowDetails: boolean) {
   return (
     <div className={styles.toolTraceFlowShell}>
       <div className={styles.toolTraceLegend}>
-        {([
-          'user_input',
-          'assistant_tool_call',
-          'client_tool_result',
-          'assistant_final_response',
-        ] as const).map((stepType) => (
+        {(
+          [
+            'user_input',
+            'assistant_tool_call',
+            'client_tool_result',
+            'assistant_final_response',
+            'assistant_reasoning_complete',
+          ] as const
+        ).map((stepType) => (
           <span
             key={stepType}
             className={styles.toolTraceLegendItem}
             style={toolTraceTintStyle(stepType)}
           >
             <span className={styles.toolTraceLegendIcon}>{renderToolTraceStepIcon(stepType)}</span>
-            <span className={styles.toolTraceLegendLabel}>{formatToolTraceStepLabel(stepType)}</span>
+            <span className={styles.toolTraceLegendLabel}>
+              {formatToolTraceStepLabel(stepType)}
+            </span>
           </span>
         ))}
       </div>
 
       <div className={styles.toolTraceTimeline}>
-      {steps.map((step, index) => (
-        <div key={buildToolTraceStepKey(step, index)} className={styles.toolTraceStepRow}>
-          <div className={styles.toolTraceMarker}>
-            <span className={styles.toolTraceMarkerDot} style={toolTraceTintStyle(step.type)}>
-              {index + 1}
-            </span>
-            {index < steps.length - 1 ? <span className={styles.toolTraceMarkerLine} /> : null}
-          </div>
-
-          <article className={styles.toolTraceStepCard} style={toolTraceTintStyle(step.type)}>
-            <div className={styles.toolTraceHeader}>
-              <span className={styles.toolTraceRolePill} style={toolTraceTintStyle(step.type)}>
-                <span className={styles.toolTraceRoleIcon}>{renderToolTraceStepIcon(step.type)}</span>
-                {formatToolTraceStepLabel(step.type)}
+        {steps.map((step, index) => (
+          <div key={buildToolTraceStepKey(step, index)} className={styles.toolTraceStepRow}>
+            <div className={styles.toolTraceMarker}>
+              <span className={styles.toolTraceMarkerDot} style={toolTraceTintStyle(step.type)}>
+                {index + 1}
               </span>
-              {step.tool_name ? (
-                <span className={styles.signalPillCompact}>{step.tool_name}</span>
-              ) : null}
-              {formatToolTraceSource(step) ? (
-                <span className={styles.costSubtle}>Source: {formatToolTraceSource(step)}</span>
-              ) : null}
+              {index < steps.length - 1 ? <span className={styles.toolTraceMarkerLine} /> : null}
             </div>
 
-            <div className={styles.toolTraceTitleRow}>
-              <strong className={styles.toolTraceTitle}>{formatToolTraceHeadline(step)}</strong>
-              {step.type === 'client_tool_result' ? (
-                <span
-                  className={`${styles.toolTraceStatusBadge} ${
-                    isSuccessfulToolResult(step)
-                      ? styles.toolTraceStatusBadgeSuccess
-                      : styles.toolTraceStatusBadgeFailed
-                  }`}
-                >
-                  {isSuccessfulToolResult(step) ? 'Completed' : 'Failed'}
+            <article className={styles.toolTraceStepCard} style={toolTraceTintStyle(step.type)}>
+              <div className={styles.toolTraceHeader}>
+                <span className={styles.toolTraceRolePill} style={toolTraceTintStyle(step.type)}>
+                  <span className={styles.toolTraceRoleIcon}>
+                    {renderToolTraceStepIcon(step.type)}
+                  </span>
+                  {formatToolTraceStepLabel(step.type)}
+                </span>
+                {step.tool_name ? (
+                  <span className={styles.signalPillCompact}>{step.tool_name}</span>
+                ) : null}
+                {formatToolTraceSource(step) ? (
+                  <span className={styles.costSubtle}>Source: {formatToolTraceSource(step)}</span>
+                ) : null}
+              </div>
+
+              <div className={styles.toolTraceTitleRow}>
+                <strong className={styles.toolTraceTitle}>{formatToolTraceHeadline(step)}</strong>
+                {step.type === 'client_tool_result' ? (
+                  <span
+                    className={`${styles.toolTraceStatusBadge} ${
+                      isSuccessfulToolResult(step)
+                        ? styles.toolTraceStatusBadgeSuccess
+                        : styles.toolTraceStatusBadgeFailed
+                    }`}
+                  >
+                    {isSuccessfulToolResult(step) ? 'Completed' : 'Failed'}
+                  </span>
+                ) : null}
+              </div>
+
+              {step.tool_call_id ? (
+                <span className={styles.toolTraceMeta}>Call ID: {step.tool_call_id}</span>
+              ) : null}
+              {step.type === 'client_tool_result' && !isSuccessfulToolResult(step) ? (
+                <span className={styles.toolTraceMeta}>
+                  Null or empty tool result returned to the model
                 </span>
               ) : null}
-            </div>
-
-            {step.tool_call_id ? (
-              <span className={styles.toolTraceMeta}>Call ID: {step.tool_call_id}</span>
-            ) : null}
-            {step.type === 'client_tool_result' && !isSuccessfulToolResult(step) ? (
-              <span className={styles.toolTraceMeta}>
-                Null or empty tool result returned to the model
-              </span>
-            ) : null}
-            {canViewFlowDetails && step.arguments ? (
-              <pre className={styles.toolTraceBlock}>{formatTraceBlock(step.arguments)}</pre>
-            ) : null}
-            {canViewFlowDetails && step.text ? (
-              renderToolTraceContent(step)
-            ) : null}
-            {!canViewFlowDetails && step.content_redacted ? (
-              <span className={styles.toolTraceMeta}>Inputs and outputs are hidden for your role</span>
-            ) : null}
-          </article>
-        </div>
-      ))}
+              {canViewFlowDetails && step.arguments ? (
+                <pre className={styles.toolTraceBlock}>{formatTraceBlock(step.arguments)}</pre>
+              ) : null}
+              {canViewFlowDetails && step.text ? renderToolTraceContent(step) : null}
+              {!canViewFlowDetails && step.content_redacted ? (
+                <span className={styles.toolTraceMeta}>
+                  Inputs and outputs are hidden for your role
+                </span>
+              ) : null}
+            </article>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
 function buildToolTraceStepKey(step: ToolTraceStep, index: number) {
-  return [
-    step.type,
-    step.tool_call_id || '',
-    step.tool_name || '',
-    String(index),
-  ].join(':')
+  return [step.type, step.tool_call_id || '', step.tool_name || '', String(index)].join(':')
 }
 
 function formatToolTraceStepLabel(stepType: string) {
@@ -252,6 +261,8 @@ function formatToolTraceStepLabel(stepType: string) {
       return 'Tool Execute'
     case 'assistant_final_response':
       return 'LLM Answer'
+    case 'assistant_reasoning_complete':
+      return 'LLM Reasoning Complete'
     default:
       return stepType
   }
@@ -265,6 +276,8 @@ function formatToolTraceHeadline(step: ToolTraceStep) {
       return step.tool_name ? `Tool Execute (${step.tool_name})` : 'Tool Execute'
     case 'assistant_final_response':
       return 'LLM Answer'
+    case 'assistant_reasoning_complete':
+      return 'LLM Reasoning Complete'
     case 'user_input':
       return 'User Query'
     default:
@@ -373,6 +386,9 @@ function formatToolTraceStage(stage?: string, fallbackStepType?: string) {
     if (normalized === 'llm final response' || normalized === 'assistant_final_response') {
       return 'LLM Answer'
     }
+    if (normalized === 'llm reasoning complete' || normalized === 'assistant_reasoning_complete') {
+      return 'LLM Reasoning Complete'
+    }
     if (normalized === 'user query' || normalized === 'user_input') {
       return 'User Query'
     }
@@ -395,6 +411,7 @@ function formatToolTraceSource(step: ToolTraceStep) {
       return 'User'
     case 'assistant_tool_call':
     case 'assistant_final_response':
+    case 'assistant_reasoning_complete':
       return 'LLM'
     case 'client_tool_result':
       return 'Agent'
@@ -453,14 +470,26 @@ function renderToolTraceStepIcon(stepType: string) {
   switch (stepType) {
     case 'user_input':
       return (
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
           <path d="M10 10.5a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z" />
           <path d="M4 16c1.2-2.35 3.18-3.52 6-3.52 2.82 0 4.8 1.17 6 3.52" strokeLinecap="round" />
         </svg>
       )
     case 'assistant_tool_call':
       return (
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
           <path d="m7 6-3 4 3 4" strokeLinecap="round" strokeLinejoin="round" />
           <path d="m13 6 3 4-3 4" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M11 4 9 16" strokeLinecap="round" />
@@ -468,21 +497,43 @@ function renderToolTraceStepIcon(stepType: string) {
       )
     case 'client_tool_result':
       return (
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
           <path d="M12.5 4.5a3 3 0 0 1 3 3c0 .53-.14 1.02-.38 1.44l-5.68 5.68a2 2 0 0 1-2.83 0l-1.25-1.25a2 2 0 0 1 0-2.83l5.68-5.68c.42-.24.91-.36 1.46-.36Z" />
           <path d="m10.4 6.9 2.7 2.7" strokeLinecap="round" />
         </svg>
       )
     case 'assistant_final_response':
+    case 'assistant_reasoning_complete':
       return (
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-          <path d="M4.5 5.5h11a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 2v-2H4.5A1.5 1.5 0 0 1 3 13V7a1.5 1.5 0 0 1 1.5-1.5Z" strokeLinejoin="round" />
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
+          <path
+            d="M4.5 5.5h11a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 2v-2H4.5A1.5 1.5 0 0 1 3 13V7a1.5 1.5 0 0 1 1.5-1.5Z"
+            strokeLinejoin="round"
+          />
           <path d="M6.5 9h7M6.5 11.5h5" strokeLinecap="round" />
         </svg>
       )
     default:
       return (
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
           <circle cx="10" cy="10" r="5.5" />
         </svg>
       )

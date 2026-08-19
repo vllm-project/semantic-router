@@ -2,86 +2,134 @@
 
 from __future__ import annotations
 
+import base64
+import copy
 from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
+from router_calibration_probe import (
+    ACCEPTANCE_FIELDS,
+    DECISION_FIELDS,
+    EVALUATION_FIELDS,
+    PROBE_SCHEMA_VERSION,
+    ROUTING_ASSET_FIELDS,
+    TOP_LEVEL_FIELDS,
+    VARIANT_FIELDS,
+    Probe,
+    ProbeGeneratedText,
+    ProbeImageFixture,
+    ProbePadding,
+    ProbePlaygroundPolicy,
+    load_grouped_probes,
+    normalize_image_fixtures,
+    reject_unknown_fields,
+)
+from router_calibration_schema import validate_probe_manifest_schema
+from yaml.nodes import MappingNode, Node, SequenceNode
+from yaml.tokens import AliasToken, AnchorToken, TagToken
+
+__all__ = [
+    "DECISION_FIELDS",
+    "TOP_LEVEL_FIELDS",
+    "VARIANT_FIELDS",
+    "Probe",
+    "ProbeGeneratedText",
+    "ProbeImageFixture",
+    "ProbePadding",
+    "ProbePlaygroundPolicy",
+    "load_probe_manifest",
+    "report_safe_probe_manifest",
+]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-@dataclass
-class Probe:
-    decision_id: str
-    variant_id: str
-    probe_id: str
-    expected_decision: str
-    query: str | None = None
-    messages: tuple[dict[str, Any], ...] = ()
-    expected_alias: str | None = None
-    notes: str | None = None
-    tags: tuple[str, ...] = ()
-
-
 def load_probe_manifest(path: Path) -> tuple[dict[str, Any], list[Probe]]:
-    manifest = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    document = path.read_text(encoding="utf-8")
+    reject_yaml_indirection(document, path)
+    manifest = yaml.safe_load(document) or {}
+    if not isinstance(manifest, dict):
+        raise TypeError(f"{path} must contain a mapping")
+    validate_probe_manifest_schema(manifest, path)
+    reject_unknown_fields(manifest, TOP_LEVEL_FIELDS, str(path))
+    version = str(manifest.get("schema_version") or "").strip()
+    if version != PROBE_SCHEMA_VERSION:
+        raise ValueError(
+            f"{path} schema_version must be {PROBE_SCHEMA_VERSION!r}, got {version!r}"
+        )
+    if not str(manifest.get("name") or "").strip():
+        raise ValueError(f"{path} must declare a non-empty name")
+    _validate_manifest_settings(path, manifest)
+    image_fixtures = normalize_image_fixtures(manifest.get("fixtures"), path)
     raw_decisions = manifest.get("decisions")
     if isinstance(raw_decisions, list) and raw_decisions:
-        return manifest, _load_grouped_probes(raw_decisions)
+        return manifest, load_grouped_probes(raw_decisions, path, image_fixtures)
 
     raise ValueError(f"{path} must contain a non-empty 'decisions' list")
 
 
-def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
-    probes: list[Probe] = []
-    for index, item in enumerate(raw_decisions):
-        if not isinstance(item, dict):
-            raise ValueError(f"decision[{index}] must be a mapping")
-        decision_id = str(item.get("id") or item.get("expected_decision") or "").strip()
-        expected = str(item.get("expected_decision") or decision_id).strip()
-        expected_alias = str(item.get("expected_alias") or "").strip() or None
-        decision_notes = str(item.get("notes") or item.get("objective") or "").strip()
-        raw_variants = item.get("variants")
-        if not decision_id or not expected:
-            raise ValueError(
-                f"decision[{index}] must include non-empty id or expected_decision"
-            )
-        if not isinstance(raw_variants, list) or not raw_variants:
-            raise ValueError(
-                f"decision[{index}] must include a non-empty 'variants' list"
-            )
-        for variant_index, variant in enumerate(raw_variants):
-            if not isinstance(variant, dict):
-                raise ValueError(
-                    f"decision[{index}].variants[{variant_index}] must be a mapping"
-                )
-            variant_id = str(variant.get("id") or f"v{variant_index + 1}").strip()
-            query = str(variant.get("query") or "").strip()
-            messages = _normalize_messages(variant.get("messages"))
-            if not variant_id or (not query and not messages):
-                raise ValueError(
-                    f"decision[{index}].variants[{variant_index}] must include non-empty id and either query or messages"
-                )
-            probes.append(
-                Probe(
-                    decision_id=decision_id,
-                    variant_id=variant_id,
-                    probe_id=f"{decision_id}:{variant_id}",
-                    expected_decision=expected,
-                    query=query or None,
-                    messages=messages,
-                    expected_alias=expected_alias,
-                    notes=(
-                        str(variant.get("notes") or "").strip()
-                        or decision_notes
-                        or None
-                    ),
-                    tags=_normalize_tags(variant.get("tags")),
-                )
-            )
-    return probes
+def reject_yaml_indirection(document: str, path: Path) -> None:
+    """Reject YAML features that can hide or multiply untrusted probe data."""
+    for token in yaml.scan(document):
+        if isinstance(token, AnchorToken):
+            raise ValueError(f"{path} must not contain YAML anchors")
+        if isinstance(token, AliasToken):
+            raise ValueError(f"{path} must not contain YAML aliases")
+        if isinstance(token, TagToken):
+            raise ValueError(f"{path} must not contain explicit YAML tags")
+    root = yaml.compose(document)
+    if root is not None and _contains_yaml_merge(root):
+        raise ValueError(f"{path} must not contain YAML merge keys")
+
+
+def _contains_yaml_merge(node: Node) -> bool:
+    if isinstance(node, MappingNode):
+        for key, value in node.value:
+            if key.tag == "tag:yaml.org,2002:merge":
+                return True
+            if _contains_yaml_merge(key) or _contains_yaml_merge(value):
+                return True
+    elif isinstance(node, SequenceNode):
+        return any(_contains_yaml_merge(item) for item in node.value)
+    return False
+
+
+def report_safe_probe_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Keep fixture identity and integrity metadata while omitting binary payloads."""
+    safe_manifest = copy.deepcopy(manifest)
+    fixtures = safe_manifest.get("fixtures")
+    images = fixtures.get("images") if isinstance(fixtures, dict) else None
+    if not isinstance(images, dict):
+        return safe_manifest
+    for fixture in images.values():
+        if not isinstance(fixture, dict):
+            continue
+        data_base64 = fixture.pop("data_base64", "")
+        compact = "".join(str(data_base64).split())
+        fixture["bytes"] = len(base64.b64decode(compact, validate=True))
+    return safe_manifest
+
+
+def _validate_manifest_settings(path: Path, manifest: dict[str, Any]) -> None:
+    assets = manifest.get("routing_assets")
+    if not isinstance(assets, dict):
+        raise TypeError(f"{path} routing_assets must be a mapping")
+    reject_unknown_fields(assets, ROUTING_ASSET_FIELDS, f"{path} routing_assets")
+    for field in sorted(ROUTING_ASSET_FIELDS):
+        if not str(assets.get(field) or "").strip():
+            raise ValueError(f"{path} routing_assets.{field} is required")
+
+    evaluation = manifest.get("evaluation", {})
+    if not isinstance(evaluation, dict):
+        raise TypeError(f"{path} evaluation must be a mapping")
+    reject_unknown_fields(evaluation, EVALUATION_FIELDS, f"{path} evaluation")
+
+    acceptance = manifest.get("acceptance", {})
+    if not isinstance(acceptance, dict):
+        raise TypeError(f"{path} acceptance must be a mapping")
+    reject_unknown_fields(acceptance, ACCEPTANCE_FIELDS, f"{path} acceptance")
 
 
 def summarize_decision_results(
@@ -109,6 +157,9 @@ def summarize_decision_results(
             {
                 "decision_id": decision_id,
                 "expected_decision": variants[0]["expected_decision"],
+                "model": variants[0].get("model"),
+                "expected_recipe": variants[0].get("expected_recipe"),
+                "expected_algorithm": variants[0].get("expected_algorithm"),
                 "expected_alias": variants[0].get("expected_alias"),
                 "matched": matched,
                 "total": total,
@@ -124,9 +175,39 @@ def summarize_decision_results(
                         "variant_id": variant["variant_id"],
                         "matched": variant["matched"],
                         "actual_decision": variant["actual_decision"],
+                        "actual_recipe": variant.get("actual_recipe"),
+                        "actual_algorithm": variant.get("actual_algorithm"),
+                        "error": variant.get("error"),
                         "tags": variant.get("tags") or [],
                     }
                     for variant in variants
+                ],
+            }
+        )
+    return summaries
+
+
+def summarize_tag_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Summarize robustness dimensions encoded as stable manifest tags."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for result in results:
+        for tag in result.get("tags") or []:
+            grouped[str(tag)].append(result)
+
+    summaries: list[dict[str, Any]] = []
+    for tag in sorted(grouped):
+        variants = grouped[tag]
+        matched = sum(1 for variant in variants if variant["matched"])
+        total = len(variants)
+        summaries.append(
+            {
+                "tag": tag,
+                "matched": matched,
+                "total": total,
+                "pass_rate": round((matched / total) * 100, 1) if total else 0.0,
+                "passed": matched == total,
+                "failing_variants": [
+                    variant["id"] for variant in variants if not variant["matched"]
                 ],
             }
         )
@@ -166,24 +247,6 @@ def resolve_manifest_assets(
         "dsl",
     )
     return yaml_path, dsl_path
-
-
-def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:
-    if not isinstance(raw_tags, list):
-        return ()
-    normalized = [str(tag).strip() for tag in raw_tags if str(tag).strip()]
-    return tuple(normalized)
-
-
-def _normalize_messages(raw_messages: Any) -> tuple[dict[str, Any], ...]:
-    if not isinstance(raw_messages, list):
-        return ()
-    normalized: list[dict[str, Any]] = []
-    for index, item in enumerate(raw_messages):
-        if not isinstance(item, dict):
-            raise ValueError(f"messages[{index}] must be a mapping")
-        normalized.append(item)
-    return tuple(normalized)
 
 
 def _resolve_manifest_path(path_value: Any) -> Path | None:

@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -10,9 +12,6 @@ import (
 )
 
 var maintainedFullConfigAssets = []string{
-	"deploy/recipes/agentic-saars.yaml",
-	"deploy/recipes/balance.yaml",
-	"deploy/recipes/feedback/feedback-router.yaml",
 	"deploy/kubernetes/istio/config.yaml",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",
@@ -40,6 +39,16 @@ var maintainedFullConfigAssets = []string{
 	repoRel("bench", "hallucination", "config-7b.yaml"),
 }
 
+var maintainedRecipeFiles = []string{
+	"README.md",
+	"config.yaml",
+	"metadata.yaml",
+	"probes.yaml",
+	"recipe.dsl",
+}
+
+const builtInRecipeCatalogDirectory = "built-in"
+
 var maintainedEmbeddedConfigAssets = []string{
 	"deploy/kserve/configmap-router-config.yaml",
 	"deploy/kserve/configmap-router-config-simulator.yaml",
@@ -48,6 +57,7 @@ var maintainedEmbeddedConfigAssets = []string{
 
 var maintainedValuesConfigAssets = []string{
 	"deploy/helm/semantic-router/values.yaml",
+	"deploy/kubernetes/agentgateway/semantic-router-values/values.yaml",
 	"deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml",
 	"deploy/kubernetes/aibrix/semantic-router-values/values.yaml",
 	"deploy/kubernetes/dynamo/semantic-router-values/values.yaml",
@@ -61,6 +71,7 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "llm-d", "values.yaml"),
 	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
+	repoRel("e2e", "profiles", "multimodal-routing", "values.yaml"),
 	repoRel("e2e", "profiles", "production-stack", "values.yaml"),
 	repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml"),
 	repoRel("e2e", "profiles", "response-api-redis-cluster", "values.yaml"),
@@ -120,6 +131,64 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 	}
 }
 
+func TestMaintainedRecipeDirectoriesAreCompleteAndSymmetric(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..", "config", "recipes")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read recipe catalog: %v", err)
+	}
+
+	var actualDirectories []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if entry.Name() == builtInRecipeCatalogDirectory {
+				continue
+			}
+			actualDirectories = append(actualDirectories, entry.Name())
+			continue
+		}
+		if entry.Name() != "README.md" && entry.Name() != "CONFORMANCE.md" {
+			t.Errorf("recipe catalog root contains non-catalog file %q", entry.Name())
+		}
+	}
+	sort.Strings(actualDirectories)
+	if len(actualDirectories) == 0 {
+		t.Fatal("recipe catalog must contain at least one maintained recipe")
+	}
+
+	for _, name := range actualDirectories {
+		t.Run(name, func(t *testing.T) {
+			assertRecipeDirectoryContract(t, root, name)
+		})
+	}
+}
+
+func assertRecipeDirectoryContract(t *testing.T, root, name string) {
+	t.Helper()
+	directory := filepath.Join(root, name)
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("read %s: %v", directory, err)
+	}
+	actual := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if entry.Name() == ".vllm-sr" {
+				continue
+			}
+			t.Fatalf("%s contains unexpected nested directory %q", directory, entry.Name())
+		}
+		actual = append(actual, entry.Name())
+	}
+	sort.Strings(actual)
+	if !reflect.DeepEqual(actual, maintainedRecipeFiles) {
+		t.Fatalf("%s files = %v, want exactly %v", directory, actual, maintainedRecipeFiles)
+	}
+
+	configRel := filepath.ToSlash(filepath.Join("config", "recipes", name, "config.yaml"))
+	validateMaintainedConfigAsset(t, configRel, readMaintainedConfigAsset(t, configRel))
+}
+
 func readMaintainedConfigAsset(t *testing.T, rel string) []byte {
 	t.Helper()
 	return mustReadRepoFile(t, rel)
@@ -164,9 +233,62 @@ func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {
 	t.Helper()
 	raw := decodeYAMLMap(t, data, rel)
 	assertNoLegacySteadyStateKeys(t, rel, raw)
+	assertNoRemovedDomainPolicyKeys(t, rel, raw)
 	if _, err := ParseYAMLBytes(data); err != nil {
 		t.Fatalf("%s no longer parses as a maintained canonical config asset: %v", rel, err)
 	}
+}
+
+// removedDomainPolicyKeys are per-domain policy keys from the pre-plugin config
+// schema. #681 moved these behaviours onto decision plugins and reduced
+// routing.signals.domains to metadata plus model scores, so the loader has
+// ignored them ever since. A shipped asset that still sets one advertises a
+// knob the router does not have.
+var removedDomainPolicyKeys = []string{
+	"system_prompt_enabled",
+	"system_prompt_mode",
+	"semantic_cache_enabled",
+	"semantic_cache_similarity_threshold",
+	"jailbreak_enabled",
+	"jailbreak_threshold",
+	"pii_enabled",
+	"pii_threshold",
+}
+
+func assertNoRemovedDomainPolicyKeys(t *testing.T, rel string, raw map[string]interface{}) {
+	t.Helper()
+	for _, domain := range assetDomainEntries(raw) {
+		name, _ := domain["name"].(string)
+		for _, key := range removedDomainPolicyKeys {
+			if _, ok := domain[key]; ok {
+				t.Errorf("%s sets removed per-domain policy key %q on domain %q; the router ignores it, configure the matching decision plugin instead", rel, key, name)
+			}
+		}
+	}
+}
+
+// assetDomainEntries returns routing.signals.domains, or nothing when the asset
+// declares no domain signal.
+func assetDomainEntries(raw map[string]interface{}) []map[string]interface{} {
+	routing, ok := raw["routing"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	signals, ok := routing["signals"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	domains, ok := signals["domains"].([]interface{})
+	if !ok {
+		return nil
+	}
+	entries := make([]map[string]interface{}, 0, len(domains))
+	for _, domain := range domains {
+		if typed, ok := domain.(map[string]interface{}); ok {
+			entries = append(entries, typed)
+		}
+	}
+	return entries
 }
 
 func assertNoLegacySteadyStateKeys(t *testing.T, rel string, raw map[string]interface{}) {

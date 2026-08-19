@@ -56,7 +56,7 @@ WORKDIR /app
 ENV GOPROXY=https://proxy.golang.org,direct
 
 # Accept build arguments for target architecture
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG TARGETOS=linux
 ARG DASHBOARD_VERSION
 
@@ -86,6 +86,7 @@ COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 
 # Copy go.mod and go.sum first for better caching
@@ -129,6 +130,7 @@ COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-back
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
+COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/training/model_eval/ /app/src/training/model_eval/
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
@@ -138,15 +140,28 @@ COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.j
 COPY dashboard/backend/skillpacks/ /app/skills/
 # Copy entrypoint script
 COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
+COPY dashboard/backend/entrypoint_permissions.py /app/entrypoint_permissions.py
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --index-url "${TORCH_CPU_INDEX_URL}" "torch==${TORCH_CPU_VERSION}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt && \
-    chmod +x /app/entrypoint.sh /app/start-dashboard.sh
+    chmod +x /app/entrypoint.sh /app/entrypoint_permissions.py /app/start-dashboard.sh
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
-    chown -R nonroot:nonroot /app
+    install -d -o nonroot -g root -m 0770 /app/data && \
+    chown root:root \
+      /app/entrypoint.sh \
+      /app/entrypoint_permissions.py \
+      /app/start-dashboard.sh \
+      /app/dashboard-backend \
+      /usr/local/bin/dashboard-backend && \
+    chmod 0755 \
+      /app/entrypoint.sh \
+      /app/entrypoint_permissions.py \
+      /app/start-dashboard.sh \
+      /app/dashboard-backend \
+      /usr/local/bin/dashboard-backend
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
 ENTRYPOINT ["/app/entrypoint.sh"]

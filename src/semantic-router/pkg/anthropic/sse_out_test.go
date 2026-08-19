@@ -553,3 +553,47 @@ func TestEmitAnthropicSSEChunk_DeterministicToolClose(t *testing.T) {
 		assert.Less(t, firstStopInSection, secondStopInSection, "tool block stops must appear in block-index ascending order")
 	}
 }
+
+// TestEmitAnthropicSSEChunk_UsageOnEveryContentChunk covers backends
+// (observed: Baseten Model APIs) that attach cumulative usage to every
+// content delta, not just the terminal chunk. Before the fix, the first
+// content chunk satisfied chunkHasUsage and was treated as terminal,
+// truncating the response to a single token. Only finish_reason (or a
+// usage-only trailer with no choices) should terminate a stream.
+func TestEmitAnthropicSSEChunk_UsageOnEveryContentChunk(t *testing.T) {
+	state := NewStreamState()
+
+	// Chunk 1: content + usage, no finish_reason — must NOT terminate.
+	chunk1 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"1, "},"finish_reason":null}],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}`,
+	)
+	out1, done1, err := EmitAnthropicSSEChunk(chunk1, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.False(t, done1, "content chunk with usage must NOT end the stream")
+	assert.Equal(t, 0, strings.Count(string(out1), "event: message_stop"), "no message_stop on non-terminal content chunk")
+	assert.Contains(t, string(out1), `"text":"1, "`)
+
+	// Chunk 2: more content + usage, still no finish_reason.
+	chunk2 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"content":"2, 3"},"finish_reason":null}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}`,
+	)
+	out2, done2, err := EmitAnthropicSSEChunk(chunk2, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.False(t, done2, "second content chunk with usage must NOT end the stream")
+	assert.Contains(t, string(out2), `"text":"2, 3"`)
+
+	// Chunk 3: terminal — finish_reason present (usage may also be present).
+	chunk3 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}`,
+	)
+	out3, done3, err := EmitAnthropicSSEChunk(chunk3, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.True(t, done3, "finish_reason chunk must end the stream")
+	assert.Equal(t, 1, strings.Count(string(out3), "event: message_stop"), "exactly one message_stop on terminal chunk")
+
+	// All three content chunks reached the client, no truncation.
+	combined := string(out1) + string(out2) + string(out3)
+	assert.Contains(t, combined, `"text":"1, "`)
+	assert.Contains(t, combined, `"text":"2, 3"`)
+	assert.Equal(t, 1, strings.Count(combined, "event: message_stop"))
+}

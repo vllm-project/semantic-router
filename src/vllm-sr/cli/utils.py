@@ -2,22 +2,22 @@
 
 import logging
 import os
-import sys
 import time
 from http import HTTPStatus
+from importlib import import_module
 
-import requests
 import yaml
 
 from cli.consts import DEFAULT_ENVOY_PORT
+from cli.terminal import TerminalLogHandler
 
 
 def get_logger(name):
-    """Get a configured logger."""
+    """Get a logger that follows the shared CLI terminal contract."""
     logger = logging.getLogger(name)
     if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        handler = TerminalLogHandler()
+        formatter = logging.Formatter("%(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
@@ -72,6 +72,7 @@ def health_check_endpoint(url, timeout=5):
         True if healthy, False otherwise
     """
     try:
+        requests = import_module("requests")
         response = requests.get(url, timeout=timeout)
         return response.status_code == HTTPStatus.OK
     except Exception:

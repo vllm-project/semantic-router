@@ -31,6 +31,7 @@ extern bool is_similarity_model_initialized();
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
 extern bool init_classifier(const char* model_id, int num_classes, bool use_cpu);
+extern bool init_generic_classifier(const char* model_id, int num_classes, bool use_cpu);
 
 extern bool init_pii_classifier(const char* model_id, int num_classes, bool use_cpu);
 
@@ -167,12 +168,14 @@ typedef struct {
 typedef struct {
     int class;
     float confidence;
+    char* label;
 } ClassificationResult;
 
 // Classification result with full probability distribution structure
 typedef struct {
-    int class;
     float confidence;
+    int class;
+    char* label;
     float* probabilities;
     int num_classes;
 } ClassificationResultWithProbs;
@@ -266,12 +269,15 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
+extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_modernbert_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
@@ -455,8 +461,10 @@ var (
 	initOnce                              sync.Once
 	initErr                               error
 	modelInitialized                      bool
-	classifierInitOnce                    sync.Once
-	classifierInitErr                     error
+	classifierInitMu                      sync.Mutex
+	classifierInitialized                 bool
+	genericClassifierInitMu               sync.Mutex
+	genericClassifierInitialized          bool
 	piiClassifierInitOnce                 sync.Once
 	piiClassifierInitErr                  error
 	jailbreakClassifierInitOnce           sync.Once
@@ -1925,30 +1933,61 @@ func IsModelInitialized() (rustState bool, goState bool) {
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
 func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
-	var err error
-	classifierInitOnce.Do(func() {
-		if modelPath == "" {
-			// Default to BERT base model if path is empty
-			modelPath = "bert-base-uncased"
-		}
+	classifierInitMu.Lock()
+	defer classifierInitMu.Unlock()
+	if classifierInitialized {
+		return nil
+	}
+	if modelPath == "" {
+		modelPath = "bert-base-uncased"
+	}
+	if numClasses < 2 {
+		return fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
+	}
 
-		if numClasses < 2 {
-			err = fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
-			return
-		}
+	log.Printf("Initializing classifier model: %s", modelPath)
+	cModelID := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelID))
 
-		log.Printf("Initializing classifier model: %s", modelPath)
+	if !bool(C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))) {
+		return fmt.Errorf("failed to initialize classifier model")
+	}
+	classifierInitialized = true
+	return nil
+}
 
-		// Initialize classifier directly using CGO
-		cModelID := C.CString(modelPath)
-		defer C.free(unsafe.Pointer(cModelID))
-
-		success := C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))
-		if !bool(success) {
-			err = fmt.Errorf("failed to initialize classifier model")
-		}
-	})
-	return err
+// InitGenericClassifier initializes the classifier consumed by
+// ClassifyTextWithProbabilities.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	genericClassifierInitMu.Lock()
+	defer genericClassifierInitMu.Unlock()
+	if genericClassifierInitialized {
+		return nil
+	}
+	if modelPath == "" {
+		return fmt.Errorf("generic classifier model path cannot be empty")
+	}
+	if numClasses < 2 {
+		return fmt.Errorf(
+			"number of classes must be at least 2, got %d",
+			numClasses,
+		)
+	}
+	cModelID := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelID))
+	if !bool(C.init_generic_classifier(
+		cModelID,
+		C.int(numClasses),
+		C.bool(useCPU),
+	)) {
+		return fmt.Errorf("failed to initialize generic classifier model")
+	}
+	genericClassifierInitialized = true
+	return nil
 }
 
 // InitPIIClassifier initializes the BERT PII classifier with the specified model path and number of classes
@@ -2085,6 +2124,40 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyJailbreakTextWithProbs classifies text for jailbreak detection (LoRA
+// auto-detection, falling back to Traditional BERT) and returns the predicted
+// class, confidence, and full probability distribution. This allows callers to
+// read the probability of the jailbreak class itself rather than the
+// confidence of whichever class wins argmax.
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 
@@ -2429,6 +2502,39 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyMmBert32KJailbreakWithProbs classifies text with the mmBERT-32K jailbreak
+// detector and returns the predicted class, confidence, and full probability
+// distribution. This allows callers to read the probability of the jailbreak class
+// itself rather than the confidence of whichever class wins argmax.
+func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_jailbreak_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak with probabilities using mmBERT-32K")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // InitMmBert32KFeedbackClassifier initializes the mmBERT-32K feedback detector
 // This model detects user satisfaction from follow-up messages.
 // Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
@@ -2699,6 +2805,10 @@ const (
 	NLINeutral NLILabel = 1
 	// NLIContradiction means the premise contradicts the hypothesis
 	NLIContradiction NLILabel = 2
+	// NLIUnknown means no NLI judgment is available (e.g. a non-NLI backend such
+	// as the endpoint hallucination detector). It is distinct from NLIEntailment
+	// (0) so consumers reading the numeric label do not misread it as entailment.
+	NLIUnknown NLILabel = 3
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
@@ -2712,6 +2822,8 @@ func (l NLILabel) String() string {
 		return "NEUTRAL"
 	case NLIContradiction:
 		return "CONTRADICTION"
+	case NLIUnknown:
+		return "UNKNOWN"
 	default:
 		return "ERROR"
 	}
@@ -3058,6 +3170,40 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyModernBertJailbreakTextWithProbs classifies text for jailbreak
+// detection using ModernBERT and returns the predicted class, confidence, and
+// full probability distribution. This allows callers to read the probability
+// of the jailbreak class itself rather than the confidence of whichever class
+// wins argmax.
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_modernbert_jailbreak_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify jailbreak text with probabilities using ModernBERT")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

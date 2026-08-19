@@ -1,85 +1,50 @@
-# nlp-binding
+# Keyword-classifier native binding
 
-Go bindings for BM25 and N-gram keyword classification, backed by Rust
-implementations via C FFI.
+`nlp-binding` exposes BM25 and N-gram keyword classifiers to Go through a Rust
+CGo library. The router uses them for keyword signals that need ranked or fuzzy
+matching rather than literal regular expressions.
 
-## Rust Crates Used
+| Method | Use it for |
+| --- | --- |
+| BM25 | Ranking text against weighted keyword rules. |
+| N-gram | Tolerating small spelling differences in short terms. |
 
-| Crate | Version | Purpose |
-|-------|---------|---------|
-| [bm25](https://crates.io/crates/bm25) | 2.3 | BM25 (Okapi) keyword scoring and search |
-| [ngrammatic](https://crates.io/crates/ngrammatic) | 0.7 | N-gram fuzzy string matching |
+## Build and test
 
-## Prerequisites
-
-- Go 1.24.1+
-- Rust 1.90.0+ with cargo
-
-## Build the Native Library
+The module requires Go 1.24.1 or newer, Rust, Cargo, CGo, and a C compiler.
 
 ```bash
 cd nlp-binding
 cargo build --release
+cargo test
+
+export LD_LIBRARY_PATH="$PWD/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+go test ./...
 ```
 
-## Run the Go Tests
+On macOS, set `DYLD_LIBRARY_PATH` instead. From the repository root,
+`make test-binding-minimal` runs the maintained cross-binding check.
 
-```bash
-# Linux:
-export LD_LIBRARY_PATH=$(pwd)/target/release:$LD_LIBRARY_PATH
-
-# macOS:
-export DYLD_LIBRARY_PATH=$(pwd)/target/release:$DYLD_LIBRARY_PATH
-
-go test -v
-```
-
-## Usage
-
-### BM25 Classifier
+## Use from Go
 
 ```go
-import nlp "github.com/vllm-project/semantic-router/nlp-binding"
+classifier := nlp.NewBM25Classifier()
+defer classifier.Free()
 
-c := nlp.NewBM25Classifier()
-defer c.Free()
-
-c.AddRule("urgent", "OR", []string{"urgent", "immediate", "emergency"}, 0.1, false)
-
-result := c.Classify("This is an urgent request")
-// result.Matched == true
-// result.RuleName == "urgent"
-// result.MatchedKeywords == ["urgent"]
-// result.Scores == [1.20...]
+classifier.AddRule(
+    "urgent",
+    "OR",
+    []string{"urgent", "immediate", "emergency"},
+    0.1,
+    false,
+)
+result := classifier.Classify("This is an urgent request")
 ```
 
-### N-gram Classifier
+Use `NewNgramClassifier` and provide the N-gram size when fuzzy matching is
+required. Rule methods, thresholds, and case handling are part of the router
+configuration contract; see the
+[keyword signal guide](../website/docs/tutorials/signal/heuristic/keyword.md) for
+configuration examples.
 
-```go
-c := nlp.NewNgramClassifier()
-defer c.Free()
-
-c.AddRule("urgent", "OR", []string{"urgent", "immediate", "emergency"}, 0.4, false, 3)
-
-// Exact match
-result := c.Classify("This is urgent")
-
-// Fuzzy match (typos!)
-result = c.Classify("This is urgnet")  // matches "urgent" with ~0.56 similarity
-```
-
-## Architecture
-
-```
-YAML keyword_rules (method: "bm25" | "ngram")
-    ↓
-config.KeywordRule
-    ↓
-classification.KeywordClassifier (dispatches by method)
-    ↓
-nlp-binding Go API (BM25Classifier / NgramClassifier)
-    ↓
-C FFI (#cgo LDFLAGS → libnlp_binding.so)
-    ↓
-Rust crate (bm25 + ngrammatic)
-```
+[`nlp_binding.go`](nlp_binding.go) is the source of truth for the public Go API.

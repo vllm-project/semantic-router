@@ -1,794 +1,199 @@
-# E2E Test Framework
+# End-to-end test framework
 
-A comprehensive end-to-end testing framework for Semantic Router with support for multiple deployment profiles.
+The Go E2E runner builds the checked-out Router image, creates or reuses a Kind
+cluster, deploys one named profile, runs that profile's registered test cases,
+and writes `test-report.json` and `test-report.md` in the current directory.
 
-## Architecture
+A profile owns environment setup and a list of tests. A test case owns one
+externally visible contract and can be reused by several profiles.
 
-The framework follows a **separation of concerns** design:
-
-- **Profiles**: Define deployment environments and configurations
-- **Test Cases**: Reusable test logic that can be shared across profiles
-- **Framework**: Core infrastructure for test execution and reporting
-- **Stacks**: Reusable deployment modules for shared semantic-router/envoy/ai-gateway topologies
-- **Fixtures**: Typed service sessions and API clients for common contract families
-
-### Supported Profiles
-
-Standard CI-backed profiles:
-
-- **kubernetes**: Baseline router contract for routing, safety, cache, and decision behavior
-- **aibrix**: AIBrix control-plane and gateway coverage plus a minimal router smoke path
-- **routing-strategies**: Keyword, entropy, and fallback routing behavior
-- **dynamic-config**: Kubernetes CRD-based routing and embedding-signal behavior
-- **multimodal-routing**: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model
-- **remote-embedding**: OpenAI-compatible remote embedding provider startup and deterministic text embedding-signal routing
-- **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
-- **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
-- **agentgateway**: agentgateway gateway controller routing and extproc policy enforcement behavior
-- **production-stack**: HA, load-balancing, failover, and throughput behavior
-- **response-api**: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check
-- **ml-model-selection**: ML-based model-selection behavior
-- **multi-endpoint**: Environment-specific routing and safety policy behavior
-- **authz-rbac**: Authz-driven routing and per-user rate limiting
-- **forward-auth**: Per-backend `forward_authorization_header` passthrough and the internal-leg trust boundary
-- **streaming**: Streamed request-body and streaming-cache behavior
-- **anthropic-shim**: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle, stop-reason mapping, and request-side field preservation
-- **dashboard**: Dashboard API surface — health, status, config read, deploy preview, config versions, and input validation
-
-Manual-only profiles:
-
-- **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage for direct backend debugging
-- **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage for direct backend debugging
-- **router-replay**: Router Replay restart-recovery with Postgres backend, validating that replay records survive pod restarts
-- **vectorstore-registry**: Vector Store Registry restart-recovery with Postgres metadata backend, validating that store and file metadata survive pod restarts
-- **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
-- **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
-
-### Coverage Ownership Matrix
-
-| Profile | Shared baseline | Unique contract |
-|---------|------------------|-----------------|
-| `kubernetes` | Full router contract | Baseline ownership for generic router behavior |
-| `aibrix` | `chat-completions-request` | AIBrix control-plane and gateway health |
-| `routing-strategies` | none | Routing-strategy-specific behavior |
-| `dynamic-config` | `chat-completions-request` | CRD and embedding-signal routing |
-| `multimodal-routing` | `chat-completions-request` | Image-modality embedding-signal routing |
-| `remote-embedding` | none | Remote provider health, authentication, dimension, and text embedding-signal routing |
-| `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
-| `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
-| `agentgateway` | `chat-completions-request` | agentgateway gateway controller and extproc behavior |
-| `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |
-| `response-api` | none | Responses API behavior across memory, Redis, and Redis Cluster backends |
-| `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |
-| `multi-endpoint` | `chat-completions-request` | Environment-specific safety policies |
-| `authz-rbac` | `chat-completions-request` | Authz and rate-limiting behavior |
-| `forward-auth` | `forward-authorization` | Forward-auth passthrough, per-backend enforcement, spoofed-header rejection |
-| `streaming` | none | Streaming request-body and SSE cache behavior |
-| `anthropic-shim` | none | Outbound Anthropic translation cell — cache, stop-reason, and request-side field preservation |
-| `dashboard` | none | Dashboard HTTP API contract |
-| `dynamo` | none | GPU and batching behavior |
-| `rag-hybrid-search` | none | RAG vector-store and hybrid-search behavior |
-
-## Directory Structure
-
-```
-e2e/
-├── cmd/
-│   └── e2e/              # Main test runner
-├── pkg/
-│   ├── framework/        # Core test framework
-│   ├── fixtures/         # Typed service sessions and API clients
-│   ├── cluster/          # Kind cluster management
-│   ├── docker/           # Docker image operations
-│   ├── helm/             # Helm deployment utilities
-│   ├── helpers/          # Kubernetes helper functions
-│   ├── stacks/           # Reusable deployment stack modules
-│   ├── testcases/        # Test case registry
-│   └── testmatrix/       # Shared testcase ownership groups
-├── testcases/            # Reusable test cases (shared across profiles)
-│   ├── testdata/         # Test data files
-│   ├── common.go         # Common helper functions
-│   ├── chat_completions_request.go
-│   ├── domain_classify.go
-│   ├── cache.go
-│   ├── pii_detection.go
-│   ├── jailbreak_detection.go
-│   ├── decision_priority.go           # Signal-decision: Priority selection
-│   ├── plugin_chain_execution.go      # Signal-decision: Plugin chains
-│   ├── rule_condition_logic.go        # Signal-decision: AND/OR operators
-│   ├── decision_fallback.go           # Signal-decision: Fallback behavior
-│   ├── keyword_routing.go             # Signal-decision: Keyword matching
-│   ├── plugin_config_variations.go    # Signal-decision: Plugin configs
-│   └── embedding_signal_routing.go    # Signal-decision: Embedding signals
-├── profiles/
-│   ├── ai-gateway/       # Kubernetes baseline profile implementation
-│   │   └── profile.go    # Profile definition and environment setup
-│   ├── aibrix/           # AIBrix test profile
-│   │   └── profile.go
-│   └── dynamic-config/   # Dynamic CRD-based configuration profile
-│       ├── profile.go
-│       └── crds/         # IntelligentRoute and IntelligentPool CRDs
-│           ├── intelligentroute.yaml
-│           └── intelligentpool.yaml
-└── README.md
+```text
+e2e/cmd/e2e             command-line entry point
+e2e/pkg/framework       cluster, profile lifecycle, execution, and reports
+e2e/pkg/testcases       reusable test implementations and registry
+e2e/profiles            deployment-specific profile implementations
+e2e/config              focused Router configs for profiles and smoke tests
 ```
 
-## Available Test Cases
+The scripts under [`testing/`](testing/) are older or specialized manual
+utilities. New Kubernetes E2E coverage belongs in the Go runner unless the test
+has a documented reason to remain a separate integration suite.
 
-The framework includes the following test cases (all in `e2e/testcases/`):
+## Requirements
 
-### Basic Functionality Tests
+- Docker;
+- Kind and `kubectl`;
+- Helm;
+- Go matching `e2e/go.mod`;
+- enough local CPU, memory, and disk for the selected profile;
+- credentials or accelerators declared by that profile.
 
-| Test Case | Description | Metrics |
-|-----------|-------------|---------|
-| `chat-completions-request` | Basic chat completions API test | Response validation |
-| `chat-completions-stress-request` | Sequential stress test with 1000 requests | Success rate, avg duration |
-| `chat-completions-progressive-stress` | Progressive QPS stress test (10/20/50/100 QPS) | Per-stage success rate, latency stats |
+The default run creates and deletes a Kind cluster named
+`semantic-router-e2e`. Do not point `E2E_USE_EXISTING_CLUSTER=true` at a shared
+or production cluster.
 
-### Classification and Feature Tests
+## Run a profile
 
-| Test Case | Description | Metrics |
-|-----------|-------------|---------|
-| `domain-classify` | Domain classification accuracy | 65 cases, accuracy rate |
-| `semantic-cache` | Semantic cache hit rate | 5 groups, cache hit rate |
-| `pii-detection` | PII detection and blocking | 10 PII types, detection rate, block rate |
-| `jailbreak-detection` | Jailbreak attack detection | 10 attack types, detection rate, block rate |
-
-### Response API Tests
-
-| Test Case | Description | Metrics |
-|-----------|-------------|---------|
-| `response-api-create` | POST /v1/responses - Create a new response | Response ID validation, status check |
-| `response-api-get` | GET /v1/responses/{id} - Retrieve a response | Response retrieval, ID matching |
-| `response-api-delete` | DELETE /v1/responses/{id} - Delete a response | Deletion confirmation, 404 verification |
-| `response-api-input-items` | GET /v1/responses/{id}/input_items - List input items | Input items list, pagination |
-| `response-api-streaming-sse` | POST /v1/responses with `stream:true` | Responses API SSE event shape, no Chat Completions SSE passthrough |
-| `response-api-conversation-chaining` | Conversation chaining with previous_response_id (3-turn chain) | History preservation, instruction inheritance |
-| `response-api-error-missing-input` | Error handling - Invalid request format (missing input field) | 400 error, error message validation |
-| `response-api-error-nonexistent-previous-response-id` | Error handling - Non-existent previous_response_id | Graceful degradation or 404 error |
-| `response-api-error-nonexistent-response-id-get` | Error handling - Non-existent response ID for GET | 404 error response |
-| `response-api-error-nonexistent-response-id-delete` | Error handling - Non-existent response ID for DELETE | 404 error response |
-| `response-api-error-backend-passthrough` | Error handling - Backend error passthrough | Error format validation, passthrough behavior |
-
-### Signal-Decision Engine Tests
-
-| Test Case | Description | Metrics |
-|-----------|-------------|---------|
-| `decision-priority-selection` | Decision priority selection with multiple matches | 4 cases, priority validation (indirect) |
-| `plugin-chain-execution` | Plugin execution order (PII → Cache → System Prompt) | 4 cases, chain validation, blocking behavior |
-| `rule-condition-logic` | AND/OR operators and keyword matching | 6 cases, operator validation |
-| `decision-fallback-behavior` | Fallback to default decision when no match | 5 cases, fallback validation |
-| `keyword-routing` | Keyword-based routing decisions | 6 cases, keyword matching (case-insensitive) |
-| `plugin-config-variations` | Plugin configuration variations (PII allowlist, cache thresholds) | 6 cases, config validation |
-| `embedding-signal-routing` | EmbeddingSignal CRD routing with semantic similarity | 31 cases, PII/security/technical/domain routing accuracy |
-| `remote-embedding-routing` | OpenAI-compatible provider startup and text embedding-signal routing | Provider health plus 2/2 exact decision matches |
-
-**Signal-Decision Engine Features Tested:**
-
-- ✅ Decision priority selection (priority 15 > 10) - validated by checking which decision wins when multiple match
-- ✅ Plugin chain execution order and blocking
-- ✅ Rule condition logic (AND/OR operators)
-- ✅ Keyword-based routing (case-insensitive)
-- ✅ Decision fallback behavior
-- ✅ Per-decision plugin configurations
-- ✅ PII allowlist handling
-- ✅ Per-decision cache thresholds (0.75, 0.92, 0.95)
-- ✅ Embedding signal routing (semantic similarity-based routing via IntelligentRoute CRD)
-- ✅ Remote OpenAI-compatible provider authentication, startup health, dimension validation, and deterministic text routing
-
-All test cases:
-
-- Use model name `"MoM"` to trigger decision engine
-- Automatically clean up port forwarding
-- Generate detailed reports with statistics
-- Support verbose logging
-
-## Quick Start
-
-### Install dependencies (optional)
-
-```bash
-make e2e-deps
-```
-
-### Run all tests with default profile (kubernetes)
+From the repository root:
 
 ```bash
 make e2e-test
 ```
 
-### Run workflow-driven integration suites
+The default profile is `envoy-ai-gateway`, which owns the broad Router contract.
+Select another registered profile explicitly:
 
 ```bash
-make vllm-sr-test-integration
-make memory-test-integration
-make e2e-test-response-api-suite
+make e2e-test E2E_PROFILE=dashboard
+make e2e-test E2E_PROFILE=routing-strategies
 ```
 
-### Run specific profile
+List the runner's current profile names and flags from the built binary:
 
 ```bash
-make e2e-test E2E_PROFILE=kubernetes
-make e2e-test E2E_PROFILE=production-stack
+make build-e2e
+./bin/e2e -help
 ```
 
-### Run specific test cases
+[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml)
+records CI ownership, selection mode, and path triggers. Profile code remains
+the source of truth for deployment behavior and its exact test list.
+
+## Run selected test cases
 
 ```bash
-# Run only specific test cases using make
-make e2e-test-specific E2E_TESTS="chat-completions-progressive-stress"
-
-# Run multiple specific test cases using make
-make e2e-test-specific E2E_TESTS="chat-completions-request,chat-completions-progressive-stress"
-
-# Or run directly with the binary
-./bin/e2e -profile kubernetes -tests chat-completions-progressive-stress -verbose
-
-# Run multiple specific test cases with the binary
-./bin/e2e -profile kubernetes -tests "chat-completions-request,chat-completions-progressive-stress"
+make e2e-test-specific \
+  E2E_PROFILE=envoy-ai-gateway \
+  E2E_TESTS='chat-completions-request,decision-fallback-behavior'
 ```
 
-### Run with custom options
+Names must be registered under `e2e/testcases`. A test can be runnable by name
+without being part of every profile's default contract.
+
+## Keep an environment for debugging
 
 ```bash
-# Keep cluster and deployed profile after test
-make e2e-test E2E_KEEP_CLUSTER=true
-
-# Use existing cluster
-make e2e-test E2E_USE_EXISTING_CLUSTER=true
-
-# Disable verbose output
-make e2e-test E2E_VERBOSE=false
-
-# Run tests in parallel
-make e2e-test E2E_PARALLEL=true
-
-# Combine multiple options
-make e2e-test E2E_PROFILE=kubernetes E2E_KEEP_CLUSTER=true E2E_VERBOSE=true
+make e2e-test-debug E2E_PROFILE=envoy-ai-gateway
 ```
 
-### Debug mode
+Or split setup from repeated test runs:
 
 ```bash
-# Run tests with debug mode (keeps cluster, deployed profile, and enables verbose logging)
-make e2e-test-debug
-```
-
-### Advanced Workflows
-
-#### Setup environment once, run tests multiple times
-
-This is useful for development and debugging:
-
-```bash
-# Step 1: Setup environment only (no tests)
-make e2e-setup
-
-# Step 2: Run all tests (skip setup)
-make e2e-test-only
-
-# Step 3: Run specific tests (skip setup)
-make e2e-test-only E2E_TESTS="chat-completions-request"
-
-# Step 4: Make code changes and re-run tests
-make e2e-test-only E2E_TESTS="domain-classify"
-
-# Step 5: Clean up when done
+make e2e-setup E2E_PROFILE=envoy-ai-gateway
+make e2e-test-only E2E_PROFILE=envoy-ai-gateway
+make e2e-test-only \
+  E2E_PROFILE=envoy-ai-gateway \
+  E2E_TESTS='chat-completions-request'
 make e2e-cleanup
 ```
 
-#### Using binary directly
+Use the same `E2E_CLUSTER_NAME` and profile for each command. `e2e-test-only`
+assumes the expected releases, values, images, and Services are already in the
+cluster; it does not reconcile drift first.
+
+## Runner options
+
+| Make variable | Default | Effect |
+| --- | --- | --- |
+| `E2E_PROFILE` | `envoy-ai-gateway` | Registered deployment profile. |
+| `E2E_CLUSTER_NAME` | `semantic-router-e2e` | Kind cluster name. |
+| `E2E_IMAGE_TAG` | `e2e-test` | Tag used for locally built images. |
+| `E2E_KEEP_CLUSTER` | `false` | Preserve the cluster after the run. |
+| `E2E_USE_EXISTING_CLUSTER` | `false` | Skip Kind creation and use current access. |
+| `E2E_TESTS` | empty | Comma-separated test names; empty uses the profile list. |
+| `E2E_PARALLEL` | `false` | Run selected test cases concurrently. |
+| `E2E_VERBOSE` | `true` | Print lifecycle and test details. |
+| `E2E_SETUP_ONLY` | `false` | Deploy the profile without tests. |
+| `E2E_SKIP_SETUP` | `false` | Run against an already deployed profile. |
+| `E2E_USE_WORKSPACE_MODELS` | `false` | Mount the workspace `models/` directory into a new Kind cluster. |
+
+Parallel tests must not mutate the same runtime state. Leave parallel mode off
+until the selected cases are known to be isolated.
+
+## Profile selection
+
+### Supported Profiles
+
+- **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **dashboard**: dashboard API, validation, and security-policy contracts.
+- **aibrix**: AIBrix gateway and control-plane integration.
+- **routing-strategies**: keyword, entropy, and fallback routing.
+- **dynamic-config**: CRD-driven routing and embedding signals.
+- **multimodal-routing**: image-modality embedding routing.
+- **remote-embedding**: OpenAI-compatible remote embedding providers.
+- **llm-d**: llm-d inference-gateway health and router smoke coverage.
+- **istio**: sidecar, mTLS, and tracing behavior.
+- **agentgateway**: agentgateway routing and ExtProc policy enforcement.
+- **production-stack**: HA, load balancing, failover, and load checks.
+- **ml-model-selection**: trained model-selector behavior.
+- **multi-endpoint**: environment policy across several backends.
+- **authz-rbac**: authorization routing and rate-limit behavior.
+- **streaming**: streamed request bodies and cache round trips.
+- **anthropic-shim**: manual Anthropic-shape translation diagnostics.
+- **response-api**: manual memory-backed Responses API coverage.
+- **response-api-redis**: manual Redis persistence and TTL coverage.
+- **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
+- **router-replay**: manual management-boundary and restart-recovery coverage.
+- **dynamo**: manual NVIDIA Dynamo batching and GPU health coverage.
+- **vectorstore-registry**: manual metadata restart-recovery coverage.
+- **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
+- **hallucination**: manual fact-check gating and warning behavior.
+
+### Coverage Ownership Matrix
+
+| Selection | Meaning | Source of truth |
+| --- | --- | --- |
+| Default local | Runs when no profile is specified | `default_local_profiles` in the profile map |
+| Full CI | Runs in the complete E2E matrix | `full_ci_profiles` in the profile map |
+| Affected | Selected when owned paths change | `profile_rules` in the profile map |
+| Manual only | Requires explicit selection and profile prerequisites | `manual_profile_rules` in the profile map |
+
+[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml) owns
+the exact selection mode, path triggers, and coverage role for every entry.
+“Manual” describes lifecycle and prerequisites; it is not evidence that the
+profile passed in another environment.
+
+## Add or change a profile
+
+1. Add or update a package under `e2e/profiles/<name>`.
+2. Implement `framework.Profile`: name, setup, teardown, test list, and Service
+   access.
+3. Register it in `e2e/profiles/all/imports.go`.
+4. Add its ownership and selection mode to
+   `tools/agent/e2e-profile-map.yaml`.
+5. Reuse test cases where the contract is shared; add a new test only for a new
+   externally visible behavior.
+6. Add deterministic assertions. A request that merely returned any response
+   is not sufficient evidence for routing, safety, cache, or fallback behavior.
+
+For test-case boundaries, read [`testcases/AGENTS.md`](testcases/AGENTS.md).
+
+## Validate framework changes
 
 ```bash
-# Setup only
-./bin/e2e -profile kubernetes -setup-only -keep-cluster -verbose
-
-# Run tests only (assumes environment is already deployed)
-./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -verbose
-
-# Run specific tests only
-./bin/e2e -profile kubernetes -skip-setup -use-existing-cluster -tests "chat-completions-request"
+make build-e2e
+(cd e2e && go test ./...)
+make agent-report ENV=cpu CHANGED_FILES='e2e/...'
 ```
 
-### Test Reports
+Then run the smallest affected profile. Use
+`make agent-e2e-affected CHANGED_FILES='...'` when the repository harness can
+resolve the profile set from changed paths.
 
-After running tests, reports are generated:
+## Diagnose a failed run
 
-- `test-report.json`: Structured test results
-- `test-report.md`: Human-readable Markdown report
-- `semantic-router-logs.txt`: Complete semantic-router pod logs
-
-Each test case also prints detailed statistics to the console.
-
-## Environment Variables
-
-The following environment variables can be used to customize test execution:
-
-| Variable | Description | Default | Example |
-|----------|-------------|---------|---------|
-| `E2E_PROFILE` | Test profile to run | `kubernetes` | `make e2e-test E2E_PROFILE=kubernetes` |
-| `E2E_CLUSTER_NAME` | Kind cluster name | `semantic-router-e2e` | `make e2e-test E2E_CLUSTER_NAME=my-cluster` |
-| `E2E_IMAGE_TAG` | Docker image tag | `e2e-test` | `make e2e-test E2E_IMAGE_TAG=v1.0.0` |
-| `E2E_KEEP_CLUSTER` | Keep cluster and deployed profile after tests | `false` | `make e2e-test E2E_KEEP_CLUSTER=true` |
-| `E2E_USE_EXISTING_CLUSTER` | Use existing cluster | `false` | `make e2e-test E2E_USE_EXISTING_CLUSTER=true` |
-| `E2E_VERBOSE` | Enable verbose logging | `true` | `make e2e-test E2E_VERBOSE=false` |
-| `E2E_PARALLEL` | Run tests in parallel | `false` | `make e2e-test E2E_PARALLEL=true` |
-| `E2E_TESTS` | Specific test cases to run | (all tests) | `make e2e-test-specific E2E_TESTS="test1,test2"` |
-| `E2E_SETUP_ONLY` | Only setup profile without running tests (automatically keeps cluster) | `false` | `make e2e-test E2E_SETUP_ONLY=true` |
-| `E2E_SKIP_SETUP` | Skip setup and only run tests | `false` | `make e2e-test E2E_SKIP_SETUP=true` |
-
-**Note**:
-
-- When `E2E_SETUP_ONLY=true` is set, the cluster is automatically kept (no need to set `E2E_KEEP_CLUSTER=true`)
-- When `E2E_KEEP_CLUSTER=true` is set, the profile teardown is also skipped so you can reuse the environment with `E2E_USE_EXISTING_CLUSTER=true E2E_SKIP_SETUP=true`
-- When using the binary directly (`./bin/e2e`), use command-line flags instead:
-
-- `-profile` instead of `E2E_PROFILE`
-- `-cluster` instead of `E2E_CLUSTER_NAME`
-- `-image-tag` instead of `E2E_IMAGE_TAG`
-- `-keep-cluster` instead of `E2E_KEEP_CLUSTER`
-- `-use-existing-cluster` instead of `E2E_USE_EXISTING_CLUSTER`
-- `-verbose` instead of `E2E_VERBOSE`
-- `-parallel` instead of `E2E_PARALLEL`
-- `-tests` instead of `E2E_TESTS`
-- `-setup-only` instead of `E2E_SETUP_ONLY`
-- `-skip-setup` instead of `E2E_SKIP_SETUP`
-
-Example:
+The runner prints the failing test and writes reports even when the run fails.
+With a preserved cluster:
 
 ```bash
-./bin/e2e -profile kubernetes -keep-cluster -verbose -tests "chat-completions-request"
+kubectl get pods --all-namespaces
+kubectl get events --all-namespaces --sort-by=.lastTimestamp
+kubectl get gateway,httproute --all-namespaces
 ```
 
-## Adding New Test Profiles
-
-1. Create a new directory under `profiles/`
-2. Implement the `Profile` interface
-3. Register test cases using the test case registry
-4. Add profile-specific deployment configurations
-
-See `profiles/ai-gateway/` for the kubernetes profile implementation example.
-
-## Key Concepts
-
-### Profile vs Test Case Separation
-
-**Profiles** are responsible for:
-
-- Deploying the test environment (Helm charts, Kubernetes resources)
-- Verifying environment health
-- Providing service configuration (namespace, labels, port mappings)
-
-**Test Cases** are responsible for:
-
-- Executing test logic
-- Validating functionality
-- Reporting results
-
-This separation allows test cases to be **reused across different profiles** by simply providing different service configurations.
-
-**Benefits:**
-
-- ✅ Test cases are independent of deployment details
-- ✅ Easy to add new profiles without duplicating test logic
-- ✅ Profiles can share common test cases
-- ✅ Test cases can be maintained in one place
-- ✅ Clear separation of concerns
-
-### Service Configuration
-
-Profiles provide service configuration to test cases via `ServiceConfig`:
-
-```go
-type ServiceConfig struct {
-    LabelSelector string  // e.g., "gateway.envoyproxy.io/owning-gateway-namespace=default,..."
-    Namespace     string  // Service namespace
-    Name          string  // Service name (optional, if empty uses LabelSelector)
-    ServicePort   string  // Service port exposed by Kubernetes
-    LocalPort     string  // Optional fixed local port; empty means ephemeral
-    PortMapping   string  // Deprecated compatibility shim: "localPort:servicePort"
-}
-```
-
-Test cases use this configuration to connect to the deployed service without knowing the specific deployment details.
-
-## Test Case Registration
-
-Test cases are registered using a simple function-based approach:
-
-```go
-func init() {
-    pkgtestcases.Register("my-test", pkgtestcases.TestCase{
-        Description: "Description of what this test does",
-        Tags:        []string{"functional", "llm"},
-        Fn:          testMyFeature,
-    })
-}
-
-func testMyFeature(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-    session, err := fixtures.OpenServiceSession(ctx, client, opts)
-    if err != nil {
-        return err
-    }
-    defer session.Close()
-
-    chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
-    resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
-        Model: "MoM",
-        Messages: []fixtures.ChatMessage{
-            {Role: "user", Content: "hello"},
-        },
-    }, nil)
-    if err != nil {
-        return err
-    }
-    if resp.StatusCode != http.StatusOK {
-        return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-    }
-
-    // ...
-    return nil
-}
-```
-
-## Framework Features
-
-- **Automatic cluster lifecycle management**: Creates and cleans up Kind clusters
-- **Docker image building and loading**: Builds images and loads them into Kind
-- **Helm deployment automation**: Deploys required Helm charts
-- **Automatic port forwarding cleanup**: Each test case cleans up its port forwarding
-- **Detailed logging**: Provides comprehensive test output
-- **Test reporting**: Generates JSON and Markdown reports
-- **Resource cleanup**: Ensures proper cleanup even on failures
-
-## Test Data
-
-Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case loads its own test data.
-
-**Available Test Data:**
-
-- `domain_classify_cases.json`: 65 test cases across 13 categories
-- `cache_cases.json`: 5 groups of similar questions for semantic cache testing
-- `pii_detection_cases.json`: 10 PII types (email, phone, SSN, etc.)
-- `jailbreak_detection_cases.json`: 10 attack types (prompt injection, DAN, etc.)
-- `embedding_signal_cases.json`: 31 test cases for EmbeddingSignal routing (PII, security, technical, domain classification)
-
-**Signal-Decision Engine Tests** use embedded test cases (defined inline in test files) to validate:
-
-- Decision priority mechanisms (4 test cases)
-- Plugin chain execution and blocking (4 test cases)
-- Rule condition logic with AND/OR operators (6 test cases)
-- Decision fallback behavior (5 test cases)
-- Keyword-based routing (6 test cases)
-- Plugin configuration variations (6 test cases)
-
-### Embedding Signal Routing
-
-The `embedding-signal-routing` test validates the `IntelligentRoute` CRD with `EmbeddingSignal` configurations. This test:
-
-**Features Tested:**
-
-- Semantic similarity-based routing using embedding models (Qwen3/Gemma)
-- PII detection via embedding signals (semantic patterns like "share my credit card")
-- Security threat detection (SQL injection, unauthorized access attempts)
-- Technical domain routing (Kubernetes, container orchestration)
-- Domain classification (healthcare, finance, general knowledge)
-- Threshold behavior (0.75 similarity threshold)
-- Aggregation methods (max similarity across multiple candidates)
-- Paraphrase handling (different wording, same intent)
-- Multi-signal evaluation (multiple signals in one request)
-
-**Test Categories:**
-
-- PII Detection (7 cases): Semantic PII pattern matching
-- Security Threats (4 cases): Malicious intent detection
-- Technical Topics (4 cases): Kubernetes-specific routing
-- Domain Classification (4 cases): Healthcare, finance domains
-- Threshold Tests (3 cases): Similarity boundary testing
-- Aggregation Tests (2 cases): Multi-candidate matching
-- Paraphrase Tests (2 cases): Intent recognition
-- Multi-signal (1 case): Combined signal evaluation
-- Edge Cases (4 cases): Empty content, short/long queries
-
-**Profile Support:**
-
-- ✅ `dynamic-config` profile (uses CRDs)
-- ❌ `kubernetes` profile (uses static YAML config)
-- ❌ `aibrix` profile (uses static YAML config)
-
-**Requirements:**
-
-- Embedding models must be initialized (Qwen3 or Gemma)
-- `EMBEDDING_MODEL_OVERRIDE=qwen3` environment variable for consistent test results
-- IntelligentRoute CRD with EmbeddingSignal definitions
-- Model requests must use `"model": "auto"` to trigger decision evaluation
-
-**Note:** This test differs from `pii-detection` (which uses regex/NER plugins) and `domain-classify` (which uses academic domain routing). Embedding signals use semantic similarity to detect **intent** rather than exact patterns.
-
-**Test Data Format Example:**
-
-```json
-{
-  "cases": [
-    {
-      "question": "What is 2+2?",
-      "expected_category": "math",
-      "expected_reasoning": "Basic arithmetic question"
-    }
-  ]
-}
-```
-
-## Prerequisites
-
-Before running E2E tests, ensure you have the following tools installed:
-
-- [Go](https://golang.org/doc/install) 1.24 or later
-- [Docker](https://docs.docker.com/get-docker/)
-- [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- [Helm](https://helm.sh/docs/intro/install/)
-
-## Development
-
-### Adding a New Test Case
-
-Test cases are created in the `e2e/testcases/` directory and can be reused across multiple profiles.
-
-**Steps:**
-
-1. Create a new file in `e2e/testcases/` (e.g., `my_feature.go`)
-2. Implement the test function with proper cleanup
-3. Register it in the `init()` function
-4. Add test data to `e2e/testcases/testdata/` if needed
-5. Add the test case name to any profile's `GetTestCases()` method
-
-**Example:**
-
-```go
-package testcases
-
-import (
-    "context"
-    "fmt"
-
-    "k8s.io/client-go/kubernetes"
-    pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-)
-
-func init() {
-    pkgtestcases.Register("my-feature", pkgtestcases.TestCase{
-        Description: "Test my new feature",
-        Tags:        []string{"functional", "llm"},
-        Fn:          testMyFeature,
-    })
-}
-
-func testMyFeature(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-    if opts.Verbose {
-        fmt.Println("[Test] Testing my feature")
-    }
-
-    // Setup service connection and get local port
-    localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
-    if err != nil {
-        return err
-    }
-    defer stopPortForward() // IMPORTANT: Always clean up port forwarding
-
-    // Test implementation using localPort
-    url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-    // ... send requests and validate responses
-
-    return nil
-}
-```
-
-**Important Notes:**
-
-- Prefer `e2e/pkg/fixtures` service sessions and typed clients over ad-hoc port-forward and `http.Client` setup
-- Use `opts.ServiceConfig` to get service connection details
-- Shared helpers allocate an ephemeral local port by default; set `LocalPort` only when a testcase truly requires a stable port
-- Use `opts.Verbose` for debug logging
-- Load test data from `e2e/testcases/testdata/`
-- Use model name `"MoM"` in all requests
-
-### Adding a New Profile
-
-Profiles define deployment environments and can reuse existing test cases.
-
-**Steps:**
-
-1. Create a new directory under `profiles/` (e.g., `profiles/istio/`)
-2. Create `profile.go` implementing the `Profile` interface
-3. Implement required methods:
-   - `Setup()`: Deploy environment
-   - `Teardown()`: Clean up resources
-   - `GetTestCases()`: Return list of test case names to run
-   - `GetServiceConfig()`: Provide service configuration
-4. Import the `testcases` package to register test cases
-5. Update `e2e/profiles/all/imports.go` to import the profile package and add a `register(...)` entry for any runner-level capabilities such as GPU or extra local images
-
-**Example:**
-
-```go
-package myprofile
-
-import (
-    "context"
-
-    "github.com/vllm-project/semantic-router/e2e/pkg/framework"
-
-    // Import testcases to register them
-    _ "github.com/vllm-project/semantic-router/e2e/testcases"
-)
-
-type Profile struct {
-    stack *gatewaystack.Stack
-}
-
-func NewProfile() *Profile {
-    return &Profile{
-        stack: gatewaystack.New(gatewaystack.Config{
-            Name:                     "my-profile",
-            SemanticRouterValuesFile: "e2e/profiles/my-profile/values.yaml",
-            ResourceManifests: []string{
-                "deploy/kubernetes/my-profile/base-model.yaml",
-                "deploy/kubernetes/my-profile/gwapi-resources.yaml",
-            },
-        }),
-    }
-}
-
-func (p *Profile) Name() string {
-    return "my-profile"
-}
-
-func (p *Profile) Description() string {
-    return "My custom deployment profile"
-}
-
-func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
-    return p.stack.Setup(ctx, opts)
-}
-
-func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
-    return p.stack.Teardown(ctx, opts)
-}
-
-func (p *Profile) GetTestCases() []string {
-    return []string{
-        "chat-completions-request",
-        "domain-classify",
-        // ... other test cases
-    }
-}
-
-func (p *Profile) GetServiceConfig() framework.ServiceConfig {
-    return p.stack.ServiceConfig()
-}
-```
-
-Then wire the profile into the runnable catalog:
-
-```go
-// e2e/profiles/all/imports.go
-import myprofile "github.com/vllm-project/semantic-router/e2e/profiles/my-profile"
-
-func init() {
-    register("my-profile", myprofile.NewProfile, framework.ProfileCapabilities{})
-}
-```
-
-See `profiles/ai-gateway/` for the kubernetes profile implementation example.
-
-## Profile Details
-
-### Istio Profile
-
-The Istio profile owns service-mesh-specific assertions plus a single shared router smoke request. The full generic router contract lives in `kubernetes`, so the Istio environment no longer replays the entire baseline suite.
-
-**What it Tests:**
-
-- **Istio-specific features:**
-  - Istio sidecar injection and health
-  - Traffic routing through Istio ingress gateway
-  - Mutual TLS (mTLS) between services
-  - Distributed tracing and observability
-- **Shared smoke path:**
-  - `chat-completions-request` through the Istio-managed gateway path
-
-**Prerequisites:**
-
-- Docker and Kind (managed by E2E framework)
-- Helm (for installing Istio components)
-
-**Components Deployed:**
-
-1. **Istio Control Plane** (`istio-system` namespace):
-   - `istiod` - Istio control plane
-   - `istio-ingressgateway` - Ingress gateway for external traffic
-
-2. **Semantic Router** (`semantic-router` namespace):
-   - Deployed via Helm with Istio sidecar injection enabled
-   - Namespace labeled with `istio-injection=enabled`
-
-3. **Istio Resources**:
-   - `Gateway` - Configures ingress gateway on port 80
-   - `VirtualService` - Routes traffic to Semantic Router service
-   - `DestinationRule` - Enables mTLS with `ISTIO_MUTUAL` mode
-
-**Test Cases:**
-
-**Istio-specific tests (4):**
-
-| Test Case | Description | What it Validates |
-|-----------|-------------|-------------------|
-| `istio-sidecar-health-check` | Verify Envoy sidecar injection | - Istio-proxy container exists<br>- Sidecar is healthy and ready<br>- Namespace has `istio-injection=enabled` label |
-| `istio-traffic-routing` | Test routing through Istio gateway | - Gateway and VirtualService exist<br>- Requests route correctly to Semantic Router<br>- Istio/Envoy headers present in responses |
-| `istio-mtls-verification` | Verify mutual TLS configuration | - DestinationRule has `ISTIO_MUTUAL` mode<br>- mTLS certificates present in istio-proxy<br>- PeerAuthentication policy (if configured) |
-| `istio-tracing-observability` | Check distributed tracing and metrics | - Trace headers propagated<br>- Envoy metrics exposed<br>- Telemetry configuration<br>- Access logs enabled |
-
-**Shared smoke test (1):**
-
-- `chat-completions-request` - verifies the router still serves traffic correctly through the Istio-managed gateway path
-
-**Total: 5 test cases** (4 Istio-specific + 1 shared smoke)
-
-**Coverage ownership:**
-
-- `kubernetes` owns the baseline router contract
-- `istio` keeps only mesh-specific assertions and the smoke request that proves traffic still flows through the mesh
-
-**Usage:**
+Separate setup failure, test assertion failure, and teardown failure. Keep the
+profile only long enough to inspect it, then delete the named Kind cluster:
 
 ```bash
-# Run all Istio tests
-make e2e-test E2E_PROFILE=istio
-
-# Run specific Istio tests
-make e2e-test-specific E2E_PROFILE=istio E2E_TESTS="istio-sidecar-health-check,istio-mtls-verification"
-
-# Run with verbose output
-./bin/e2e -profile istio -verbose
-
-# Keep cluster for debugging
-make e2e-test E2E_PROFILE=istio E2E_KEEP_CLUSTER=true
+make e2e-cleanup E2E_CLUSTER_NAME=semantic-router-e2e
 ```
-
-**Setup Steps (Automated by Profile):**
-
-1. Install Istio control plane using Helm (base, istiod, ingress gateway)
-2. Create namespace with `istio-injection=enabled` label
-3. Deploy Semantic Router via Helm (sidecar auto-injected)
-4. Create Istio Gateway and VirtualService for traffic routing
-5. Create DestinationRule for mTLS configuration
-6. Verify all components are ready
-
-**Troubleshooting:**
-
-If tests fail, check:
-
-```bash
-# Check Istio installation
-kubectl get pods -n istio-system
-
-# Check sidecar injection
-kubectl get pods -n semantic-router -o jsonpath='{.items[*].spec.containers[*].name}'
-
-# Check Istio resources
-kubectl get gateway,virtualservice,destinationrule -n semantic-router
-
-# Check mTLS configuration
-kubectl get destinationrule semantic-router -n semantic-router -o yaml
-
-# View Istio proxy logs
-kubectl logs -n semantic-router <pod-name> -c istio-proxy
-```
-
-**Related Resources:**
-
-- [Istio Documentation](https://istio.io/latest/docs/)
-- [Istio Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/)
-- [Istio Security (mTLS)](https://istio.io/latest/docs/concepts/security/)
-- [Istio Observability](https://istio.io/latest/docs/concepts/observability/)

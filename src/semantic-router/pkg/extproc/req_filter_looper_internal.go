@@ -20,21 +20,6 @@ type looperBackendRoute struct {
 	found          bool
 }
 
-// findDecisionByName finds a decision by name in the router configuration.
-func (r *OpenAIRouter) findDecisionByName(name string) *config.Decision {
-	if r.Config == nil || r.Config.Decisions == nil {
-		return nil
-	}
-
-	for i := range r.Config.Decisions {
-		if r.Config.Decisions[i].Name == name {
-			return &r.Config.Decisions[i]
-		}
-	}
-
-	return nil
-}
-
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
 func (r *OpenAIRouter) getReasoningInfoFromDecision(
 	decision *config.Decision,
@@ -93,10 +78,28 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 ) ([]byte, error) {
 	openAIRequest.Model = upstreamModel
 
-	modifiedBody, err := serializeOpenAIRequestWithStream(
-		openAIRequest,
-		ctx.ExpectStreamingResponse,
-	)
+	// Preserve provider-specific request fields on the internal Looper hop.
+	// The OpenAI SDK parameter types intentionally discard unknown JSON fields
+	// when they are unmarshaled, so serializing openAIRequest here would lose
+	// extensions such as chat_template_kwargs, cache_control, and exact large
+	// integers. Native Anthropic requests still require the typed protocol
+	// translation path, matching ordinary auto routing.
+	var modifiedBody []byte
+	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
+		modifiedBody = ctx.workingRequestBody()
+	}
+	var err error
+	if len(modifiedBody) > 0 {
+		modifiedBody, err = rewriteModelInBody(modifiedBody, upstreamModel)
+		if err == nil && ctx.ExpectStreamingResponse {
+			modifiedBody = addStreamFieldsFast(modifiedBody)
+		}
+	} else {
+		modifiedBody, err = serializeOpenAIRequestWithStream(
+			openAIRequest,
+			ctx.ExpectStreamingResponse,
+		)
+	}
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -113,7 +116,7 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 	modifiedBody, err = r.setReasoningModeToRequestBody(
 		modifiedBody,
 		useReasoning,
-		decisionName,
+		ctx.VSRSelectedDecision,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_reasoning_mode_apply_failed", map[string]interface{}{
@@ -153,10 +156,13 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	ctx *RequestContext,
 ) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
 	setHeaders := []*core.HeaderValueOption{}
-	// Always strip the internal caller-identity carrier so it never reaches an
-	// upstream, including on the non-routed branch below (defense in depth; the
-	// routed branch also strips it via buildRouteHeaderState).
-	removeHeaders := []string{"content-length", headers.VSRInboundAuthorization}
+	// looperInternalHeadersForRemoval covers the internal caller-identity carrier
+	// too, so it never reaches an upstream on either branch below (defense in
+	// depth; the routed branch also strips it via buildRouteHeaderState).
+	removeHeaders := append(
+		[]string{"content-length"},
+		looperInternalHeadersForRemoval()...,
+	)
 
 	if route.found {
 		routedSetHeaders, routedRemoveHeaders, errorResponse := r.buildRoutedLooperHeaders(modelName, route, ctx)
@@ -252,7 +258,8 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	decisionName := ctx.Headers[headers.VSRLooperDecision]
+	r.hydrateLooperRoutingContext(ctx)
+	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -269,6 +276,25 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
+	}
+	workingBody := ctx.workingRequestBody()
+	workingBody, compressionErr := r.applyContextCompressionPolicy(ctx, workingBody)
+	if compressionErr != nil {
+		return r.createErrorResponse(
+			500,
+			"Context compression failed under fail_closed policy",
+		), nil
+	}
+	ctx.setWorkingRequestBody(workingBody)
+	if ctx.requestBodyMutated() {
+		openAIRequest, err = parseOpenAIRequest(workingBody)
+		if err != nil {
+			logging.ComponentErrorEvent("extproc", "looper_mutated_request_reparse_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"error":      err.Error(),
+			})
+			return r.createErrorResponse(500, "Failed to process looper request"), nil
+		}
 	}
 
 	route, err := r.resolveLooperBackendRoute(ctx, modelName)
@@ -360,7 +386,7 @@ func (r *OpenAIRouter) resolveLooperDecision(
 		"decision":   decisionName,
 	})
 
-	decision := r.findDecisionByName(decisionName)
+	decision := r.looperDecisionForRoutingContext(ctx, decisionName)
 	if decision != nil {
 		return decision, nil
 	}
@@ -386,7 +412,7 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.Config.EffectiveRouterReplayConfigForDecision(decisionName); replayCfg != nil {
+	if replayCfg := r.Config.EffectiveRouterReplayConfig(decision); replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{
@@ -418,7 +444,7 @@ func applyLooperReasoningContext(
 func (r *OpenAIRouter) parseLooperRequestForPlugins(
 	ctx *RequestContext,
 ) (*openai.ChatCompletionNewParams, error) {
-	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+	openAIRequest, err := parseOpenAIRequest(ctx.workingRequestBody())
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_request_parse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

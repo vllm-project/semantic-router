@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
@@ -43,6 +45,31 @@ func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
 	t.Helper()
 	return newTestEvaluationHarness(t).handler
+}
+
+func TestEvaluationMutationsHonorServerReadonly(t *testing.T) {
+	t.Parallel()
+	handler := &EvaluationHandler{readonlyMode: true}
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{name: "create", method: http.MethodPost, path: "/api/evaluation/tasks", handler: handler.CreateTaskHandler()},
+		{name: "delete", method: http.MethodDelete, path: "/api/evaluation/tasks/task-1", handler: handler.DeleteTaskHandler()},
+		{name: "run", method: http.MethodPost, path: "/api/evaluation/run", handler: handler.RunTaskHandler()},
+		{name: "cancel", method: http.MethodPost, path: "/api/evaluation/cancel/task-1", handler: handler.CancelTaskHandler()},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			test.handler.ServeHTTP(recorder, httptest.NewRequest(test.method, test.path, nil))
+			if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"error":"readonly_mode"`) {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
 }
 
 func TestCreateTaskHandler_MoMWithAccuracyReturns201(t *testing.T) {
@@ -326,6 +353,22 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 	harness.handler.RunTaskHandler().ServeHTTP(rec, req)
 	t.Cleanup(func() {
 		_ = harness.handler.runner.CancelTask(task.ID)
+		// Join the background evaluation goroutine before the harness
+		// cleanups (db.Close, TempDir removal) run: RunTaskHandler deletes
+		// the task's cancelFunc entry only after runner.RunTask returns, so
+		// once the entry is gone the goroutine performs no further DB or
+		// filesystem writes.
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			if _, ok := harness.handler.cancelFuncs.Load(task.ID); !ok {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Error("background evaluation goroutine did not exit within 10s")
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	})
 
 	if rec.Code != http.StatusOK {
@@ -345,7 +388,12 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 	if updatedTask.ProgressPercent != 0 {
 		t.Fatalf("task progress = %d, want 0", updatedTask.ProgressPercent)
 	}
-	if updatedTask.CurrentStep != "Starting evaluation" {
-		t.Fatalf("task current_step = %q, want %q", updatedTask.CurrentStep, "Starting evaluation")
-	}
+	// CurrentStep is intentionally not asserted here. The handler writes
+	// "Starting evaluation" synchronously, then hands off to a background
+	// goroutine that advances the step to "Evaluating <dimension>" as soon
+	// as the first dimension starts. That handoff is a race by design, so
+	// asserting the transient step after the response returns is inherently
+	// flaky (the goroutine can win the race and the step is already
+	// "Evaluating accuracy"). The stable contract is status=Running and
+	// progress=0, both set before the goroutine is spawned.
 }

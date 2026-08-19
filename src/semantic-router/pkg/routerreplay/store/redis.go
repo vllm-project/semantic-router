@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,11 +27,9 @@ type RedisStore struct {
 	asyncWrites bool
 	asyncChan   chan asyncOp
 	done        chan struct{}
-}
-
-type asyncOp struct {
-	fn  func() error
-	err chan error
+	writerDone  chan struct{}
+	updateMu    sync.Mutex
+	lifecycle   *storageLifecycle
 }
 
 // NewRedisStore creates a new Redis storage backend.
@@ -88,10 +87,12 @@ func NewRedisStore(cfg *RedisConfig, ttlSeconds int, asyncWrites bool) (*RedisSt
 		ttl:         time.Duration(ttlSeconds) * time.Second,
 		asyncWrites: asyncWrites,
 		done:        make(chan struct{}),
+		lifecycle:   newStorageLifecycle(),
 	}
 
 	if asyncWrites {
 		store.asyncChan = make(chan asyncOp, 100)
+		store.writerDone = make(chan struct{})
 		go store.asyncWriter()
 	}
 
@@ -100,6 +101,7 @@ func NewRedisStore(cfg *RedisConfig, ttlSeconds int, asyncWrites bool) (*RedisSt
 
 // asyncWriter processes async write operations in the background.
 func (r *RedisStore) asyncWriter() {
+	defer close(r.writerDone)
 	for {
 		select {
 		case op := <-r.asyncChan:
@@ -115,12 +117,20 @@ func (r *RedisStore) asyncWriter() {
 
 // Add inserts a new record into Redis.
 func (r *RedisStore) Add(ctx context.Context, record Record) (string, error) {
+	release, err := r.lifecycle.beginMutation()
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
+	}
 	if record.ID == "" {
-		id, err := generateRedisID()
-		if err != nil {
-			return "", err
+		generatedID, generateErr := generateRedisID()
+		if generateErr != nil {
+			return "", generateErr
 		}
-		record.ID = id
+		record.ID = generatedID
 	}
 
 	if record.Timestamp.IsZero() {
@@ -142,9 +152,9 @@ func (r *RedisStore) Add(ctx context.Context, record Record) (string, error) {
 	}
 
 	if r.asyncWrites {
-		errChan := make(chan error, 1)
-		r.asyncChan <- asyncOp{fn: fn, err: errChan}
-		// Non-blocking for async writes
+		if err := runAsyncOp(ctx, r.asyncChan, fn); err != nil {
+			return "", fmt.Errorf("failed to store record: %w", err)
+		}
 		return record.ID, nil
 	}
 
@@ -157,6 +167,15 @@ func (r *RedisStore) Add(ctx context.Context, record Record) (string, error) {
 
 // Get retrieves a record by ID from Redis.
 func (r *RedisStore) Get(ctx context.Context, id string) (Record, bool, error) {
+	release, err := r.lifecycle.beginMutation()
+	if err != nil {
+		return Record{}, false, err
+	}
+	defer release()
+	return r.getRecord(ctx, id)
+}
+
+func (r *RedisStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
 	key := r.keyPrefix + id
 	data, err := r.client.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
@@ -176,6 +195,15 @@ func (r *RedisStore) Get(ctx context.Context, id string) (Record, bool, error) {
 
 // List returns all records ordered by timestamp descending.
 func (r *RedisStore) List(ctx context.Context) ([]Record, error) {
+	release, err := r.lifecycle.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return r.listRecords(ctx)
+}
+
+func (r *RedisStore) listRecords(ctx context.Context) ([]Record, error) {
 	// Scan for all keys with our prefix
 	var cursor uint64
 	var keys []string
@@ -234,258 +262,150 @@ func (r *RedisStore) List(ctx context.Context) ([]Record, error) {
 
 // UpdateStatus updates the response status and flags for a record.
 func (r *RedisStore) UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	if status != 0 {
-		record.ResponseStatus = status
-	}
-	record.FromCache = record.FromCache || fromCache
-	record.Streaming = record.Streaming || streaming
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		if status != 0 {
+			record.ResponseStatus = status
 		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
+		record.FromCache = record.FromCache || fromCache
+		record.Streaming = record.Streaming || streaming
+		return true
+	})
+}
 
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+func (r *RedisStore) UpdateLifecycle(
+	ctx context.Context,
+	id string,
+	state string,
+	endedAt time.Time,
+	durationMS int64,
+	reason string,
+) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		if record.LifecycleState != "" && record.LifecycleState != LifecycleInProgress {
+			return false
+		}
+		record.LifecycleState = state
+		record.EndedAt = cloneTimePtr(&endedAt)
+		record.DurationMS = durationMS
+		record.TerminalReason = reason
+		return true
+	})
 }
 
 // AttachRequest updates the request body for a record.
 func (r *RedisStore) AttachRequest(ctx context.Context, id string, body string, truncated bool) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.RequestBody = body
-	record.RequestBodyTruncated = record.RequestBodyTruncated || truncated
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.RequestBody = body
+		record.RequestBodyTruncated = record.RequestBodyTruncated || truncated
+		return true
+	})
 }
 
 // AttachResponse updates the response body for a record.
 func (r *RedisStore) AttachResponse(ctx context.Context, id string, body string, truncated bool) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.ResponseBody = body
-	record.ResponseBodyTruncated = record.ResponseBodyTruncated || truncated
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.ResponseBody = body
+		record.ResponseBodyTruncated = record.ResponseBodyTruncated || truncated
+		return true
+	})
 }
 
 // AppendOutcome links post-route feedback to a record.
 func (r *RedisStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.Outcomes = append(record.Outcomes, cloneOutcome(outcome))
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.Outcomes = append(record.Outcomes, cloneOutcome(outcome))
+		return true
+	})
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.HallucinationDetected = detected
-	record.HallucinationConfidence = confidence
-	record.HallucinationSpans = spans
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.HallucinationDetected = detected
+		record.HallucinationConfidence = confidence
+		record.HallucinationSpans = cloneStringSlice(spans)
+		record.HallucinationSpanDetails = cloneHallucinationSpanDetails(spanDetails)
+		return true
+	})
 }
 
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
-	record, found, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
-	record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
-	record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
-	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
-	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
-	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)
-	record.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
-	record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
-	record.Currency = cloneStringPtr(usage.Currency)
-	record.BaselineModel = cloneStringPtr(usage.BaselineModel)
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
-	fn := func() error {
-		if r.ttl > 0 {
-			return r.client.Set(ctx, key, data, r.ttl).Err()
-		}
-		return r.client.Set(ctx, key, data, 0).Err()
-	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
-	}
-
-	return fn()
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.PromptTokens = cloneIntPtr(usage.PromptTokens)
+		record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+		record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
+		record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+		record.TotalTokens = cloneIntPtr(usage.TotalTokens)
+		record.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+		record.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+		record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+		record.Currency = cloneStringPtr(usage.Currency)
+		record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		return true
+	})
 }
 
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
-	record, found, err := r.Get(ctx, id)
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.ToolTrace = cloneToolTrace(&trace)
+		return true
+	})
+}
+
+// updateRecord serializes Redis read-modify-write operations through the
+// async writer. Reading inside the queued operation prevents a later update
+// from overwriting fields written by an earlier queued operation with a stale
+// snapshot. Every update waits for persistence so a completed lifecycle never
+// claims that response, tool, or usage metadata was stored when it was not.
+func (r *RedisStore) updateRecord(
+	ctx context.Context,
+	id string,
+	mutate func(*Record) bool,
+) error {
+	release, err := r.lifecycle.beginMutation()
 	if err != nil {
 		return err
 	}
-	if !found {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	record.ToolTrace = cloneToolTrace(&trace)
-
-	data, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("failed to marshal record: %w", err)
-	}
-
-	key := r.keyPrefix + id
+	defer release()
 	fn := func() error {
+		r.updateMu.Lock()
+		defer r.updateMu.Unlock()
+		record, found, err := r.getRecord(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+		if !mutate(&record) {
+			return nil
+		}
+		data, err := json.Marshal(record)
+		if err != nil {
+			return fmt.Errorf("failed to marshal record: %w", err)
+		}
+		key := r.keyPrefix + id
 		if r.ttl > 0 {
 			return r.client.Set(ctx, key, data, r.ttl).Err()
 		}
 		return r.client.Set(ctx, key, data, 0).Err()
 	}
-
-	if r.asyncWrites {
-		r.asyncChan <- asyncOp{fn: fn}
-		return nil
+	if !r.asyncWrites {
+		return fn()
 	}
-
-	return fn()
+	return runAsyncOp(ctx, r.asyncChan, fn)
 }
 
 // Close closes the Redis client and stops async writer.
 func (r *RedisStore) Close() error {
-	if r.asyncWrites {
-		close(r.done)
-	}
-	return r.client.Close()
+	return r.lifecycle.close(func() error {
+		if r.asyncWrites {
+			return closeAsyncWriter(r.asyncChan, r.done, r.writerDone, r.client.Close)
+		}
+		return r.client.Close()
+	})
 }
 
 func generateRedisID() (string, error) {

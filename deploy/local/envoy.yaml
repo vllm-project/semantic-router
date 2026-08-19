@@ -42,11 +42,12 @@ static_resources:
               # ext_proc (authoritative); this is defense-in-depth. Keep in sync
               # with headers.ReservedInternalHeaders.
               request_headers_to_remove:
+              - "x-vsr-internal-auth"
               - "x-vsr-looper-request"
-              - "x-vsr-looper-authorization"
               - "x-vsr-looper-decision"
               - "x-vsr-looper-iteration"
               - "x-vsr-fusion-depth"
+              - "x-vsr-selected-recipe"
               - "x-vsr-inbound-authorization"
               - "x-authz-user-id"
               - "x-authz-user-groups"

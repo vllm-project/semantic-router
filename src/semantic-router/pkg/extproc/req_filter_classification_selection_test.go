@@ -18,6 +18,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -32,6 +33,42 @@ import (
 type selectionResultSelector struct {
 	result *selection.SelectionResult
 	err    error
+}
+
+type cancellationSelector struct {
+	cancelled *bool
+}
+
+func (s cancellationSelector) Select(
+	ctx context.Context,
+	_ *selection.SelectionContext,
+) (*selection.SelectionResult, error) {
+	select {
+	case <-ctx.Done():
+		*s.cancelled = true
+		return nil, ctx.Err()
+	default:
+		return nil, fmt.Errorf("selection context was not cancelled")
+	}
+}
+
+func (s cancellationSelector) Method() selection.SelectionMethod {
+	return selection.MethodStatic
+}
+
+func (s cancellationSelector) UpdateFeedback(
+	context.Context,
+	*selection.Feedback,
+) error {
+	return nil
+}
+
+func (s cancellationSelector) Tier() selection.AlgorithmTier {
+	return selection.TierSupported
+}
+
+func (s cancellationSelector) ExternalDependencies() []selection.Dependency {
+	return nil
 }
 
 func (s selectionResultSelector) Select(ctx context.Context, selCtx *selection.SelectionContext) (*selection.SelectionResult, error) {
@@ -72,9 +109,10 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 			registry.Register(selection.MethodStatic, selectionResultSelector{result: tc.result})
 
 			router := &OpenAIRouter{ModelSelector: registry}
-			selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+			requestContext := &RequestContext{}
+			selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 				CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-			}, nil, nil)
+			}, nil, requestContext)
 
 			if selected == nil || selected.Model != "model-a" {
 				t.Fatalf("expected default candidate model-a, got %#v", selected)
@@ -82,21 +120,84 @@ func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t
 			if method != string(selection.MethodStatic) {
 				t.Fatalf("expected static method, got %q", method)
 			}
+			if requestContext.VSRSelectionReasoning != selectionFallbackInvalidResult {
+				t.Fatalf(
+					"fallback reason = %q, want %q",
+					requestContext.VSRSelectionReasoning,
+					selectionFallbackInvalidResult,
+				)
+			}
 		})
 	}
 }
 
 func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext(t *testing.T) {
 	router := &OpenAIRouter{}
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+	requestContext := &RequestContext{}
+	selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: " "}, {Model: "model-b"}},
-	}, nil, nil)
+	}, nil, requestContext)
 
 	if selected == nil || selected.Model != "model-b" {
 		t.Fatalf("expected default candidate model-b, got %#v", selected)
 	}
-	if method != "" {
-		t.Fatalf("expected empty method for invalid context default, got %q", method)
+	if method != string(selection.MethodStatic) {
+		t.Fatalf("expected static method for invalid context default, got %q", method)
+	}
+	if requestContext.VSRSelectionReasoning != selectionFallbackInvalidContext {
+		t.Fatalf("fallback reason = %q", requestContext.VSRSelectionReasoning)
+	}
+}
+
+func TestPromptSelectionDoesNotResolveBaseModelThroughLoRAAlias(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model-b", LoRAName: "model-a"},
+		{Model: "model-a"},
+	}
+	selected := selectedModelRefFromResult(
+		&selection.SelectionContext{CandidateModels: candidates},
+		&selection.SelectionResult{
+			SelectedModel: "model-a",
+			Method:        selection.MethodPrompt,
+		},
+	)
+	if selected == nil || selected.Model != "model-a" || selected.LoRAName != "" {
+		t.Fatalf("selected = %#v, want base model-a candidate", selected)
+	}
+}
+
+func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
+	cancelled := false
+	registry := selection.NewRegistry()
+	registry.Register(
+		selection.MethodStatic,
+		cancellationSelector{cancelled: &cancelled},
+	)
+	cancelledContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	requestContext := &RequestContext{TraceContext: cancelledContext}
+	router := &OpenAIRouter{ModelSelector: registry}
+
+	selected, _, err := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "cancelled",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		},
+		nil,
+		requestContext,
+	)
+
+	if !cancelled {
+		t.Fatal("selector did not observe request cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context cancellation", err)
+	}
+	if selected != nil {
+		t.Fatalf("cancelled selection returned fallback %#v", selected)
+	}
+	if requestContext.VSRSelectionReasoning != "" {
+		t.Fatalf("cancelled request mutated fallback diagnostics")
 	}
 }
 
@@ -106,7 +207,7 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 
 	router := &OpenAIRouter{}
 	reqCtx := &RequestContext{SessionID: "single-candidate-session"}
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+	selected, method, _ := router.selectModelFromCandidates(&selection.SelectionContext{
 		SessionID:       "single-candidate-session",
 		DecisionName:    "warmup",
 		CandidateModels: []config.ModelRef{{Model: "model-a"}},
@@ -162,7 +263,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 			ExperienceWeight: 0.6,
 			RouterDCWeight:   0.4,
 		},
-	})
+	}, nil)
 
 	result, err := selector.Select(context.Background(), &selection.SelectionContext{
 		Query:           "need help with coding",
@@ -175,6 +276,60 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 	wantWeights := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]", 0.6, 0.4, 0.2, 0.2)
 	if !strings.Contains(result.Reasoning, wantWeights) {
 		t.Fatalf("expected decision-scoped hybrid weights in reasoning, got %q", result.Reasoning)
+	}
+}
+
+func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *testing.T) {
+	qualityPolicy := &config.AlgorithmConfig{
+		Type: "multi_factor",
+		MultiFactor: &config.MultiFactorSelectionConfig{
+			Weights: &config.MultiFactorWeightsConfig{Quality: 1},
+		},
+	}
+	costPolicy := &config.AlgorithmConfig{
+		Type: "multi_factor",
+		MultiFactor: &config.MultiFactorSelectionConfig{
+			Weights: &config.MultiFactorWeightsConfig{Cost: 1},
+		},
+	}
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"premium": {
+			QualityScore: 0.9,
+			Pricing:      config.ModelPricing{PromptPer1M: 10},
+		},
+		"economy": {
+			QualityScore: 0.1,
+			Pricing:      config.ModelPricing{PromptPer1M: 1},
+		},
+	}
+	cfg.Decisions = []config.Decision{
+		{Name: "quality", Algorithm: qualityPolicy},
+		{Name: "cost", Algorithm: costPolicy},
+	}
+
+	registry := selection.NewFactory(buildModelSelectionConfig(&cfg)).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		CreateAll()
+	router := &OpenAIRouter{Config: &cfg, ModelSelector: registry}
+	candidates := []config.ModelRef{{Model: "premium"}, {Model: "economy"}}
+
+	qualityResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, qualityPolicy, nil).
+		Select(context.Background(), &selection.SelectionContext{DecisionName: "quality", CandidateModels: candidates})
+	if err != nil {
+		t.Fatalf("quality selector returned error: %v", err)
+	}
+	if qualityResult.SelectedModel != "premium" {
+		t.Fatalf("quality decision selected %q, want premium", qualityResult.SelectedModel)
+	}
+
+	costResult, err := router.selectorForDecisionMethod(selection.MethodMultiFactor, costPolicy, nil).
+		Select(context.Background(), &selection.SelectionContext{DecisionName: "cost", CandidateModels: candidates})
+	if err != nil {
+		t.Fatalf("cost selector returned error: %v", err)
+	}
+	if costResult.SelectedModel != "economy" {
+		t.Fatalf("cost decision selected %q, want economy", costResult.SelectedModel)
 	}
 }
 

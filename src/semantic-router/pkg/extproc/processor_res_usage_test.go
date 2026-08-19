@@ -222,6 +222,7 @@ func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {
 		VSRMatchedContext:       []string{"long_context"},
 		VSRSelectedDecisionName: "fallback_decision",
 	}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 
 	for i := 0; i < 20; i++ {
 		router.calibrateTokenEstimator(ctx, 1000)
@@ -234,6 +235,18 @@ func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {
 	categoryMean, _, _, categoryCalibrated := classifier.TokenCalibrationRatio("long_context")
 	assert.True(t, categoryCalibrated)
 	assert.InDelta(t, 2.0, categoryMean, 0.1)
+}
+
+func TestTokenCalibrationSkipsStructuredOrImageContextEstimate(t *testing.T) {
+	ctx := &RequestContext{
+		OriginalRequestBody:       []byte(`{"messages":[{"role":"user","content":"short"}]}`),
+		VSRContextTextBytes:       2_000,
+		VSRContextEquivalentBytes: 80_000,
+		VSRContextHasNonText:      true,
+	}
+
+	assert.Equal(t, 0, tokenCalibrationByteLen(ctx),
+		"structured/image reserves must not train the prose bytes-per-token ratio")
 }
 
 // =====================================================================

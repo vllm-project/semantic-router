@@ -1,0 +1,136 @@
+.page {
+  min-height: 100vh;
+  background: var(--site-bg);
+}
+
+.container {
+  width: min(100% - 2.5rem, var(--site-grid-max));
+  margin: 0 auto;
+  padding: 2.25rem 0 3.5rem;
+}
+
+.masthead {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 46rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.eyebrow {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.masthead h1 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(2.6rem, 6vw, 4.25rem);
+  font-weight: 430;
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+}
+
+.description {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.22fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 2.5rem;
+  padding-top: 1.75rem;
+}
+
+.sidebar {
+  position: sticky;
+  top: calc(var(--site-header-height) + 1.25rem);
+  display: grid;
+  gap: 0.1rem;
+  align-content: start;
+}
+
+.navLink {
+  padding: 0.45rem 0.7rem;
+  border-left: 2px solid transparent;
+  color: var(--site-muted-bright);
+  font-size: 0.82rem;
+  font-weight: 550;
+  line-height: 1.3;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.navLink:hover {
+  background: var(--site-surface-soft);
+  color: var(--site-text);
+  text-decoration: none;
+}
+
+.navLinkActive,
+.navLinkActive:hover {
+  border-left-color: var(--site-accent);
+  background: var(--site-accent-soft);
+  color: var(--site-text);
+}
+
+.article {
+  min-width: 0;
+}
+
+@media (max-width: 996px) {
+  .body {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .sidebar {
+    position: static;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navLink {
+    flex: 0 0 auto;
+    border: 1px solid var(--site-border);
+    border-left: 1px solid var(--site-border);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .navLinkActive,
+  .navLinkActive:hover {
+    border-color: var(--site-accent);
+    border-left-color: var(--site-accent);
+  }
+}
+
+@media (max-width: 700px) {
+  .container {
+    width: min(100% - 1.4rem, var(--site-grid-max));
+    padding-top: 1.5rem;
+  }
+
+  .masthead h1 {
+    font-size: clamp(2.2rem, 12vw, 3.2rem);
+  }
+}

@@ -72,18 +72,30 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 ) ([]byte, error) {
 	openAIRequest.Model = matchedModel
 
-	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	var modifiedBody []byte
+	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
+		modifiedBody = ctx.workingRequestBody()
+	}
+	var err error
+	if len(modifiedBody) > 0 {
+		modifiedBody, err = rewriteModelInBody(modifiedBody, matchedModel)
+		if err == nil && ctx.ExpectStreamingResponse {
+			modifiedBody = addStreamFieldsFast(modifiedBody)
+		}
+	} else {
+		modifiedBody, err = serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	}
 	if err != nil {
-		logging.Errorf("Error serializing modified request: %v", err)
+		logging.Errorf("Error building modified request: %v", err)
 		metrics.RecordRequestError(matchedModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
+		return nil, status.Errorf(codes.Internal, "error building modified request: %v", err)
 	}
 
 	if decisionName != "" {
 		modifiedBody, err = r.setReasoningModeToRequestBodyForProvider(
 			modifiedBody,
 			useReasoning,
-			decisionName,
+			ctx.VSRSelectedDecision,
 			profile,
 		)
 		if err != nil {
@@ -98,15 +110,8 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 		}
 	}
 
-	if ctx.MemoryContext != "" {
-		modifiedBody, err = injectMemoryMessages(modifiedBody, ctx.MemoryContext)
-		if err != nil {
-			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-		}
-	}
-
 	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody, profile)
+		modifiedBody, err = r.buildRequestParamsMutations(ctx.VSRSelectedDecision, modifiedBody, profile, ctx.Routing.RecipeName())
 		if err != nil {
 			logging.Warnf("Failed to apply request params mutation: %v", err)
 		}
@@ -214,16 +219,15 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 		})
 	}
 
-	// RAG/memory injection modifies ctx.OriginalRequestBody. Without a body
-	// mutation Envoy forwards the original (pre-injection) body, silently
-	// dropping the personalized context. Force the mutation so the modified
-	// body actually reaches the upstream model.
-	if !needsBodyMutation && (ctx.RAGRetrievedContext != "" || ctx.MemoryContext != "") {
+	// Route-local mutations are carried separately from the immutable request
+	// used for routing and cache identity. Force a body mutation whenever the
+	// provider-bound representation differs, even when the model name does not.
+	if !needsBodyMutation && ctx.requestBodyMutated() {
 		logging.ComponentDebugEvent("extproc", "body_mutation_forced", map[string]interface{}{
-			"request_id":   ctx.RequestID,
-			"model":        model,
-			"rag_chars":    len(ctx.RAGRetrievedContext),
-			"memory_chars": len(ctx.MemoryContext),
+			"request_id":        ctx.RequestID,
+			"model":             model,
+			"working_body_len":  len(ctx.WorkingRequestBody),
+			"compression_apply": ctx.ContextCompressionApplied,
 		})
 		needsBodyMutation = true
 	}
@@ -523,6 +527,14 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 		return specifiedModel, nil
 	}
 	if state.profile == nil {
+		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+			state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      ":path",
+					RawValue: []byte("/v1/chat/completions"),
+				},
+			})
+		}
 		return false, nil
 	}
 
@@ -530,6 +542,9 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 	if pathErr != nil {
 		logging.Errorf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
 		return false, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	if chatPath == "" && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		chatPath = "/v1/chat/completions"
 	}
 	if chatPath != "" {
 		state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{
@@ -587,7 +602,7 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 	}
 
 	if needsRequestParamsMutation {
-		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes, state.profile)
+		modified, err := r.buildRequestParamsMutations(ctx.VSRSelectedDecision, bodyBytes, state.profile, ctx.Routing.RecipeName())
 		if err != nil {
 			logging.Warnf("Failed to apply request params mutation: %v", err)
 		} else {
@@ -604,13 +619,33 @@ func (r *OpenAIRouter) buildSpecifiedModelBodyMutation(
 }
 
 func getBodyMutationSource(ctx *RequestContext) []byte {
-	if ctx != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
-		return ctx.ResponseAPICtx.TranslatedBody
-	}
-	if ctx != nil && len(ctx.OriginalRequestBody) > 0 {
-		return ctx.OriginalRequestBody
+	if ctx != nil {
+		return ctx.workingRequestBody()
 	}
 	return nil
+}
+
+func attachWorkingBodyMutation(
+	response *ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if response == nil || !ctx.requestBodyMutated() {
+		return response
+	}
+	common := response.GetRequestBody().GetResponse()
+	if common == nil {
+		return response
+	}
+	body := getBodyMutationSource(ctx)
+	common.BodyMutation = &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+	}
+	if common.HeaderMutation == nil {
+		common.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	common.HeaderMutation.RemoveHeaders = append(common.HeaderMutation.RemoveHeaders, "content-length")
+	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
+	return response
 }
 
 func buildRequestBodyContinueResponse(

@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -29,21 +28,22 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient   *http.Client
-	endpoint     string
-	headers      map[string]string
-	decisionName string // Decision name to pass in looper requests
-	fusionDepth  int    // Recursion guard for Fusion requests
+	httpClient       *http.Client
+	endpoint         string
+	headers          map[string]string
+	decisionName     string // Decision name to pass in looper requests
+	fusionDepth      int    // Recursion guard for Fusion requests
+	maxResponseBytes int64  // Ceiling for a single upstream response body
 	// inboundAuthorization is the caller's original Authorization header value.
-	// When set, it is forwarded verbatim on internal looper requests so per-user
-	// identity survives the re-dispatch to backends that opt into
-	// forward_authorization_header. It takes precedence over the static access key.
+	// When set, it is forwarded on internal looper requests so per-user identity
+	// survives the re-dispatch to backends that opt into
+	// forward_authorization_header. It rides a dedicated internal header, never
+	// Authorization, so the static access key is never mistaken for it.
 	inboundAuthorization string
 }
 
@@ -53,8 +53,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
-		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
+		endpoint:         cfg.Endpoint,
+		headers:          cfg.Headers,
+		maxResponseBytes: cfg.GetMaxResponseBytes(),
 	}
 	return c
 }
@@ -115,16 +116,25 @@ type ModelResponse struct {
 	// Range: positive values, higher = more confident
 	AverageMargin float64
 
+	// MarginEvidenceComplete is true only when every generated token has at
+	// least two top-logprob entries, so AverageMargin was computed from real
+	// alternatives rather than an invented fallback margin.
+	MarginEvidenceComplete bool
+
 	// Tokens contains the text of each generated token (for token filtering)
 	Tokens []string
 
 	// FilteredAverageLogprob is the average logprob computed only over semantic tokens
 	// (e.g., argument values in tool calls, excluding JSON boilerplate)
-	// Zero means no filtering was applied.
 	FilteredAverageLogprob float64
 
 	// FilteredAverageMargin is the average margin computed only over semantic tokens
 	FilteredAverageMargin float64
+
+	// FilteredTokenCount records how many semantic tokens contributed to the
+	// filtered averages. Presence cannot be inferred from either average because
+	// zero is valid evidence for both logprob and margin.
+	FilteredTokenCount int
 
 	// HasToolCalls indicates the response contained tool_calls (not just content)
 	HasToolCalls bool
@@ -139,6 +149,10 @@ type ModelResponse struct {
 	// call. It is zero when the backend omits usage (e.g. streaming responses
 	// without stream_options.include_usage).
 	Usage TokenUsage
+
+	// LatencyMs is the wall-clock duration in milliseconds of the upstream
+	// round-trip (request + read + parse) for this single call.
+	LatencyMs int64
 }
 
 // LogprobsConfig controls logprobs behavior for model calls
@@ -199,73 +213,44 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	c.applyRequestHeaders(httpReq, accessKey, iteration)
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range c.headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	// Set Authorization header if access key is provided
+	if accessKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
+	}
+
+	c.setInternalRequestHeaders(httpReq, ctx, iteration)
 
 	// Execute request
+	start := time.Now()
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readResponseBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, err
 	}
 
 	// Parse response based on streaming mode
+	var result *ModelResponse
 	if streaming {
-		return c.parseStreamingResponse(respBody, modelName)
+		result, err = c.parseStreamingResponse(respBody, modelName)
+	} else {
+		result, err = c.parseNonStreamingResponse(respBody, modelName)
 	}
-	return c.parseNonStreamingResponse(respBody, modelName)
-}
-
-// applyRequestHeaders sets the transport, auth, and looper-identification
-// headers on an internal looper request.
-func (c *Client) applyRequestHeaders(httpReq *http.Request, accessKey string, iteration int) {
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
-		httpReq.Header.Set(k, v)
+	if err != nil {
+		return nil, err
 	}
-
-	// Set Authorization header if access key is provided.
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
-	}
-
-	// Carry the caller's original Authorization on a dedicated header (never on
-	// Authorization, which may hold the static access key above). On the internal
-	// leg, extproc treats this as the sole source of caller identity for backends
-	// that opt into forward_authorization_header, and strips it before the
-	// upstream. Keeping the two separate prevents the static key from ever being
-	// forwarded as if it were the caller's credential.
-	if c.inboundAuthorization != "" {
-		httpReq.Header.Set(headers.VSRInboundAuthorization, c.inboundAuthorization)
-	}
-
-	// Authenticate the internal leg. extproc trusts the looper markers and the
-	// caller-identity carrier below ONLY when this proof matches the per-process
-	// secret; on any unauthenticated (client) request it strips them. Set after
-	// the configured c.headers loop so a stray configured value can never shadow
-	// the proof (config also rejects reserved headers up front). The proof is
-	// validated and stripped at the ingress and never reaches the upstream.
-	httpReq.Header.Set(headers.VSRLooperAuthorization, InternalAuthSecret())
-
-	// Looper identification headers: let extproc identify looper requests and
-	// look up the decision configuration.
-	httpReq.Header.Set("x-vsr-looper-request", "true")
-	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
-	if c.fusionDepth > 0 {
-		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
-	}
-	if c.decisionName != "" {
-		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
-	}
+	result.LatencyMs = time.Since(start).Milliseconds()
+	return result, nil
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
@@ -300,6 +285,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		result.AverageLogprob = analysis.AverageLogprob
 		result.TopLogprobMargins = analysis.Margins
 		result.AverageMargin = analysis.AverageMargin
+		result.MarginEvidenceComplete = analysis.MarginEvidenceComplete
 	}
 
 	// Extract reasoning content from vLLM extra fields
@@ -326,55 +312,74 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		IsStreaming: true,
 	}
 
-	// Parse SSE chunks to extract content
-	content, chunks := parseSSEContent(body)
+	// Parse SSE chunks to extract content, reasoning, and usage.
+	content, reasoning, chunks := parseSSEContent(body)
+	result.ReasoningContent = reasoning
 	result.Content = content
 	result.StreamingChunks = chunks
+	result.Usage = parseStreamingUsage(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
-		"decision":    c.decisionName,
-		"model_ref":   modelName,
-		"content_len": len(content),
-		"streaming":   true,
+		"decision":      c.decisionName,
+		"model_ref":     modelName,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"total_tokens":  result.Usage.TotalTokens,
+		"streaming":     true,
 	})
 
 	return result, nil
 }
 
-// parseSSEContent extracts content from SSE formatted response
-func parseSSEContent(body []byte) (string, []string) {
+// parseSSEContent extracts answer and reasoning text from an SSE response.
+func parseSSEContent(body []byte) (string, string, []string) {
 	var content string
+	var reasoning string
 	var chunks []string
 
 	lines := bytes.Split(body, []byte("\n"))
 	for _, line := range lines {
-		lineStr := string(line)
-		if len(lineStr) > 6 && lineStr[:6] == "data: " {
-			data := lineStr[6:]
-			chunks = append(chunks, data)
+		payload, ok := sseDataPayload(line)
+		if !ok {
+			continue
+		}
+		data := string(payload)
+		chunks = append(chunks, data)
 
-			if data == "[DONE]" {
-				continue
-			}
+		if data == "[DONE]" {
+			continue
+		}
 
-			var chunk map[string]interface{}
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-				continue
-			}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
 
-			if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
-				if choice, ok := choices[0].(map[string]interface{}); ok {
-					if delta, ok := choice["delta"].(map[string]interface{}); ok {
-						if c, ok := delta["content"].(string); ok {
-							content += c
-						}
-					}
-				}
-			}
+		choices, ok := chunk["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		textFields := choice
+		if delta, ok := choice["delta"].(map[string]interface{}); ok {
+			textFields = delta
+		} else if message, ok := choice["message"].(map[string]interface{}); ok {
+			textFields = message
+		}
+		if text, ok := textFields["content"].(string); ok {
+			content += text
+		}
+		if text := reasoningTextFromMap(textFields); text != "" {
+			reasoning += text
+		} else if text := reasoningTextFromMap(choice); text != "" {
+			reasoning += text
 		}
 	}
 
-	return content, chunks
+	return content, reasoning, chunks
 }
 
 // LogprobAnalysis contains analyzed logprob data from a response
@@ -393,6 +398,9 @@ type LogprobAnalysis struct {
 	// AverageMargin is the average margin across all tokens
 	// Range: positive, higher = more confident
 	AverageMargin float64
+	// MarginEvidenceComplete reports whether every token had a real
+	// alternative from which its margin could be calculated.
+	MarginEvidenceComplete bool
 }
 
 // extractLogprobs extracts logprobs and margins from a ChatCompletion response
@@ -412,22 +420,27 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 
 	var logprobSum float64
 	var marginSum float64
+	result.MarginEvidenceComplete = true
 
 	for _, tokenLogprob := range choice.Logprobs.Content {
 		result.Tokens = append(result.Tokens, tokenLogprob.Token)
 		result.Logprobs = append(result.Logprobs, tokenLogprob.Logprob)
 		logprobSum += tokenLogprob.Logprob
 
-		margin := calculateMargin(tokenLogprob.Logprob, tokenLogprob.TopLogprobs)
+		margin, hasAlternative := calculateMargin(tokenLogprob.TopLogprobs)
 		result.Margins = append(result.Margins, margin)
-		marginSum += margin
+		if hasAlternative {
+			marginSum += margin
+		} else {
+			result.MarginEvidenceComplete = false
+		}
 	}
 
 	// Calculate averages
 	if len(result.Logprobs) > 0 {
 		result.AverageLogprob = logprobSum / float64(len(result.Logprobs))
 	}
-	if len(result.Margins) > 0 {
+	if result.MarginEvidenceComplete && len(result.Margins) > 0 {
 		result.AverageMargin = marginSum / float64(len(result.Margins))
 	}
 
@@ -437,11 +450,12 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 // calculateMargin calculates the margin between the chosen token and the next best alternative
 // A large margin indicates the model was very confident in its choice
 // A small margin indicates the model was uncertain between multiple options
-func calculateMargin(chosenLogprob float64, topLogprobs []openai.ChatCompletionTokenLogprobTopLogprob) float64 {
+func calculateMargin(topLogprobs []openai.ChatCompletionTokenLogprobTopLogprob) (float64, bool) {
 	if len(topLogprobs) < 2 {
-		// No alternative token available, assume high confidence
-		// Use a reasonable default margin
-		return 2.0
+		// A chosen-token logprob alone contains no evidence about the nearest
+		// alternative. Returning zero keeps token/margin indexes aligned; the
+		// completeness flag prevents callers from treating it as confidence.
+		return 0, false
 	}
 
 	// topLogprobs[0] is the chosen token (should match chosenLogprob)
@@ -454,7 +468,7 @@ func calculateMargin(chosenLogprob float64, topLogprobs []openai.ChatCompletionT
 	// Margin: how much better is top1 than top2
 	// Example: top1=-0.1, top2=-2.0 => margin=1.9 (high confidence)
 	// Example: top1=-0.5, top2=-0.6 => margin=0.1 (low confidence, model is uncertain)
-	return top1 - top2
+	return top1 - top2, true
 }
 
 // ApplyTokenFilter computes filtered logprob/margin averages on a ModelResponse
@@ -504,6 +518,7 @@ func filterToolCallArgTokens(resp *ModelResponse) {
 	if len(filteredLP) == 0 {
 		return
 	}
+	resp.FilteredTokenCount = len(filteredLP)
 
 	var lpSum float64
 	for _, v := range filteredLP {
@@ -690,7 +705,16 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		return nil, err
 	}
 	reqMap["stream"] = streaming
-	if !streaming {
+	if streaming {
+		// Ask the backend to emit a trailing usage chunk so token accounting
+		// works for streamed calls; preserve any caller-set stream_options.
+		opts, _ := reqMap["stream_options"].(map[string]interface{})
+		if opts == nil {
+			opts = map[string]interface{}{}
+		}
+		opts["include_usage"] = true
+		reqMap["stream_options"] = opts
+	} else {
 		delete(reqMap, "stream_options")
 	}
 	return json.Marshal(reqMap)
@@ -718,27 +742,23 @@ func extractReasoningFromRaw(rawBody []byte) string {
 		return ""
 	}
 
-	// Try choice-level fields first
-	if reasoning, reasoningOk := choice["reasoning"].(string); reasoningOk {
+	if message, ok := choice["message"].(map[string]interface{}); ok {
+		if reasoning := reasoningTextFromMap(message); reasoning != "" {
+			return reasoning
+		}
+	}
+	if reasoning := reasoningTextFromMap(choice); reasoning != "" {
 		return reasoning
 	}
-	if reasoning, reasoningOk := choice["reasoning_content"].(string); reasoningOk {
-		return reasoning
-	}
+	return ""
+}
 
-	// Try message-level fields
-	message, ok := choice["message"].(map[string]interface{})
-	if !ok {
-		return ""
+func reasoningTextFromMap(fields map[string]interface{}) string {
+	for _, key := range []string{"reasoning_content", "reasoning"} {
+		if value, ok := fields[key].(string); ok && strings.TrimSpace(value) != "" {
+			return value
+		}
 	}
-
-	if reasoning, ok := message["reasoning"].(string); ok {
-		return reasoning
-	}
-	if reasoning, ok := message["reasoning_content"].(string); ok {
-		return reasoning
-	}
-
 	return ""
 }
 

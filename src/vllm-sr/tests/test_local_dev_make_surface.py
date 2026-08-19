@@ -3,7 +3,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKER_MK_PATH = REPO_ROOT / "tools" / "make" / "docker.mk"
 AGENT_MK_PATH = REPO_ROOT / "tools" / "make" / "agent.mk"
-ENVIRONMENTS_DOC_PATH = REPO_ROOT / "docs" / "agent" / "environments.md"
+ENVIRONMENTS_DOC_PATH = REPO_ROOT / "tools" / "agent" / "docs" / "environments.md"
 
 
 def test_split_topology_defaults_to_rebuilding_router_image() -> None:

@@ -1,41 +1,17 @@
 name: Test And Build
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-  push:
-    branches:
-      - main
-  schedule:
-    # Run nightly at 2:00 AM UTC
-    - cron: "0 2 * * *"
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 env:
   HELM_VERSION: v3.14.0
 
 jobs:
-  # use changes as filter
-  changes:
-    uses: ./.github/workflows/ci-changes.yml
-
   test-and-build:
-    needs: changes
-    if: >-
-      ${{ !github.event.pull_request.draft
-          && (github.event_name == 'schedule'
-          || needs.changes.outputs.core == 'true'
-          || needs.changes.outputs.helm == 'true'
-          || needs.changes.outputs.e2e  == 'true'
-          || needs.changes.outputs.docker == 'true'
-          || needs.changes.outputs.make == 'true'
-          || needs.changes.outputs.ci   == 'true') }}
+    name: Core test and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -149,6 +125,17 @@ jobs:
 
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
+
+      # Regenerates the apiserver OpenAPI JSON and reference Markdown from the
+      # route catalog and fails if either committed artifact differs, so API
+      # docs cannot be hand-edited or left stale when a route changes.
+      # Runs before the model/service setup so drift fails fast.
+      - name: Check generated API docs are up to date
+        run: make api-docs-check
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 
       - name: Install HuggingFace CLI
         run: |
@@ -277,13 +264,3 @@ jobs:
           echo "::error::Test and build failed. Check the workflow run for details."
           echo "To reproduce this job locally: make test-and-build-local"
           echo "To run the baseline PR parity gate locally: make agent-pr-gate"
-
-  # Trigger Docker publishing on successful nightly runs
-  publish-docker:
-    needs: test-and-build
-    if: github.repository == 'vllm-project/semantic-router' && success() && github.event_name == 'schedule'
-    uses: ./.github/workflows/docker-publish.yml
-    with:
-      tag_suffix: nightly-$(date +'%Y%m%d')
-      is_nightly: true
-    secrets: inherit

@@ -1,151 +1,193 @@
-name: Release Validation
-
-# This workflow is the release guard: it validates that all versioned surfaces
-# (Python package, Rust crate) agree with the pushed tag before any of the
-# independent publish workflows can drift.  It also produces a single, unified
-# GitHub Release note that links every published artifact.
-#
-# Individual publish workflows (docker-release, helm-publish, pypi-publish,
-# publish-crate) still trigger independently on v* tags so they remain
-# self-contained.  This workflow adds the cross-surface sanity check on top.
+name: Release
 
 on:
   push:
     tags:
-      - "v*"
-  # Allow running the validation step manually against any ref for pre-release
-  # testing (e.g. before actually pushing the tag).
+      - "v[0-9]*.[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to validate (e.g. 0.3.0) — no leading 'v'"
+        description: Version contract to validate without publishing.
         required: true
         type: string
+
+permissions:
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write # needed to create/update the GitHub Release
-
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # validate: check that every versioned source file matches the git tag.
-  # A mismatch here means a developer forgot to bump a version before tagging —
-  # fail loudly so it is caught before artifacts land in production registries.
-  # ─────────────────────────────────────────────────────────────────────────────
   validate:
     name: Cross-Surface Version Validation
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.extract.outputs.version }}
-      tag: ${{ steps.extract.outputs.tag }}
-      sim_version: ${{ steps.check_versions.outputs.sim_version }}
-
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sim_version: ${{ steps.contract.outputs.sim_version }}
+      catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # ── Derive version ────────────────────────────────────────────────────────
-      - name: Extract version
-        id: extract
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install release validation dependencies
+        run: python -m pip install PyYAML==6.0.3
+
+      - name: Resolve release version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="$INPUT_VERSION"
             TAG="v${VERSION}"
           else
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
           fi
-          echo "tag=${TAG}"     >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Validating release: ${TAG} (version: ${VERSION})"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release version '$VERSION' is not semantic version syntax"
+            exit 1
+          fi
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
 
-      # ── Cross-surface release contract ───────────────────────────────────────
-      # The script is also used by `make release-check` and `make release`, so
-      # tag validation, local release prep, Helm packaging semantics, and release
-      # notes stay on the same parser instead of drifting across workflow-local
-      # grep/sed snippets.
       - name: Validate release version contract
-        id: check_versions
+        id: contract
         run: |
+          python3 tools/release/snapshot_model_catalog.py \
+            --check-published --base-ref "$GITHUB_SHA"
           python3 tools/release/check_version_contract.py \
-            --version "${{ steps.extract.outputs.version }}" \
+            --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # release-notes: create or update the GitHub Release with a cross-surface
-  # summary so operators can find every artifact from one place.
-  # Runs only on actual tag pushes (not workflow_dispatch test runs).
-  # ─────────────────────────────────────────────────────────────────────────────
-  release-notes:
-    name: Publish GitHub Release Notes
+  docker:
+    name: Docker images
     needs: validate
     if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      mode: release
+      images: '["dashboard","extproc","extproc-rocm","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm"]'
+      tag: ${{ needs.validate.outputs.tag }}
+      publish_latest: true
+    secrets: inherit
+
+  helm:
+    name: Helm chart
+    needs: validate
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/helm-publish.yml
+    with:
+      mode: release
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+    secrets: inherit
+
+  pypi:
+    name: Python package
+    needs: validate
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/pypi-publish.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+      catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
+    secrets: inherit
+
+  crate:
+    name: Rust crate
+    needs: validate
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/publish-crate.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+      tag: ${{ needs.validate.outputs.tag }}
+    secrets: inherit
+
+  release-notes:
+    name: Publish GitHub Release
+    needs: [validate, docker, helm, pypi, crate]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vllm-sr-dist
+          path: release-assets/python
 
-      - name: Resolve GHCR owner (lowercase)
+      - uses: actions/download-artifact@v4
+        with:
+          name: candle-release-libraries
+          path: release-assets/rust
+
+      - name: Resolve lowercase registry owner
         id: owner
         run: |
-          echo "lower=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+          echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
             >> "$GITHUB_OUTPUT"
 
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Create release after every publisher succeeds
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
-          name: "Release ${{ needs.validate.outputs.tag }}"
+          name: Release ${{ needs.validate.outputs.tag }}
           draft: false
           prerelease: false
+          overwrite_files: false
           generate_release_notes: true
+          files: |
+            release-assets/python/*
+            release-assets/rust/*
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            ### Container Images (GHCR)
+            Version validation completed before Docker, Helm, PyPI, crates.io,
+            and operator image publication.
 
-            Always pin to a version tag in production — it is immutable.
+            ### Container images
 
-            ```bash
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/extproc:${{ needs.validate.outputs.tag }}
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/vllm-sr:${{ needs.validate.outputs.tag }}
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/anthropic-shim:${{ needs.validate.outputs.tag }}
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/dashboard:${{ needs.validate.outputs.tag }}
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator:${{ needs.validate.outputs.tag }}
-            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator-bundle:${{ needs.validate.outputs.tag }}
-            ```
+            All images use `${{ needs.validate.outputs.tag }}` and `latest`:
 
-            | Image | Tags pushed |
-            |-------|-------------|
-            | `extproc` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `vllm-sr` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `anthropic-shim` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `extproc-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `vllm-sr-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `llm-katan` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `dashboard` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `operator` | `${{ needs.validate.outputs.tag }}` · `latest` |
-            | `operator-bundle` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            - `dashboard`
+            - `extproc`
+            - `extproc-rocm`
+            - `operator`
+            - `operator-bundle`
+            - `vllm-sr`
+            - `vllm-sr-cuda`
+            - `vllm-sr-rocm`
 
-            ### Helm Chart
+            Registry prefix:
+            `ghcr.io/${{ steps.owner.outputs.value }}/semantic-router/`
+
+            ### Helm
 
             ```bash
-            # Install a specific version
             helm install semantic-router \
-              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
-              --version ${{ needs.validate.outputs.version }} \
-              --namespace vllm-semantic-router-system --create-namespace
-
-            # Upgrade to this version
-            helm upgrade semantic-router \
-              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
-              --version ${{ needs.validate.outputs.version }} \
-              --namespace vllm-semantic-router-system
+              oci://ghcr.io/${{ steps.owner.outputs.value }}/charts/semantic-router \
+              --version ${{ needs.validate.outputs.version }}
             ```
 
-            ### Python Package (PyPI)
+            ### Python
 
             ```bash
             pip install vllm-sr==${{ needs.validate.outputs.version }}
@@ -154,16 +196,25 @@ jobs:
             ### Rust Crate (crates.io)
 
             ```toml
-            [dependencies]
             candle-semantic-router = "${{ needs.validate.outputs.version }}"
             ```
 
-            ---
+            ### Built-in virtual models
 
-            **vllm-sr-sim** ships on its own `vllm-sr-sim-v*` tag and is currently at
-            `${{ needs.validate.outputs.sim_version }}`.
+            Curated virtual models and their versioned Recipe YAML are bundled
+            in the `vllm-sr` wheel and release images. They are not published
+            as separate GitHub Release assets. This release binds immutable
+            catalog snapshot `${{ needs.validate.outputs.catalog_snapshot }}`.
+            Inspect or fork the installed catalog locally:
 
-            See the [upgrade and rollback runbook](https://github.com/${{ github.repository }}/blob/main/website/docs/installation/upgrade-rollback.md)
-            for step-by-step upgrade and rollback instructions.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            ```bash
+            vllm-sr model list
+            vllm-sr model show vllm-sr/mom-v1-blend \
+              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
+            vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml \
+              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
+            ```
+
+            `vllm-sr-sim` Python releases remain on the independent
+            `vllm-sr-sim-v*` tag stream (current source version
+            `${{ needs.validate.outputs.sim_version }}`).

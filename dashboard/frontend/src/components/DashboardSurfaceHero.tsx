@@ -14,6 +14,7 @@ export interface DashboardSurfaceHeroPill {
 }
 
 interface DashboardSurfaceHeroProps {
+  compact?: boolean
   eyebrow?: string
   title: string
   description: string
@@ -26,6 +27,7 @@ interface DashboardSurfaceHeroProps {
 }
 
 export default function DashboardSurfaceHero({
+  compact = false,
   eyebrow = 'Manager',
   title,
   description,
@@ -37,7 +39,7 @@ export default function DashboardSurfaceHero({
   panelFooter,
 }: DashboardSurfaceHeroProps) {
   return (
-    <header className={styles.hero}>
+    <header className={`${styles.hero} ${compact ? styles.heroCompact : ''}`}>
       <div className={styles.heroGlow} aria-hidden="true" />
       <div className={styles.copy}>
         <div className={styles.topline}>
@@ -89,7 +91,7 @@ export default function DashboardSurfaceHero({
                 >
                   {pill.label}
                 </span>
-              )
+              ),
             )}
           </div>
         ) : null}

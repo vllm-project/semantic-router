@@ -9,14 +9,15 @@ import (
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
-	Endpoint         string              `yaml:"endpoint"`
-	GRPCMaxMsgSizeMB int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
-	TimeoutSeconds   int                 `yaml:"timeout_seconds,omitempty"`
-	RetryCount       int                 `yaml:"retry_count,omitempty"`
-	Headers          map[string]string   `yaml:"headers,omitempty"`
-	ReMoM            ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
-	Fusion           FusionRuntimeConfig `yaml:"fusion,omitempty"`
-	Flow             FlowRuntimeConfig   `yaml:"flow,omitempty"`
+	Endpoint           string              `yaml:"endpoint"`
+	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
+	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
+	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
+	RetryCount         int                 `yaml:"retry_count,omitempty"`
+	Headers            map[string]string   `yaml:"headers,omitempty"`
+	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
+	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
+	Flow               FlowRuntimeConfig   `yaml:"flow,omitempty"`
 }
 
 func (l *LooperConfig) IsEnabled() bool {
@@ -58,6 +59,21 @@ func (l *LooperConfig) GetGRPCMaxMsgSize() int {
 		return 4 * 1024 * 1024
 	}
 	return l.GRPCMaxMsgSizeMB * 1024 * 1024
+}
+
+// DefaultMaxResponseBytes caps a single upstream model response body when no
+// explicit max_response_bytes_mb is configured (32 MiB). A single chat
+// completion never approaches this, but it bounds a huge or malicious upstream
+// response so it cannot exhaust router memory.
+const DefaultMaxResponseBytes int64 = 32 * 1024 * 1024
+
+// GetMaxResponseBytes returns the per-response read ceiling in bytes, falling
+// back to DefaultMaxResponseBytes when unset or non-positive.
+func (l *LooperConfig) GetMaxResponseBytes() int64 {
+	if l.MaxResponseBytesMB <= 0 {
+		return DefaultMaxResponseBytes
+	}
+	return int64(l.MaxResponseBytesMB) * 1024 * 1024
 }
 
 // RedisConfig defines the complete configuration structure for Redis cache backend.
@@ -224,7 +240,7 @@ type MilvusConfig struct {
 	} `json:"development" yaml:"development"`
 }
 
-type SemanticCache struct {
+type ResponseCacheStoreConfig struct {
 	BackendType         string        `yaml:"backend_type,omitempty"`
 	Enabled             bool          `yaml:"enabled"`
 	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
@@ -237,6 +253,9 @@ type SemanticCache struct {
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
+
+// SemanticCache is retained for source compatibility.
+type SemanticCache = ResponseCacheStoreConfig
 
 // QdrantConfig defines the complete configuration structure for Qdrant cache backend.
 type QdrantConfig struct {
@@ -386,13 +405,12 @@ type ResponseAPIRedisConfig struct {
 }
 
 // RouterReplayConfig controls routing-decision replay record storage.
-// StoreBackend defaults to "postgres" for durable, SQL-queryable storage
-// that survives router restarts. Supported backends: "postgres", "redis",
-// "milvus", "qdrant", "memory". Use "redis" for lightweight deployments that already
-// run Redis. Set to "memory" only for local development — all replay
-// records are lost when the router process exits.
+// Replay is disabled by default and uses an in-memory store when a decision
+// explicitly opts in without a global storage configuration. Supported
+// backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
+// deployments should explicitly enable replay and configure a durable backend.
 type RouterReplayConfig struct {
-	Enabled      bool                        `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled      bool                        `json:"enabled" yaml:"enabled"`
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`

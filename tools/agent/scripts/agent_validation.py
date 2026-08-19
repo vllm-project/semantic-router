@@ -162,28 +162,6 @@ def validate_routing_fixtures(errors: list[str]) -> None:
             )
 
 
-def validate_discovery_bridge(errors: list[str]) -> None:
-    bridge_path = REPO_ROOT / ".agents" / "skills" / "harness" / "SKILL.md"
-    if not bridge_path.exists():
-        errors.append(
-            "Missing native-discovery bridge: .agents/skills/harness/SKILL.md"
-        )
-        return
-
-    bridge_text = bridge_path.read_text(encoding="utf-8")
-    required_refs = [
-        "AGENTS.md",
-        "docs/agent/README.md",
-        "make agent-report",
-        "tools/agent/skills/",
-    ]
-    for ref in required_refs:
-        if ref not in bridge_text:
-            errors.append(
-                f"Discovery bridge skill must reference '{ref}' in {bridge_path.relative_to(REPO_ROOT)}"
-            )
-
-
 def collect_validation_errors() -> list[str]:
     repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry = (
         load_manifests()
@@ -207,7 +185,6 @@ def collect_validation_errors() -> list[str]:
     )
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
     validate_routing_fixtures(errors)
-    validate_discovery_bridge(errors)
     return errors
 
 

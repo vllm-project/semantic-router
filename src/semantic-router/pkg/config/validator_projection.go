@@ -21,7 +21,7 @@ func validateProjectionContracts(cfg *RouterConfig) error {
 	if err != nil {
 		return err
 	}
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateDecisionProjectionReferences(decision.Name, &decision.Rules, outputNames); err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func buildProjectionScoreAdj(scores []ProjectionScore, outputToSource map[string
 				continue
 			}
 			vs := strings.ToLower(strings.TrimSpace(input.ValueSource))
-			if vs == "confidence" {
+			if vs == ProjectionValueSourceConfidence {
 				if src, ok := outputToSource[input.Name]; ok {
 					adj[score.Name] = append(adj[score.Name], src)
 				}
@@ -330,9 +330,9 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 		)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "", "score":
+	case "", ProjectionValueSourceScore:
 		return nil
-	case "confidence":
+	case ProjectionValueSourceConfidence:
 		if _, ok := outputToSource[input.Name]; !ok {
 			return fmt.Errorf(
 				"routing.projections.scores[%q]: projection input %q with value_source \"confidence\" references undefined mapping output",
@@ -353,7 +353,7 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
 	switch input.ValueSource {
-	case "", "binary", "confidence", "raw":
+	case "", ProjectionValueSourceBinary, ProjectionValueSourceConfidence, ProjectionValueSourceRaw:
 		return nil
 	default:
 		return fmt.Errorf(
@@ -414,6 +414,8 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
 		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
 		SignalTypeEvent:        collectEventRuleNames(cfg.EventRules),
+		SignalTypeMetadata:     collectMetadataRuleNames(cfg.MetadataRules),
+		SignalTypeClassifier:   collectClassifierRuleNames(cfg.ClassifierRules),
 	}
 	return declared
 }
@@ -696,6 +698,24 @@ func collectEventRuleNames(rules []EventRule) map[string]struct{} {
 	return names
 }
 
+func collectMetadataRuleNames(rules []MetadataRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectClassifierRuleNames(
+	rules []ClassifierSignalRule,
+) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
 func validateKBMetricProjectionInput(
 	cfg *RouterConfig,
 	scoreName string,
@@ -730,7 +750,7 @@ func validateKBMetricProjectionInput(
 		)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "", "score":
+	case "", ProjectionValueSourceScore:
 		return nil
 	default:
 		return fmt.Errorf(

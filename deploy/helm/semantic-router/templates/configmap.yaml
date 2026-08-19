@@ -1,45 +1,49 @@
-{{- $config := deepCopy .Values.config -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $router := (get $global "router") | default (dict) -}}
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
 
-{{- $skipProcessingEnabled := false -}}
-{{- if and .Values.router .Values.router.skipProcessing -}}
-{{-   $skipProcessingEnabled = (.Values.router.skipProcessing.enabled | default false) -}}
+{{- $skipProcessing := (get $router "skip_processing") | default (dict) -}}
+{{- $skipProcessingEnabled := (get $skipProcessing "enabled") | default false -}}
+{{- $routerValues := .Values.router | default (dict) -}}
+{{- $skipProcessingValues := (get $routerValues "skipProcessing") | default (dict) -}}
+{{- if and (hasKey $skipProcessingValues "enabled") (ne (get $skipProcessingValues "enabled") nil) -}}
+{{-   $skipProcessingEnabled = (get $skipProcessingValues "enabled") -}}
 {{- end -}}
-{{- $skipProcessing := dict "enabled" $skipProcessingEnabled -}}
+{{- $_ := set $skipProcessing "enabled" $skipProcessingEnabled -}}
 {{- $_ := set $router "skip_processing" $skipProcessing -}}
 {{- $_ := set $global "router" $router -}}
-{{- $semanticCache := (get $stores "semantic_cache") | default (dict) -}}
-{{- $_ := unset $semanticCache "use_hnsw" -}}
-{{- $_ := unset $semanticCache "hnsw_m" -}}
-{{- $_ := unset $semanticCache "hnsw_ef_construction" -}}
+{{- $responseCache := (get $stores "response_cache") | default (get $stores "semantic_cache") | default (dict) -}}
+{{- $_ := unset $stores "semantic_cache" -}}
+{{- $_ := unset $responseCache "use_hnsw" -}}
+{{- $_ := unset $responseCache "hnsw_m" -}}
+{{- $_ := unset $responseCache "hnsw_ef_construction" -}}
 {{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $observability := (get $services "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
 {{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
 {{- $tracingResource := (get $tracing "resource") | default (dict) -}}
-{{- $semanticBackend := (get $semanticCache "backend_type") | default "" -}}
+{{- $responseCacheBackend := (get $responseCache "backend_type") | default "" -}}
 {{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
 {{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
 {{- $tracingEnabled := (get $tracing "enabled") | default false -}}
 
-{{- if and .Values.dependencies.semanticCache.redis.enabled (eq $semanticBackend "redis") -}}
-{{- $semanticRedis := dict -}}
-{{- $_ := set $semanticRedis "connection" (dict "host" (include "semantic-router.semanticCache.redisHost" .) "port" .Values.dependencies.semanticCache.redis.port "database" .Values.dependencies.semanticCache.redis.database "password" .Values.dependencies.semanticCache.redis.password "timeout" .Values.dependencies.semanticCache.redis.timeout "tls" (dict "enabled" .Values.dependencies.semanticCache.redis.tls.enabled)) -}}
-{{- $_ := set $semanticRedis "index" (dict "name" .Values.dependencies.semanticCache.redis.index.name "prefix" .Values.dependencies.semanticCache.redis.index.prefix "vector_field" (dict "name" .Values.dependencies.semanticCache.redis.index.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.redis.index.metricType) "index_type" .Values.dependencies.semanticCache.redis.index.indexType "params" (dict "M" .Values.dependencies.semanticCache.redis.index.params.m "efConstruction" .Values.dependencies.semanticCache.redis.index.params.efConstruction)) -}}
-{{- $_ := set $semanticRedis "search" (dict "topk" .Values.dependencies.semanticCache.redis.search.topk) -}}
-{{- $_ := set $semanticRedis "development" (dict "drop_index_on_startup" .Values.dependencies.semanticCache.redis.development.dropIndexOnStartup "auto_create_index" .Values.dependencies.semanticCache.redis.development.autoCreateIndex "verbose_errors" .Values.dependencies.semanticCache.redis.development.verboseErrors) -}}
-{{- $_ := set $semanticCache "redis" $semanticRedis -}}
+{{- if and .Values.dependencies.semanticCache.redis.enabled (eq $responseCacheBackend "redis") -}}
+{{- $cacheRedis := dict -}}
+{{- $_ := set $cacheRedis "connection" (dict "host" (include "semantic-router.semanticCache.redisHost" .) "port" .Values.dependencies.semanticCache.redis.port "database" .Values.dependencies.semanticCache.redis.database "password" .Values.dependencies.semanticCache.redis.password "timeout" .Values.dependencies.semanticCache.redis.timeout "tls" (dict "enabled" .Values.dependencies.semanticCache.redis.tls.enabled)) -}}
+{{- $_ := set $cacheRedis "index" (dict "name" .Values.dependencies.semanticCache.redis.index.name "prefix" .Values.dependencies.semanticCache.redis.index.prefix "vector_field" (dict "name" .Values.dependencies.semanticCache.redis.index.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.redis.index.metricType) "index_type" .Values.dependencies.semanticCache.redis.index.indexType "params" (dict "M" .Values.dependencies.semanticCache.redis.index.params.m "efConstruction" .Values.dependencies.semanticCache.redis.index.params.efConstruction)) -}}
+{{- $_ := set $cacheRedis "search" (dict "topk" .Values.dependencies.semanticCache.redis.search.topk) -}}
+{{- $_ := set $cacheRedis "development" (dict "drop_index_on_startup" .Values.dependencies.semanticCache.redis.development.dropIndexOnStartup "auto_create_index" .Values.dependencies.semanticCache.redis.development.autoCreateIndex "verbose_errors" .Values.dependencies.semanticCache.redis.development.verboseErrors) -}}
+{{- $_ := set $responseCache "redis" $cacheRedis -}}
 {{- end -}}
-{{- if and .Values.dependencies.semanticCache.milvus.enabled (or (eq $semanticBackend "milvus") (eq $semanticBackend "hybrid")) -}}
-{{- $semanticMilvus := dict -}}
-{{- $_ := set $semanticMilvus "connection" (dict "host" (include "semantic-router.semanticCache.milvusHost" .) "port" .Values.dependencies.semanticCache.milvus.port "database" .Values.dependencies.semanticCache.milvus.database "timeout" .Values.dependencies.semanticCache.milvus.timeout "auth" (dict "enabled" .Values.dependencies.semanticCache.milvus.auth.enabled "username" .Values.dependencies.semanticCache.milvus.auth.username "password" .Values.dependencies.semanticCache.milvus.auth.password) "tls" (dict "enabled" .Values.dependencies.semanticCache.milvus.tls.enabled)) -}}
-{{- $_ := set $semanticMilvus "collection" (dict "name" .Values.dependencies.semanticCache.milvus.collection.name "description" .Values.dependencies.semanticCache.milvus.collection.description "vector_field" (dict "name" .Values.dependencies.semanticCache.milvus.collection.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.milvus.collection.metricType) "index" (dict "type" .Values.dependencies.semanticCache.milvus.collection.index.type "params" (dict "M" .Values.dependencies.semanticCache.milvus.collection.index.params.m "efConstruction" .Values.dependencies.semanticCache.milvus.collection.index.params.efConstruction))) -}}
-{{- $_ := set $semanticMilvus "search" (dict "params" (dict "ef" .Values.dependencies.semanticCache.milvus.search.params.ef) "topk" .Values.dependencies.semanticCache.milvus.search.topk) -}}
-{{- $_ := set $semanticMilvus "development" (dict "drop_collection_on_startup" .Values.dependencies.semanticCache.milvus.development.dropCollectionOnStartup "auto_create_collection" .Values.dependencies.semanticCache.milvus.development.autoCreateCollection "verbose_errors" .Values.dependencies.semanticCache.milvus.development.verboseErrors) -}}
-{{- $_ := set $semanticCache "milvus" $semanticMilvus -}}
+{{- if and .Values.dependencies.semanticCache.milvus.enabled (or (eq $responseCacheBackend "milvus") (eq $responseCacheBackend "hybrid")) -}}
+{{- $cacheMilvus := dict -}}
+{{- $_ := set $cacheMilvus "connection" (dict "host" (include "semantic-router.semanticCache.milvusHost" .) "port" .Values.dependencies.semanticCache.milvus.port "database" .Values.dependencies.semanticCache.milvus.database "timeout" .Values.dependencies.semanticCache.milvus.timeout "auth" (dict "enabled" .Values.dependencies.semanticCache.milvus.auth.enabled "username" .Values.dependencies.semanticCache.milvus.auth.username "password" .Values.dependencies.semanticCache.milvus.auth.password) "tls" (dict "enabled" .Values.dependencies.semanticCache.milvus.tls.enabled)) -}}
+{{- $_ := set $cacheMilvus "collection" (dict "name" .Values.dependencies.semanticCache.milvus.collection.name "description" .Values.dependencies.semanticCache.milvus.collection.description "vector_field" (dict "name" .Values.dependencies.semanticCache.milvus.collection.vectorFieldName "dimension" 384 "metric_type" .Values.dependencies.semanticCache.milvus.collection.metricType) "index" (dict "type" .Values.dependencies.semanticCache.milvus.collection.index.type "params" (dict "M" .Values.dependencies.semanticCache.milvus.collection.index.params.m "efConstruction" .Values.dependencies.semanticCache.milvus.collection.index.params.efConstruction))) -}}
+{{- $_ := set $cacheMilvus "search" (dict "params" (dict "ef" .Values.dependencies.semanticCache.milvus.search.params.ef) "topk" .Values.dependencies.semanticCache.milvus.search.topk) -}}
+{{- $_ := set $cacheMilvus "development" (dict "drop_collection_on_startup" .Values.dependencies.semanticCache.milvus.development.dropCollectionOnStartup "auto_create_collection" .Values.dependencies.semanticCache.milvus.development.autoCreateCollection "verbose_errors" .Values.dependencies.semanticCache.milvus.development.verboseErrors) -}}
+{{- $_ := set $responseCache "milvus" $cacheMilvus -}}
 {{- end -}}
 
 {{- if and $responseEnabled .Values.dependencies.responseApi.milvus.enabled (eq $responseBackend "milvus") -}}
@@ -64,7 +68,7 @@
 {{- end -}}
 {{- $_ := set $observability "tracing" $tracing -}}
 
-{{- $_ := set $stores "semantic_cache" $semanticCache -}}
+{{- $_ := set $stores "response_cache" $responseCache -}}
 {{- $_ := set $services "response_api" $responseAPI -}}
 {{- $_ := set $services "observability" $observability -}}
 {{- $_ := set $global "stores" $stores -}}

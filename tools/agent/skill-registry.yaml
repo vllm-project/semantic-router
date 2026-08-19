@@ -218,7 +218,7 @@ surfaces:
     paths:
     - src/training/**
     - tools/make/models.mk
-    - scripts/train-mmbert32k-gpu.sh
+    - tools/models/train-mmbert32k-gpu.sh
     - website/docs/training/**
     task_rules:
     - training-stack
@@ -226,11 +226,8 @@ surfaces:
   docs_examples:
     description: User-facing docs, examples, presets, and reference configs that explain or demonstrate behavior.
     paths:
-    - docs/**
     - website/**
-    - deploy/amd/**
-    - deploy/examples/**
-    - config/**/*.yaml
+    - config/**
     task_rules:
     - repo-docs
     - training-stack
@@ -238,7 +235,7 @@ surfaces:
     description: Shared agent entry, indexed harness docs, local AGENTS supplements, skill prose, execution plans, glossary, and debt tracking for the harness itself.
     paths:
     - AGENTS.md
-    - docs/agent/**
+    - tools/agent/docs/**
     - tools/agent/skills/**
     - src/fleet-sim/AGENTS.md
     - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
@@ -261,7 +258,9 @@ surfaces:
     paths:
     - tools/agent/*.yaml
     - tools/agent/scripts/**
+    - tools/ci/**
     - tools/make/agent.mk
+    - .mergify.yml
     task_rules:
     - agent_exec
   contributor_interface:
@@ -279,7 +278,7 @@ surfaces:
   maintainer_ops:
     description: Maintainer-only release, milestone, issue, PR, stale-work, and daily board workflows.
     paths:
-    - docs/agent/maintainer-ops.md
+    - tools/agent/docs/maintainer-ops.md
     - tools/agent/maintainer-policy.yaml
     - tools/agent/scripts/maintainer_board.py
     - tools/agent/skills/maintainer/**
@@ -320,11 +319,9 @@ surfaces:
   ci_e2e:
     description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
-    - .github/workflows/ci-changes.yml
-    - .github/workflows/integration-test-k8s.yml
-    - .github/workflows/integration-test-memory.yml
-    - .github/workflows/integration-test-vllm-sr-cli.yml
-    - .github/workflows/pre-commit.yml
+    - .github/actions/**
+    - .github/workflows/**
+    - .mergify.yml
     - e2e/testing/vllm-sr-cli/**
     - e2e/testing/09-memory-features-test.py
     - e2e/testing/llm-katan/**
@@ -344,7 +341,7 @@ skills:
     - AGENTS.md
     - README.md
     - CONTRIBUTING.md
-    - docs/agent/**
+    - tools/agent/docs/**
     - tools/agent/skills/**
     - src/fleet-sim/AGENTS.md
     - src/fleet-sim/fleet_sim/optimizer/AGENTS.md
@@ -361,15 +358,15 @@ skills:
     - e2e/testcases/AGENTS.md
     - tools/agent/*.yaml
     - tools/agent/scripts/**
+    - tools/ci/**
     - tools/make/agent.mk
     - .github/copilot-instructions.md
     - .github/PULL_REQUEST_TEMPLATE.md
     - .github/ISSUE_TEMPLATE/**
     - .prowlabels.yaml
-    - .github/workflows/ci-changes.yml
-    - .github/workflows/integration-test-k8s.yml
-    - .github/workflows/integration-test-vllm-sr-cli.yml
-    - .github/workflows/pre-commit.yml
+    - .github/actions/**
+    - .github/workflows/**
+    - .mergify.yml
     required_surfaces:
     - harness_docs
     conditional_surfaces:
@@ -699,7 +696,7 @@ skills:
     selector_paths:
     - src/training/**
     - tools/make/models.mk
-    - scripts/train-mmbert32k-gpu.sh
+    - tools/models/train-mmbert32k-gpu.sh
     - website/docs/training/**
     required_surfaces:
     - training_stack

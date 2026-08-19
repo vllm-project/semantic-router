@@ -1,0 +1,1750 @@
+version: v0.3
+listeners:
+- name: http-8899
+  address: 0.0.0.0
+  port: 8899
+  timeout: 1200s
+providers:
+  defaults:
+    default_model: local/qwen3.5-9b-economy
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+    default_reasoning_effort: low
+  models:
+  - name: local/qwen3.5-122b-frontier
+    reasoning_family: qwen3
+    provider_model_id: qwen/qwen3.5-rocm
+    backend_refs:
+    - name: qwen3.5-122b_vllm_primary
+      endpoint: vllm:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.35
+      completion_per_1m: 1.4
+      cached_input_per_1m: 0.0875
+    external_model_ids:
+      vllm: qwen/qwen3.5-rocm
+  - name: local/qwen3.5-9b-economy
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-economy
+    backend_refs:
+    - name: qwen3.5-9b-economy_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.02
+      completion_per_1m: 0.08
+      cached_input_per_1m: 0.005
+    external_model_ids:
+      vllm: local/qwen3.5-9b-economy
+  - name: local/qwen3.5-9b-economy-replica
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-economy
+    backend_refs:
+    - name: qwen3.5-9b-economy_vllm_replica
+      endpoint: vllm-qwen35-economy-replica:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.02
+      completion_per_1m: 0.08
+      cached_input_per_1m: 0.005
+    external_model_ids:
+      vllm: local/qwen3.5-9b-economy
+  - name: local/qwen3.5-9b-private
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.5-9b-private
+    backend_refs:
+    - name: qwen3.5-9b-private_vllm_primary
+      endpoint: vllm-qwen35-economy:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.025
+      completion_per_1m: 0.1
+      cached_input_per_1m: 0.00625
+    external_model_ids:
+      vllm: local/qwen3.5-9b-private
+  - name: local/qwen3.6-27b-coder
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-27b-coder
+    backend_refs:
+    - name: qwen3.6-27b-coder_vllm_primary
+      endpoint: vllm-qwen36-coder:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.14
+      completion_per_1m: 0.56
+      cached_input_per_1m: 0.035
+    external_model_ids:
+      vllm: local/qwen3.6-27b-coder
+  - name: local/qwen3.6-35b-flash
+    reasoning_family: qwen3
+    provider_model_id: local/qwen3.6-35b-flash
+    backend_refs:
+    - name: qwen3.6-35b-flash_vllm_primary
+      endpoint: vllm-qwen36-flash:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.08
+      completion_per_1m: 0.32
+      cached_input_per_1m: 0.02
+    external_model_ids:
+      vllm: local/qwen3.6-35b-flash
+  - name: local/gemma4-26b-balanced
+    provider_model_id: local/gemma4-26b-balanced
+    backend_refs:
+    - name: gemma4-26b-balanced_vllm_primary
+      endpoint: vllm-gemma4-balanced:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.12
+      completion_per_1m: 0.48
+      cached_input_per_1m: 0.03
+    external_model_ids:
+      vllm: local/gemma4-26b-balanced
+  - name: local/deepseek-v4-flash-analyst
+    provider_model_id: deepseek-ai/DeepSeek-V4-Flash-0731
+    backend_refs:
+    - name: deepseek-v4-flash_vllm_primary
+      endpoint: vllm-deepseek-v4:8000
+      protocol: http
+      weight: 1
+      type: vllm
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.22
+      completion_per_1m: 0.88
+      cached_input_per_1m: 0.055
+    external_model_ids:
+      vllm: deepseek-ai/DeepSeek-V4-Flash-0731
+routing:
+  modelCards:
+  - name: local/qwen3.5-122b-frontier
+    context_window_size: 262144
+    description: Large local MoE tier for accuracy-first synthesis and review.
+    capabilities:
+    - legal_analysis
+    - high_risk_review
+    - deep_synthesis
+    quality_score: 0.94
+    modality: text
+    tags:
+    - tier:premium
+    - cost:highest
+    - deployment:self_hosted
+    - physical:qwen3.5-122b-a10b-fp8
+  - name: local/qwen3.5-9b-economy
+    context_window_size: 32768
+    description: Small dense local tier for low-cost and short interactive workloads.
+    capabilities:
+    - fast_qa
+    - explanation
+    - general_chat
+    quality_score: 0.68
+    modality: text
+    tags:
+    - tier:economy
+    - cost:lowest
+    - latency:fastest
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.5-9b-economy-replica
+    context_window_size: 32768
+    description: Independent replica of the economy tier for latency and load-aware selection.
+    capabilities:
+    - fast_qa
+    - explanation
+    - general_chat
+    quality_score: 0.68
+    modality: text
+    tags:
+    - tier:economy_replica
+    - cost:lowest
+    - latency:fastest
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.5-9b-private
+    context_window_size: 32768
+    description: Isolated alias of the local 9B tier for privacy-policy routes.
+    capabilities:
+    - privacy_locality
+    - sensitive_data
+    - general_chat
+    quality_score: 0.68
+    modality: text
+    tags:
+    - tier:private
+    - cost:low
+    - deployment:self_hosted
+    - physical:qwen3.5-9b
+  - name: local/qwen3.6-27b-coder
+    context_window_size: 32768
+    description: Dense Qwen3.6 tier for coding, structured output, and verification.
+    capabilities:
+    - reasoning
+    - coding
+    - structured_output
+    - tool_use
+    quality_score: 0.9
+    modality: text
+    tags:
+    - tier:coder
+    - cost:upper_mid
+    - deployment:self_hosted
+    - physical:qwen3.6-27b
+  - name: local/qwen3.6-35b-flash
+    context_window_size: 32768
+    description: Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning.
+    capabilities:
+    - fast_qa
+    - coding
+    - reasoning
+    quality_score: 0.84
+    modality: text
+    tags:
+    - tier:flash
+    - cost:medium
+    - latency:fast
+    - deployment:self_hosted
+    - physical:qwen3.6-35b-a3b-fp8
+  - name: local/gemma4-26b-balanced
+    context_window_size: 32768
+    description: Fast architecture-diverse MoE tier for balanced general reasoning.
+    capabilities:
+    - reasoning
+    - multilingual
+    - structured_output
+    - long_context
+    quality_score: 0.89
+    modality: text
+    tags:
+    - tier:balanced
+    - cost:medium
+    - latency:fastest_measured
+    - deployment:self_hosted
+    - physical:gemma4-26b-a4b
+  - name: local/deepseek-v4-flash-analyst
+    context_window_size: 262144
+    description: Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration.
+    capabilities:
+    - independent_analysis
+    - long_context
+    - tool_use
+    - reasoning_diversity
+    quality_score: 0.88
+    modality: text
+    tags:
+    - tier:experimental_frontier
+    - cost:high
+    - deployment:self_hosted
+    - physical:deepseek-v4-flash-0731
+  strategy: priority
+entrypoints:
+- model_names:
+  - vllm-sr/mom-v1-blend
+  recipe: balanced
+- model_names:
+  - vllm-sr/mom-v1-flash
+  recipe: speed-first
+- model_names:
+  - vllm-sr/mom-v1-lite
+  recipe: cost-first
+- model_names:
+  - vllm-sr/mom-v1-ultra
+  recipe: accuracy-first
+- model_names:
+  - vllm-sr/mom-v1-vault
+  recipe: privacy-first
+recipes:
+- name: balanced
+  description: Mixture-of-Models · Balanced — adaptive quality, speed, and efficiency for everyday routing.
+  routing:
+    signals:
+      keywords:
+      - name: unified_balance_simple_markers
+        operator: OR
+        keywords:
+        - quick answer
+        - answer briefly
+        - one sentence
+        - concise summary
+        - 简单回答
+        - 简要说明
+        - respuesta breve
+        - réponse brève
+        - 簡潔に答えて
+        - kurz antworten
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_terse_markers
+        operator: OR
+        keywords:
+        - concise and direct
+        - brief and direct
+        - 简洁直接
+        - 简短直接
+        - breve y directa
+        - brève et directe
+        - 簡潔で直接的
+        - kurz und direkt
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_negated_reasoning
+        operator: OR
+        keywords:
+        - do not analyze
+        - don't analyze
+        - without analysis
+        - 不要分析
+        - 无需分析
+        - no analices
+        - sans analyse
+        - 分析しない
+        - nicht analysieren
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_reasoning_markers
+        operator: OR
+        keywords:
+        - analyze the tradeoffs
+        - analyze the trade-offs
+        - from first principles
+        - root cause
+        - step by step
+        - system design
+        - consistency tradeoffs
+        - competing production failure
+        - 分析取舍
+        - 第一性原理
+        - 根因分析
+        - 逐步推理
+        - 取舍
+        - 根因
+        - analizar las ventajas y desventajas
+        - causa raíz
+        - analyser les compromis
+        - cause racine
+        - 根本原因を分析
+        - 段階的に推論
+        - トレードオフ
+        - 根本原因
+        - トレードオフを分析
+        - 根本原因と
+        - kompromisse analysieren
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_verification_markers
+        operator: OR
+        keywords:
+        - verify the answer
+        - cite sources
+        - fact-check
+        - check the evidence
+        - provide evidence
+        - 核实答案
+        - 引用来源
+        - 检查证据
+        - verificar la respuesta
+        - citer les sources
+        - 答えを検証
+        - quellen zitieren
+        case_sensitive: false
+        method: regex
+      - name: unified_balance_correction_markers
+        operator: OR
+        keywords:
+        - that's wrong
+        - wrong answer
+        - please correct the answer
+        - try again
+        - 回答错了
+        - 请纠正答案
+        - 重新回答
+        - la respuesta es incorrecta
+        - corrige la respuesta
+        - la réponse est incorrecte
+        - corrige la réponse
+        - 回答が間違っています
+        - bitte korrigiere die antwort
+        case_sensitive: false
+        method: regex
+      fact_check:
+      - name: needs_fact_check
+        description: Detect claims that benefit from evidence-backed verification.
+      user_feedbacks:
+      - name: wrong_answer
+        description: Detect explicit correction or dissatisfaction with the previous answer.
+      reasks:
+      - name: unified_balance_reask
+        description: Detect an immediate semantic repeat after an unsatisfactory answer.
+        threshold: 0.8
+        lookback_turns: 1
+      language:
+      - name: zh
+        description: Chinese-language requests.
+        threshold: 0.5
+      - name: es
+        description: Spanish-language requests.
+        threshold: 0.5
+      - name: fr
+        description: French-language requests.
+        threshold: 0.5
+      - name: ja
+        description: Japanese-language requests.
+        threshold: 0.5
+      - name: de
+        description: German-language requests.
+        threshold: 0.5
+      conversation:
+      - name: unified_balance_multi_turn
+        description: Multi-turn conversations benefit from a small synthesis allowance.
+        feature:
+          type: count
+          source:
+            type: message
+            role: user
+        predicate:
+          gte: 2
+      context:
+      - name: unified_balance_long_context
+        min_tokens: 12K
+        max_tokens: 262K
+        description: Long inputs that justify stronger synthesis.
+      structure:
+      - name: unified_balance_constraint_dense
+        description: Requests containing a dense set of explicit constraints.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            keywords:
+            - at most
+            - at least
+            - must
+            - without
+            - no more than
+            - 不超过
+            - 至少
+            - 必须
+        predicate:
+          gt: 0.08
+      complexity:
+      - name: unified_balance_difficulty
+        threshold: 0.08
+        description: Semantic boundary between direct requests and synthesis-heavy work.
+        easy:
+          candidates:
+          - Give a short definition of a common term.
+          - Summarize one paragraph in a single sentence.
+          - Explain a basic concept with one example.
+        hard:
+          candidates:
+          - Analyze a production failure from several competing root causes.
+          - Design a distributed system and justify its consistency tradeoffs.
+          - Synthesize conflicting evidence into a defensible recommendation.
+    projections:
+      scores:
+      - name: unified_balance_effort_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_balance_simple_markers
+          weight: -0.35
+          value_source: confidence
+        - type: keyword
+          name: unified_balance_terse_markers
+          weight: -0.1
+          value_source: confidence
+        - type: keyword
+          name: unified_balance_negated_reasoning
+          weight: -1
+          value_source: confidence
+        - type: keyword
+          name: unified_balance_reasoning_markers
+          weight: 0.85
+          value_source: confidence
+        - type: keyword
+          name: unified_balance_verification_markers
+          weight: 0.45
+          value_source: confidence
+        - type: fact_check
+          name: needs_fact_check
+          weight: 0.45
+        - type: user_feedback
+          name: wrong_answer
+          weight: 0.35
+        - type: keyword
+          name: unified_balance_correction_markers
+          weight: 0.35
+          value_source: confidence
+        - type: reask
+          name: unified_balance_reask
+          weight: 0.25
+          value_source: confidence
+        - type: context
+          name: unified_balance_long_context
+          weight: 0.18
+        - type: structure
+          name: unified_balance_constraint_dense
+          weight: 0.45
+        - type: complexity
+          name: unified_balance_difficulty:hard
+          weight: 0.4
+        - type: complexity
+          name: unified_balance_difficulty:easy
+          weight: -0.05
+        - type: conversation
+          name: unified_balance_multi_turn
+          weight: 0.08
+        - type: language
+          name: zh
+          weight: 0.06
+        - type: language
+          name: es
+          weight: 0.06
+        - type: language
+          name: fr
+          weight: 0.06
+        - type: language
+          name: ja
+          weight: 0.06
+        - type: language
+          name: de
+          weight: 0.06
+      mappings:
+      - name: unified_balance_effort_band
+        source: unified_balance_effort_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10
+        outputs:
+        - name: unified_balance_standard
+          lt: 0.3
+        - name: unified_balance_deliberate
+          gte: 0.3
+    decisions:
+    - name: unified_balance_recovery
+      description: Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.
+      priority: 300
+      tier: 1
+      rules:
+        operator: OR
+        conditions:
+        - type: user_feedback
+          name: wrong_answer
+        - type: keyword
+          name: unified_balance_correction_markers
+        - type: reask
+          name: unified_balance_reask
+      modelRefs:
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.65
+            latency: 0.1
+            cost: 0.1
+            load: 0.15
+          latency_percentile: 95
+          on_no_candidates: first
+      plugins:
+      - type: system_prompt
+        configuration:
+          enabled: true
+          mode: insert
+          system_prompt: Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit.
+    - name: unified_balance_deliberate_route
+      description: Increase quality for complex, constrained, long-context, or verification-heavy work.
+      priority: 200
+      tier: 2
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_balance_deliberate
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.55
+            latency: 0.15
+            cost: 0.15
+            load: 0.15
+          latency_percentile: 95
+          on_no_candidates: cheapest
+    - name: unified_balance_route
+      description: Balance quality, observed latency, configured cost, and current load.
+      priority: 100
+      tier: 3
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.4
+            latency: 0.2
+            cost: 0.25
+            load: 0.15
+          latency_percentile: 95
+          on_no_candidates: cheapest
+    strategy: priority
+- name: speed-first
+  description: Prefer the lowest observed latency while preserving a bounded lane for heavy requests.
+  routing:
+    signals:
+      keywords:
+      - name: unified_speed_heavy_markers
+        operator: OR
+        keywords:
+        - deep analysis
+        - detailed architecture
+        - comprehensive review
+        - multi-step plan
+        - 深入分析
+        - 详细架构
+        - 全面审查
+        - 多步骤计划
+        - análisis profundo
+        - architecture détaillée
+        - 詳細なアーキテクチャ
+        - gründliche analyse
+        case_sensitive: false
+        method: regex
+      context:
+      - name: unified_speed_long_context
+        min_tokens: 16K
+        max_tokens: 262K
+        description: Long requests where first-token and generation latency should be measured separately.
+      structure:
+      - name: unified_speed_ordered_workflow
+        description: Prompts that require an ordered workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            sequences:
+            - - first
+              - then
+            - - first
+              - next
+              - finally
+            - - 首先
+              - 然后
+            - - 先
+              - 再
+    projections:
+      scores:
+      - name: unified_speed_work_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_speed_heavy_markers
+          weight: 0.6
+          value_source: confidence
+        - type: context
+          name: unified_speed_long_context
+          weight: 0.35
+        - type: structure
+          name: unified_speed_ordered_workflow
+          weight: 0.25
+      mappings:
+      - name: unified_speed_work_band
+        source: unified_speed_work_score
+        method: threshold_bands
+        outputs:
+        - name: unified_speed_interactive
+          lt: 0.35
+        - name: unified_speed_heavy
+          gte: 0.35
+    decisions:
+    - name: unified_speed_heavy_route
+      description: Use live TTFT and TPOT percentiles across efficient models for heavier requests.
+      priority: 200
+      tier: 1
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_speed_heavy
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      algorithm:
+        type: latency_aware
+        latency_aware:
+          tpot_percentile: 90
+          ttft_percentile: 90
+          description: Minimize observed generation and first-token latency.
+    - name: unified_speed_first_route
+      description: Choose the fastest healthy candidate from live p90 latency and load.
+      priority: 100
+      tier: 2
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            latency: 0.85
+            load: 0.15
+          latency_percentile: 90
+          on_no_candidates: first
+      plugins:
+      - type: response_cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.9
+          ttl_seconds: 900
+    strategy: priority
+- name: cost-first
+  description: Keep every request local and spend additional compute only when the request justifies reasoning.
+  routing:
+    signals:
+      keywords:
+      - name: unified_cost_reasoning_markers
+        operator: OR
+        keywords:
+        - reason step by step
+        - analyze the tradeoffs
+        - root cause
+        - design a system
+        - prove that
+        - 逐步推理
+        - 分析取舍
+        - 根因分析
+        - 设计系统
+        - 证明
+        - razonar paso a paso
+        - razona paso a paso
+        - concevoir un système
+        - conçois un système
+        - raisonner étape par étape
+        - raisonne étape par étape
+        - 段階的に推論
+        - system entwerfen
+        case_sensitive: false
+        method: regex
+      context:
+      - name: unified_cost_long_context
+        min_tokens: 16K
+        max_tokens: 262K
+        description: Long requests that benefit from local reasoning.
+      structure:
+      - name: unified_cost_ordered_workflow
+        description: Multi-stage requests that benefit from local reasoning.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            sequences:
+            - - first
+              - then
+            - - first
+              - next
+              - finally
+            - - 首先
+              - 然后
+            - - 先
+              - 再
+    projections:
+      scores:
+      - name: unified_cost_compute_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_cost_reasoning_markers
+          weight: 0.6
+          value_source: confidence
+        - type: context
+          name: unified_cost_long_context
+          weight: 0.35
+        - type: structure
+          name: unified_cost_ordered_workflow
+          weight: 0.3
+      mappings:
+      - name: unified_cost_compute_band
+        source: unified_cost_compute_score
+        method: threshold_bands
+        outputs:
+        - name: unified_cost_direct
+          lt: 0.35
+        - name: unified_cost_reasoning
+          gte: 0.35
+    decisions:
+    - name: unified_cost_local_reasoning
+      description: Enable bounded reasoning on the self-hosted model for genuinely demanding requests.
+      priority: 200
+      tier: 1
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_cost_reasoning
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: true
+        reasoning_effort: medium
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: true
+        reasoning_effort: medium
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.6
+            load: 0.4
+          on_no_candidates: first
+    - name: unified_cost_first_route
+      description: Deterministic local route with semantic reuse for ordinary requests.
+      priority: 100
+      tier: 2
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.5-9b-economy-replica
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            cost: 0.8
+            load: 0.2
+          on_no_candidates: first
+      plugins:
+      - type: response_cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.88
+          ttl_seconds: 3600
+    strategy: priority
+- name: accuracy-first
+  description: Escalate from a frontier direct answer to ReMoM, Fusion, or Router Flow when the task benefits from orchestration.
+  routing:
+    signals:
+      keywords:
+      - name: unified_frontier_workflow_markers
+        operator: OR
+        keywords:
+        - investigate and implement
+        - plan and execute
+        - multi-agent workflow
+        - delegate to agents
+        - coordinate multiple agents
+        - use tools
+        - use search_web
+        - search then synthesize
+        - research and synthesize
+        - call the tool then
+        - 调查并实现
+        - 规划并执行
+        - 多智能体工作流
+        - 协调多个智能体
+        - investigar e implementar
+        - planificar y ejecutar
+        - enquêter et implémenter
+        - planifier et exécuter
+        - 調査して実装
+        - 計画して実行
+        - untersuchen und implementieren
+        case_sensitive: false
+        method: regex
+      - name: unified_frontier_fusion_markers
+        operator: OR
+        keywords:
+        - independent analyses
+        - compare multiple expert opinions
+        - cross-check the answer
+        - panel of experts
+        - resolve disagreements
+        - compare several independent viewpoints
+        - ask multiple models
+        - get a second and third opinion
+        - synthesize competing answers
+        - 独立分析
+        - 比较多个专家意见
+        - 交叉验证答案
+        - 解决分歧
+        - análisis independientes
+        - comparar opiniones de expertos
+        - analyses indépendantes
+        - comparer plusieurs avis d'experts
+        - 独立した分析
+        - 複数の専門家の意見を比較
+        - unabhängige analysen
+        case_sensitive: false
+        method: regex
+      - name: unified_frontier_deep_markers
+        operator: OR
+        keywords:
+        - explore several approaches
+        - search multiple reasoning paths
+        - from first principles
+        - rigorous proof
+        - derive step by step
+        - hard reasoning problem
+        - difficult result
+        - multiple possible derivations
+        - think deeply before answering
+        - think deeply
+        - solve this thoroughly
+        - reason through alternative paths
+        - alternative paths
+        - do a deep analysis
+        - 探索多种方法
+        - 多条推理路径
+        - 第一性原理
+        - 严格证明
+        - 逐步推导
+        - explorar varios enfoques
+        - demostración rigurosa
+        - explorer plusieurs approches
+        - preuve rigoureuse
+        - 複数のアプローチを探索
+        - 複数のアプローチと推論経路を探索
+        - 推論経路を探索
+        - 厳密な証明
+        - mehrere ansätze untersuchen
+        - denkwege untersuchen
+        case_sensitive: false
+        method: regex
+      - name: unified_frontier_verification_markers
+        operator: OR
+        keywords:
+        - verify with evidence
+        - verify the answer
+        - cite reliable sources
+        - check every factual claim
+        - 用证据核实
+        - 核实每个事实
+        - verificar con evidencia
+        - vérifier avec des preuves
+        - 証拠で検証
+        - mit belegen überprüfen
+        - \b(is|was|were)\b.{0,80}\b(accurate|true|correct)\b
+        - \b(when was|who invented|what is the population|how tall is)\b
+        case_sensitive: false
+        method: regex
+      embeddings:
+      - name: unified_frontier_workflow_intent
+        threshold: 0.78
+        aggregation_method: max
+        candidates:
+        - Investigate the repository, implement the fix, run tests, and iterate until it works.
+        - Coordinate specialized agents to research, code, review, and validate a complete solution.
+        - 制定执行计划，完成实现、评审和验证。
+        - Investiga el repositorio, implementa la solución y valida todos los cambios.
+        - リポジトリを調査し、修正を実装して検証してください。
+      - name: unified_frontier_fusion_intent
+        threshold: 0.79
+        aggregation_method: max
+        candidates:
+        - Ask independent experts to solve the problem and synthesize the most reliable answer.
+        - Compare conflicting analyses, identify disagreements, and produce a verified conclusion.
+        - 汇总多个独立观点并解决其中的分歧。
+        - Compara análisis independientes, resuelve desacuerdos y sintetiza la respuesta.
+        - 複数の独立した分析を比較し、相違点を解決してください。
+      - name: unified_frontier_deep_intent
+        threshold: 0.78
+        aggregation_method: max
+        candidates:
+        - Explore several reasoning paths and synthesize the strongest rigorous solution.
+        - Build a careful derivation from first principles for a difficult problem.
+        - 从多个推理路径探索难题并综合最强答案。
+        - Explora varias rutas de razonamiento y sintetiza la solución más rigurosa.
+        - 複数の推論経路を探索し、最も厳密な解答を統合してください。
+      language:
+      - name: zh
+        description: Chinese-language requests.
+        threshold: 0.5
+      - name: es
+        description: Spanish-language requests.
+        threshold: 0.5
+      - name: fr
+        description: French-language requests.
+        threshold: 0.5
+      - name: ja
+        description: Japanese-language requests.
+        threshold: 0.5
+      - name: de
+        description: German-language requests.
+        threshold: 0.5
+      conversation:
+      - name: unified_frontier_tooling_available
+        description: Tool-rich requests are candidates for Router Flow decomposition.
+        feature:
+          type: count
+          source:
+            type: tool_definition
+        predicate:
+          gte: 2
+      - name: unified_frontier_active_tool_loop
+        description: Continue an already active tool loop through Router Flow.
+        feature:
+          type: exists
+          source:
+            type: active_tool_loop
+      context:
+      - name: unified_frontier_long_context
+        min_tokens: 16K
+        max_tokens: 262K
+        description: Long-context tasks that benefit from multi-pass synthesis.
+      structure:
+      - name: unified_frontier_ordered_workflow
+        description: Prompts that explicitly describe a multi-stage workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            sequences:
+            - - first
+              - then
+            - - first
+              - next
+              - finally
+            - - 首先
+              - 然后
+            - - 先
+              - 再
+      - name: unified_frontier_constraint_dense
+        description: Prompts with dense correctness or output constraints.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            keywords:
+            - must
+            - exactly
+            - at least
+            - at most
+            - verify
+            - 必须
+            - 严格
+            - 至少
+            - 不超过
+        predicate:
+          gt: 0.08
+      - name: unified_frontier_direct_reference
+        description: >-
+          Detect requests that quote orchestration vocabulary only to define,
+          translate, or briefly explain it; this independently suppresses
+          workflow and fusion escalation even when their keyword signals match.
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: >-
+              (?i)(\b(define|translate|explain)\b.{0,48}\b(phrase|term|expression)\b|(définis|traduis|explique).{0,48}(expression|terme)|(define|traduce|explica).{0,48}(frase|expresión|término)|(definiere|übersetze|erkläre).{0,48}(ausdruck|begriff)|(定义|翻译|解释).{0,16}(短语|词语|“|「)|(説明|翻訳).{0,16}(表現|語句|「))
+      complexity:
+      - name: unified_frontier_complexity
+        threshold: 0.15
+        description: Semantic boundary for tasks that merit multi-round reasoning.
+        easy:
+          candidates:
+          - Explain a familiar concept in plain language.
+          - Summarize a short paragraph.
+          - Answer a direct factual question.
+        hard:
+          candidates:
+          - Prove a difficult result by exploring multiple possible derivations.
+          - Diagnose a complex distributed-system failure with incomplete evidence.
+          - Synthesize competing scientific explanations into a rigorous conclusion.
+    projections:
+      scores:
+      - name: unified_frontier_workflow_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_frontier_workflow_markers
+          weight: 0.7
+          value_source: confidence
+        - type: embedding
+          name: unified_frontier_workflow_intent
+          weight: 0.55
+          value_source: confidence
+        - type: conversation
+          name: unified_frontier_tooling_available
+          weight: 0.1
+        - type: conversation
+          name: unified_frontier_active_tool_loop
+          weight: 0.1
+        - type: structure
+          name: unified_frontier_ordered_workflow
+          weight: 0.25
+        - type: structure
+          name: unified_frontier_direct_reference
+          weight: -0.9
+      - name: unified_frontier_fusion_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_frontier_fusion_markers
+          weight: 0.7
+          value_source: confidence
+        - type: embedding
+          name: unified_frontier_fusion_intent
+          weight: 0.55
+          value_source: confidence
+        - type: structure
+          name: unified_frontier_direct_reference
+          weight: -0.9
+      - name: unified_frontier_deliberation_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_frontier_deep_markers
+          weight: 0.45
+          value_source: confidence
+        - type: embedding
+          name: unified_frontier_deep_intent
+          weight: 0.35
+          value_source: confidence
+        - type: context
+          name: unified_frontier_long_context
+          weight: 0.2
+        - type: structure
+          name: unified_frontier_ordered_workflow
+          weight: 0.15
+        - type: structure
+          name: unified_frontier_constraint_dense
+          weight: 0.1
+        - type: complexity
+          name: unified_frontier_complexity:hard
+          weight: 0.35
+        - type: structure
+          name: unified_frontier_direct_reference
+          weight: -0.65
+        - type: language
+          name: zh
+          weight: 0.05
+        - type: language
+          name: es
+          weight: 0.05
+        - type: language
+          name: fr
+          weight: 0.05
+        - type: language
+          name: ja
+          weight: 0.05
+        - type: language
+          name: de
+          weight: 0.05
+      mappings:
+      - name: unified_frontier_workflow_band
+        source: unified_frontier_workflow_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 12
+        outputs:
+        - name: unified_frontier_not_workflow
+          lt: 0.5
+        - name: unified_frontier_use_workflow
+          gte: 0.5
+      - name: unified_frontier_fusion_band
+        source: unified_frontier_fusion_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 12
+        outputs:
+        - name: unified_frontier_not_fusion
+          lt: 0.5
+        - name: unified_frontier_use_fusion
+          gte: 0.5
+      - name: unified_frontier_deliberation_band
+        source: unified_frontier_deliberation_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10
+        outputs:
+        - name: unified_frontier_direct
+          lt: 0.35
+        - name: unified_frontier_deliberate
+          gte: 0.35
+    decisions:
+    - name: unified_frontier_workflow
+      description: Use Router Flow for explicit investigate-plan-execute tasks with separable roles.
+      priority: 400
+      tier: 1
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_frontier_use_workflow
+        - operator: OR
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+          - type: structure
+            name: unified_frontier_ordered_workflow
+      modelRefs:
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: workflows
+        workflows:
+          mode: dynamic
+          template: micro_agent
+          planner:
+            model: local/qwen3.6-27b-coder
+          max_steps: 4
+          max_parallel: 3
+          round_timeout_seconds: 120
+          min_successful_responses: 2
+          include_intermediate_responses: false
+          on_error: skip
+    - name: unified_frontier_tool_result_synthesis
+      description: Synthesize an existing client tool result directly without spawning another tool or multi-agent loop.
+      priority: 375
+      tier: 2
+      rules:
+        operator: AND
+        conditions:
+        - type: conversation
+          name: unified_frontier_active_tool_loop
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: unified_frontier_workflow_markers
+      modelRefs:
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: true
+        reasoning_effort: medium
+      algorithm:
+        type: static
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
+    - name: unified_frontier_fusion
+      description: Use independent expert answers plus a frontier judge when disagreement resolution matters.
+      priority: 350
+      tier: 3
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_frontier_use_fusion
+        - type: keyword
+          name: unified_frontier_fusion_markers
+      modelRefs:
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/deepseek-v4-flash-analyst
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: fusion
+        fusion:
+          model: local/qwen3.5-122b-frontier
+          analysis_models:
+          - local/qwen3.6-27b-coder
+          - local/gemma4-26b-balanced
+          - local/deepseek-v4-flash-analyst
+          max_concurrent: 3
+          round_timeout_seconds: 180
+          min_successful_responses: 2
+          temperature: 0.2
+          include_analysis: false
+          include_intermediate_responses: false
+          on_error: skip
+          judge_prompt_version: fusion-v1
+    - name: unified_frontier_verified_answer
+      description: Escalate evidence-sensitive factual answers from an efficient model to frontier models only when confidence is insufficient.
+      priority: 325
+      tier: 4
+      rules:
+        operator: AND
+        conditions:
+        - type: keyword
+          name: unified_frontier_verification_markers
+      modelRefs:
+      - model: local/qwen3.5-9b-economy
+        use_reasoning: false
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: avg_logprob
+          threshold: 0.72
+          escalation_order: small_to_large
+          on_error: skip
+    - name: unified_frontier_remom
+      description: Use bounded multi-round search and synthesis for deep reasoning tasks.
+      priority: 300
+      tier: 5
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_frontier_deliberate
+      modelRefs:
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: true
+        reasoning_effort: high
+      - model: local/deepseek-v4-flash-analyst
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: true
+        reasoning_effort: high
+      algorithm:
+        type: remom
+        remom:
+          breadth_schedule:
+          - 3
+          - 2
+          model_distribution: round_robin
+          temperature: 0.6
+          include_reasoning: true
+          compaction_strategy: last_n_tokens
+          compaction_tokens: 8000
+          synthesis_model: local/qwen3.5-122b-frontier
+          max_concurrent: 3
+          round_timeout_seconds: 180
+          min_successful_responses: 2
+          max_responses_per_round: 3
+          include_intermediate_responses: false
+          on_error: skip
+    - name: unified_frontier_direct
+      description: Use the strongest direct model when orchestration would add little value.
+      priority: 100
+      tier: 6
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+      - model: local/qwen3.6-27b-coder
+        use_reasoning: false
+      - model: local/qwen3.6-35b-flash
+        use_reasoning: false
+      - model: local/gemma4-26b-balanced
+        use_reasoning: false
+      - model: local/qwen3.5-122b-frontier
+        use_reasoning: false
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 1
+          on_no_candidates: first
+    strategy: priority
+- name: privacy-first
+  description: Keep every request local, using recipe-scoped risk projections to isolate sensitive and suspicious prompts.
+  routing:
+    signals:
+      keywords:
+      - name: unified_privacy_local_only_markers
+        operator: OR
+        keywords:
+        - local processing only
+        - on-prem only
+        - do not send to the cloud
+        - confidential handling
+        - internal use only
+        - private repository
+        - proprietary code
+        - internal document
+        - 本地处理
+        - 不要发到云端
+        - 仅供内部使用
+        - 私有仓库
+        - 内部文档
+        - solo procesamiento local
+        - no enviar a la nube
+        - traitement local uniquement
+        - ne pas envoyer au cloud
+        - ローカル処理のみ
+        - クラウドに送信しない
+        - nur lokale verarbeitung
+        case_sensitive: false
+        method: regex
+      - name: unified_privacy_sensitive_markers
+        operator: OR
+        keywords:
+        - \b\d{3}-\d{2}-\d{4}\b
+        - \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+        - \b(ssn|social security number|credit card|passport number)\b
+        - (身份证|邮箱|护照号码|银行卡号)
+        - (número de seguridad social|correo electrónico|pasaporte)
+        - (numéro de sécurité sociale|adresse e-mail|passeport)
+        - (マイナンバー|メールアドレス|パスポート番号)
+        - (sozialversicherungsnummer|e-mail-adresse|reisepassnummer)
+        case_sensitive: false
+        method: regex
+      - name: unified_privacy_attack_markers
+        operator: OR
+        keywords:
+        - ignore previous instructions
+        - reveal the system prompt
+        - exfiltrate credentials
+        - bypass the safety policy
+        - 忽略之前的指令
+        - 泄露系统提示词
+        - 导出凭据
+        - 绕过安全策略
+        - ignora las instrucciones anteriores
+        - extraer credenciales
+        - ignorer les instructions précédentes
+        - exfiltrer les identifiants
+        - 以前の指示を無視
+        - 認証情報を流出
+        - vorherige anweisungen ignorieren
+        case_sensitive: false
+        method: regex
+      jailbreak:
+      - name: unified_privacy_jailbreak_strict
+        method: classifier
+        threshold: 0.45
+        description: Detect suspicious prompts that require local containment.
+      pii:
+      - name: unified_privacy_pii_strict
+        threshold: 0.7
+        description: Detect personally identifiable information that must remain local.
+      kb:
+      - name: unified_privacy_policy
+        kb: privacy_kb
+        target:
+          kind: group
+          value: privacy_policy
+        match: best
+    projections:
+      scores:
+      - name: unified_privacy_risk_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: unified_privacy_local_only_markers
+          weight: 0.5
+          value_source: confidence
+        - type: keyword
+          name: unified_privacy_sensitive_markers
+          weight: 0.75
+          value_source: confidence
+        - type: pii
+          name: unified_privacy_pii_strict
+          weight: 0.9
+        - type: jailbreak
+          name: unified_privacy_jailbreak_strict
+          weight: 0.9
+        - type: keyword
+          name: unified_privacy_attack_markers
+          weight: 0.9
+          value_source: confidence
+        - type: kb
+          name: unified_privacy_policy
+          weight: 0.3
+      mappings:
+      - name: unified_privacy_risk_band
+        source: unified_privacy_risk_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 12
+        outputs:
+        - name: unified_privacy_standard
+          lt: 0.35
+        - name: unified_privacy_sensitive
+          gte: 0.35
+    decisions:
+    - name: unified_privacy_security_containment
+      description: Disable tool access for suspicious prompts while keeping inference local.
+      priority: 300
+      tier: 1
+      rules:
+        operator: OR
+        conditions:
+        - type: jailbreak
+          name: unified_privacy_jailbreak_strict
+        - type: keyword
+          name: unified_privacy_attack_markers
+      modelRefs:
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
+    - name: unified_privacy_sensitive_route
+      description: Keep PII, private-domain, and explicit local-only work on the local model with no tools.
+      priority: 200
+      tier: 2
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: unified_privacy_sensitive
+      modelRefs:
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+      - type: tools
+        configuration:
+          enabled: true
+          mode: none
+    - name: unified_privacy_local_default
+      description: Route non-sensitive traffic locally as the privacy-first default.
+      priority: 100
+      tier: 3
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+      - model: local/qwen3.5-9b-private
+        use_reasoning: false
+    strategy: priority
+global:
+  router:
+    config_source: file
+    strategy: priority
+    auto_model_name: MoM
+    auto_model_names: []
+    include_config_models_in_list: false
+    clear_route_cache: true
+    model_selection:
+      enabled: true
+  services:
+    response_api:
+      enabled: true
+      store_backend: redis
+      ttl_seconds: 86400
+      max_responses: 1000
+    observability:
+      tracing:
+        enabled: true
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: vllm-sr-jaeger:4317
+          insecure: true
+        sampling:
+          type: always_on
+          rate: 1
+        resource:
+          service_name: vllm-sr
+          service_version: v0.3.0
+          deployment_environment: development
+      metrics:
+        enabled: true
+    management_api:
+      # The host publication remains loopback-only; split containers need the
+      # Router to listen on its container interface for Dashboard and Envoy.
+      bind_address: 0.0.0.0
+      port: 8080
+      auth:
+        mode: disabled
+        roles:
+          admin:
+          - '*'
+          operator:
+          - health.read
+          - ready.read
+          - docs.read
+          - metrics.read
+          - classify.invoke
+          - config.read
+          - config.write
+          - learning.ingest
+          - replay.read
+          - replay.detail
+          - data.read
+          - data.write
+          viewer:
+          - health.read
+          - ready.read
+          - docs.read
+          - metrics.read
+          - classify.invoke
+          - config.read
+          - replay.read
+          - data.read
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      ttl_seconds: 2592000
+    startup_status:
+      store_backend: redis
+  stores:
+    response_cache:
+      backend_type: memory
+      enabled: true
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 1200
+      flow:
+        state:
+          store_backend: file
+          ttl_seconds: 1800
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
+          enable_soft_matching: true
+          top_k: 1
+          min_score_threshold: 0.5
+    system:
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      hallucination_detector: models/mom-halugate-detector
+      hallucination_explainer: models/mom-halugate-explainer
+      feedback_detector: models/mmbert32k-feedback-detector-merged
+    modules:
+      prompt_guard:
+        enabled: true
+        model_id: models/mmbert32k-jailbreak-detector-merged
+        threshold: 0.7
+        use_cpu: true
+        variant: mmbert32k
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        model_ref: prompt_guard
+      classifier:
+        pii:
+          model_id: models/mmbert32k-pii-detector-merged
+          threshold: 0.9
+          use_cpu: true
+          use_mmbert_32k: true
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          model_ref: pii_classifier
+      complexity:
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+      hallucination_mitigation:
+        fact_check:
+          model_id: models/mmbert32k-factcheck-classifier-merged
+          threshold: 0.5
+          use_cpu: true
+          use_mmbert_32k: true
+          model_ref: fact_check_classifier
+        detector:
+          model_id: models/mom-halugate-detector
+          threshold: 0.8
+          use_cpu: true
+          min_span_length: 2
+          min_span_confidence: 0.6
+          context_window_size: 50
+          enable_nli_filtering: true
+          nli_entailment_threshold: 0.75
+          model_ref: hallucination_detector
+        explainer:
+          model_id: models/mom-halugate-explainer
+          threshold: 0.9
+          use_cpu: true
+          model_ref: hallucination_explainer
+      feedback_detector:
+        enabled: true
+        model_id: models/mmbert32k-feedback-detector-merged
+        threshold: 0.5
+        use_cpu: true
+        use_modernbert: false
+        use_mmbert_32k: true
+        feedback_mapping_path: ''
+        model_ref: feedback_detector

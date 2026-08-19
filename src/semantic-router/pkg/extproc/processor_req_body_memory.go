@@ -27,6 +27,9 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	requestBody []byte,
 	openAIRequest *openai.ChatCompletionNewParams,
 ) ([]byte, error) {
+	if requestBypassesRouting(ctx) {
+		return requestBody, nil
+	}
 	ctx.MemoryBackend = r.Config.Memory.Backend
 	if ctx.MemoryBackend == "" {
 		ctx.MemoryBackend = "milvus"
@@ -42,7 +45,7 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
-	logging.Debugf("Memory: retrieval flow query=%q", truncateForLog(userContent, 80))
+	logging.Debugf("Memory: retrieval flow query=%s", logging.ContentDescriptor(userContent))
 	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, openAIRequest)
 	if !shouldSearch {
 		return requestBody, nil
@@ -51,9 +54,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
 	if err != nil {
 		recordMemoryOutcome(ctx, "unavailable", "retrieval_error", true)
-		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%q: %v",
-			userID, ctx.VSRSelectedDecisionName, truncateForLog(searchQuery, 60), err)
-		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
+		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%s error_class=%T",
+			userID, ctx.VSRSelectedDecisionName, logging.ContentDescriptor(searchQuery), err)
+		// The caller records this error in the stack log. Do not propagate the
+		// provider's free-form text because it may echo tenant content or secrets.
+		return requestBody, fmt.Errorf("memory retrieval failed (error_class=%T)", err)
 	}
 	retrievedCount := len(memories)
 	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
@@ -129,7 +134,7 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	history := r.extractConversationHistory(openAIRequest)
 	searchQuery, err := BuildSearchQuery(ctx.TraceContext, history, userContent, r.Config)
 	if err != nil {
-		logging.Warnf("Memory: Query rewriting failed, using original query: %v", err)
+		logging.Warnf("Memory: Query rewriting failed, using original query (error_class=%T)", err)
 		ctx.MemoryFailOpen = true
 		ctx.MemoryFallbackReason = "query_rewrite_error"
 		searchQuery = userContent
@@ -237,7 +242,10 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 		return requestBody
 	}
 
-	injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
+	injectedBody, messageIndex, err := injectMemoryMessagesWithIndex(
+		requestBody,
+		ctx.MemoryContext,
+	)
 	if err != nil {
 		logging.Warnf("Memory: Failed to inject memory context: %v", err)
 		recordMemoryOutcome(ctx, "unavailable", "injection_error", true)
@@ -246,6 +254,10 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 	}
 
 	ctx.MemoryResultCount = len(memories)
+	if ctx.MemoryMessageIndexes == nil {
+		ctx.MemoryMessageIndexes = make(map[int]struct{})
+	}
+	ctx.MemoryMessageIndexes[messageIndex] = struct{}{}
 	recordMemoryOutcome(ctx, "used", "injected", false)
 	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
@@ -259,7 +271,7 @@ func recordMemoryOutcome(ctx *RequestContext, status, reason string, failOpen bo
 	if failOpen {
 		ctx.MemoryFallbackReason = reason
 	}
-	metrics.RecordPluginExecution("memory", ctx.VSRSelectedDecisionName, status, 0)
+	metrics.RecordPluginExecution("memory", requestDecisionStateKey(ctx), status, 0)
 }
 
 func (r *OpenAIRouter) getMemoryStore() memory.Store {
@@ -352,15 +364,31 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	}
 
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
-	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
+	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
 
 	if isResponseAPIRequest(ctx) {
 		if response, ok := r.createResponseAPIFastResponse(ctx, fastCfg.Message, decisionName); ok {
+			appendRecipeHeaderToImmediateResponse(response, ctx)
 			return response
 		}
 	}
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		response := createAnthropicFastResponse(
+			ctx,
+			fastCfg.Message,
+			decisionName,
+		)
+		appendRecipeHeaderToImmediateResponse(response, ctx)
+		return response
+	}
 
-	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+	response := httputil.CreateFastResponse(
+		fastCfg.Message,
+		ctx.ExpectStreamingResponse,
+		decisionName,
+	)
+	appendRecipeHeaderToImmediateResponse(response, ctx)
+	return response
 }
 
 // isMemoryDisabledForRoute checks if memory is disabled for the given route path.

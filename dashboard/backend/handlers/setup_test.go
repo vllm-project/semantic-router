@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,6 +41,77 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 		t.Fatalf("failed to write bootstrap config: %v", err)
 	}
 	return configPath
+}
+
+func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
+	var config setupConfigFile
+	err := yaml.Unmarshal([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: shared-model
+routing:
+  modelCards:
+    - name: shared-model
+  decisions: []
+entrypoints:
+  - model_names: [vllm-sr/balanced]
+    recipe: balanced
+recipes:
+  - name: balanced
+    routing:
+      signals:
+        keywords:
+          - name: balanced-keyword
+            operator: OR
+            keywords: [balanced]
+      decisions:
+        - name: balanced-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: balanced-keyword
+          modelRefs:
+            - model: shared-model
+              use_reasoning: false
+  - name: private
+    routing:
+      signals:
+        pii:
+          - name: private-pii
+            threshold: 0.8
+      decisions:
+        - name: private-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: pii
+                name: private-pii
+          modelRefs:
+            - model: shared-model
+              use_reasoning: false
+`), &config)
+	if err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+
+	summary := summarizeSetupConfig(&config.CanonicalConfig)
+
+	if summary.Models != 1 || summary.Decisions != 2 || summary.Signals != 2 {
+		t.Fatalf("summary = %+v, want models=1 decisions=2 signals=2", summary)
+	}
+
+	merged := mergeSetupCanonicalConfig(setupConfigFile{}.CanonicalConfig, config.CanonicalConfig)
+	if len(merged.Entrypoints) != 1 || len(merged.Recipes) != 2 {
+		t.Fatalf(
+			"setup merge dropped scoped routing: entrypoints=%d recipes=%d",
+			len(merged.Entrypoints),
+			len(merged.Recipes),
+		)
+	}
 }
 
 func createValidSetupPatch() map[string]interface{} {
@@ -545,11 +615,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)

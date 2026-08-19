@@ -80,6 +80,9 @@ func ensureStreamingState(ctx *RequestContext) {
 	if ctx.StreamingToolCalls == nil {
 		ctx.StreamingToolCalls = make(map[int]*StreamingToolCallState)
 	}
+	if ctx.StreamingChoices == nil {
+		ctx.StreamingChoices = make(map[int]*StreamingChoiceState)
+	}
 	if ctx.ResponseAPIStreamToolCallItemIDs == nil {
 		ctx.ResponseAPIStreamToolCallItemIDs = make(map[int]string)
 	}
@@ -188,12 +191,55 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 		if !ok {
 			continue
 		}
+		index := streamingChoiceIndex(choice)
+		state := streamingChoiceState(ctx, index)
 		if delta, ok := choice["delta"].(map[string]interface{}); ok {
-			extractStreamingDeltaContent(ctx, delta)
+			extractStreamingChoiceDelta(state, delta)
+			if index == 0 {
+				extractStreamingDeltaContent(ctx, delta)
+			}
 		}
 		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
-			ctx.StreamingMetadata["finish_reason"] = finishReason
+			state.FinishReason = finishReason
+			if index == 0 {
+				ctx.StreamingMetadata["finish_reason"] = finishReason
+			}
 		}
+	}
+}
+
+func streamingChoiceIndex(choice map[string]interface{}) int {
+	switch value := choice["index"].(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	default:
+		return 0
+	}
+}
+
+func streamingChoiceState(ctx *RequestContext, index int) *StreamingChoiceState {
+	if ctx.StreamingChoices == nil {
+		ctx.StreamingChoices = make(map[int]*StreamingChoiceState)
+	}
+	state := ctx.StreamingChoices[index]
+	if state == nil {
+		state = &StreamingChoiceState{ToolCalls: make(map[int]*StreamingToolCallState)}
+		ctx.StreamingChoices[index] = state
+	}
+	return state
+}
+
+func extractStreamingChoiceDelta(state *StreamingChoiceState, delta map[string]interface{}) {
+	if content, ok := delta["content"].(string); ok {
+		state.Content += content
+	}
+	if reasoning, ok := delta["reasoning_content"].(string); ok {
+		state.Reasoning += reasoning
+	}
+	if refusal, ok := delta["refusal"].(string); ok {
+		state.Refusal += refusal
 	}
 }
 

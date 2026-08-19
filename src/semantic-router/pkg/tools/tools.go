@@ -288,7 +288,7 @@ func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, t
 			result.Entry.Tool.Function.Name, result.Similarity)
 	}
 
-	logging.Infof("Found %d similar tools for query: %s", len(selected), query)
+	logging.Infof("Found %d similar tools for query: %s", len(selected), logging.ContentDescriptor(query))
 	return selected, nil
 }
 

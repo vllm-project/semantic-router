@@ -37,6 +37,7 @@ type routerLearningCandidateScore struct {
 	reliabilityPenalty float64
 	latencyAdjustment  float64
 	cacheAdjustment    float64
+	coldStart          bool
 }
 
 var routerLearningSamplingSeedSource = func() int64 {
@@ -72,9 +73,12 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 	}
 
 	baseModel := selectedModelName(input.baseResult)
-	winner := selectRoutingSamplingWinner(scores, baseModel, candidateSet)
+	winner := routingSamplingWinner(scores, baseModel, candidateSet, usedSampling)
 	diag := newRoutingSamplingDiagnostics(learningCtx, input.ctx, candidateSet, strategy, baseModel, winner, usedSampling, seed, scores)
 	action, reason := routingSamplingAction(mode, usedSampling, winner.model, baseModel)
+	if winner.coldStart && mode == config.DecisionAdaptationModeApply {
+		reason = "cold_start"
+	}
 	policy := adaptationPolicy(mode, action, reason, diag)
 	if mode == config.DecisionAdaptationModeObserve || winner.model == baseModel {
 		return baseAdaptationDecision(input, policy)
@@ -92,6 +96,31 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		changesModel:     learningChangesModel(input.baseResult, result),
 		policy:           policy,
 	}
+}
+
+func routingSamplingWinner(
+	scores []routerLearningCandidateScore,
+	baseModel string,
+	candidateSet string,
+	usedSampling bool,
+) routerLearningCandidateScore {
+	winner := selectRoutingSamplingWinner(scores, baseModel, candidateSet)
+	if !usedSampling {
+		return winner
+	}
+	if coldStartWinner, ok := firstColdStartCandidate(scores); ok {
+		return coldStartWinner
+	}
+	return winner
+}
+
+func firstColdStartCandidate(scores []routerLearningCandidateScore) (routerLearningCandidateScore, bool) {
+	for _, score := range scores {
+		if score.coldStart {
+			return score, true
+		}
+	}
+	return routerLearningCandidateScore{}, false
 }
 
 func baseAdaptationDecision(input routerLearningInput, policy routerLearningPolicy) routerLearningDecision {
@@ -230,14 +259,33 @@ func (r *OpenAIRouter) learningCandidateModels(
 	switch candidateSet {
 	case config.RouterLearningCandidateSetTier:
 		if tier := decisionTier(ctx); tier > 0 {
-			return r.eligibleLearningModelRefs(r.unionDecisionModelRefs(func(decision config.Decision) bool {
-				return decision.Tier == tier
-			}))
+			return r.eligibleLearningModelRefs(
+				r.unionRecipeDecisionModelRefs(
+					selCtx.RecipeName,
+					func(decision config.Decision) bool {
+						return decision.Tier == tier
+					},
+				),
+			)
 		}
 	case config.RouterLearningCandidateSetGlobal:
 		return r.eligibleLearningModelRefs(r.deployedLearningModelRefs())
 	}
 	return r.eligibleLearningModelRefs(cloneModelRefs(selCtx.CandidateModels))
+}
+
+func (r *OpenAIRouter) unionRecipeDecisionModelRefs(
+	recipeName config.RecipeName,
+	match func(config.Decision) bool,
+) []config.ModelRef {
+	if r == nil || r.Config == nil {
+		return nil
+	}
+	scopedConfig := r.Config
+	if recipe, ok := r.Config.RecipeByName(recipeName); ok {
+		scopedConfig = r.Config.ConfigForRecipe(recipe)
+	}
+	return unionConfigDecisionModelRefs(scopedConfig, match)
 }
 
 func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
@@ -277,12 +325,22 @@ func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
 }
 
 func (r *OpenAIRouter) unionDecisionModelRefs(match func(config.Decision) bool) []config.ModelRef {
-	if r == nil || r.Config == nil || match == nil {
+	if r == nil {
+		return nil
+	}
+	return unionConfigDecisionModelRefs(r.Config, match)
+}
+
+func unionConfigDecisionModelRefs(
+	cfg *config.RouterConfig,
+	match func(config.Decision) bool,
+) []config.ModelRef {
+	if cfg == nil || match == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var refs []config.ModelRef
-	for _, decision := range r.Config.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if !match(decision) {
 			continue
 		}
@@ -328,7 +386,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 		if model == "" {
 			continue
 		}
-		exp := r.routerLearningRuntimeState().experienceSnapshot(selCtx.DecisionName, decisionTier(ctx), model)
+		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
 		if params, ok := r.Config.ModelConfig[model]; ok && params.QualityScore > 0 && exp.GoodFitCount+exp.UnderpoweredCount == 0 {
 			exp.QualitySeed = clamp01(params.QualityScore)
 			exp.SeedWeight = 2
@@ -361,6 +419,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			reliabilityPenalty: reliabilityPenalty,
 			latencyAdjustment:  latencyAdjustment,
 			cacheAdjustment:    cacheAdjustment,
+			coldStart:          exp.LastUpdated.IsZero(),
 		})
 	}
 	sort.SliceStable(scores, func(i, j int) bool {
@@ -520,6 +579,7 @@ func (d *routerLearningAdaptationDiagnostics) toPolicyMap() map[string]interface
 			"reliability_penalty": roundLearningFloat(score.reliabilityPenalty),
 			"latency_adjustment":  roundLearningFloat(score.latencyAdjustment),
 			"cache_adjustment":    roundLearningFloat(score.cacheAdjustment),
+			"cold_start":          score.coldStart,
 		}
 	}
 	if len(scoreDiagnostics) > 0 {

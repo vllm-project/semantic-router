@@ -82,7 +82,7 @@ func (c *RouterConfig) HasReMoMDecision() bool {
 		return false
 	}
 	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == "remom" {
+		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmReMoM {
 			return true
 		}
 	}
@@ -138,6 +138,9 @@ func validateReMoMPositiveControls(cfg *ReMoMAlgorithmConfig) error {
 	}
 	if cfg.MaxConcurrent < 0 {
 		return fmt.Errorf("max_concurrent must be >= 1 when set")
+	}
+	if cfg.MaxCompletionTokens != nil && *cfg.MaxCompletionTokens < 1 {
+		return fmt.Errorf("max_completion_tokens must be >= 1 when set")
 	}
 	if cfg.RoundTimeoutSeconds < 0 {
 		return fmt.Errorf("round_timeout_seconds must be >= 1 when set")

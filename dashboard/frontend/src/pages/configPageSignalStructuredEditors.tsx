@@ -69,8 +69,8 @@ export function SignalConditionsEditor({ value, onChange, readOnly = false }: Un
       itemLabel={(condition) => condition.name || 'New condition'}
       itemDescription={(condition) => condition.type || 'Choose a signal type and name.'}
       validateItem={(condition) => [
-        ...(!condition.type.trim() ? ['Signal type is required.'] : []),
-        ...(!condition.name.trim() ? ['Signal name is required.'] : []),
+        ...(!(condition.type || '').trim() ? ['Signal type is required.'] : []),
+        ...(!(condition.name || '').trim() ? ['Signal name is required.'] : []),
       ]}
       readOnly={readOnly}
     />

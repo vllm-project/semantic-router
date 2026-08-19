@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 
 import {
   readPlaygroundAttachmentFile,
+  validatePlaygroundAttachmentBudget,
   type PlaygroundAttachment,
 } from './playgroundFileAttachments'
 
@@ -16,28 +17,40 @@ export const usePlaygroundAttachments = ({
 }: UsePlaygroundAttachmentsOptions) => {
   const [pendingAttachments, setPendingAttachments] = useState<PlaygroundAttachment[]>([])
 
-  const handleAttachFiles = useCallback(async (files: FileList | File[]) => {
-    const nextFiles = Array.from(files)
-    if (nextFiles.length === 0) {
-      return
-    }
-
-    setConversationError(conversationId, null)
-
-    for (const file of nextFiles) {
-      try {
-        const attachment = await readPlaygroundAttachmentFile(file)
-        setPendingAttachments(prev => [...prev, attachment])
-      } catch (error) {
-        const message = error instanceof Error ? error.message : `Could not attach "${file.name}".`
-        setConversationError(conversationId, message)
-        break
+  const handleAttachFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const nextFiles = Array.from(files)
+      if (nextFiles.length === 0) {
+        return
       }
-    }
-  }, [conversationId, setConversationError])
+
+      setConversationError(conversationId, null)
+
+      const accepted: PlaygroundAttachment[] = []
+      for (const file of nextFiles) {
+        try {
+          const attachment = await readPlaygroundAttachmentFile(file)
+          const budgetError = validatePlaygroundAttachmentBudget([
+            ...pendingAttachments,
+            ...accepted,
+            attachment,
+          ])
+          if (budgetError) throw new Error(budgetError)
+          accepted.push(attachment)
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : `Could not attach "${file.name}".`
+          setConversationError(conversationId, message)
+          return
+        }
+      }
+      setPendingAttachments((prev) => [...prev, ...accepted])
+    },
+    [conversationId, pendingAttachments, setConversationError],
+  )
 
   const handleRemoveAttachment = useCallback((attachmentId: string) => {
-    setPendingAttachments(prev => prev.filter(attachment => attachment.id !== attachmentId))
+    setPendingAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId))
   }, [])
 
   const clearPendingAttachments = useCallback(() => {
@@ -45,12 +58,12 @@ export const usePlaygroundAttachments = ({
   }, [])
 
   const restorePendingAttachments = useCallback((attachments: PlaygroundAttachment[] = []) => {
-    setPendingAttachments(attachments.map(attachment => ({ ...attachment })))
+    setPendingAttachments(attachments.map((attachment) => ({ ...attachment })))
   }, [])
 
   const copyPendingAttachmentsForTask = useCallback(
-    () => pendingAttachments.map(attachment => ({ ...attachment })),
-    [pendingAttachments]
+    () => pendingAttachments.map((attachment) => ({ ...attachment })),
+    [pendingAttachments],
   )
 
   return {

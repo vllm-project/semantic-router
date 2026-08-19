@@ -30,6 +30,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	detectClientProtocol(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
+	// Router Replay contains captured request, response, and tool data. It is a
+	// management API only: the public inference listener must fail closed even
+	// when a caller supplies the otherwise valid skip-processing opt-out.
+	if isRouterReplayRequestTarget(path) {
+		return r.createErrorResponse(404, "endpoint not found"), nil
+	}
+
 	// Honor x-vsr-skip-processing as early as possible: once captured we bypass
 	// every router-side header check (replay API, validation, response-API
 	// translation) and emit a plain CONTINUE so the request flows through.
@@ -38,11 +45,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildReservedHeaderRemovalMutation()), nil
-	}
-
-	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
-		return replayResp, nil
+		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
 	}
 
 	detectStreamingExpectation(ctx)
@@ -58,27 +61,14 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
 }
 
-// buildReservedHeaderRemovalMutation returns a header-phase mutation that
-// removes every reserved internal header from the wire request Envoy forwards
-// upstream. enforceInternalHeaderTrust has already stripped them from
-// ctx.Headers (so router logic is unaffected), but that in-memory strip does
-// NOT reach the wire: without this, a client-spoofed marker — and, critically,
-// the internal-leg auth proof on a genuine looper request — would travel to the
-// upstream, leaking the secret. Applying it at the header phase covers every
-// upstream-bound path uniformly and does not depend on operators configuring
-// Envoy's request_headers_to_remove. See buildIdentityEncodingRequestMutation
-// for the routing-path variant that also pins accept-encoding.
-func buildReservedHeaderRemovalMutation() *ext_proc.HeaderMutation {
-	return &ext_proc.HeaderMutation{
-		RemoveHeaders: append([]string(nil), headers.ReservedInternalHeaders...),
-	}
-}
-
 func startRequestHeaderSpan(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
 ) trace.Span {
-	baseCtx := context.Background()
+	baseCtx := ctx.TraceContext
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
 	headerMap := make(map[string]string, len(v.RequestHeaders.Headers.Headers))
 	for _, header := range v.RequestHeaders.Headers.Headers {
 		headerMap[header.Key] = extractHeaderValue(header)
@@ -104,9 +94,10 @@ func captureRequestHeaders(
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
 
-		// HTTP/2 lowercases header names, but we accept either case for both the
-		// internal looper marker and the external skip-processing opt-out so
-		// upstream filters do not have to worry about casing.
+		// HTTP/2 lowercases header names, but we accept either case for the
+		// external skip-processing opt-out so upstream filters do not have to
+		// worry about casing. Internal request authentication runs after all
+		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
@@ -121,13 +112,12 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
-
 	// Enforce the internal-leg trust boundary before any router logic keys off
-	// the looper markers: a genuine looper re-dispatch authenticates with a
-	// per-process secret and has ctx.LooperRequest set here, while reserved
-	// internal headers on an untrusted (client) request are stripped so a caller
-	// cannot spoof the internal path or inject a caller-identity carrier.
-	enforceInternalHeaderTrust(ctx)
+	// the looper markers: a genuine looper re-dispatch authenticates with the
+	// process-local internal credential and has ctx.LooperRequest set here, while
+	// reserved internal headers on an untrusted (client) request are stripped so
+	// a caller cannot spoof the internal path or inject a caller-identity carrier.
+	authenticateLooperRequestContext(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
@@ -199,9 +189,8 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 			},
 		}},
 		// Strip the reserved internal headers from the wire so a spoofed marker
-		// or the internal-leg auth proof never reaches the upstream. See
-		// buildReservedHeaderRemovalMutation.
-		RemoveHeaders: append([]string(nil), headers.ReservedInternalHeaders...),
+		// or the internal-leg credential never reaches the upstream.
+		RemoveHeaders: looperInternalHeadersForRemoval(),
 	}
 }
 

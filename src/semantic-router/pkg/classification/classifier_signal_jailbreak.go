@@ -1,18 +1,17 @@
 package classification
 
 import (
+	"context"
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // cachedJailbreakResult stores a cached jailbreak classification result.
 type cachedJailbreakResult struct {
-	result candle_binding.ClassResult
+	result SequenceClassificationResult
 	err    error
 }
 
@@ -45,17 +44,25 @@ func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, no
 	return contents
 }
 
-func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mutex, jailbreakText string, nonUserMessages []string) {
+func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, jailbreakText string, nonUserMessages []string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	start := time.Now()
 
 	// Step 1: Collect unique content pieces needed by classifier (non-contrastive) rules.
 	classifierContents := c.collectJailbreakClassifierContents(jailbreakText, nonUserMessages)
 
 	// Step 2: Run classifier inference exactly once per unique content piece.
-	jailbreakCache := make(map[string]cachedJailbreakResult, len(classifierContents))
+	jailbreakCache := make(map[string][]cachedJailbreakResult, len(classifierContents))
 	for _, content := range classifierContents {
-		result, err := c.jailbreakInference.Classify(content)
-		jailbreakCache[content] = cachedJailbreakResult{result, err}
+		chunks := jailbreakSignalChunks(content)
+		cached := make([]cachedJailbreakResult, 0, len(chunks))
+		for _, chunk := range chunks {
+			result, err := c.jailbreakInference.Classify(ctx, chunk)
+			cached = append(cached, cachedJailbreakResult{result, err})
+		}
+		jailbreakCache[content] = cached
 	}
 
 	// Step 3: Evaluate all rules concurrently.
@@ -76,11 +83,11 @@ func (c *Classifier) evaluateJailbreakSignal(results *SignalResults, mu *sync.Mu
 		results.Metrics.Jailbreak.Confidence = float64(results.JailbreakConfidence)
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
 	logging.Debugf("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakText string, nonUserMessages []string, jailbreakCache map[string]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakText string, nonUserMessages []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	contentToAnalyze := buildContentList(jailbreakText, nonUserMessages, rule.IncludeHistory)
 	if len(contentToAnalyze) == 0 {
 		return
@@ -88,7 +95,11 @@ func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakT
 
 	switch rule.Method {
 	case "contrastive":
-		c.evaluateContrastiveJailbreakRule(rule, contentToAnalyze, start, results, mu)
+		var chunks []string
+		for _, content := range contentToAnalyze {
+			chunks = append(chunks, jailbreakSignalChunks(content)...)
+		}
+		c.evaluateContrastiveJailbreakRule(rule, chunks, start, results, mu)
 	default:
 		c.evaluateBERTJailbreakRule(rule, contentToAnalyze, jailbreakCache, start, results, mu)
 	}
@@ -121,8 +132,8 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		return
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-	metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
 	confidence := analysisResult.MaxScore
 	mu.Lock()
@@ -139,54 +150,60 @@ func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule,
 		rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
 }
 
-func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	bestType, bestConf := c.findBestJailbreakMatch(rule, contentToAnalyze, jailbreakCache)
-	if bestConf <= 0 {
+func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	bestType, bestScore := c.findBestJailbreakMatch(rule, contentToAnalyze, jailbreakCache)
+	if bestScore <= 0 {
 		return
 	}
 
-	metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-	metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+	c.recordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+	c.recordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
 	mu.Lock()
 	results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-	if bestConf > results.JailbreakConfidence {
+	if bestScore > results.JailbreakConfidence {
 		results.JailbreakDetected = true
 		results.JailbreakType = bestType
-		results.JailbreakConfidence = bestConf
+		results.JailbreakConfidence = bestScore
 	}
-	results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
+	results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestScore)
 	mu.Unlock()
 }
 
-// findBestJailbreakMatch scans cached BERT results and returns the highest-confidence jailbreak match.
-func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string]cachedJailbreakResult) (string, float32) {
+// findBestJailbreakMatch scans cached BERT results and returns the highest
+// combined-positive-label-risk match, via the same isJailbreakRiskAboveThreshold
+// helper CheckForJailbreakWithRisk uses.
+func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32) {
 	var bestType string
-	var bestConf float32
+	var bestScore float32
 	for _, content := range contentToAnalyze {
 		if content == "" {
 			continue
 		}
-		cached, ok := jailbreakCache[content]
+		cachedResults, ok := jailbreakCache[content]
 		if !ok {
 			continue
 		}
-		if cached.err != nil {
-			logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
-			continue
-		}
-		jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(cached.result.Class)
-		if !ok {
-			logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
-			continue
-		}
-		if cached.result.Confidence < rule.Threshold || jailbreakType != "jailbreak" {
-			continue
-		}
-		if cached.result.Confidence > bestConf {
-			bestConf = cached.result.Confidence
-			bestType = jailbreakType
+		for _, cached := range cachedResults {
+			if cached.err != nil {
+				logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
+				continue
+			}
+			class, _ := deriveArgmax(cached.result.Probabilities)
+			jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
+			if !ok {
+				logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
+				continue
+			}
+			aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
+			if !aboveThreshold {
+				continue
+			}
+			if riskScore > bestScore {
+				bestScore = riskScore
+				bestType = jailbreakType
+			}
 		}
 	}
-	return bestType, bestConf
+	return bestType, bestScore
 }
