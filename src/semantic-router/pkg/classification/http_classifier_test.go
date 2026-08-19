@@ -62,6 +62,31 @@ func TestNewHTTPClassifierInference(t *testing.T) {
 			mapping:     (*JailbreakMapping)(nil),
 			expectError: true,
 		},
+		{
+			// A mapping declaring only an index->label map leaves the
+			// label->index maps empty, so LabelCount() is 0 even though
+			// IndexForLabel still resolves. Without an arity check the
+			// constructor accepts it, alignScoresToMapping then allocates a
+			// zero-length distribution, and every valid server response is
+			// rejected as "label not in the configured label mapping" - on
+			// every request, blocking all traffic under on_error: block.
+			name: "index-to-label-only mapping has zero labels",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+				ModelName:     "custom-classifier",
+			},
+			mapping:     &JailbreakMapping{IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"}},
+			expectError: true,
+		},
+		{
+			name: "single-label mapping cannot express a distribution",
+			externalCfg: &config.ExternalModelConfig{
+				ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+				ModelName:     "custom-classifier",
+			},
+			mapping:     &JailbreakMapping{LabelToIdx: map[string]int{"benign": 0}},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {

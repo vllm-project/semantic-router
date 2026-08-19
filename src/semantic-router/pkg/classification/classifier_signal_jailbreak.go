@@ -199,7 +199,8 @@ const (
 	// content-based match.
 	jailbreakCandidateMatched
 	// jailbreakCandidateFailClosed means on_error: block turned a classify
-	// error into an immediate, maximum-confidence match.
+	// error into a maximum-confidence match, used only when the scan finds
+	// no genuine content-based match to report instead.
 	jailbreakCandidateFailClosed
 )
 
@@ -226,7 +227,17 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 	class, _ := deriveArgmax(cached.result.Probabilities)
 	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
 	if !ok {
+		// The call succeeded but its answer is uninterpretable against the
+		// configured mapping (e.g. a 3-class checkpoint behind a 2-class
+		// mapping - nothing validates the model head against the mapping,
+		// since the initializers ignore numClasses and the FFI reports the
+		// model's own head size). That is "could not verify safe" just like a
+		// transport error, so on_error: block must close here too rather than
+		// treat it as a clean result.
 		logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, class)
+		if c.Config.PromptGuard.IsBlock() {
+			return jailbreakCandidate{outcome: jailbreakCandidateFailClosed}
+		}
 		return jailbreakCandidate{}
 	}
 	aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
@@ -242,6 +253,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentToAnalyze []string, jailbreakCache map[string][]cachedJailbreakResult) (string, float32) {
 	var bestType string
 	var bestScore float32
+	failClosed := false
 	for _, content := range contentToAnalyze {
 		if content == "" {
 			continue
@@ -257,7 +269,7 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				// No contribution: a tolerated error, an unknown class
 				// index, or a risk score below the rule's threshold.
 			case jailbreakCandidateFailClosed:
-				return jailbreakClassificationErrorType, 1.0
+				failClosed = true
 			case jailbreakCandidateMatched:
 				if candidate.riskScore > bestScore {
 					bestScore = candidate.riskScore
@@ -265,6 +277,21 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 				}
 			}
 		}
+	}
+
+	// A genuine detection wins over the fail-closed sentinel. Both block the
+	// request - the sentinel's 1.0 is >= any real score, so every decision
+	// that would fire still fires either way - but returning the sentinel
+	// when a real match exists erases the detected label and its true score,
+	// and those flow on to results.JailbreakType/JailbreakConfidence, the
+	// replay record's jailbreak_type, and the jailbreak.type span attribute.
+	// A replayed genuine attack would then be indistinguishable from an
+	// unreachable guardrail, and eval confidence would skew to 1.0.
+	if bestType != "" {
+		return bestType, bestScore
+	}
+	if failClosed {
+		return jailbreakClassificationErrorType, 1.0
 	}
 	return bestType, bestScore
 }

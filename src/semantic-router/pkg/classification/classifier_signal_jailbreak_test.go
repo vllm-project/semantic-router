@@ -125,28 +125,107 @@ func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) 
 }
 
 // TestFindBestJailbreakMatch_OnErrorBlock_DoesNotOverrideARealMatch verifies
-// that when a genuine content-based match already scores above the
-// fail-closed sentinel would, findBestJailbreakMatch still surfaces the
-// contract callers rely on: a score of 1.0 either way, so a decision
-// threshold at or below 1.0 behaves identically regardless of which content
-// piece is examined first.
+// that a genuine content-based detection is reported with its own label and
+// score even when another content piece failed to classify under
+// on_error: block. Both outcomes block the request, but reporting the
+// sentinel here would erase the real label and score from
+// results.JailbreakType/JailbreakConfidence, the replay record's
+// jailbreak_type, and the jailbreak.type span attribute - making a replayed
+// real attack indistinguishable from a guardrail outage.
+//
+// The real score is deliberately 0.97, not 1.0: with a 1.0 fixture the
+// sentinel's own 1.0 makes the substitution invisible, which is exactly how
+// an earlier version of this test asserted the opposite of its own name
+// without anyone noticing.
 func TestFindBestJailbreakMatch_OnErrorBlock_DoesNotOverrideARealMatch(t *testing.T) {
 	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
 	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
 	cache := map[string][]cachedJailbreakResult{
-		"attack text": {{result: SequenceClassificationResult{Probabilities: []float32{0.0, 1.0}}}},
+		"attack text": {{result: SequenceClassificationResult{Probabilities: []float32{0.03, 0.97}}}},
+		"broken text": {{err: errClassifyUnreachable}},
+	}
+
+	// Both orderings, because the fail-closed error must not win by being
+	// encountered first.
+	for _, order := range [][]string{
+		{"attack text", "broken text"},
+		{"broken text", "attack text"},
+	} {
+		bestType, bestScore := classifier.findBestJailbreakMatch(rule, order, cache)
+
+		if bestType != "jailbreak" {
+			t.Errorf("order %v: bestType = %q, want %q (a real detection must not be replaced by the sentinel)",
+				order, bestType, "jailbreak")
+		}
+		if bestScore != 0.97 {
+			t.Errorf("order %v: bestScore = %v, want 0.97 (the real score must survive)", order, bestScore)
+		}
+	}
+}
+
+// TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedOnUninterpretableResult
+// covers the other way a result can be unusable: the call succeeded, but its
+// argmax index has no entry in the configured mapping (reachable because
+// nothing validates the model head against the mapping - the initializers
+// ignore numClasses and the FFI reports the model's own head size). That is
+// "could not verify safe" just like a transport error, so on_error: block
+// must close rather than treat it as clean.
+func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedOnUninterpretableResult(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	// Mapping under test has 2 labels; argmax here is index 2.
+	cache := map[string][]cachedJailbreakResult{
+		"odd text": {{result: SequenceClassificationResult{Probabilities: []float32{0.10, 0.20, 0.70}}}},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"odd text"}, cache)
+
+	if bestType != jailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q (an uninterpretable result must fail closed under block)",
+			bestType, jailbreakClassificationErrorType)
+	}
+	if bestScore != 1.0 {
+		t.Errorf("bestScore = %v, want 1.0", bestScore)
+	}
+}
+
+// TestFindBestJailbreakMatch_OnErrorAllow_ToleratesUninterpretableResult is
+// the default-path counterpart: on_error: allow must keep its historical
+// behaviour of logging and moving on.
+func TestFindBestJailbreakMatch_OnErrorAllow_ToleratesUninterpretableResult(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.OnErrorAllow)
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	cache := map[string][]cachedJailbreakResult{
+		"odd text": {{result: SequenceClassificationResult{Probabilities: []float32{0.10, 0.20, 0.70}}}},
+	}
+
+	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"odd text"}, cache)
+
+	if bestType != "" || bestScore != 0 {
+		t.Errorf("bestType, bestScore = %q, %v; want \"\", 0", bestType, bestScore)
+	}
+}
+
+// TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedWhenNoRealMatch is the
+// other half of the contract above: with no genuine detection to report, a
+// classify failure under on_error: block must still block, via the sentinel.
+func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedWhenNoRealMatch(t *testing.T) {
+	classifier := newJailbreakTestClassifier(t, config.OnErrorBlock)
+	rule := config.JailbreakRule{Name: "default", Threshold: 0.5}
+	cache := map[string][]cachedJailbreakResult{
+		"benign text": {{result: SequenceClassificationResult{Probabilities: []float32{0.98, 0.02}}}},
 		"broken text": {{err: errClassifyUnreachable}},
 	}
 
 	bestType, bestScore := classifier.findBestJailbreakMatch(
-		rule, []string{"attack text", "broken text"}, cache,
+		rule, []string{"benign text", "broken text"}, cache,
 	)
 
+	if bestType != jailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q", bestType, jailbreakClassificationErrorType)
+	}
 	if bestScore != 1.0 {
 		t.Errorf("bestScore = %v, want 1.0", bestScore)
-	}
-	if bestType != jailbreakClassificationErrorType {
-		t.Errorf("bestType = %q, want %q (fail-closed short-circuits the scan)", bestType, jailbreakClassificationErrorType)
 	}
 }
 

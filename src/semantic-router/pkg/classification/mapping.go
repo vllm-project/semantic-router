@@ -96,14 +96,18 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// place that compares against the sentinel.
 	//
 	// This deliberately probes via GetIndexForJailbreakType rather than
-	// indexing LabelToIdx directly: a mapping file may declare only
-	// idx_to_label or only id_to_label (the HuggingFace naming the shipped
-	// mmbert32k mapping uses), and the normalization above only back-fills
-	// label_to_id -> LabelToIdx, never idx_to_label -> LabelToIdx. A direct
-	// LabelToIdx lookup therefore misses those shapes while
-	// GetJailbreakTypeFromIndex still resolves the sentinel from
+	// indexing LabelToIdx directly. A mapping file may declare *only* an
+	// index->label map (idx_to_label or id_to_label) and no label->index map
+	// at all; the normalization above back-fills label_to_id -> LabelToIdx
+	// but never idx_to_label -> LabelToIdx, so LabelToIdx stays empty while
+	// GetJailbreakTypeFromIndex still resolves the sentinel out of
 	// IdxToLabel/IDToLabel at runtime. Probing through the same lookup the
 	// runtime uses keeps the guard from drifting from what it guards.
+	//
+	// For the record, the shipped mmbert32k mapping declares both directions
+	// (label_to_id + id_to_label), so it back-fills and was never in the
+	// unguarded set - the gap was only ever reachable via a hand-written
+	// index->label-only mapping.
 	if _, collides := mapping.GetIndexForJailbreakType(jailbreakClassificationErrorType); collides {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",

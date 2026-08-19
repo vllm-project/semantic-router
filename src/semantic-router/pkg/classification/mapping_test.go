@@ -115,11 +115,15 @@ func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
 // instead of loading it silently.
 //
 // Every supported mapping shape is covered on purpose. An earlier version of
-// this guard indexed LabelToIdx directly and only this test's first case
-// exercised it, so the three remaining shapes - including the idx_to_label /
-// id_to_label (HuggingFace) naming the shipped mmbert32k mapping actually
-// uses - loaded without error while GetJailbreakTypeFromIndex still resolved
-// the sentinel at runtime.
+// this guard indexed LabelToIdx directly, which caught the two shapes that
+// populate a label->index map (label_to_idx, and label_to_id via the loader's
+// back-fill) but missed the two that declare only an index->label map: those
+// left LabelToIdx empty and still resolved the sentinel through
+// GetJailbreakTypeFromIndex at runtime.
+//
+// Note the shipped mmbert32k mapping declares both directions, so it was
+// already covered; only a hand-written index->label-only mapping could reach
+// the gap.
 func TestLoadJailbreakMapping_RejectsSentinelCollision(t *testing.T) {
 	for name, data := range map[string]string{
 		"label_to_idx_and_idx_to_label": `{"label_to_idx":{"benign":0,"classification_error":1},"idx_to_label":{"0":"benign","1":"classification_error"}}`,
