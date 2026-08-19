@@ -26,13 +26,17 @@ func testRuntimeSyncPythonBinary(t *testing.T) string {
 		if err != nil {
 			continue
 		}
-		cmd := exec.Command(resolved, "-c", "import yaml, jinja2")
+		cmd := exec.Command(resolved, "-c", "import yaml, jinja2, pydantic")
 		if err := cmd.Run(); err == nil {
 			return resolved
 		}
 	}
 
-	t.Fatal("python interpreter with yaml support not found")
+	// These tests drive the vllm-sr CLI through a Python interpreter. Skip rather
+	// than fail where the CLI's dependencies are not installed, so `go test ./...`
+	// stays usable without them; CI installs `pip install -e src/vllm-sr`, so the
+	// tests do run in the Dashboard gate.
+	t.Skip("python interpreter with vllm-sr CLI dependencies (yaml, jinja2, pydantic) not found")
 	return ""
 }
 
