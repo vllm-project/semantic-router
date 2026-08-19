@@ -1084,7 +1084,7 @@ routing:
           cost_quality_tradeoff: 0.35
           discount_factor: 0.9
           use_logprob_verification: true
-	  enable_self_verification: false
+          enable_self_verification: false
           verification_samples: 5
           verification_temperature: 0.7
           use_pomdp_router: true
@@ -1595,7 +1595,7 @@ global:
         cost_quality_tradeoff: 0.4
         discount_factor: 0.9
         use_logprob_verification: true
-	enable_self_verification: false
+        enable_self_verification: false
         verification_samples: 5
         verification_temperature: 0.7
         use_pomdp_router: true
