@@ -52,9 +52,9 @@ func acquireRuntimeConfigStoreLock(storeDir string) (*runtimeConfigStoreLock, bo
 		}
 		return nil, false, errors.New("runtime config lock must be a regular private file")
 	}
-	if err := unix.Fchmod(lockFD, 0o600); err != nil {
+	if stat.Mode&0o007 != 0 {
 		cleanup()
-		return nil, false, err
+		return nil, false, errors.New("runtime config lock must not grant access to other users")
 	}
 	if err := unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		cleanup()

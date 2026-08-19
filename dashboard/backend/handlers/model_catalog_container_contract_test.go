@@ -54,6 +54,8 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		`if [ "$(id -u)" -ne 0 ]; then`,
 		"DASHBOARD_RUNTIME_CONFIG_WRITABLE=false",
 		"DASHBOARD_RECIPE_STORE_WRITABLE=false",
+		`PROVENANCE_FILE_PATH=${CONFIG_FILE_PATH%.*}.provenance.json`,
+		`prepare-file "$PROVENANCE_FILE_PATH" "$STATE_GID"`,
 		`exec "$@"`,
 	} {
 		if !strings.Contains(entrypoint, required) {
