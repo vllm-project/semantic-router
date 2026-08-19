@@ -119,8 +119,8 @@ func TestFindBestJailbreakMatch_OnErrorBlock_TreatsFailureAsMatch(t *testing.T) 
 	if bestScore != 1.0 {
 		t.Errorf("bestScore = %v, want 1.0 (fail-closed)", bestScore)
 	}
-	if bestType != jailbreakClassificationErrorType {
-		t.Errorf("bestType = %q, want %q", bestType, jailbreakClassificationErrorType)
+	if bestType != JailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q", bestType, JailbreakClassificationErrorType)
 	}
 }
 
@@ -180,9 +180,9 @@ func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedOnUninterpretableResult(
 
 	bestType, bestScore := classifier.findBestJailbreakMatch(rule, []string{"odd text"}, cache)
 
-	if bestType != jailbreakClassificationErrorType {
+	if bestType != JailbreakClassificationErrorType {
 		t.Errorf("bestType = %q, want %q (an uninterpretable result must fail closed under block)",
-			bestType, jailbreakClassificationErrorType)
+			bestType, JailbreakClassificationErrorType)
 	}
 	if bestScore != 1.0 {
 		t.Errorf("bestScore = %v, want 1.0", bestScore)
@@ -221,8 +221,8 @@ func TestFindBestJailbreakMatch_OnErrorBlock_FailsClosedWhenNoRealMatch(t *testi
 		rule, []string{"benign text", "broken text"}, cache,
 	)
 
-	if bestType != jailbreakClassificationErrorType {
-		t.Errorf("bestType = %q, want %q", bestType, jailbreakClassificationErrorType)
+	if bestType != JailbreakClassificationErrorType {
+		t.Errorf("bestType = %q, want %q", bestType, JailbreakClassificationErrorType)
 	}
 	if bestScore != 1.0 {
 		t.Errorf("bestScore = %v, want 1.0", bestScore)

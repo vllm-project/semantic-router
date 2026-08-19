@@ -108,7 +108,7 @@ func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
 }
 
 // TestLoadJailbreakMapping_RejectsSentinelCollision guards on_error: block's
-// fail-closed sentinel (jailbreakClassificationErrorType): a deployment
+// fail-closed sentinel (JailbreakClassificationErrorType): a deployment
 // whose mapping file configures a real label with that exact name would
 // make a genuine detection indistinguishable from a classify failure - see
 // @adaamko's review on #2918/#2930. LoadJailbreakMapping must reject it

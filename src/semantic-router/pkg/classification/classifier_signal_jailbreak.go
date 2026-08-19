@@ -15,7 +15,7 @@ type cachedJailbreakResult struct {
 	err    error
 }
 
-// jailbreakClassificationErrorType is the sentinel jailbreak type reported
+// JailbreakClassificationErrorType is the sentinel jailbreak type reported
 // when on_error: block forces a rule to match because inference itself
 // failed (e.g. an unreachable http_chat/http_classify endpoint), rather than
 // because the content was actually classified as a jailbreak. It is
@@ -26,7 +26,7 @@ type cachedJailbreakResult struct {
 // that resolves to this value, in any of the supported label_to_idx/
 // label_to_id/idx_to_label/id_to_label shapes, so a real detection can never
 // collide with it.
-const jailbreakClassificationErrorType = "classification_error"
+const JailbreakClassificationErrorType = "classification_error"
 
 // collectJailbreakClassifierContents returns the deduplicated set of text pieces
 // that need BERT classifier inference (contrastive rules are excluded).
@@ -291,7 +291,7 @@ func (c *Classifier) findBestJailbreakMatch(rule config.JailbreakRule, contentTo
 		return bestType, bestScore
 	}
 	if failClosed {
-		return jailbreakClassificationErrorType, 1.0
+		return JailbreakClassificationErrorType, 1.0
 	}
 	return bestType, bestScore
 }
