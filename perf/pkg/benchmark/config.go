@@ -148,7 +148,7 @@ func (m *Manifest) validateProfile(name string, profile ProfileConfig) error {
 		return fmt.Errorf("profile %q has no suites", name)
 	}
 	if profile.Count < 0 {
-		return fmt.Errorf("profile %q count must be positive", name)
+		return fmt.Errorf("profile %q count must be non-negative", name)
 	}
 	if err := validateProfileDuration(name, "benchtime", profile.BenchTime); err != nil {
 		return err

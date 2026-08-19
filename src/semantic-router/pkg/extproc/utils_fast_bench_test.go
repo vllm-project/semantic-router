@@ -32,7 +32,6 @@ func BenchmarkExtractContentFast_ContextShape(b *testing.B) {
 		name := fmt.Sprintf("tokens=%d/messages=%d/tools=%d", shape.tokens, shape.messages, shape.tools)
 		b.Run(name, func(b *testing.B) {
 			b.ReportAllocs()
-			b.ReportMetric(float64(len(body)), "input_bytes")
 			for b.Loop() {
 				result, err := extractContentFast(body)
 				if err != nil {
@@ -40,6 +39,9 @@ func BenchmarkExtractContentFast_ContextShape(b *testing.B) {
 				}
 				benchmarkFastExtractResult.Store(result)
 			}
+			// b.Loop resets metrics on its first call, so report the request
+			// size after the loop to retain it in benchmark output.
+			b.ReportMetric(float64(len(body)), "input_bytes")
 		})
 	}
 }

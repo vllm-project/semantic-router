@@ -282,16 +282,28 @@ func compareExternalMetrics(
 		}
 	}
 	if baseline.ThroughputQPS > 0 {
-		result.ThroughputChange = calculatePercentChange(baseline.ThroughputQPS, current.ThroughputQPS)
-		regressed = regressed || result.ThroughputChange < -threshold.MaxThroughputRegressionPercent
+		if current.ThroughputQPS <= 0 {
+			regressed = true
+		} else {
+			result.ThroughputChange = calculatePercentChange(baseline.ThroughputQPS, current.ThroughputQPS)
+			regressed = regressed || result.ThroughputChange < -threshold.MaxThroughputRegressionPercent
+		}
 	}
 	if baseline.UpstreamCalls > 0 {
-		result.UpstreamCallsChange = calculatePercentChange(baseline.UpstreamCalls, current.UpstreamCalls)
-		regressed = regressed || result.UpstreamCallsChange > threshold.MaxUpstreamCallsRegressionPercent
+		if current.UpstreamCalls <= 0 {
+			regressed = true
+		} else {
+			result.UpstreamCallsChange = calculatePercentChange(baseline.UpstreamCalls, current.UpstreamCalls)
+			regressed = regressed || result.UpstreamCallsChange > threshold.MaxUpstreamCallsRegressionPercent
+		}
 	}
 	if baseline.TokenAmplification > 0 {
-		result.TokenAmplificationChange = calculatePercentChange(baseline.TokenAmplification, current.TokenAmplification)
-		regressed = regressed || result.TokenAmplificationChange > threshold.MaxTokenAmplificationRegressionPercent
+		if current.TokenAmplification <= 0 {
+			regressed = true
+		} else {
+			result.TokenAmplificationChange = calculatePercentChange(baseline.TokenAmplification, current.TokenAmplification)
+			regressed = regressed || result.TokenAmplificationChange > threshold.MaxTokenAmplificationRegressionPercent
+		}
 	}
 	return regressed
 }

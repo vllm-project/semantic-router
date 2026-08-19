@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -29,34 +30,36 @@ type ReportSummary struct {
 }
 
 type ReportRow struct {
-	Suite                      string  `json:"suite"`
-	Benchmark                  string  `json:"benchmark"`
-	Samples                    int     `json:"samples"`
-	BaselineNsPerOp            float64 `json:"baseline_ns_per_op"`
-	CurrentNsPerOp             float64 `json:"current_ns_per_op"`
-	NsChange                   float64 `json:"ns_change_percent"`
-	NsStdDev                   float64 `json:"ns_stddev_percent"`
-	BaselineAllocs             int64   `json:"baseline_allocs_per_op"`
-	CurrentAllocs              int64   `json:"current_allocs_per_op"`
-	AllocsChange               float64 `json:"allocs_change_percent"`
-	BaselineBytes              int64   `json:"baseline_bytes_per_op"`
-	CurrentBytes               int64   `json:"current_bytes_per_op"`
-	BytesChange                float64 `json:"bytes_change_percent"`
-	CurrentP50Ms               float64 `json:"current_p50_latency_ms,omitempty"`
-	BaselineP95Ms              float64 `json:"baseline_p95_latency_ms,omitempty"`
-	CurrentP95Ms               float64 `json:"current_p95_latency_ms,omitempty"`
-	CurrentP99Ms               float64 `json:"current_p99_latency_ms,omitempty"`
-	P95Change                  float64 `json:"p95_latency_change_percent,omitempty"`
-	BaselineQPS                float64 `json:"baseline_throughput_qps,omitempty"`
-	CurrentQPS                 float64 `json:"current_throughput_qps,omitempty"`
-	ThroughputChange           float64 `json:"throughput_change_percent,omitempty"`
-	BaselineUpstreamCalls      float64 `json:"baseline_upstream_calls,omitempty"`
-	CurrentUpstreamCalls       float64 `json:"current_upstream_calls,omitempty"`
-	UpstreamCallsChange        float64 `json:"upstream_calls_change_percent,omitempty"`
-	BaselineTokenAmplification float64 `json:"baseline_token_amplification,omitempty"`
-	CurrentTokenAmplification  float64 `json:"current_token_amplification,omitempty"`
-	TokenAmplificationChange   float64 `json:"token_amplification_change_percent,omitempty"`
-	Status                     string  `json:"status"`
+	Suite                      string             `json:"suite"`
+	Benchmark                  string             `json:"benchmark"`
+	Samples                    int                `json:"samples"`
+	BaselineNsPerOp            float64            `json:"baseline_ns_per_op"`
+	CurrentNsPerOp             float64            `json:"current_ns_per_op"`
+	NsChange                   float64            `json:"ns_change_percent"`
+	NsStdDev                   float64            `json:"ns_stddev_percent"`
+	BaselineAllocs             int64              `json:"baseline_allocs_per_op"`
+	CurrentAllocs              int64              `json:"current_allocs_per_op"`
+	AllocsChange               float64            `json:"allocs_change_percent"`
+	BaselineBytes              int64              `json:"baseline_bytes_per_op"`
+	CurrentBytes               int64              `json:"current_bytes_per_op"`
+	BytesChange                float64            `json:"bytes_change_percent"`
+	BaselineCustom             map[string]float64 `json:"baseline_custom,omitempty"`
+	CurrentCustom              map[string]float64 `json:"current_custom,omitempty"`
+	CurrentP50Ms               float64            `json:"current_p50_latency_ms,omitempty"`
+	BaselineP95Ms              float64            `json:"baseline_p95_latency_ms,omitempty"`
+	CurrentP95Ms               float64            `json:"current_p95_latency_ms,omitempty"`
+	CurrentP99Ms               float64            `json:"current_p99_latency_ms,omitempty"`
+	P95Change                  float64            `json:"p95_latency_change_percent,omitempty"`
+	BaselineQPS                float64            `json:"baseline_throughput_qps,omitempty"`
+	CurrentQPS                 float64            `json:"current_throughput_qps,omitempty"`
+	ThroughputChange           float64            `json:"throughput_change_percent,omitempty"`
+	BaselineUpstreamCalls      float64            `json:"baseline_upstream_calls,omitempty"`
+	CurrentUpstreamCalls       float64            `json:"current_upstream_calls,omitempty"`
+	UpstreamCallsChange        float64            `json:"upstream_calls_change_percent,omitempty"`
+	BaselineTokenAmplification float64            `json:"baseline_token_amplification,omitempty"`
+	CurrentTokenAmplification  float64            `json:"current_token_amplification,omitempty"`
+	TokenAmplificationChange   float64            `json:"token_amplification_change_percent,omitempty"`
+	Status                     string             `json:"status"`
 }
 
 func GenerateReport(comparison *ComparisonDocument) *Report {
@@ -97,6 +100,8 @@ func GenerateReport(comparison *ComparisonDocument) *Report {
 			BaselineBytes:              result.Baseline.BytesPerOp,
 			CurrentBytes:               result.Current.BytesPerOp,
 			BytesChange:                result.BytesPerOpChange,
+			BaselineCustom:             result.Baseline.Custom,
+			CurrentCustom:              result.Current.Custom,
 			CurrentP50Ms:               result.Current.P50LatencyMs,
 			BaselineP95Ms:              result.Baseline.P95LatencyMs,
 			CurrentP95Ms:               result.Current.P95LatencyMs,
@@ -167,13 +172,14 @@ func (r *Report) SaveMarkdown(path string) error {
 	}
 
 	output.WriteString("## Measurements\n\n")
-	output.WriteString("| Suite | Benchmark | Samples | ns/op base → current | Δ time | CV | allocs/op base → current | B/op base → current | p95 ms base → current | QPS base → current | upstream calls | token amplification | Status |\n")
-	output.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
+	output.WriteString("| Suite | Benchmark | Samples | ns/op base → current | Δ time | CV | allocs/op base → current | B/op base → current | custom metrics base → current | p95 ms base → current | QPS base → current | upstream calls | token amplification | Status |\n")
+	output.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |\n")
 	for _, row := range r.Rows {
-		output.WriteString(fmt.Sprintf("| %s | %s | %d | %.1f → %.1f | %+.1f%% | %.1f%% | %d → %d | %d → %d | %s | %s | %s | %s | %s |\n",
+		output.WriteString(fmt.Sprintf("| %s | %s | %d | %.1f → %.1f | %+.1f%% | %.1f%% | %d → %d | %d → %d | %s | %s | %s | %s | %s | %s |\n",
 			markdownCell(row.Suite), markdownCell(row.Benchmark), row.Samples,
 			row.BaselineNsPerOp, row.CurrentNsPerOp, row.NsChange, row.NsStdDev,
 			row.BaselineAllocs, row.CurrentAllocs, row.BaselineBytes, row.CurrentBytes,
+			markdownCell(optionalCustomMetricPairs(row.BaselineCustom, row.CurrentCustom)),
 			optionalMetricPair(row.BaselineP95Ms, row.CurrentP95Ms),
 			optionalMetricPair(row.BaselineQPS, row.CurrentQPS),
 			optionalMetricPair(row.BaselineUpstreamCalls, row.CurrentUpstreamCalls),
@@ -198,6 +204,40 @@ func optionalMetricPair(baseline, current float64) string {
 	return fmt.Sprintf("%.1f → %.1f", baseline, current)
 }
 
+func optionalCustomMetricPairs(baseline, current map[string]float64) string {
+	keys := make(map[string]struct{}, len(baseline)+len(current))
+	for key := range baseline {
+		keys[key] = struct{}{}
+	}
+	for key := range current {
+		keys[key] = struct{}{}
+	}
+	if len(keys) == 0 {
+		return "—"
+	}
+
+	sortedKeys := make([]string, 0, len(keys))
+	for key := range keys {
+		sortedKeys = append(sortedKeys, key)
+	}
+	sort.Strings(sortedKeys)
+
+	pairs := make([]string, 0, len(sortedKeys))
+	for _, key := range sortedKeys {
+		pairs = append(pairs, fmt.Sprintf("%s=%s → %s", key,
+			customMetricValue(baseline, key), customMetricValue(current, key)))
+	}
+	return strings.Join(pairs, "; ")
+}
+
+func customMetricValue(metrics map[string]float64, key string) string {
+	value, ok := metrics[key]
+	if !ok {
+		return "—"
+	}
+	return fmt.Sprintf("%.1f", value)
+}
+
 func (r *Report) SaveHTML(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
@@ -211,6 +251,7 @@ func (r *Report) SaveHTML(path string) error {
 		"change": func(value float64) string { return fmt.Sprintf("%+.1f%%", value) },
 		"number": func(value float64) string { return fmt.Sprintf("%.1f", value) },
 		"pair":   optionalMetricPair,
+		"custom": optionalCustomMetricPairs,
 	}).Parse(reportHTMLTemplate)
 	if err != nil {
 		return fmt.Errorf("parse HTML report template: %w", err)
@@ -234,6 +275,6 @@ table{border-collapse:collapse;width:100%;margin-top:1.5rem}th,td{border-bottom:
 <div class="cards"><div class="card"><strong>{{.Summary.Measured}}</strong><br>measured</div><div class="card"><strong>{{.Summary.Compared}}</strong><br>compared</div><div class="card"><strong>{{.Summary.Regressions}}</strong><br>regressions</div><div class="card"><strong>{{.Summary.TimingAdvisories}}</strong><br>timing advisories</div></div>
 {{if .Ungated}}<h2 class="bad">Unbaselined measurements</h2><ul>{{range .Ungated}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
 {{if .Missing}}<h2 class="bad">Missing measurements</h2><ul>{{range .Missing}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
-<table><thead><tr><th>Suite</th><th>Benchmark</th><th>samples</th><th>base ns/op</th><th>current ns/op</th><th>Δ time</th><th>CV</th><th>allocs/op</th><th>B/op</th><th>p95 ms</th><th>QPS</th><th>upstream calls</th><th>token amp</th><th>status</th></tr></thead><tbody>
-{{range .Rows}}<tr><td>{{.Suite}}</td><td><code>{{.Benchmark}}</code></td><td>{{.Samples}}</td><td>{{number .BaselineNsPerOp}}</td><td>{{number .CurrentNsPerOp}}</td><td>{{change .NsChange}}</td><td>{{number .NsStdDev}}%</td><td>{{.BaselineAllocs}} → {{.CurrentAllocs}}</td><td>{{.BaselineBytes}} → {{.CurrentBytes}}</td><td>{{pair .BaselineP95Ms .CurrentP95Ms}}</td><td>{{pair .BaselineQPS .CurrentQPS}}</td><td>{{pair .BaselineUpstreamCalls .CurrentUpstreamCalls}}</td><td>{{pair .BaselineTokenAmplification .CurrentTokenAmplification}}</td><td class="{{if eq .Status "regression"}}bad{{else if eq .Status "timing-advisory"}}warn{{else}}ok{{end}}">{{.Status}}</td></tr>{{end}}
+<table><thead><tr><th>Suite</th><th>Benchmark</th><th>samples</th><th>base ns/op</th><th>current ns/op</th><th>Δ time</th><th>CV</th><th>allocs/op</th><th>B/op</th><th>custom metrics</th><th>p95 ms</th><th>QPS</th><th>upstream calls</th><th>token amp</th><th>status</th></tr></thead><tbody>
+{{range .Rows}}<tr><td>{{.Suite}}</td><td><code>{{.Benchmark}}</code></td><td>{{.Samples}}</td><td>{{number .BaselineNsPerOp}}</td><td>{{number .CurrentNsPerOp}}</td><td>{{change .NsChange}}</td><td>{{number .NsStdDev}}%</td><td>{{.BaselineAllocs}} → {{.CurrentAllocs}}</td><td>{{.BaselineBytes}} → {{.CurrentBytes}}</td><td>{{custom .BaselineCustom .CurrentCustom}}</td><td>{{pair .BaselineP95Ms .CurrentP95Ms}}</td><td>{{pair .BaselineQPS .CurrentQPS}}</td><td>{{pair .BaselineUpstreamCalls .CurrentUpstreamCalls}}</td><td>{{pair .BaselineTokenAmplification .CurrentTokenAmplification}}</td><td class="{{if eq .Status "regression"}}bad{{else if eq .Status "timing-advisory"}}warn{{else}}ok{{end}}">{{.Status}}</td></tr>{{end}}
 </tbody></table></body></html>`

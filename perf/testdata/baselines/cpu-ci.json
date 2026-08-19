@@ -452,7 +452,10 @@
       "ns_per_op": 9470,
       "ns_stddev_percent": 16.343982345030078,
       "allocs_per_op": 7,
-      "bytes_per_op": 2096
+      "bytes_per_op": 2096,
+      "custom": {
+        "input_bytes": 851
+      }
     },
     "BenchmarkExtractContentFast_ContextShape/tokens=16384/messages=64/tools=8": {
       "suite": "request-shape",
@@ -461,7 +464,10 @@
       "ns_per_op": 898758,
       "ns_stddev_percent": 8.499363074819886,
       "allocs_per_op": 19,
-      "bytes_per_op": 218129
+      "bytes_per_op": 218129,
+      "custom": {
+        "input_bytes": 101701
+      }
     },
     "BenchmarkExtractContentFast_ContextShape/tokens=4096/messages=8/tools=8": {
       "suite": "request-shape",
@@ -470,7 +476,10 @@
       "ns_per_op": 194014,
       "ns_stddev_percent": 1.0432152318511743,
       "allocs_per_op": 13,
-      "bytes_per_op": 57872
+      "bytes_per_op": 57872,
+      "custom": {
+        "input_bytes": 26209
+      }
     },
     "BenchmarkExtractContentFast_ContextShape/tokens=65536/messages=8/tools=64": {
       "suite": "request-shape",
@@ -479,7 +488,10 @@
       "ns_per_op": 3722755,
       "ns_stddev_percent": 3.203246106050702,
       "allocs_per_op": 13,
-      "bytes_per_op": 825109
+      "bytes_per_op": 825109,
+      "custom": {
+        "input_bytes": 404199
+      }
     },
     "BenchmarkExtractContentFast_Parallel": {
       "suite": "request-shape",

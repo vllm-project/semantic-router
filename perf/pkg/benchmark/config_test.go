@@ -3,6 +3,7 @@ package benchmark
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +76,26 @@ func TestManifestRejectsCapabilityMismatch(t *testing.T) {
 	}
 	if _, err := manifest.Resolve("cpu", "ci"); err == nil {
 		t.Fatal("Resolve should reject a missing GPU capability")
+	}
+}
+
+func TestManifestRejectsNegativeProfileCount(t *testing.T) {
+	manifest := &Manifest{
+		SchemaVersion: ManifestSchemaVersion,
+		Environments: map[string]EnvironmentConfig{
+			"cpu": {Kind: "cpu", Capabilities: []string{"host"}},
+		},
+		Profiles: map[string]ProfileConfig{
+			"ci": {Suites: []string{"core"}, Count: -1},
+		},
+		Suites: map[string]SuiteConfig{
+			"core": {
+				Runner: "go_benchmark", Module: ".", Packages: []string{"./..."},
+				Benchmark: "BenchmarkCore", Environments: []string{"cpu"},
+			},
+		},
+	}
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "non-negative") {
+		t.Fatalf("negative count error = %v, want non-negative validation", err)
 	}
 }

@@ -58,3 +58,28 @@ func TestCompareWithBaselineGatesExternalLatencyAndEfficiency(t *testing.T) {
 		t.Fatalf("external changes = p95 %.1f, throughput %.1f", results[0].P95LatencyChange, results[0].ThroughputChange)
 	}
 }
+
+func TestCompareWithBaselineFailsClosedOnMissingExternalMetrics(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseline BenchmarkMetric
+	}{
+		{name: "p95 latency", baseline: BenchmarkMetric{P95LatencyMs: 100}},
+		{name: "throughput", baseline: BenchmarkMetric{ThroughputQPS: 80}},
+		{name: "upstream calls", baseline: BenchmarkMetric{UpstreamCalls: 1}},
+		{name: "token amplification", baseline: BenchmarkMetric{TokenAmplification: 1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			baseline := &Baseline{Benchmarks: map[string]BenchmarkMetric{"external": test.baseline}}
+			current := &Baseline{Benchmarks: map[string]BenchmarkMetric{"external": {}}}
+			results, err := CompareWithBaseline(current, baseline, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(results) != 1 || !results[0].RegressionDetected {
+				t.Fatalf("missing %s was not gated: %+v", test.name, results)
+			}
+		})
+	}
+}

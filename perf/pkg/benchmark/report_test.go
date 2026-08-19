@@ -12,8 +12,8 @@ func TestReportWritesJSONMarkdownAndHTML(t *testing.T) {
 		CurrentMetadata: RunMetadata{Environment: "cpu", EnvironmentKind: "cpu", Profile: "ci", GitCommit: "abc"},
 		Results: []ComparisonResult{{
 			BenchmarkName: "BenchmarkCore", Suite: "core",
-			Baseline:      BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 1, BytesPerOp: 8, P95LatencyMs: 20, ThroughputQPS: 100},
-			Current:       BenchmarkMetric{NsPerOp: 110, AllocsPerOp: 1, BytesPerOp: 8, Samples: 3, P95LatencyMs: 22, ThroughputQPS: 95},
+			Baseline:      BenchmarkMetric{NsPerOp: 100, AllocsPerOp: 1, BytesPerOp: 8, Custom: map[string]float64{"input_bytes": 1024}, P95LatencyMs: 20, ThroughputQPS: 100},
+			Current:       BenchmarkMetric{NsPerOp: 110, AllocsPerOp: 1, BytesPerOp: 8, Custom: map[string]float64{"input_bytes": 1024}, Samples: 3, P95LatencyMs: 22, ThroughputQPS: 95},
 			NsPerOpChange: 10,
 		}},
 		CoverageComplete: true,
@@ -33,6 +33,9 @@ func TestReportWritesJSONMarkdownAndHTML(t *testing.T) {
 		}
 		if !strings.Contains(string(data), "22") {
 			t.Errorf("%s does not contain external latency metrics", name)
+		}
+		if !strings.Contains(string(data), "input_bytes") {
+			t.Errorf("%s does not contain custom metrics", name)
 		}
 	}
 }
