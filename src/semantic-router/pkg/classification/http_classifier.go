@@ -74,20 +74,15 @@ func NewHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 		return nil, fmt.Errorf("label mapping is required for http_classify")
 	}
 	// http_classify was the only backend without an arity check (candle
-	// requires numClasses >= 2, http_chat exactly 2). It matters more here,
-	// not less: LabelCount() counts only the label->index maps, and
-	// LoadJailbreakMapping neither back-fills those from an index->label-only
-	// file nor rejects an empty one, so a mapping declaring just idx_to_label
-	// (or literally "{}") yields LabelCount() == 0. alignScoresToMapping then
-	// allocates a zero-length distribution and assignScoreToMapping's bounds
-	// check rejects every label, so a perfectly valid server response fails
-	// with an error that blames the server - on every single request, and
-	// under on_error: block that blocks 100% of traffic. Fail at construction
-	// instead.
+	// requires numClasses >= 2, http_chat exactly 2). Without one, a mapping
+	// with fewer than 2 labels - an empty file, or one built in-process rather
+	// than through LoadJailbreakMapping's normalization - makes
+	// alignScoresToMapping allocate an undersized distribution, so
+	// assignScoreToMapping's bounds check rejects every label and a perfectly
+	// valid server response fails with an error blaming the server, on every
+	// request. Under on_error: block that blocks all traffic. Fail here instead.
 	if n := mapping.LabelCount(); n < 2 {
-		return nil, fmt.Errorf(
-			"http_classify label mapping must define at least 2 labels, got %d "+
-				"(a mapping declaring only idx_to_label/id_to_label leaves the label->index map empty)", n)
+		return nil, fmt.Errorf("http_classify label mapping must define at least 2 labels, got %d", n)
 	}
 
 	scheme := cfg.ModelEndpoint.Protocol

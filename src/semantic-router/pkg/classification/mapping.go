@@ -88,6 +88,10 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
 		mapping.IdxToLabel = mapping.IDToLabel
 	}
+	normalizeJailbreakMappingDirections(&mapping)
+	if err := validateJailbreakMappingConsistency(path, &mapping); err != nil {
+		return nil, err
+	}
 
 	// A configured label equal to the on_error: block sentinel
 	// (JailbreakClassificationErrorType) would make a genuine detection of
@@ -96,18 +100,10 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// place that compares against the sentinel.
 	//
 	// This deliberately probes via GetIndexForJailbreakType rather than
-	// indexing LabelToIdx directly. A mapping file may declare *only* an
-	// index->label map (idx_to_label or id_to_label) and no label->index map
-	// at all; the normalization above back-fills label_to_id -> LabelToIdx
-	// but never idx_to_label -> LabelToIdx, so LabelToIdx stays empty while
-	// GetJailbreakTypeFromIndex still resolves the sentinel out of
-	// IdxToLabel/IDToLabel at runtime. Probing through the same lookup the
-	// runtime uses keeps the guard from drifting from what it guards.
-	//
-	// For the record, the shipped mmbert32k mapping declares both directions
-	// (label_to_id + id_to_label), so it back-fills and was never in the
-	// unguarded set - the gap was only ever reachable via a hand-written
-	// index->label-only mapping.
+	// indexing LabelToIdx directly: it is the same lookup the runtime uses to
+	// resolve a label, so the guard cannot cover fewer shapes than the code it
+	// guards. The normalization above now fills both directions in, but that
+	// is the reason the probe is safe rather than a reason to drop it.
 	if _, collides := mapping.GetIndexForJailbreakType(JailbreakClassificationErrorType); collides {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
@@ -115,6 +111,67 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	}
 
 	return &mapping, nil
+}
+
+// normalizeJailbreakMappingDirections fills in whichever direction the file
+// omitted, so LabelToIdx and IdxToLabel always describe the same label set.
+//
+// The file formats let a mapping declare only one direction. Leaving it that
+// way makes LabelCount() (which reads the label->index map) disagree with
+// GetIndexForJailbreakType (which falls back to scanning the index->label
+// map): an index->label-only file counts 0 labels while its labels still
+// resolve. alignScoresToMapping sizes the probability distribution from
+// LabelCount(), so that disagreement silently truncates the distribution.
+// Deriving both directions once at load keeps the count authoritative and
+// keeps the reverse scan off the request path.
+func normalizeJailbreakMappingDirections(mapping *JailbreakMapping) {
+	if len(mapping.LabelToIdx) == 0 && len(mapping.IdxToLabel) > 0 {
+		mapping.LabelToIdx = make(map[string]int, len(mapping.IdxToLabel))
+		for indexStr, label := range mapping.IdxToLabel {
+			idx, err := strconv.Atoi(indexStr)
+			if err != nil {
+				continue
+			}
+			mapping.LabelToIdx[label] = idx
+		}
+	}
+	if len(mapping.IdxToLabel) == 0 && len(mapping.LabelToIdx) > 0 {
+		mapping.IdxToLabel = make(map[string]string, len(mapping.LabelToIdx))
+		for label, idx := range mapping.LabelToIdx {
+			mapping.IdxToLabel[strconv.Itoa(idx)] = label
+		}
+	}
+}
+
+// validateJailbreakMappingConsistency rejects a mapping whose two directions
+// disagree.
+//
+// A disagreement is not cosmetic: LabelCount() sizes the http_classify
+// probability distribution from the label->index map, so a class that exists
+// only in the index->label map is resolvable but has no slot. A response that
+// omits it then passes the completeness guard, and the missing class - which
+// may be the positive one - reads as probability 0.0, under-reporting risk
+// with no error at all.
+func validateJailbreakMappingConsistency(path string, mapping *JailbreakMapping) error {
+	if len(mapping.LabelToIdx) != len(mapping.IdxToLabel) {
+		return fmt.Errorf(
+			"jailbreak mapping %s: inconsistent label maps - %d label->index entries but %d index->label entries",
+			path, len(mapping.LabelToIdx), len(mapping.IdxToLabel))
+	}
+	for label, idx := range mapping.LabelToIdx {
+		mapped, ok := mapping.IdxToLabel[strconv.Itoa(idx)]
+		if !ok {
+			return fmt.Errorf(
+				"jailbreak mapping %s: inconsistent label maps - label %q claims index %d, which the index->label map does not define",
+				path, label, idx)
+		}
+		if mapped != label {
+			return fmt.Errorf(
+				"jailbreak mapping %s: inconsistent label maps - index %d is %q in one direction and %q in the other",
+				path, idx, label, mapped)
+		}
+	}
+	return nil
 }
 
 // GetCategoryFromIndex converts a class index to category name using the mapping
