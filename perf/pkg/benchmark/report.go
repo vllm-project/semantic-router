@@ -1,246 +1,239 @@
 package benchmark
 
 import (
-	"encoding/json"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
-// Report represents a performance report
 type Report struct {
-	Metadata       ReportMetadata     `json:"metadata"`
-	Comparisons    []ComparisonResult `json:"comparisons"`
-	HasRegressions bool               `json:"has_regressions"`
-	Summary        ReportSummary      `json:"summary"`
+	Metadata         RunMetadata   `json:"metadata"`
+	BaselineMetadata RunMetadata   `json:"baseline_metadata"`
+	Summary          ReportSummary `json:"summary"`
+	Rows             []ReportRow   `json:"rows"`
+	Ungated          []string      `json:"ungated_benchmarks"`
+	Missing          []string      `json:"missing_benchmarks"`
+	HasRegressions   bool          `json:"has_regressions"`
+	CoverageComplete bool          `json:"coverage_complete"`
 }
 
-// ReportMetadata holds metadata about the report
-type ReportMetadata struct {
-	GeneratedAt time.Time `json:"generated_at"`
-	GitCommit   string    `json:"git_commit"`
-	GitBranch   string    `json:"git_branch"`
-	GoVersion   string    `json:"go_version"`
-}
-
-// ReportSummary holds summary statistics
 type ReportSummary struct {
-	TotalBenchmarks   int `json:"total_benchmarks"`
-	RegressionsFound  int `json:"regressions_found"`
-	ImprovementsFound int `json:"improvements_found"`
-	NoChangeFound     int `json:"no_change_found"`
+	Measured         int `json:"measured"`
+	Compared         int `json:"compared"`
+	Regressions      int `json:"regressions"`
+	TimingAdvisories int `json:"timing_advisories"`
+	Unbaselined      int `json:"unbaselined"`
+	Missing          int `json:"missing"`
 }
 
-// GenerateReport creates a performance report from comparison results
-func GenerateReport(comparisons []ComparisonResult, metadata ReportMetadata) *Report {
+type ReportRow struct {
+	Suite                      string  `json:"suite"`
+	Benchmark                  string  `json:"benchmark"`
+	Samples                    int     `json:"samples"`
+	BaselineNsPerOp            float64 `json:"baseline_ns_per_op"`
+	CurrentNsPerOp             float64 `json:"current_ns_per_op"`
+	NsChange                   float64 `json:"ns_change_percent"`
+	NsStdDev                   float64 `json:"ns_stddev_percent"`
+	BaselineAllocs             int64   `json:"baseline_allocs_per_op"`
+	CurrentAllocs              int64   `json:"current_allocs_per_op"`
+	AllocsChange               float64 `json:"allocs_change_percent"`
+	BaselineBytes              int64   `json:"baseline_bytes_per_op"`
+	CurrentBytes               int64   `json:"current_bytes_per_op"`
+	BytesChange                float64 `json:"bytes_change_percent"`
+	CurrentP50Ms               float64 `json:"current_p50_latency_ms,omitempty"`
+	BaselineP95Ms              float64 `json:"baseline_p95_latency_ms,omitempty"`
+	CurrentP95Ms               float64 `json:"current_p95_latency_ms,omitempty"`
+	CurrentP99Ms               float64 `json:"current_p99_latency_ms,omitempty"`
+	P95Change                  float64 `json:"p95_latency_change_percent,omitempty"`
+	BaselineQPS                float64 `json:"baseline_throughput_qps,omitempty"`
+	CurrentQPS                 float64 `json:"current_throughput_qps,omitempty"`
+	ThroughputChange           float64 `json:"throughput_change_percent,omitempty"`
+	BaselineUpstreamCalls      float64 `json:"baseline_upstream_calls,omitempty"`
+	CurrentUpstreamCalls       float64 `json:"current_upstream_calls,omitempty"`
+	UpstreamCallsChange        float64 `json:"upstream_calls_change_percent,omitempty"`
+	BaselineTokenAmplification float64 `json:"baseline_token_amplification,omitempty"`
+	CurrentTokenAmplification  float64 `json:"current_token_amplification,omitempty"`
+	TokenAmplificationChange   float64 `json:"token_amplification_change_percent,omitempty"`
+	Status                     string  `json:"status"`
+}
+
+func GenerateReport(comparison *ComparisonDocument) *Report {
 	report := &Report{
-		Metadata:       metadata,
-		Comparisons:    comparisons,
-		HasRegressions: HasRegressions(comparisons),
+		Metadata:         comparison.CurrentMetadata,
+		BaselineMetadata: comparison.BaselineMetadata,
+		Ungated:          comparison.Ungated,
+		Missing:          comparison.Missing,
+		HasRegressions:   comparison.HasRegressions,
+		CoverageComplete: comparison.CoverageComplete,
 	}
-
-	// Calculate summary
-	for _, comp := range comparisons {
-		report.Summary.TotalBenchmarks++
-		if comp.RegressionDetected {
-			report.Summary.RegressionsFound++
-		} else if comp.NsPerOpChange < -5 { // 5% improvement threshold
-			report.Summary.ImprovementsFound++
-		} else {
-			report.Summary.NoChangeFound++
+	for _, suite := range comparison.CurrentMetadata.Suites {
+		report.Summary.Measured += suite.BenchmarkCount
+	}
+	report.Summary.Compared = len(comparison.Results)
+	report.Summary.Unbaselined = len(comparison.Ungated)
+	report.Summary.Missing = len(comparison.Missing)
+	for _, result := range comparison.Results {
+		status := "ok"
+		if result.RegressionDetected {
+			status = "regression"
+			report.Summary.Regressions++
+		} else if result.NsAdvisory {
+			status = "timing-advisory"
+			report.Summary.TimingAdvisories++
 		}
+		report.Rows = append(report.Rows, ReportRow{
+			Suite:                      result.Suite,
+			Benchmark:                  result.BenchmarkName,
+			Samples:                    result.Current.Samples,
+			BaselineNsPerOp:            result.Baseline.NsPerOp,
+			CurrentNsPerOp:             result.Current.NsPerOp,
+			NsChange:                   result.NsPerOpChange,
+			NsStdDev:                   result.Current.NsStdDevPct,
+			BaselineAllocs:             result.Baseline.AllocsPerOp,
+			CurrentAllocs:              result.Current.AllocsPerOp,
+			AllocsChange:               result.AllocsPerOpChange,
+			BaselineBytes:              result.Baseline.BytesPerOp,
+			CurrentBytes:               result.Current.BytesPerOp,
+			BytesChange:                result.BytesPerOpChange,
+			CurrentP50Ms:               result.Current.P50LatencyMs,
+			BaselineP95Ms:              result.Baseline.P95LatencyMs,
+			CurrentP95Ms:               result.Current.P95LatencyMs,
+			CurrentP99Ms:               result.Current.P99LatencyMs,
+			P95Change:                  result.P95LatencyChange,
+			BaselineQPS:                result.Baseline.ThroughputQPS,
+			CurrentQPS:                 result.Current.ThroughputQPS,
+			ThroughputChange:           result.ThroughputChange,
+			BaselineUpstreamCalls:      result.Baseline.UpstreamCalls,
+			CurrentUpstreamCalls:       result.Current.UpstreamCalls,
+			UpstreamCallsChange:        result.UpstreamCallsChange,
+			BaselineTokenAmplification: result.Baseline.TokenAmplification,
+			CurrentTokenAmplification:  result.Current.TokenAmplification,
+			TokenAmplificationChange:   result.TokenAmplificationChange,
+			Status:                     status,
+		})
 	}
-
 	return report
 }
 
-// SaveJSON saves the report as JSON
+func (r *Report) SaveAll(outputDir string) error {
+	if err := r.SaveJSON(filepath.Join(outputDir, "report.json")); err != nil {
+		return err
+	}
+	if err := r.SaveMarkdown(filepath.Join(outputDir, "report.md")); err != nil {
+		return err
+	}
+	return r.SaveHTML(filepath.Join(outputDir, "report.html"))
+}
+
 func (r *Report) SaveJSON(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create report directory: %w", err)
-	}
-
-	data, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal report: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write report file: %w", err)
-	}
-
-	fmt.Printf("JSON report saved: %s\n", path)
-	return nil
+	return saveJSON(path, r)
 }
 
-// SaveMarkdown saves the report as Markdown
 func (r *Report) SaveMarkdown(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create report directory: %w", err)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
 	}
+	var output strings.Builder
+	output.WriteString("# Performance report\n\n")
+	output.WriteString(fmt.Sprintf("Environment: `%s` (%s)· Profile: `%s`· Commit: `%s`\n\n",
+		r.Metadata.Environment, r.Metadata.EnvironmentKind, r.Metadata.Profile, r.Metadata.GitCommit))
+	output.WriteString(fmt.Sprintf("Host: `%s/%s`· Go: `%s`· CPU: `%s` (%d cores)\n\n",
+		r.Metadata.GOOS, r.Metadata.GOARCH, r.Metadata.GoVersion, r.Metadata.CPUModel, r.Metadata.CPUCount))
 
-	var md strings.Builder
-
-	// Header
-	md.WriteString("# Performance Benchmark Report\n\n")
-	md.WriteString(fmt.Sprintf("**Generated:** %s\n\n", r.Metadata.GeneratedAt.Format(time.RFC3339)))
-	md.WriteString(fmt.Sprintf("**Git Commit:** %s\n\n", r.Metadata.GitCommit))
-	md.WriteString(fmt.Sprintf("**Git Branch:** %s\n\n", r.Metadata.GitBranch))
-	md.WriteString(fmt.Sprintf("**Go Version:** %s\n\n", r.Metadata.GoVersion))
-
-	// Summary
-	md.WriteString("## Summary\n\n")
-	md.WriteString(fmt.Sprintf("- **Total Benchmarks:** %d\n", r.Summary.TotalBenchmarks))
-	md.WriteString(fmt.Sprintf("- **Regressions:** %d\n", r.Summary.RegressionsFound))
-	md.WriteString(fmt.Sprintf("- **Improvements:** %d\n", r.Summary.ImprovementsFound))
-	md.WriteString(fmt.Sprintf("- **No Change:** %d\n\n", r.Summary.NoChangeFound))
-
-	if r.HasRegressions {
-		md.WriteString("⚠️ **WARNING: Performance regressions detected!**\n\n")
-	} else {
-		md.WriteString("**No regressions detected**\n\n")
+	result := "PASS"
+	if r.HasRegressions || !r.CoverageComplete {
+		result = "FAIL"
 	}
+	output.WriteString("## Summary\n\n")
+	output.WriteString(fmt.Sprintf("Result: **%s**· measured %d· compared %d· regressions %d· timing advisories %d\n\n",
+		result, r.Summary.Measured, r.Summary.Compared, r.Summary.Regressions, r.Summary.TimingAdvisories))
+	output.WriteString("Allocation count and bytes/op are portable component gates. External suites gate p95 latency, throughput, upstream calls, and token amplification. ns/op is advisory unless a same-runner timing gate is enabled.\n\n")
 
-	// Detailed results
-	md.WriteString("## Detailed Results\n\n")
-	md.WriteString("| Benchmark | Metric | Baseline | Current | Change | Status |\n")
-	md.WriteString("|-----------|--------|----------|---------|--------|--------|\n")
-
-	for _, comp := range r.Comparisons {
-		status := "OK"
-		if comp.RegressionDetected {
-			status = "⚠️ REGRESSION"
-		} else if comp.NsPerOpChange < -5 {
-			status = "🚀 IMPROVED"
+	if len(r.Ungated) > 0 {
+		output.WriteString("### Unbaselined measurements\n\n")
+		for _, name := range r.Ungated {
+			output.WriteString("- `" + strings.ReplaceAll(name, "`", "") + "`\n")
 		}
-
-		// ns/op row
-		md.WriteString(fmt.Sprintf("| %s | ns/op | %.1f | %.1f | %+.2f%% | %s |\n",
-			comp.BenchmarkName,
-			comp.Baseline.NsPerOp,
-			comp.Current.NsPerOp,
-			comp.NsPerOpChange,
-			status,
-		))
-
-		// P95 latency row if available
-		if comp.Baseline.P95LatencyMs > 0 {
-			md.WriteString(fmt.Sprintf("| %s | P95 Latency | %.2fms | %.2fms | %+.2f%% | |\n",
-				"",
-				comp.Baseline.P95LatencyMs,
-				comp.Current.P95LatencyMs,
-				comp.P95LatencyChange,
-			))
+		output.WriteString("\n")
+	}
+	if len(r.Missing) > 0 {
+		output.WriteString("### Missing measurements\n\n")
+		for _, name := range r.Missing {
+			output.WriteString("- `" + strings.ReplaceAll(name, "`", "") + "`\n")
 		}
-
-		// Throughput row if available
-		if comp.Baseline.ThroughputQPS > 0 {
-			md.WriteString(fmt.Sprintf("| %s | Throughput | %.2f qps | %.2f qps | %+.2f%% | |\n",
-				"",
-				comp.Baseline.ThroughputQPS,
-				comp.Current.ThroughputQPS,
-				comp.ThroughputChange,
-			))
-		}
+		output.WriteString("\n")
 	}
 
-	if err := os.WriteFile(path, []byte(md.String()), 0644); err != nil {
-		return fmt.Errorf("failed to write markdown report: %w", err)
+	output.WriteString("## Measurements\n\n")
+	output.WriteString("| Suite | Benchmark | Samples | ns/op base → current | Δ time | CV | allocs/op base → current | B/op base → current | p95 ms base → current | QPS base → current | upstream calls | token amplification | Status |\n")
+	output.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n")
+	for _, row := range r.Rows {
+		output.WriteString(fmt.Sprintf("| %s | %s | %d | %.1f → %.1f | %+.1f%% | %.1f%% | %d → %d | %d → %d | %s | %s | %s | %s | %s |\n",
+			markdownCell(row.Suite), markdownCell(row.Benchmark), row.Samples,
+			row.BaselineNsPerOp, row.CurrentNsPerOp, row.NsChange, row.NsStdDev,
+			row.BaselineAllocs, row.CurrentAllocs, row.BaselineBytes, row.CurrentBytes,
+			optionalMetricPair(row.BaselineP95Ms, row.CurrentP95Ms),
+			optionalMetricPair(row.BaselineQPS, row.CurrentQPS),
+			optionalMetricPair(row.BaselineUpstreamCalls, row.CurrentUpstreamCalls),
+			optionalMetricPair(row.BaselineTokenAmplification, row.CurrentTokenAmplification), row.Status))
 	}
 
-	fmt.Printf("Markdown report saved: %s\n", path)
+	if err := os.WriteFile(path, []byte(output.String()), 0o644); err != nil {
+		return fmt.Errorf("write Markdown report: %w", err)
+	}
 	return nil
 }
 
-// SaveHTML saves the report as HTML
+func markdownCell(value string) string {
+	value = strings.ReplaceAll(value, "|", "\\|")
+	return strings.ReplaceAll(value, "\n", " ")
+}
+
+func optionalMetricPair(baseline, current float64) string {
+	if baseline == 0 && current == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%.1f → %.1f", baseline, current)
+}
+
 func (r *Report) SaveHTML(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create report directory: %w", err)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
 	}
-
-	var html strings.Builder
-
-	html.WriteString(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Performance Benchmark Report</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; }
-        h1 { color: #333; }
-        .metadata { background-color: #f0f0f0; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-        .summary-card { background-color: #e8f4f8; padding: 15px; border-radius: 5px; text-align: center; }
-        .summary-card.regression { background-color: #ffe8e8; }
-        .summary-card.improvement { background-color: #e8ffe8; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #4CAF50; color: white; }
-        tr:hover { background-color: #f5f5f5; }
-        .regression { color: #d32f2f; font-weight: bold; }
-        .improvement { color: #388e3c; font-weight: bold; }
-        .ok { color: #666; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Performance Benchmark Report</h1>
-`)
-
-	// Metadata
-	html.WriteString(`        <div class="metadata">`)
-	html.WriteString(fmt.Sprintf(`            <p><strong>Generated:</strong> %s</p>`, r.Metadata.GeneratedAt.Format(time.RFC3339)))
-	html.WriteString(fmt.Sprintf(`            <p><strong>Git Commit:</strong> %s</p>`, r.Metadata.GitCommit))
-	html.WriteString(fmt.Sprintf(`            <p><strong>Git Branch:</strong> %s</p>`, r.Metadata.GitBranch))
-	html.WriteString(fmt.Sprintf(`            <p><strong>Go Version:</strong> %s</p>`, r.Metadata.GoVersion))
-	html.WriteString(`        </div>`)
-
-	// Summary
-	html.WriteString(`        <div class="summary">`)
-	html.WriteString(fmt.Sprintf(`            <div class="summary-card"><h3>%d</h3><p>Total Benchmarks</p></div>`, r.Summary.TotalBenchmarks))
-	html.WriteString(fmt.Sprintf(`            <div class="summary-card regression"><h3>%d</h3><p>Regressions</p></div>`, r.Summary.RegressionsFound))
-	html.WriteString(fmt.Sprintf(`            <div class="summary-card improvement"><h3>%d</h3><p>Improvements</p></div>`, r.Summary.ImprovementsFound))
-	html.WriteString(fmt.Sprintf(`            <div class="summary-card"><h3>%d</h3><p>No Change</p></div>`, r.Summary.NoChangeFound))
-	html.WriteString(`        </div>`)
-
-	// Results table
-	html.WriteString(`        <table>`)
-	html.WriteString(`            <tr><th>Benchmark</th><th>Metric</th><th>Baseline</th><th>Current</th><th>Change</th><th>Status</th></tr>`)
-
-	for _, comp := range r.Comparisons {
-		statusClass := "ok"
-		statusText := "OK"
-		if comp.RegressionDetected {
-			statusClass = "regression"
-			statusText = "REGRESSION"
-		} else if comp.NsPerOpChange < -5 {
-			statusClass = "improvement"
-			statusText = "IMPROVED"
-		}
-
-		html.WriteString(fmt.Sprintf(`            <tr><td>%s</td><td>ns/op</td><td>%.1f</td><td>%.1f</td><td>%+.2f%%</td><td class="%s">%s</td></tr>`,
-			comp.BenchmarkName,
-			comp.Baseline.NsPerOp,
-			comp.Current.NsPerOp,
-			comp.NsPerOpChange,
-			statusClass,
-			statusText,
-		))
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create HTML report: %w", err)
 	}
-
-	html.WriteString(`        </table>`)
-	html.WriteString(`    </div>`)
-	html.WriteString(`</body>`)
-	html.WriteString(`</html>`)
-
-	if err := os.WriteFile(path, []byte(html.String()), 0644); err != nil {
-		return fmt.Errorf("failed to write HTML report: %w", err)
+	defer file.Close()
+	tmpl, err := template.New("report").Funcs(template.FuncMap{
+		"change": func(value float64) string { return fmt.Sprintf("%+.1f%%", value) },
+		"number": func(value float64) string { return fmt.Sprintf("%.1f", value) },
+		"pair":   optionalMetricPair,
+	}).Parse(reportHTMLTemplate)
+	if err != nil {
+		return fmt.Errorf("parse HTML report template: %w", err)
 	}
-
-	fmt.Printf("HTML report saved: %s\n", path)
+	if err := tmpl.Execute(file, r); err != nil {
+		return fmt.Errorf("render HTML report: %w", err)
+	}
 	return nil
 }
+
+const reportHTMLTemplate = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Semantic Router performance report</title>
+<style>
+body{font:14px system-ui,sans-serif;margin:2rem;color:#172033}h1{margin-bottom:.3rem}.meta{color:#536079;margin-bottom:1.5rem}
+.cards{display:flex;gap:1rem;flex-wrap:wrap}.card{background:#f3f6fa;border-radius:8px;padding:.8rem 1.2rem;min-width:110px}.bad{color:#b42318;font-weight:700}.warn{color:#9a6700}.ok{color:#067647;font-weight:700}
+table{border-collapse:collapse;width:100%;margin-top:1.5rem}th,td{border-bottom:1px solid #d8dee9;padding:.55rem;text-align:right}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}code{font-size:12px}
+</style></head><body>
+<h1>Semantic Router performance report</h1>
+<div class="meta">{{.Metadata.Environment}} / {{.Metadata.Profile}} · {{.Metadata.GitCommit}} · {{.Metadata.GOOS}}/{{.Metadata.GOARCH}} · {{.Metadata.GoVersion}}</div>
+<div class="cards"><div class="card"><strong>{{.Summary.Measured}}</strong><br>measured</div><div class="card"><strong>{{.Summary.Compared}}</strong><br>compared</div><div class="card"><strong>{{.Summary.Regressions}}</strong><br>regressions</div><div class="card"><strong>{{.Summary.TimingAdvisories}}</strong><br>timing advisories</div></div>
+{{if .Ungated}}<h2 class="bad">Unbaselined measurements</h2><ul>{{range .Ungated}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+{{if .Missing}}<h2 class="bad">Missing measurements</h2><ul>{{range .Missing}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+<table><thead><tr><th>Suite</th><th>Benchmark</th><th>samples</th><th>base ns/op</th><th>current ns/op</th><th>Δ time</th><th>CV</th><th>allocs/op</th><th>B/op</th><th>p95 ms</th><th>QPS</th><th>upstream calls</th><th>token amp</th><th>status</th></tr></thead><tbody>
+{{range .Rows}}<tr><td>{{.Suite}}</td><td><code>{{.Benchmark}}</code></td><td>{{.Samples}}</td><td>{{number .BaselineNsPerOp}}</td><td>{{number .CurrentNsPerOp}}</td><td>{{change .NsChange}}</td><td>{{number .NsStdDev}}%</td><td>{{.BaselineAllocs}} → {{.CurrentAllocs}}</td><td>{{.BaselineBytes}} → {{.CurrentBytes}}</td><td>{{pair .BaselineP95Ms .CurrentP95Ms}}</td><td>{{pair .BaselineQPS .CurrentQPS}}</td><td>{{pair .BaselineUpstreamCalls .CurrentUpstreamCalls}}</td><td>{{pair .BaselineTokenAmplification .CurrentTokenAmplification}}</td><td class="{{if eq .Status "regression"}}bad{{else if eq .Status "timing-advisory"}}warn{{else}}ok{{end}}">{{.Status}}</td></tr>{{end}}
+</tbody></table></body></html>`

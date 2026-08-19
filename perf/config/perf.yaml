@@ -1,35 +1,180 @@
-benchmark_config:
+schema_version: 1
+
+# Environments are capability adapters, not hard-coded runner branches. The
+# first shipped gate uses CPU. AMD/NVIDIA entries make accelerator ownership
+# explicit now; future GPU producers can use runner: external and emit the same
+# result JSON without changing the report or comparison layers.
+environments:
+  cpu:
+    kind: cpu
+    description: Portable host-side router benchmark environment.
+    capabilities: [host, cgo]
+    env:
+      VSR_PERF_DEVICE: cpu
+
+  amd-gpu:
+    kind: gpu
+    accelerator: amd
+    description: AMD accelerator runner for future ROCm/model-serving suites.
+    capabilities: [host, cgo, gpu, rocm]
+    env:
+      VSR_PERF_DEVICE: amd
+
+  nvidia-gpu:
+    kind: gpu
+    accelerator: nvidia
+    description: NVIDIA accelerator runner for future CUDA/model-serving suites.
+    capabilities: [host, cgo, gpu, cuda]
+    env:
+      VSR_PERF_DEVICE: nvidia
+
+profiles:
+  quick:
+    description: Fast local feedback over deterministic router hot paths.
+    suites: [request-shape, decision-topology, selection, looper-core]
+    count: 1
+    benchtime: 100ms
+    timeout: 10m
+
+  ci:
+    description: CPU PR gate with repeated samples and stubbed algorithm fanout.
+    suites:
+      - request-shape
+      - decision-topology
+      - selection
+      - looper-core
+      - looper-orchestration
+    count: 3
+    benchtime: 500ms
+    timeout: 20m
+
+  nightly:
+    description: Longer CPU trend run over the same fail-closed inventory.
+    suites:
+      - request-shape
+      - decision-topology
+      - selection
+      - looper-core
+      - looper-orchestration
+    count: 8
+    benchtime: 2s
+    timeout: 45m
+
+  cpu-full:
+    description: Opt-in CPU run including model-backed classification and cache suites.
+    suites:
+      - request-shape
+      - decision-topology
+      - selection
+      - looper-core
+      - looper-orchestration
+      - classification
+      - semantic-cache
+    count: 3
+    benchtime: 2s
+    timeout: 45m
+
+suites:
+  request-shape:
+    description: Real ExtProc request extraction across context, message, tool, and concurrency shapes.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/extproc]
+    benchmark: "^Benchmark(ExtractContentFast_ContextShape|ExtractContentFast_Parallel|Handler_ChunkProcessing_16K|RewriteModel_Fast_16K)$"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      context_tokens: ["128", "4096", "16384", "65536"]
+      messages: ["1", "8", "64"]
+      tools: ["0", "8", "64"]
+      request_concurrency: ["1", "parallel"]
+    source_paths:
+      - src/semantic-router/pkg/extproc/**
+
+  decision-topology:
+    description: Real decision evaluation scaling by rule count and match position.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/decision]
+    benchmark: "^BenchmarkDecisionTopology$"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      decisions: ["1", "16", "128", "512"]
+      match_position: [first, last, no-match]
+      request_concurrency: ["1", "parallel"]
+    source_paths:
+      - src/semantic-router/pkg/decision/**
+
+  selection:
+    description: Candidate selection and context-window fit hot paths.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/selection]
+    benchmark: "^Benchmark(SelectionTopology|ComputeCacheAffinityAdjustments|ComputeGap12|ComputeFitM)"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      candidate_models: ["1", "3", "16"]
+      context_utilization: [low, medium, boundary]
+    source_paths:
+      - src/semantic-router/pkg/selection/**
+
+  looper-core:
+    description: Pure deterministic Looper, Fusion, ReMoM, and Workflow helpers.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/looper]
+    benchmark: "^Benchmark(ReMoM_(Distribute|Shuffle)|Fusion_(Resolve|Format|Build|Parse)|Flow_(Resolve|Build|Format)|Base_(Split|Parse|Rewrite))"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      candidate_models: ["1", "4", "16"]
+      algorithm: [base, fusion, remom, workflows]
+    source_paths:
+      - src/semantic-router/pkg/looper/**
+
+  looper-orchestration:
+    description: Algorithm fanout, quorum, JSON, and localhost HTTP overhead with deterministic stubs.
+    runner: go_benchmark
+    module: src/semantic-router
+    packages: [./pkg/looper]
+    benchmark: "^Benchmark(Base|Fusion|ReMoM|Flow)_Execute$"
+    environments: [cpu, amd-gpu, nvidia-gpu]
+    requires: [host]
+    dimensions:
+      fanout: ["1", "2", "3", "4", "5", "8"]
+      rounds: ["1", "2"]
+      algorithm: [base, fusion, remom, workflows]
+    source_paths:
+      - src/semantic-router/pkg/looper/**
+
   classification:
-    batch_sizes: [1, 10, 50, 100]
-    iterations: 1000
-    warmup_iterations: 100
+    description: Model-backed CPU classification batch and CGO overhead.
+    runner: go_benchmark
+    module: perf
+    packages: [./benchmarks]
+    benchmark: "^Benchmark(ClassifyBatch|CGOOverhead)"
+    environments: [cpu]
+    requires: [host, cgo]
+    dimensions:
+      classifier_batch: ["1", "10", "50", "100", parallel]
+    source_paths:
+      - src/semantic-router/pkg/classification/**
+      - candle-binding/**
 
-  cache:
-    cache_sizes: [1000, 10000]
-    concurrency_levels: [1, 10, 50]
-    hit_ratio: 0.7
-
-  e2e:
-    load_patterns:
-      - name: constant
-        qps: 50
-        duration: 60s
-
-      - name: ramp_up
-        start_qps: 10
-        end_qps: 100
-        duration: 120s
-
-      - name: burst
-        qps: 200
-        duration: 30s
-
-profiling:
-  enable_cpu: true
-  enable_memory: true
-  enable_goroutine: true
-  output_dir: reports
-
-reporting:
-  formats: [json, markdown, html]
-  baseline_dir: testdata/baselines
+  semantic-cache:
+    description: Semantic-cache size, hit-rate, and concurrency paths.
+    runner: go_benchmark
+    module: perf
+    packages: [./benchmarks]
+    benchmark: "^BenchmarkCache"
+    environments: [cpu]
+    requires: [host, cgo]
+    dimensions:
+      cache_entries: ["1000", "10000"]
+      request_concurrency: ["1", "10", "50"]
+      cache_outcome: [hit, miss]
+    source_paths:
+      - src/semantic-router/pkg/cache/**
+      - src/semantic-router/pkg/extproc/*cache*

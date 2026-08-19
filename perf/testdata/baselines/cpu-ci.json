@@ -1,0 +1,759 @@
+{
+  "schema_version": 2,
+  "metadata": {
+    "generated_at": "2026-08-19T04:22:22.733648277Z",
+    "git_commit": "98fa3c42ceee9d8551cabe675f783d01a293678e",
+    "git_branch": "xunzhuo/perf-framework-v1",
+    "environment": "cpu",
+    "environment_kind": "cpu",
+    "profile": "ci",
+    "go_version": "go1.25.12",
+    "goos": "linux",
+    "goarch": "amd64",
+    "cpu_model": "AMD Ryzen AI 7 PRO 350 w/ Radeon 860M",
+    "cpu_count": 12,
+    "suites": [
+      {
+        "name": "request-shape",
+        "runner": "go_benchmark",
+        "duration_seconds": 20.17990259,
+        "benchmark_count": 7,
+        "dimensions": {
+          "context_tokens": [
+            "128",
+            "4096",
+            "16384",
+            "65536"
+          ],
+          "messages": [
+            "1",
+            "8",
+            "64"
+          ],
+          "request_concurrency": [
+            "1",
+            "parallel"
+          ],
+          "tools": [
+            "0",
+            "8",
+            "64"
+          ]
+        }
+      },
+      {
+        "name": "decision-topology",
+        "runner": "go_benchmark",
+        "duration_seconds": 50.218293018,
+        "benchmark_count": 24,
+        "dimensions": {
+          "decisions": [
+            "1",
+            "16",
+            "128",
+            "512"
+          ],
+          "match_position": [
+            "first",
+            "last",
+            "no-match"
+          ],
+          "request_concurrency": [
+            "1",
+            "parallel"
+          ]
+        }
+      },
+      {
+        "name": "selection",
+        "runner": "go_benchmark",
+        "duration_seconds": 16.846997703,
+        "benchmark_count": 8,
+        "dimensions": {
+          "candidate_models": [
+            "1",
+            "3",
+            "16"
+          ],
+          "context_utilization": [
+            "low",
+            "medium",
+            "boundary"
+          ]
+        }
+      },
+      {
+        "name": "looper-core",
+        "runner": "go_benchmark",
+        "duration_seconds": 36.064825153,
+        "benchmark_count": 18,
+        "dimensions": {
+          "algorithm": [
+            "base",
+            "fusion",
+            "remom",
+            "workflows"
+          ],
+          "candidate_models": [
+            "1",
+            "4",
+            "16"
+          ]
+        }
+      },
+      {
+        "name": "looper-orchestration",
+        "runner": "go_benchmark",
+        "duration_seconds": 24.83172315,
+        "benchmark_count": 12,
+        "dimensions": {
+          "algorithm": [
+            "base",
+            "fusion",
+            "remom",
+            "workflows"
+          ],
+          "fanout": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "8"
+          ],
+          "rounds": [
+            "1",
+            "2"
+          ]
+        }
+      }
+    ]
+  },
+  "benchmarks": {
+    "BenchmarkBase_Execute/models_1": {
+      "suite": "looper-orchestration",
+      "iterations": 1347,
+      "samples": 3,
+      "ns_per_op": 452221,
+      "ns_stddev_percent": 7.268071868176021,
+      "allocs_per_op": 485,
+      "bytes_per_op": 40069
+    },
+    "BenchmarkBase_Execute/models_3": {
+      "suite": "looper-orchestration",
+      "iterations": 464,
+      "samples": 3,
+      "ns_per_op": 1393622,
+      "ns_stddev_percent": 6.330775038025044,
+      "allocs_per_op": 1228,
+      "bytes_per_op": 106065
+    },
+    "BenchmarkBase_Execute/models_5": {
+      "suite": "looper-orchestration",
+      "iterations": 240,
+      "samples": 3,
+      "ns_per_op": 2457184,
+      "ns_stddev_percent": 2.7756086906447406,
+      "allocs_per_op": 1970,
+      "bytes_per_op": 173448
+    },
+    "BenchmarkBase_ParseTaggedToolCall": {
+      "suite": "looper-core",
+      "iterations": 297812,
+      "samples": 3,
+      "ns_per_op": 2106,
+      "ns_stddev_percent": 2.235620692908775,
+      "allocs_per_op": 11,
+      "bytes_per_op": 448
+    },
+    "BenchmarkBase_RewriteTaggedToolCallResponse": {
+      "suite": "looper-core",
+      "iterations": 54441,
+      "samples": 3,
+      "ns_per_op": 10964,
+      "ns_stddev_percent": 12.719397967340775,
+      "allocs_per_op": 88,
+      "bytes_per_op": 4422
+    },
+    "BenchmarkBase_SplitIntoChunks": {
+      "suite": "looper-core",
+      "iterations": 44745,
+      "samples": 3,
+      "ns_per_op": 12514,
+      "ns_stddev_percent": 4.047132791982771,
+      "allocs_per_op": 34,
+      "bytes_per_op": 8880
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_Active": {
+      "suite": "selection",
+      "iterations": 1334769,
+      "samples": 3,
+      "ns_per_op": 446.1,
+      "ns_stddev_percent": 4.962552030535572,
+      "allocs_per_op": 9,
+      "bytes_per_op": 320
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_NoOp": {
+      "suite": "selection",
+      "iterations": 369539655,
+      "samples": 3,
+      "ns_per_op": 1.656,
+      "ns_stddev_percent": 17.00128120643952,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeCacheAffinityAdjustments_StrongWinner": {
+      "suite": "selection",
+      "iterations": 11055786,
+      "samples": 3,
+      "ns_per_op": 60.15,
+      "ns_stddev_percent": 2.6079323585303453,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeFitM": {
+      "suite": "selection",
+      "iterations": 453988324,
+      "samples": 3,
+      "ns_per_op": 1.453,
+      "ns_stddev_percent": 12.07467003671932,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkComputeGap12": {
+      "suite": "selection",
+      "iterations": 23277687,
+      "samples": 3,
+      "ns_per_op": 27.16,
+      "ns_stddev_percent": 6.673837658883211,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=first/parallel": {
+      "suite": "decision-topology",
+      "iterations": 2296154,
+      "samples": 3,
+      "ns_per_op": 263.1,
+      "ns_stddev_percent": 2.7779238989333614,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=first/serial": {
+      "suite": "decision-topology",
+      "iterations": 1864412,
+      "samples": 3,
+      "ns_per_op": 314.4,
+      "ns_stddev_percent": 15.987957883896048,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=last/parallel": {
+      "suite": "decision-topology",
+      "iterations": 2142823,
+      "samples": 3,
+      "ns_per_op": 285.2,
+      "ns_stddev_percent": 11.413528275497685,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=last/serial": {
+      "suite": "decision-topology",
+      "iterations": 1241995,
+      "samples": 3,
+      "ns_per_op": 503.8,
+      "ns_stddev_percent": 8.855696116724527,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "iterations": 6685292,
+      "samples": 3,
+      "ns_per_op": 90.96,
+      "ns_stddev_percent": 2.503597163492226,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=1/position=no-match/serial": {
+      "suite": "decision-topology",
+      "iterations": 3131718,
+      "samples": 3,
+      "ns_per_op": 192,
+      "ns_stddev_percent": 9.690866228390554,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=first/parallel": {
+      "suite": "decision-topology",
+      "iterations": 1000000,
+      "samples": 3,
+      "ns_per_op": 675.4,
+      "ns_stddev_percent": 6.764689203724338,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=first/serial": {
+      "suite": "decision-topology",
+      "iterations": 238372,
+      "samples": 3,
+      "ns_per_op": 2462,
+      "ns_stddev_percent": 10.103475717651989,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=last/parallel": {
+      "suite": "decision-topology",
+      "iterations": 1000000,
+      "samples": 3,
+      "ns_per_op": 705.7,
+      "ns_stddev_percent": 30.168848534399228,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=last/serial": {
+      "suite": "decision-topology",
+      "iterations": 248326,
+      "samples": 3,
+      "ns_per_op": 2404,
+      "ns_stddev_percent": 1.9580975921215777,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "iterations": 684649,
+      "samples": 3,
+      "ns_per_op": 913.6,
+      "ns_stddev_percent": 4.329352283171266,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=128/position=no-match/serial": {
+      "suite": "decision-topology",
+      "iterations": 211158,
+      "samples": 3,
+      "ns_per_op": 3306,
+      "ns_stddev_percent": 6.716635610292293,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=first/parallel": {
+      "suite": "decision-topology",
+      "iterations": 1410553,
+      "samples": 3,
+      "ns_per_op": 400.7,
+      "ns_stddev_percent": 3.789124600556436,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=first/serial": {
+      "suite": "decision-topology",
+      "iterations": 531054,
+      "samples": 3,
+      "ns_per_op": 1085,
+      "ns_stddev_percent": 4.508852591379405,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=last/parallel": {
+      "suite": "decision-topology",
+      "iterations": 2382526,
+      "samples": 3,
+      "ns_per_op": 242.7,
+      "ns_stddev_percent": 3.241659681497941,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=last/serial": {
+      "suite": "decision-topology",
+      "iterations": 901734,
+      "samples": 3,
+      "ns_per_op": 641.2,
+      "ns_stddev_percent": 24.70354830736917,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "iterations": 6005023,
+      "samples": 3,
+      "ns_per_op": 96.68,
+      "ns_stddev_percent": 1.4792832735123145,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=16/position=no-match/serial": {
+      "suite": "decision-topology",
+      "iterations": 1663539,
+      "samples": 3,
+      "ns_per_op": 368.7,
+      "ns_stddev_percent": 8.63897130561834,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=first/parallel": {
+      "suite": "decision-topology",
+      "iterations": 161914,
+      "samples": 3,
+      "ns_per_op": 4386,
+      "ns_stddev_percent": 5.445355363759872,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=first/serial": {
+      "suite": "decision-topology",
+      "iterations": 39822,
+      "samples": 3,
+      "ns_per_op": 16279,
+      "ns_stddev_percent": 10.983181513541492,
+      "allocs_per_op": 5,
+      "bytes_per_op": 128
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=last/parallel": {
+      "suite": "decision-topology",
+      "iterations": 288266,
+      "samples": 3,
+      "ns_per_op": 2199,
+      "ns_stddev_percent": 1.9870973697025267,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=last/serial": {
+      "suite": "decision-topology",
+      "iterations": 47074,
+      "samples": 3,
+      "ns_per_op": 12997,
+      "ns_stddev_percent": 21.82125625441463,
+      "allocs_per_op": 5,
+      "bytes_per_op": 136
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=no-match/parallel": {
+      "suite": "decision-topology",
+      "iterations": 319266,
+      "samples": 3,
+      "ns_per_op": 1881,
+      "ns_stddev_percent": 2.9623143690572817,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkDecisionTopology/decisions=512/position=no-match/serial": {
+      "suite": "decision-topology",
+      "iterations": 69349,
+      "samples": 3,
+      "ns_per_op": 8311,
+      "ns_stddev_percent": 1.4595335451641431,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=128/messages=1/tools=0": {
+      "suite": "request-shape",
+      "iterations": 61018,
+      "samples": 3,
+      "ns_per_op": 9470,
+      "ns_stddev_percent": 16.343982345030078,
+      "allocs_per_op": 7,
+      "bytes_per_op": 2096
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=16384/messages=64/tools=8": {
+      "suite": "request-shape",
+      "iterations": 756,
+      "samples": 3,
+      "ns_per_op": 898758,
+      "ns_stddev_percent": 8.499363074819886,
+      "allocs_per_op": 19,
+      "bytes_per_op": 218129
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=4096/messages=8/tools=8": {
+      "suite": "request-shape",
+      "iterations": 3182,
+      "samples": 3,
+      "ns_per_op": 194014,
+      "ns_stddev_percent": 1.0432152318511743,
+      "allocs_per_op": 13,
+      "bytes_per_op": 57872
+    },
+    "BenchmarkExtractContentFast_ContextShape/tokens=65536/messages=8/tools=64": {
+      "suite": "request-shape",
+      "iterations": 158,
+      "samples": 3,
+      "ns_per_op": 3722755,
+      "ns_stddev_percent": 3.203246106050702,
+      "allocs_per_op": 13,
+      "bytes_per_op": 825109
+    },
+    "BenchmarkExtractContentFast_Parallel": {
+      "suite": "request-shape",
+      "iterations": 6931,
+      "samples": 3,
+      "ns_per_op": 76694,
+      "ns_stddev_percent": 4.6869808334290965,
+      "allocs_per_op": 13,
+      "bytes_per_op": 57893,
+      "custom": {
+        "input_bytes": 26209
+      }
+    },
+    "BenchmarkFlow_BuildFinalPrompt": {
+      "suite": "looper-core",
+      "iterations": 180345,
+      "samples": 3,
+      "ns_per_op": 3766,
+      "ns_stddev_percent": 7.839280619117993,
+      "allocs_per_op": 34,
+      "bytes_per_op": 2845
+    },
+    "BenchmarkFlow_BuildStaticPlan": {
+      "suite": "looper-core",
+      "iterations": 345916,
+      "samples": 3,
+      "ns_per_op": 1768,
+      "ns_stddev_percent": 5.473529845660288,
+      "allocs_per_op": 15,
+      "bytes_per_op": 1552
+    },
+    "BenchmarkFlow_Execute/workers_1": {
+      "suite": "looper-orchestration",
+      "iterations": 391,
+      "samples": 3,
+      "ns_per_op": 1486511,
+      "ns_stddev_percent": 12.122707797848722,
+      "allocs_per_op": 1503,
+      "bytes_per_op": 171506
+    },
+    "BenchmarkFlow_Execute/workers_2": {
+      "suite": "looper-orchestration",
+      "iterations": 375,
+      "samples": 3,
+      "ns_per_op": 1481667,
+      "ns_stddev_percent": 8.78901820452311,
+      "allocs_per_op": 1913,
+      "bytes_per_op": 215577
+    },
+    "BenchmarkFlow_Execute/workers_3": {
+      "suite": "looper-orchestration",
+      "iterations": 343,
+      "samples": 3,
+      "ns_per_op": 1761341,
+      "ns_stddev_percent": 11.898849471182753,
+      "allocs_per_op": 2400,
+      "bytes_per_op": 290580
+    },
+    "BenchmarkFlow_FormatStepResults": {
+      "suite": "looper-core",
+      "iterations": 257886,
+      "samples": 3,
+      "ns_per_op": 2247,
+      "ns_stddev_percent": 7.856896363024153,
+      "allocs_per_op": 30,
+      "bytes_per_op": 1257
+    },
+    "BenchmarkFlow_ResolveExecutionConfig": {
+      "suite": "looper-core",
+      "iterations": 3072346,
+      "samples": 3,
+      "ns_per_op": 189.4,
+      "ns_stddev_percent": 4.221608782004444,
+      "allocs_per_op": 1,
+      "bytes_per_op": 240
+    },
+    "BenchmarkFusion_BuildAnalysisPrompt": {
+      "suite": "looper-core",
+      "iterations": 458542,
+      "samples": 3,
+      "ns_per_op": 1492,
+      "ns_stddev_percent": 9.744053405922127,
+      "allocs_per_op": 15,
+      "bytes_per_op": 1281
+    },
+    "BenchmarkFusion_BuildFinalPrompt": {
+      "suite": "looper-core",
+      "iterations": 184921,
+      "samples": 3,
+      "ns_per_op": 3160,
+      "ns_stddev_percent": 4.976412952907073,
+      "allocs_per_op": 19,
+      "bytes_per_op": 2007
+    },
+    "BenchmarkFusion_Execute/panel_2": {
+      "suite": "looper-orchestration",
+      "iterations": 344,
+      "samples": 3,
+      "ns_per_op": 1725190,
+      "ns_stddev_percent": 2.52115574915922,
+      "allocs_per_op": 2131,
+      "bytes_per_op": 215414
+    },
+    "BenchmarkFusion_Execute/panel_3": {
+      "suite": "looper-orchestration",
+      "iterations": 292,
+      "samples": 3,
+      "ns_per_op": 2335526,
+      "ns_stddev_percent": 12.271104701041507,
+      "allocs_per_op": 2582,
+      "bytes_per_op": 286234
+    },
+    "BenchmarkFusion_Execute/panel_5": {
+      "suite": "looper-orchestration",
+      "iterations": 219,
+      "samples": 3,
+      "ns_per_op": 2726595,
+      "ns_stddev_percent": 3.7064545995818037,
+      "allocs_per_op": 3501,
+      "bytes_per_op": 474157
+    },
+    "BenchmarkFusion_FormatPanelResponses": {
+      "suite": "looper-core",
+      "iterations": 700447,
+      "samples": 3,
+      "ns_per_op": 939,
+      "ns_stddev_percent": 3.998903473026025,
+      "allocs_per_op": 12,
+      "bytes_per_op": 608
+    },
+    "BenchmarkFusion_ParseAnalysis": {
+      "suite": "looper-core",
+      "iterations": 130953,
+      "samples": 3,
+      "ns_per_op": 4622,
+      "ns_stddev_percent": 9.255452791422734,
+      "allocs_per_op": 19,
+      "bytes_per_op": 1280
+    },
+    "BenchmarkFusion_ResolveExecutionConfig": {
+      "suite": "looper-core",
+      "iterations": 2649781,
+      "samples": 3,
+      "ns_per_op": 219.1,
+      "ns_stddev_percent": 9.01106752446365,
+      "allocs_per_op": 2,
+      "bytes_per_op": 96
+    },
+    "BenchmarkHandler_ChunkProcessing_16K": {
+      "suite": "request-shape",
+      "iterations": 169252,
+      "samples": 3,
+      "ns_per_op": 3792,
+      "ns_stddev_percent": 6.53184914551198,
+      "allocs_per_op": 6,
+      "bytes_per_op": 3333
+    },
+    "BenchmarkReMoM_DistributeByWeight": {
+      "suite": "looper-core",
+      "iterations": 627964,
+      "samples": 3,
+      "ns_per_op": 988.5,
+      "ns_stddev_percent": 3.745397190355875,
+      "allocs_per_op": 9,
+      "bytes_per_op": 1184
+    },
+    "BenchmarkReMoM_DistributeCallsToModels": {
+      "suite": "looper-core",
+      "iterations": 583594,
+      "samples": 3,
+      "ns_per_op": 1099,
+      "ns_stddev_percent": 6.084938212009054,
+      "allocs_per_op": 9,
+      "bytes_per_op": 1184
+    },
+    "BenchmarkReMoM_DistributeEqually": {
+      "suite": "looper-core",
+      "iterations": 1498357,
+      "samples": 3,
+      "ns_per_op": 420.1,
+      "ns_stddev_percent": 9.744648766116997,
+      "allocs_per_op": 2,
+      "bytes_per_op": 400
+    },
+    "BenchmarkReMoM_DistributeFirstOnly": {
+      "suite": "looper-core",
+      "iterations": 2484776,
+      "samples": 3,
+      "ns_per_op": 261.4,
+      "ns_stddev_percent": 6.12654029882558,
+      "allocs_per_op": 1,
+      "bytes_per_op": 384
+    },
+    "BenchmarkReMoM_DistributeRoundRobin": {
+      "suite": "looper-core",
+      "iterations": 2291180,
+      "samples": 3,
+      "ns_per_op": 253.3,
+      "ns_stddev_percent": 1.977691440830709,
+      "allocs_per_op": 1,
+      "bytes_per_op": 384
+    },
+    "BenchmarkReMoM_Execute/1x4": {
+      "suite": "looper-orchestration",
+      "iterations": 264,
+      "samples": 3,
+      "ns_per_op": 2416714,
+      "ns_stddev_percent": 11.337103257606323,
+      "allocs_per_op": 2512,
+      "bytes_per_op": 296396
+    },
+    "BenchmarkReMoM_Execute/1x8": {
+      "suite": "looper-orchestration",
+      "iterations": 196,
+      "samples": 3,
+      "ns_per_op": 2897792,
+      "ns_stddev_percent": 9.751341145949226,
+      "allocs_per_op": 4356,
+      "bytes_per_op": 608828
+    },
+    "BenchmarkReMoM_Execute/2x4": {
+      "suite": "looper-orchestration",
+      "iterations": 135,
+      "samples": 3,
+      "ns_per_op": 4250939,
+      "ns_stddev_percent": 7.6993343875293485,
+      "allocs_per_op": 4510,
+      "bytes_per_op": 598686
+    },
+    "BenchmarkReMoM_ShuffleModelCalls": {
+      "suite": "looper-core",
+      "iterations": 6417126,
+      "samples": 3,
+      "ns_per_op": 95.1,
+      "ns_stddev_percent": 1.6286443353321152,
+      "allocs_per_op": 1,
+      "bytes_per_op": 16
+    },
+    "BenchmarkRewriteModel_Fast_16K": {
+      "suite": "request-shape",
+      "iterations": 9274,
+      "samples": 3,
+      "ns_per_op": 62231,
+      "ns_stddev_percent": 26.431520558254295,
+      "allocs_per_op": 3,
+      "bytes_per_op": 131153
+    },
+    "BenchmarkSelectionTopology/candidates=1/utilization=low": {
+      "suite": "selection",
+      "iterations": 279547752,
+      "samples": 3,
+      "ns_per_op": 2.197,
+      "ns_stddev_percent": 10.864125271058631,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    },
+    "BenchmarkSelectionTopology/candidates=16/utilization=boundary": {
+      "suite": "selection",
+      "iterations": 436400,
+      "samples": 3,
+      "ns_per_op": 1536,
+      "ns_stddev_percent": 7.062823154764003,
+      "allocs_per_op": 11,
+      "bytes_per_op": 1048
+    },
+    "BenchmarkSelectionTopology/candidates=3/utilization=medium": {
+      "suite": "selection",
+      "iterations": 10425580,
+      "samples": 3,
+      "ns_per_op": 59.24,
+      "ns_stddev_percent": 4.238478290342471,
+      "allocs_per_op": 0,
+      "bytes_per_op": 0
+    }
+  },
+  "timestamp": "0001-01-01T00:00:00Z"
+}

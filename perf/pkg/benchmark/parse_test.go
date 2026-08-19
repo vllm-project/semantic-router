@@ -7,8 +7,8 @@ import (
 
 // sampleBenchOutput mirrors real `go test -bench -benchmem` output, including
 // the tab-aligned columns, a subtest name with a slash, and a trailing
-// GOMAXPROCS "-8" suffix that must be stripped so the parsed name matches the
-// keys update-baseline.sh writes.
+// GOMAXPROCS "-8" suffix that must be stripped so repeated samples aggregate
+// under one stable benchmark name.
 const sampleBenchOutput = `goos: linux
 goarch: amd64
 pkg: github.com/vllm-project/semantic-router/perf/benchmarks

@@ -268,15 +268,23 @@ domains:
 
   performance:
     owner: performance
-    contract: Router hot paths do not regress allocations or bytes per operation beyond policy thresholds.
+    contract: Covered Router hot paths emit complete CPU reports and do not regress portable allocation policy.
     layer: benchmark
     selector: performance
     pr_job: performance
     workflow: .github/workflows/performance-test.yml
     cadence: [pr, nightly, manual]
     resource_class: heavy
-    paths: [perf/**]
-    local: {fast: [], feature: [make perf-check]}
+    paths:
+      - perf/**
+      - tools/make/performance.mk
+      - src/semantic-router/pkg/extproc/**
+      - src/semantic-router/pkg/decision/**
+      - src/semantic-router/pkg/selection/**
+      - src/semantic-router/pkg/looper/**
+    local:
+      fast: [make perf-unit, make perf-validate]
+      feature: [make perf-check]
     image_receipts: []
     reporting: {kind: benchmark, artifact: performance-results}
 

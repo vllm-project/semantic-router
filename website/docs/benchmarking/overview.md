@@ -27,33 +27,35 @@ implementations. Their results are not directly comparable.
 
 ## Component microbenchmarks
 
-The `perf/` package contains Go benchmarks for classification, decision
-evaluation, response-cache operations, ExtProc processing, and Looper-family
-paths. They do not need a running Router, but model-dependent suites require the
-native libraries and benchmark model files.
+The manifest-driven `perf/` framework runs benchmarks beside the Router package
+hot paths and writes the same JSON, Markdown, and HTML reports locally and in
+CI. The default profiles do not need a running Router. Model-dependent suites
+require the native libraries and benchmark model files.
 
 ```bash
-make download-models-perf
-make rust
 make perf-bench-quick
 ```
 
 Useful targets:
 
-- `make perf-bench` runs the full component set.
-- `make perf-bench-classification`, `make perf-bench-decision`,
-  `make perf-bench-cache`, and `make perf-bench-looper` narrow the run.
-- `make perf-check` records benchmark output and fails when a gated allocation
-  or byte baseline regresses beyond its configured threshold.
-- `make perf-compare` compares an existing `reports/bench-output.txt` without
-  failing on the result.
-- `make perf-profile-cpu` and `make perf-profile-mem` produce pprof data.
+- `make perf-bench-quick` runs the short deterministic CPU profile.
+- `make perf-check` runs the fail-closed CPU profile used by pull requests.
+- `make perf-nightly` runs longer repeated samples over the same inventory.
+- `make perf-bench` opts into the full CPU component set; download benchmark
+  models first with `make download-models-perf`.
+- `make perf-compare` regenerates a report from an existing current result.
+- `make perf-validate` and `make perf-unit` validate the framework itself.
 
-The regression gate uses `allocs/op` and `B/op` for pass/fail. `ns/op` is
-reported as advisory because it varies with the runner. Performance CI is
-selected for changes owned by the performance domain and is also available in
-manual and nightly workflows; it is not run for every documentation or product
-change.
+Reports are written under `reports/perf/<environment>-<profile>/`. The
+regression gate uses `allocs/op` and `B/op` for portable pass/fail decisions;
+`ns/op`, sample variation, and scaling dimensions remain visible in the report.
+Missing and unbaselined measurements fail the CI completeness gate.
+
+The manifest includes CPU, AMD GPU, and NVIDIA GPU environment adapters. The
+current required gate is CPU-only. Future GPU/model-serving commands write the
+same result schema through an external suite, so they reuse the comparison and
+report pipeline. Real-model reports must compare direct and routed endpoints
+and attribute only the delta to the Router.
 
 See the repository's
 [`perf/README.md`](https://github.com/vllm-project/semantic-router/blob/main/perf/README.md)

@@ -1,158 +1,223 @@
-# Performance Microbenchmarks
+# Performance Framework
 
-The `perf/` module measures component-level Router hot paths with Go
-benchmarks. Use it to compare allocations, bytes, and execution time for
-classification, decision evaluation, cache operations, and ExtProc data
-handling. Looper microbenchmarks live beside the Looper implementation and are
-included by the repository Make targets.
+The performance framework measures Semantic Router overhead independently from
+model-serving latency. It gives local development and CI one versioned
+manifest, one result schema, one comparison policy, and the same JSON,
+Markdown, and HTML reports.
 
-These are not end-to-end quality or load benchmarks. For reasoning quality,
-session routing, hallucination detection, and fusion evaluations, see
-[`bench/`](../bench/README.md).
+Benchmark functions live beside the package hot path they measure. `perf/`
+owns orchestration, environment metadata, baseline policy, and reports; it
+does not duplicate Router behavior in synthetic helper code.
 
-## Run the benchmarks
+## Quick start
 
-From the repository root:
+Run the fast CPU profile from the repository root:
 
 ```bash
-# Short local run
 make perf-bench-quick
-
-# Longer run with CPU and memory profiles
-make perf-bench
 ```
 
-Run one component family when iterating:
-
-```bash
-make perf-bench-classification
-make perf-bench-decision
-make perf-bench-cache
-make perf-bench-looper
-```
-
-The component targets build the Router and set the native-library path before
-running `go test -bench`. Classification benchmarks require the benchmark model
-artifacts; download them when they are not already available:
-
-```bash
-make download-models-perf
-```
-
-## Compare with the committed baselines
-
-`perf-check` captures a fresh component and Looper run, parses the Go benchmark
-output, compares it with `perf/testdata/baselines/`, and exits non-zero for a
-blocking regression:
+Run the same fail-closed profile used by pull requests:
 
 ```bash
 make perf-check
 ```
 
-To inspect a comparison without applying the failure exit, first create the
-raw input expected by `perf-compare`:
-
-```bash
-mkdir -p reports
-make perf-bench-quick 2>&1 | tee reports/bench-output.txt
-make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
-make perf-compare
-```
-
-The parser writes `reports/current.json`; the comparison writes
-`reports/comparison.json`.
-
-## What is gated
-
-Thresholds in [`config/thresholds.yaml`](config/thresholds.yaml) are matched to
-benchmark names in order; the first matching pattern wins. Unmatched names use
-the `default` thresholds.
-
-- `allocs/op` and `B/op` are blocking metrics because they are comparatively
-  stable for the same code and Go version.
-- `ns/op` is advisory because host speed and contention affect wall-clock
-  measurements.
-- A benchmark missing from the baseline is reported but cannot be compared
-  until a reviewed baseline is added.
-
-Treat an allocation pass as one signal, not a general performance guarantee.
-Record the source revision, Go version, model artifacts, CPU, and benchmark
-command whenever wall-clock results are shared.
-
-## Profiling
-
-`perf-bench` writes `reports/cpu.prof` and `reports/mem.prof`. Open them with:
-
-```bash
-make perf-profile-cpu
-make perf-profile-mem
-```
-
-The profile targets start the Go pprof web interface on port 8080. To choose a
-different address, run `go tool pprof` directly against the profile file.
-
-## Benchmark families
-
-| Family | Location | Measures |
-| --- | --- | --- |
-| Classification | `benchmarks/classification*_bench_test.go` | batch inference, parallel calls, CGO overhead, and intent accuracy setup |
-| Decision | `benchmarks/decision_bench_test.go` | rule evaluation, priority selection, and parallel evaluation |
-| Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths |
-| ExtProc data handling | `benchmarks/extproc_bench_test.go` | JSON encoding, request-body parsing, and header manipulation |
-| Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |
-
-The repository's reusable performance workflow runs these numeric regression
-checks when the performance CI domain is selected. The workflow and
-`make perf-check` use the same parser, thresholds, and committed baseline
-directory.
-
-## Directory layout
+Generated artifacts are written to
+`reports/perf/<environment>-<profile>/`:
 
 ```text
-perf/
-├── benchmarks/            Go component benchmarks
-├── cmd/perftest/           benchmark parser, comparator, and report CLI
-├── config/                 runner settings and comparison thresholds
-├── pkg/benchmark/          parsing, comparison, and report implementation
-├── pkg/profiler/           reusable pprof helper
-├── scripts/                baseline and dataset utilities
-└── testdata/
-    ├── baselines/          committed comparison inputs
-    └── examples/           illustrative, non-gating fixture files
+current.json       complete measurements and environment metadata
+comparison.json    baseline comparison and coverage inventory
+report.json        stable machine-readable report
+report.md          terminal and GitHub job summary
+report.html        standalone interactive review artifact
+suites/*.log       raw output from every selected producer
 ```
 
-## Update a baseline
+Open `report.html` locally or read `report.md`. CI appends the Markdown report
+to the job summary and uploads the complete directory.
 
-Only refresh baselines after reviewing why allocation behavior changed:
+## Performance layers
+
+This first gate protects deterministic Router overhead:
+
+| Suite | Real code path | Main dimensions |
+| --- | --- | --- |
+| `request-shape` | `pkg/extproc` request extraction and body handling | context tokens, JSON bytes, messages, tools, parallel requests |
+| `decision-topology` | `pkg/decision` rule evaluation | decisions, match position, parallel requests |
+| `selection` | `pkg/selection` cache affinity and context fit | candidate models, context utilization |
+| `looper-core` | pure Looper/Fusion/ReMoM/Workflow helpers | algorithm, candidates, distribution |
+| `looper-orchestration` | real algorithm orchestration with deterministic localhost model stubs | fanout, rounds, workers, quorum overhead |
+| `classification` | model-backed CPU classification | classifier batch size and parallel calls |
+| `semantic-cache` | semantic-cache operations | entries, hit/miss path, request concurrency |
+
+The PR profile runs the first five suites. Model-backed classification and
+cache suites remain opt-in in `cpu-full` until their model and store fixtures
+are made hermetic enough for the PR gate.
+
+Model time is a separate measurement layer. Future real-model suites must
+record direct-backend and routed results together, then report the Router
+delta:
+
+```text
+router_delta = routed_latency - direct_backend_latency
+```
+
+TTFT, TPOT/inter-token latency, end-to-end latency, tokens/s, upstream-call
+count, and token amplification belong in those external result producers.
+They must not be presented as component `ns/op`.
+
+## Manifest contract
+
+[`config/perf.yaml`](config/perf.yaml) is the source of truth:
+
+- `environments` declare CPU/GPU kind, accelerator, capabilities, and runtime
+  variables;
+- `profiles` select a bounded suite inventory, sample count, benchmark time,
+  and timeout;
+- `suites` select the real package or external producer and document its
+  dimensions and owned source paths.
+
+The shipped environments are:
+
+| Environment | Status | Purpose |
+| --- | --- | --- |
+| `cpu` | gated | Portable host-side Router regression coverage |
+| `amd-gpu` | contract ready | Future ROCm/model-serving producers |
+| `nvidia-gpu` | contract ready | Future CUDA/model-serving producers |
+
+The runner contains no accelerator-specific branch. A GPU suite uses the same
+manifest and result schema, and CI supplies an appropriate runner label.
+
+Go suites use `runner: go_benchmark`. An accelerator or load generator can use
+`runner: external`; the command receives these variables:
+
+```text
+VSR_PERF_ENVIRONMENT
+VSR_PERF_PROFILE
+VSR_PERF_SUITE
+VSR_PERF_RESULT_FILE
+```
+
+The external producer must write the `current.json` schema to
+`VSR_PERF_RESULT_FILE`. The framework then merges, compares, and reports it in
+exactly the same way as a Go benchmark.
+
+## Profiles and overrides
+
+| Profile | Intended use | Sampling |
+| --- | --- | --- |
+| `quick` | local edit loop | one short sample |
+| `ci` | CPU pull-request gate | repeated bounded samples |
+| `nightly` | CPU timing trend | longer repeated samples |
+| `cpu-full` | opt-in model/cache investigation | all current CPU suites |
+
+Make variables expose the manifest without adding a second configuration
+layer:
+
+```bash
+make perf-run \
+  PERF_ENV=cpu \
+  PERF_PROFILE=ci \
+  PERF_OUTPUT_DIR="$PWD/reports/perf/my-run"
+```
+
+Validate or test only the framework code:
+
+```bash
+make perf-validate
+make perf-unit
+```
+
+The full CPU profile needs the benchmark model artifacts:
+
+```bash
+make download-models-perf
+make perf-bench
+```
+
+## Metrics and gating
+
+Go benchmark repetitions are aggregated by median. Reports also record sample
+count and the `ns/op` coefficient of variation so a noisy runner is visible.
+
+- `allocs/op` and `B/op` are portable blocking metrics.
+- `ns/op` is advisory on shared machines.
+- A fixed same-class runner can enable `gate_ns_per_op` for a narrow threshold.
+- External suites gate p95 latency growth, throughput loss, upstream-call
+  growth, and token amplification against their environment baseline.
+- An unbaselined current measurement fails the CI completeness gate.
+- A baseline measurement missing from the selected suite also fails the gate.
+- A suite producing zero measurements is an execution error.
+
+Threshold patterns and bounds live in
+[`config/thresholds.yaml`](config/thresholds.yaml). The first matching pattern
+wins; unmatched benchmarks use the default.
+
+Performance does not replace correctness. Every hot path must still pass its
+normal unit and integration tests, and benchmark setup must validate the
+result rather than accepting a faster wrong path.
+
+## Baselines
+
+The CPU PR inventory is reviewed in
+[`testdata/baselines/cpu-ci.json`](testdata/baselines/cpu-ci.json). Scheduled
+CI never updates it automatically.
+
+After explaining and reviewing an intentional allocation change:
 
 ```bash
 make perf-baseline-update
-git diff -- perf/testdata/baselines
+git diff -- perf/testdata/baselines/cpu-ci.json
 ```
 
-Commit the baseline update with the code change that requires it. Do not use a
-baseline refresh to hide an unexplained regression.
+The command captures the entire CPU CI profile and promotes that result. Commit
+the baseline with the code change that requires it. Never refresh a baseline
+to hide an unexplained regression.
 
-## Add a benchmark
+Absolute timing from a different host is useful context but not a portable
+claim. Reports retain commit, branch, Go version, OS/architecture, CPU model,
+environment, profile, suites, and exact dimensions to make comparisons
+auditable.
 
-1. Add a `BenchmarkXxx` function to the appropriate `perf/benchmarks` file, or
-   beside the Looper implementation when it requires unexported Looper code.
-2. Call `b.ReportAllocs()` and keep setup outside the timed region.
-3. Add the narrowest suitable pattern to `config/thresholds.yaml` when the
-   default thresholds are not appropriate.
-4. Run the new benchmark directly before running the family target:
+## Add or extend coverage
 
-   ```bash
-   cd perf
-   go test -run '^$' -bench '^BenchmarkXxx$' -benchmem ./benchmarks/...
-   ```
+For a Router hot path:
 
-5. Update the applicable baseline only after the result and threshold have
-   been reviewed.
+1. Add `BenchmarkXxx` beside the package implementation. Keep fixture setup
+   outside the timed region and call `b.ReportAllocs()`.
+2. Encode actual factors in sub-benchmark names, for example
+   `tokens=16384/messages=64/tools=8`.
+3. Add or update a suite in `config/perf.yaml`; declare environments,
+   capabilities, dimensions, and owned source paths.
+4. Add the narrowest threshold pattern in `config/thresholds.yaml`.
+5. Run `make perf-bench-quick`, then `make perf-check`.
+6. Promote the complete baseline only after reviewing the result.
 
-Run the parser and comparator unit tests after changing benchmark tooling:
+Avoid a full Cartesian product. Use single-factor scaling sweeps, bounded
+pairwise combinations, production-like cases, and explicit worst corners.
+Important Router axes include:
 
-```bash
-cd perf
-go test ./pkg/benchmark/...
-```
+- input tokens, exact JSON bytes, message count, tools and schema bytes;
+- request concurrency and classifier-internal batch size;
+- decision count, rule depth, match position, and no-match scans;
+- candidate models, Looper fanout, rounds, workers, and quorum;
+- streaming chunks, cache hit/miss/write, cold/warm state, and fallback paths.
+
+For a GPU or end-to-end producer, use `runner: external`, preserve direct and
+routed measurements, and populate latency percentiles, throughput,
+upstream-call count, and token amplification in the shared result schema.
+
+## CI selection
+
+Performance CI is selected for changes under the covered ExtProc, decision,
+selection, and Looper hot paths, for `perf/**`, and for the performance Make
+contract. The reusable workflow is
+[`performance-test.yml`](../.github/workflows/performance-test.yml); the nightly
+workflow calls it with the longer CPU profile.
+
+The current PR boundary is deliberately CPU-only. Adding a GPU gate requires a
+hermetic external producer, a stable runner label, a reviewed environment
+baseline, and a workflow caller. It does not require changes to parsing,
+comparison, or report generation.
