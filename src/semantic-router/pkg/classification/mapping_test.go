@@ -1,6 +1,10 @@
 package classification
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestGetIndexForJailbreakType(t *testing.T) {
 	tests := []struct {
@@ -100,5 +104,37 @@ func TestCategoryMapping_SequenceLabelMappingMethods(t *testing.T) {
 	}
 	if count := mapping.LabelCount(); count != 2 {
 		t.Errorf("LabelCount() = %d, want 2", count)
+	}
+}
+
+// TestLoadJailbreakMapping_RejectsSentinelCollision guards on_error: block's
+// fail-closed sentinel (jailbreakClassificationErrorType): a deployment
+// whose mapping file configures a real label with that exact name would
+// make a genuine detection indistinguishable from a classify failure - see
+// @adaamko's review on #2918/#2930. LoadJailbreakMapping must reject it
+// instead of loading it silently.
+func TestLoadJailbreakMapping_RejectsSentinelCollision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
+	data := `{"label_to_idx":{"benign":0,"classification_error":1},"idx_to_label":{"0":"benign","1":"classification_error"}}`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("failed to write test mapping file: %v", err)
+	}
+
+	if _, err := LoadJailbreakMapping(path); err == nil {
+		t.Error("expected an error when a configured label collides with the on_error: block sentinel")
+	}
+}
+
+// TestLoadJailbreakMapping_AllowsOrdinaryLabels guards against the collision
+// check rejecting every mapping by mistake.
+func TestLoadJailbreakMapping_AllowsOrdinaryLabels(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
+	data := `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign","1":"jailbreak"}}`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatalf("failed to write test mapping file: %v", err)
+	}
+
+	if _, err := LoadJailbreakMapping(path); err != nil {
+		t.Errorf("unexpected error loading an ordinary mapping: %v", err)
 	}
 }

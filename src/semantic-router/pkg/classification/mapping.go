@@ -89,6 +89,17 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		mapping.IdxToLabel = mapping.IDToLabel
 	}
 
+	// A configured label equal to the on_error: block sentinel
+	// (jailbreakClassificationErrorType) would make a genuine detection of
+	// that label indistinguishable from a classify failure - see @adaamko's
+	// review on #2918/#2930. Reject it here, once, rather than at every
+	// place that compares against the sentinel.
+	if _, collides := mapping.LabelToIdx[jailbreakClassificationErrorType]; collides {
+		return nil, fmt.Errorf(
+			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
+			path, jailbreakClassificationErrorType)
+	}
+
 	return &mapping, nil
 }
 
