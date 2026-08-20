@@ -155,6 +155,11 @@ type PromptGuardConfig struct {
 	// exclusive with Variant. Requires an external model configured with
 	// model_role="guardrail".
 	Protocol string `yaml:"protocol,omitempty"`
+
+	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
+	// every other pluggable classifier backend instead of being redeclared
+	// per struct.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type FeedbackDetectorConfig struct {

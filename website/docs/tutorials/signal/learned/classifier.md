@@ -63,6 +63,12 @@ and exact-label validation. Classifier leaves are the only decision predicates
 that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
+This condition-level `on_error` (`no_match` or `match`) decides what the
+predicate evaluates to when the classifier fails. It is a different key from
+`prompt_guard.on_error` (`allow` or `block`), which decides whether a guardrail
+backend failure counts as unverified content for every rule that backend
+serves. See [Safety models and policy](../../global/safety-models-and-policy.md).
+
 Local classifiers use `model_path`. One binary local classifier is supported
 per Router process, and its decision predicates use `gte: 0.5` or higher on the
 winning-label confidence. Restart the Router after changing the model or label
