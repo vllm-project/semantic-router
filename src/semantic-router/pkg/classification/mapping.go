@@ -125,11 +125,31 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 // exactly LabelCount() slots, so a 1-based or sparse mapping would reject every
 // response at request time instead of at load.
 func canonicalizeJailbreakMapping(path string, mapping *JailbreakMapping) error {
+	labelToIdx, err := collectJailbreakLabelIndices(path, mapping)
+	if err != nil {
+		return err
+	}
+	idxToLabel, err := invertJailbreakLabelIndices(path, labelToIdx)
+	if err != nil {
+		return err
+	}
+	if err := checkJailbreakIndicesContiguous(path, idxToLabel); err != nil {
+		return err
+	}
+
+	mapping.LabelToIdx = labelToIdx
+	mapping.IdxToLabel = idxToLabel
+	return nil
+}
+
+// collectJailbreakLabelIndices unions every label->index pair the file declared,
+// in either naming convention and either direction.
+func collectJailbreakLabelIndices(path string, mapping *JailbreakMapping) (map[string]int, error) {
 	labelToIdx := make(map[string]int)
 	for _, src := range []map[string]int{mapping.LabelToIdx, mapping.LabelToID} {
 		for label, idx := range src {
 			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -137,36 +157,15 @@ func canonicalizeJailbreakMapping(path string, mapping *JailbreakMapping) error 
 		for indexStr, label := range src {
 			idx, err := strconv.Atoi(indexStr)
 			if err != nil {
-				return fmt.Errorf(
+				return nil, fmt.Errorf(
 					"jailbreak mapping %s: index->label key %q is not a number", path, indexStr)
 			}
 			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-
-	idxToLabel := make(map[string]string, len(labelToIdx))
-	for label, idx := range labelToIdx {
-		key := strconv.Itoa(idx)
-		if existing, taken := idxToLabel[key]; taken {
-			return fmt.Errorf(
-				"jailbreak mapping %s: inconsistent label maps - index %d is claimed by both %q and %q",
-				path, idx, existing, label)
-		}
-		idxToLabel[key] = label
-	}
-	for idx := 0; idx < len(labelToIdx); idx++ {
-		if _, ok := idxToLabel[strconv.Itoa(idx)]; !ok {
-			return fmt.Errorf(
-				"jailbreak mapping %s: label indices must be contiguous from 0, but %d of %d is missing",
-				path, idx, len(labelToIdx))
-		}
-	}
-
-	mapping.LabelToIdx = labelToIdx
-	mapping.IdxToLabel = idxToLabel
-	return nil
+	return labelToIdx, nil
 }
 
 // addJailbreakLabel records one label->index pair, rejecting a label that two
@@ -178,6 +177,35 @@ func addJailbreakLabel(path string, labelToIdx map[string]int, label string, idx
 			path, label, existing, idx)
 	}
 	labelToIdx[label] = idx
+	return nil
+}
+
+// invertJailbreakLabelIndices builds the index->label direction, rejecting an
+// index two labels both claim.
+func invertJailbreakLabelIndices(path string, labelToIdx map[string]int) (map[string]string, error) {
+	idxToLabel := make(map[string]string, len(labelToIdx))
+	for label, idx := range labelToIdx {
+		key := strconv.Itoa(idx)
+		if existing, taken := idxToLabel[key]; taken {
+			return nil, fmt.Errorf(
+				"jailbreak mapping %s: inconsistent label maps - index %d is claimed by both %q and %q",
+				path, idx, existing, label)
+		}
+		idxToLabel[key] = label
+	}
+	return idxToLabel, nil
+}
+
+// checkJailbreakIndicesContiguous requires indices 0..n-1, the slots
+// alignScoresToMapping allocates.
+func checkJailbreakIndicesContiguous(path string, idxToLabel map[string]string) error {
+	for idx := 0; idx < len(idxToLabel); idx++ {
+		if _, ok := idxToLabel[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf(
+				"jailbreak mapping %s: label indices must be contiguous from 0, but %d of %d is missing",
+				path, idx, len(idxToLabel))
+		}
+	}
 	return nil
 }
 
