@@ -141,6 +141,43 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	return store, nil
 }
 
+// replayCollectionSchema returns the schema of the router replay collection.
+func replayCollectionSchema(collectionName string) *entity.Schema {
+	return &entity.Schema{
+		CollectionName: collectionName,
+		Description:    "Router replay records",
+		Fields: []*entity.Field{
+			{
+				Name:       "id",
+				DataType:   entity.FieldTypeVarChar,
+				PrimaryKey: true,
+				AutoID:     false,
+				TypeParams: map[string]string{
+					"max_length": "255",
+				},
+			},
+			{
+				Name:     "timestamp",
+				DataType: entity.FieldTypeInt64,
+			},
+			{
+				Name:     "data",
+				DataType: entity.FieldTypeVarChar,
+				TypeParams: map[string]string{
+					"max_length": "65535",
+				},
+			},
+			{
+				Name:     "vector",
+				DataType: entity.FieldTypeFloatVector,
+				TypeParams: map[string]string{
+					"dim": "2",
+				},
+			},
+		},
+	}
+}
+
 // createCollection creates the Milvus collection if it doesn't exist.
 //
 //nolint:gocognit
@@ -150,40 +187,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 		m.client,
 		m.collectionName,
 		func(innerCtx context.Context) error {
-			// Create schema
-			schema := &entity.Schema{
-				CollectionName: m.collectionName,
-				Description:    "Router replay records",
-				Fields: []*entity.Field{
-					{
-						Name:       "id",
-						DataType:   entity.FieldTypeVarChar,
-						PrimaryKey: true,
-						AutoID:     false,
-						TypeParams: map[string]string{
-							"max_length": "255",
-						},
-					},
-					{
-						Name:     "timestamp",
-						DataType: entity.FieldTypeInt64,
-					},
-					{
-						Name:     "data",
-						DataType: entity.FieldTypeVarChar,
-						TypeParams: map[string]string{
-							"max_length": "65535",
-						},
-					},
-					{
-						Name:     "vector",
-						DataType: entity.FieldTypeFloatVector,
-						TypeParams: map[string]string{
-							"dim": "2",
-						},
-					},
-				},
-			}
+			schema := replayCollectionSchema(m.collectionName)
 
 			shardNum := cfg.ShardNum
 			if shardNum <= 0 {
