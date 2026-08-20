@@ -25,6 +25,11 @@ type ProviderOverrides = Partial<
   >
 >
 
+const HTTPS_SCHEME = 'https:'
+
+const hostedEndpoint = (host: string, path = ''): string =>
+  `${HTTPS_SCHEME}//${host}${path}`
+
 const local = (
   id: string,
   providerCode: string,
@@ -124,7 +129,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'OR',
     'One key for models across providers.',
     '#7c5cff',
-    'https://openrouter.ai/api/v1',
+    hostedEndpoint('openrouter.ai', '/api/v1'),
   ),
   api(
     'openai',
@@ -133,7 +138,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     '◌',
     'GPT and o-series models from OpenAI.',
     '#10a37f',
-    'https://api.openai.com/v1',
+    hostedEndpoint('api.openai.com', '/v1'),
   ),
   api(
     'anthropic',
@@ -142,7 +147,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'AI',
     'Claude models through the native Messages API.',
     '#d97757',
-    'https://api.anthropic.com',
+    hostedEndpoint('api.anthropic.com'),
     {
       apiFormat: 'anthropic',
       runtimeProvider: 'anthropic',
@@ -159,7 +164,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'G',
     'Gemini through Google AI Studio.',
     '#4285f4',
-    'https://generativelanguage.googleapis.com/v1beta/openai',
+    hostedEndpoint('generativelanguage.googleapis.com', '/v1beta/openai'),
   ),
   api('azure-openai', 'Azure', 'Azure OpenAI', 'AZ', 'Azure-hosted OpenAI deployments.', '#0089d6'),
   api(
@@ -193,7 +198,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'DS',
     'DeepSeek chat and reasoning models.',
     '#4d6bfe',
-    'https://api.deepseek.com',
+    hostedEndpoint('api.deepseek.com'),
   ),
   api(
     'mistral',
@@ -202,7 +207,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'M',
     'Mistral and Codestral APIs.',
     '#ff7000',
-    'https://api.mistral.ai/v1',
+    hostedEndpoint('api.mistral.ai', '/v1'),
   ),
   api(
     'groq',
@@ -211,7 +216,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'GQ',
     'Low-latency inference on GroqCloud.',
     '#f55036',
-    'https://api.groq.com/openai/v1',
+    hostedEndpoint('api.groq.com', '/openai/v1'),
   ),
   api(
     'together-ai',
@@ -220,7 +225,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'TO',
     'Open models on Together AI.',
     '#14b8a6',
-    'https://api.together.xyz/v1',
+    hostedEndpoint('api.together.xyz', '/v1'),
   ),
   api(
     'fireworks-ai',
@@ -229,7 +234,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'FW',
     'Fast serverless and dedicated inference.',
     '#f97316',
-    'https://api.fireworks.ai/inference/v1',
+    hostedEndpoint('api.fireworks.ai', '/inference/v1'),
   ),
   api(
     'cerebras',
@@ -238,9 +243,17 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'C',
     'Fast inference on Cerebras systems.',
     '#facc15',
-    'https://api.cerebras.ai/v1',
+    hostedEndpoint('api.cerebras.ai', '/v1'),
   ),
-  api('xai', 'xAI', 'xAI', 'x', 'Grok models from xAI.', '#f4f4f5', 'https://api.x.ai/v1'),
+  api(
+    'xai',
+    'xAI',
+    'xAI',
+    'x',
+    'Grok models from xAI.',
+    '#f4f4f5',
+    hostedEndpoint('api.x.ai', '/v1'),
+  ),
   api(
     'perplexity',
     'Perplexity',
@@ -248,7 +261,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'P',
     'Online models with search grounding.',
     '#20b8a6',
-    'https://api.perplexity.ai',
+    hostedEndpoint('api.perplexity.ai'),
   ),
   api(
     'cohere',
@@ -257,7 +270,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'CO',
     'Command models from Cohere.',
     '#39594d',
-    'https://api.cohere.ai/compatibility/v1',
+    hostedEndpoint('api.cohere.ai', '/compatibility/v1'),
   ),
   api('ai21', 'AI21_CHAT', 'AI21', '21', 'Jamba and Jurassic models from AI21.', '#6d5dfc'),
   api(
@@ -267,7 +280,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'DI',
     'Serverless open-model inference.',
     '#8b5cf6',
-    'https://api.deepinfra.com/v1/openai',
+    hostedEndpoint('api.deepinfra.com', '/v1/openai'),
   ),
   api(
     'hugging-face',
@@ -301,7 +314,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'N',
     'NVIDIA-hosted and private NIM endpoints.',
     '#8aae42',
-    'https://integrate.api.nvidia.com/v1',
+    hostedEndpoint('integrate.api.nvidia.com', '/v1'),
   ),
   api(
     'sambanova',
@@ -310,7 +323,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'SN',
     'SambaNova Cloud model APIs.',
     '#f43f5e',
-    'https://api.sambanova.ai/v1',
+    hostedEndpoint('api.sambanova.ai', '/v1'),
   ),
   api(
     'snowflake',
@@ -363,7 +376,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'NV',
     'Serverless open-model inference.',
     '#7c3aed',
-    'https://api.novita.ai/v3/openai',
+    hostedEndpoint('api.novita.ai', '/v3/openai'),
   ),
   api(
     'baseten',
@@ -380,7 +393,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'NB',
     'Open models from Nebius AI Studio.',
     '#8b5cf6',
-    'https://api.studio.nebius.com/v1',
+    hostedEndpoint('api.studio.nebius.com', '/v1'),
   ),
   api(
     'hyperbolic',
@@ -389,7 +402,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'HY',
     'Open-model inference on Hyperbolic.',
     '#7c3aed',
-    'https://api.hyperbolic.xyz/v1',
+    hostedEndpoint('api.hyperbolic.xyz', '/v1'),
   ),
   api(
     'featherless',
