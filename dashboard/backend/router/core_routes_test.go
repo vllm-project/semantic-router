@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
@@ -85,7 +86,8 @@ func TestRegisterCoreRoutesExposesReadOnlyModelCatalogEndpoint(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	cfg := &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}
+	registerCoreRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/models/catalog", nil))
@@ -221,7 +223,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		RecipeStoreWritable:   true,
 	}
 	mux := http.NewServeMux()
-	registerHealthAndSetupRoutes(mux, cfg)
+	registerHealthAndSetupRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 	registerConfigRoutes(mux, cfg)
 	registerSecurityPolicyRoutes(mux, cfg)
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 // SettingsResponse represents the dashboard settings returned to frontend
@@ -21,8 +22,12 @@ type SettingsResponse struct {
 	FleetSimEnabled       bool   `json:"fleetSimEnabled"`
 }
 
-// SettingsHandler returns dashboard settings for frontend consumption
-func SettingsHandler(cfg *config.Config) http.HandlerFunc {
+// SettingsHandler returns dashboard settings for frontend consumption.
+//
+// SetupMode comes from setupResolver, not cfg. cfg.SetupMode is the legacy flag
+// frozen at startup, and this endpoint must agree with /api/setup/state and the
+// bootstrap gate.
+func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -41,7 +46,7 @@ func SettingsHandler(cfg *config.Config) http.HandlerFunc {
 			ServerReadonly:        cfg.ReadonlyMode,
 			RuntimeConfigWritable: cfg.RuntimeConfigWritable,
 			RecipeStoreWritable:   cfg.RecipeStoreWritable,
-			SetupMode:             cfg.SetupMode,
+			SetupMode:             setupResolver.Active(),
 			Platform:              cfg.Platform,
 			EnvoyURL:              cfg.EnvoyURL,
 			RouterEvalURL:         defaultRouterEvalEndpoint(cfg.RouterAPIURL),
