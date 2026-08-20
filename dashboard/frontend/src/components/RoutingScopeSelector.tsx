@@ -27,13 +27,12 @@ export default function RoutingScopeSelector({
             : selected.description || 'Draft Recipe'}
         </span>
       </div>
-      <div className={styles.tabs} role="tablist" aria-label={label}>
+      <div className={styles.tabs} role="group" aria-label={label}>
         {scopes.map((scope) => (
           <button
             key={scope.id}
             type="button"
-            role="tab"
-            aria-selected={scope.id === selected.id}
+            aria-pressed={scope.id === selected.id}
             className={scope.id === selected.id ? styles.activeTab : styles.tab}
             onClick={() => onChange(scope.id)}
           >

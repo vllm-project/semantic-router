@@ -67,6 +67,8 @@ func registerAccessControlUnavailable(mux *http.ServeMux, cause error) {
 	}
 	mux.HandleFunc("/api/v1/access-control", handler)
 	mux.HandleFunc("/api/v1/access-control/", handler)
+	mux.HandleFunc("/api/playground/v1/models", handler)
+	mux.HandleFunc("/api/playground/v1/chat/completions", handler)
 	mux.HandleFunc("/v1/models", handler)
 	mux.HandleFunc("/v1/chat/completions", handler)
 }
