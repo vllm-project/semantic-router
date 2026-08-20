@@ -160,6 +160,15 @@ func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir
 func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExtensions) ([]byte, error) {
 	logging.Debugf("Raw Anthropic response: %s", logging.ContentDescriptorBytes(anthropicResponse))
 
+	// An Anthropic error envelope ({"type":"error","error":{...}}) would
+	// otherwise unmarshal into a zero-valued Message and be flattened into
+	// an empty, success-shaped chat.completion — losing the upstream error
+	// entirely. Preserve it as an OpenAI-shape error body instead; the
+	// upstream HTTP status is forwarded unchanged by the extproc layer.
+	if errBody, ok := anthropicErrorToOpenAIBody(anthropicResponse); ok {
+		return errBody, nil
+	}
+
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse Anthropic response: %w", err)

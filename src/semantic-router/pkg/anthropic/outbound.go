@@ -135,6 +135,10 @@ type anthropicErrorDetail struct {
 // Contract:
 //   - Returns (nil, err) only when responseBody is not valid OpenAI
 //     ChatCompletion JSON.
+//   - An OpenAI-shape error body ({"error":{...}}) is re-emitted as the
+//     Anthropic error envelope instead of a Message, with its error type
+//     mapped to one of Anthropic's defined error types; the items below
+//     apply to non-error bodies.
 //   - Tolerates a nil ext (zero usage; no warnings appended) so that
 //     defensive callers do not need to guard.
 //   - Always emits a non-null content array (possibly empty when the
@@ -146,6 +150,10 @@ type anthropicErrorDetail struct {
 //     stop reasons "pause_turn" or "refusal"), it overrides the
 //     OpenAI-derived mapping.
 func EmitAnthropicResponse(responseBody []byte, ext *ir.IRExtensions, model string) ([]byte, error) {
+	if errType, errMsg, ok := openAIErrorBody(responseBody); ok {
+		return EmitAnthropicError(anthropicErrorType(errType), errMsg), nil
+	}
+
 	var oa openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &oa); err != nil {
 		return nil, fmt.Errorf("anthropic outbound: parse OpenAI response: %w", err)
