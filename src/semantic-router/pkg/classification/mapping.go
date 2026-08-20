@@ -80,16 +80,9 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
 	}
 
-	// If standard fields are empty but alternative fields are populated,
-	// copy from alternative fields to standard fields for internal use
-	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
-		mapping.LabelToIdx = mapping.LabelToID
-	}
-	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
-		mapping.IdxToLabel = mapping.IDToLabel
-	}
-	normalizeJailbreakMappingDirections(&mapping)
-	if err := validateJailbreakMappingConsistency(path, &mapping); err != nil {
+	// Collapse whichever of the four accepted label maps the file declared into
+	// one agreed label<->index set, so every consumer reads the same thing.
+	if err := canonicalizeJailbreakMapping(path, &mapping); err != nil {
 		return nil, err
 	}
 
@@ -102,8 +95,8 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// This deliberately probes via GetIndexForJailbreakType rather than
 	// indexing LabelToIdx directly: it is the same lookup the runtime uses to
 	// resolve a label, so the guard cannot cover fewer shapes than the code it
-	// guards. The normalization above now fills both directions in, but that
-	// is the reason the probe is safe rather than a reason to drop it.
+	// guards. Canonicalization above already unified the shapes, but that is
+	// what makes the probe safe rather than a reason to drop it.
 	if _, collides := mapping.GetIndexForJailbreakType(JailbreakClassificationErrorType); collides {
 		return nil, fmt.Errorf(
 			"jailbreak mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
@@ -113,64 +106,78 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	return &mapping, nil
 }
 
-// normalizeJailbreakMappingDirections fills in whichever direction the file
-// omitted, so LabelToIdx and IdxToLabel always describe the same label set.
+// canonicalizeJailbreakMapping collapses the four accepted label maps into one
+// agreed label<->index set on LabelToIdx/IdxToLabel, or fails.
 //
-// The file formats let a mapping declare only one direction. Leaving it that
-// way makes LabelCount() (which reads the label->index map) disagree with
-// GetIndexForJailbreakType (which falls back to scanning the index->label
-// map): an index->label-only file counts 0 labels while its labels still
-// resolve. alignScoresToMapping sizes the probability distribution from
-// LabelCount(), so that disagreement silently truncates the distribution.
-// Deriving both directions once at load keeps the count authoritative and
+// The formats let a file declare any subset of label_to_idx, label_to_id,
+// idx_to_label and id_to_label. Consumers disagree about which they read:
+// LabelCount() reads the label->index map, GetJailbreakTypeFromIndex reads the
+// index->label maps, and GetIndexForJailbreakType falls back to scanning them.
+// alignScoresToMapping sizes the http_classify probability distribution from
+// LabelCount() and indexes it by resolved label index, so any disagreement
+// silently truncates that distribution: a class that resolves but has no slot
+// makes a response omitting it pass the completeness guard, and the missing
+// class - possibly the positive one - reads as probability 0.0. Deriving one
+// canonical set at load makes the count authoritative for every consumer, and
 // keeps the reverse scan off the request path.
-func normalizeJailbreakMappingDirections(mapping *JailbreakMapping) {
-	if len(mapping.LabelToIdx) == 0 && len(mapping.IdxToLabel) > 0 {
-		mapping.LabelToIdx = make(map[string]int, len(mapping.IdxToLabel))
-		for indexStr, label := range mapping.IdxToLabel {
+//
+// Indices must be contiguous from 0 for the same reason: the distribution has
+// exactly LabelCount() slots, so a 1-based or sparse mapping would reject every
+// response at request time instead of at load.
+func canonicalizeJailbreakMapping(path string, mapping *JailbreakMapping) error {
+	labelToIdx := make(map[string]int)
+	for _, src := range []map[string]int{mapping.LabelToIdx, mapping.LabelToID} {
+		for label, idx := range src {
+			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
+				return err
+			}
+		}
+	}
+	for _, src := range []map[string]string{mapping.IdxToLabel, mapping.IDToLabel} {
+		for indexStr, label := range src {
 			idx, err := strconv.Atoi(indexStr)
 			if err != nil {
-				continue
+				return fmt.Errorf(
+					"jailbreak mapping %s: index->label key %q is not a number", path, indexStr)
 			}
-			mapping.LabelToIdx[label] = idx
+			if err := addJailbreakLabel(path, labelToIdx, label, idx); err != nil {
+				return err
+			}
 		}
 	}
-	if len(mapping.IdxToLabel) == 0 && len(mapping.LabelToIdx) > 0 {
-		mapping.IdxToLabel = make(map[string]string, len(mapping.LabelToIdx))
-		for label, idx := range mapping.LabelToIdx {
-			mapping.IdxToLabel[strconv.Itoa(idx)] = label
+
+	idxToLabel := make(map[string]string, len(labelToIdx))
+	for label, idx := range labelToIdx {
+		key := strconv.Itoa(idx)
+		if existing, taken := idxToLabel[key]; taken {
+			return fmt.Errorf(
+				"jailbreak mapping %s: inconsistent label maps - index %d is claimed by both %q and %q",
+				path, idx, existing, label)
+		}
+		idxToLabel[key] = label
+	}
+	for idx := 0; idx < len(labelToIdx); idx++ {
+		if _, ok := idxToLabel[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf(
+				"jailbreak mapping %s: label indices must be contiguous from 0, but %d of %d is missing",
+				path, idx, len(labelToIdx))
 		}
 	}
+
+	mapping.LabelToIdx = labelToIdx
+	mapping.IdxToLabel = idxToLabel
+	return nil
 }
 
-// validateJailbreakMappingConsistency rejects a mapping whose two directions
-// disagree.
-//
-// A disagreement is not cosmetic: LabelCount() sizes the http_classify
-// probability distribution from the label->index map, so a class that exists
-// only in the index->label map is resolvable but has no slot. A response that
-// omits it then passes the completeness guard, and the missing class - which
-// may be the positive one - reads as probability 0.0, under-reporting risk
-// with no error at all.
-func validateJailbreakMappingConsistency(path string, mapping *JailbreakMapping) error {
-	if len(mapping.LabelToIdx) != len(mapping.IdxToLabel) {
+// addJailbreakLabel records one label->index pair, rejecting a label that two
+// of the source maps disagree about.
+func addJailbreakLabel(path string, labelToIdx map[string]int, label string, idx int) error {
+	if existing, seen := labelToIdx[label]; seen && existing != idx {
 		return fmt.Errorf(
-			"jailbreak mapping %s: inconsistent label maps - %d label->index entries but %d index->label entries",
-			path, len(mapping.LabelToIdx), len(mapping.IdxToLabel))
+			"jailbreak mapping %s: inconsistent label maps - label %q is index %d in one map and %d in another",
+			path, label, existing, idx)
 	}
-	for label, idx := range mapping.LabelToIdx {
-		mapped, ok := mapping.IdxToLabel[strconv.Itoa(idx)]
-		if !ok {
-			return fmt.Errorf(
-				"jailbreak mapping %s: inconsistent label maps - label %q claims index %d, which the index->label map does not define",
-				path, label, idx)
-		}
-		if mapped != label {
-			return fmt.Errorf(
-				"jailbreak mapping %s: inconsistent label maps - index %d is %q in one direction and %q in the other",
-				path, idx, label, mapped)
-		}
-	}
+	labelToIdx[label] = idx
 	return nil
 }
 

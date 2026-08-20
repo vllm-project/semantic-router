@@ -52,26 +52,31 @@ func TestLoadJailbreakMapping_BackfillsLabelToIdxFromIDToLabel(t *testing.T) {
 	}
 }
 
-// A file whose two directions disagree is what still let a truncated response
-// through: LabelCount() sized the distribution from the smaller map while an
-// extra class remained resolvable, so a top-1 answer passed the completeness
-// guard and dropped the missing class.
-func TestLoadJailbreakMapping_RejectsDisagreeingDirections(t *testing.T) {
+// A file whose maps disagree is what still let a truncated response through:
+// LabelCount() sized the distribution from one map while an extra class
+// remained resolvable through another, so a top-1 answer passed the
+// completeness guard and dropped the missing class. Every one of the four
+// accepted maps has to be in scope, not just the two standard ones.
+func TestLoadJailbreakMapping_RejectsDisagreeingMaps(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
+		want string
 	}{
-		{
-			name: "index->label declares a class the label->index map omits",
-			body: `{"label_to_idx":{"benign":0},"idx_to_label":{"0":"benign","1":"jailbreak"}}`,
-		},
 		{
 			name: "the two directions name different labels for one index",
 			body: `{"label_to_idx":{"benign":0},"idx_to_label":{"0":"jailbreak"}}`,
+			want: "index 0 is claimed by both",
 		},
 		{
-			name: "label->index declares a class the index->label map omits",
-			body: `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign"}}`,
+			name: "the alternative label->id map disagrees about an index",
+			body: `{"label_to_idx":{"benign":0,"jailbreak":1},"label_to_id":{"jailbreak":2}}`,
+			want: "inconsistent",
+		},
+		{
+			name: "two labels claim the same index",
+			body: `{"label_to_idx":{"benign":0,"jailbreak":0}}`,
+			want: "index 0 is claimed by both",
 		},
 	}
 
@@ -81,10 +86,100 @@ func TestLoadJailbreakMapping_RejectsDisagreeingDirections(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected an error for a self-inconsistent mapping")
 			}
-			if !strings.Contains(err.Error(), "inconsistent") {
-				t.Errorf("error %q should describe the inconsistency", err)
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error %q should mention %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// Maps that merely say different amounts of the same thing are unioned, not
+// rejected - and the union is what fixes the truncation, because LabelCount()
+// then covers every class any map can resolve. All four maps feed the union,
+// including the alternative HuggingFace pair that GetJailbreakTypeFromIndex
+// also reads.
+func TestLoadJailbreakMapping_UnionsRedundantMaps(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		want  int
+		label string
+	}{
+		{
+			name:  "index->label declares a class the label->index map omits",
+			body:  `{"label_to_idx":{"benign":0},"idx_to_label":{"0":"benign","1":"jailbreak"}}`,
+			want:  2,
+			label: "jailbreak",
+		},
+		{
+			name:  "label->index declares a class the index->label map omits",
+			body:  `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign"}}`,
+			want:  2,
+			label: "jailbreak",
+		},
+		{
+			name: "the alternative id->label map declares an extra class",
+			body: `{"label_to_idx":{"benign":0,"jailbreak":1},"idx_to_label":{"0":"benign","1":"jailbreak"},` +
+				`"id_to_label":{"0":"benign","1":"jailbreak","2":"injection"}}`,
+			want:  3,
+			label: "injection",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mapping, err := LoadJailbreakMapping(writeJailbreakMapping(t, tt.body))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := mapping.LabelCount(); got != tt.want {
+				t.Errorf("LabelCount() = %d, want %d", got, tt.want)
+			}
+			idx, ok := mapping.IndexForLabel(tt.label)
+			if !ok {
+				t.Fatalf("IndexForLabel(%q) not found", tt.label)
+			}
+			// The class now has a slot, so a response omitting it is rejected
+			// rather than silently scored 0.0.
+			if label, ok := mapping.LabelFromIndex(idx); !ok || label != tt.label {
+				t.Errorf("LabelFromIndex(%d) = (%q, %v), want (%q, true)", idx, label, ok, tt.label)
+			}
+			if _, err := alignScoresToMapping(mapping, []httpClassifyLabelScore{{Label: "benign", Score: 1.0}}); err == nil {
+				t.Error("expected a top-1 response to be rejected as incomplete")
+			}
+		})
+	}
+}
+
+// alignScoresToMapping allocates exactly LabelCount() slots and indexes them by
+// resolved label index, so a sparse or 1-based mapping cannot work. Rejecting it
+// at load beats rejecting every response at request time - which under
+// on_error: block would block all traffic.
+func TestLoadJailbreakMapping_RejectsNonContiguousIndices(t *testing.T) {
+	for _, body := range []string{
+		`{"idx_to_label":{"0":"benign","5":"jailbreak"}}`,
+		`{"idx_to_label":{"1":"benign","2":"jailbreak"}}`,
+		`{"label_to_idx":{"benign":1,"jailbreak":2}}`,
+	} {
+		_, err := LoadJailbreakMapping(writeJailbreakMapping(t, body))
+		if err == nil {
+			t.Fatalf("expected an error for non-contiguous indices in %s", body)
+		}
+		if !strings.Contains(err.Error(), "contiguous") {
+			t.Errorf("error %q should mention contiguity for %s", err, body)
+		}
+	}
+}
+
+// A non-numeric index key must be named, not silently dropped into a confusing
+// count mismatch.
+func TestLoadJailbreakMapping_RejectsNonNumericIndexKey(t *testing.T) {
+	_, err := LoadJailbreakMapping(writeJailbreakMapping(t, `{"idx_to_label":{"a":"benign","1":"jailbreak"}}`))
+	if err == nil {
+		t.Fatal("expected an error for a non-numeric index->label key")
+	}
+	if !strings.Contains(err.Error(), "not a number") {
+		t.Errorf("error %q should name the bad key", err)
 	}
 }
 

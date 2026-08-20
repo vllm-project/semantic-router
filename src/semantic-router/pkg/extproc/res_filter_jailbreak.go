@@ -109,7 +109,11 @@ func (r *OpenAIRouter) responseJailbreakOnClassifyError(ctx *RequestContext, fai
 		config.OnErrorBlock)
 
 	if r.getResponseJailbreakAction(ctx.VSRSelectedDecision) == "block" {
-		return r.createErrorResponse(403, "Response blocked: jailbreak classifier unavailable, response could not be verified")
+		// Deliberately says no more than the real-detection message above:
+		// telling a caller the guardrail itself is down hands an attacker a
+		// probe for when the safety backend is offline. The cause is already in
+		// the log line and the replay record.
+		return r.createErrorResponse(403, "Response blocked: jailbreak content detected in LLM output")
 	}
 	return nil
 }

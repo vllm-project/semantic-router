@@ -92,14 +92,28 @@ global:
 ```
 
 Applies to any prompt guard backend, local or remote - not only the remote
-protocols above.
+protocols above - and to both directions: request-side jailbreak signal rules,
+including `method: contrastive` ones, and the response-side `response_jailbreak`
+plugin, which scans LLM output with the same backend.
 
-`block` only closes a request if a decision actually consumes the jailbreak
-signal (`type: jailbreak`) and acts on it, typically with `fast_response`.
-Without one, the signal still fires at maximum confidence on a classifier
-failure, but no decision blocks the request - it looks like a no-op. See the
-`jailbreak-onerror` e2e profile's `block_on_classifier_error` decision for a
-complete example.
+A failure is reported exactly as a real detection is. On the request side that
+means the jailbreak signal fires at confidence `1.0` with type
+`classification_error`, so `block` only closes a request if a decision actually
+consumes the jailbreak signal (`type: jailbreak`) and acts on it, typically with
+`fast_response` - without one it looks like a no-op. See the `jailbreak-onerror`
+e2e profile's `block_on_classifier_error` decision for a complete example. On
+the response side the plugin's own `action` decides: `block` returns a 403,
+`header` adds the response warning, `none` stays silent.
+
+:::note
+
+This is not the same key as the `on_error` on a decision's classifier
+condition, which takes `no_match` or `match`. That one answers "what should this
+predicate evaluate to when the classifier fails"; `prompt_guard.on_error`
+answers "was the content verified at all", for every rule the guardrail backend
+serves. See [Classifier signals](../signal/learned/classifier.md).
+
+:::
 
 ### Hallucination mitigation
 
