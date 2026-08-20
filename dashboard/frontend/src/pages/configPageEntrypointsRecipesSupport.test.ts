@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   collectRecipeTargetModels,
+  getDefaultMixtureRecipeName,
   getRecipeByName,
   getRecipeDeleteBlocker,
   normalizeEntrypointModelNames,
@@ -313,6 +314,13 @@ describe('entrypoints and recipes support', () => {
       ),
     ).toThrow(/cannot be renamed/)
     expect(getRecipeDeleteBlocker(config, 'default')).toMatch(/cannot be deleted/)
+  })
+
+  it('starts a new mixture with the first recipe that can route', () => {
+    const config = baseConfig()
+    config.routing = { modelCards: config.routing?.modelCards, decisions: [] }
+
+    expect(getDefaultMixtureRecipeName(config)).toBe('frontier')
   })
 
   it('allows decision names to repeat across recipes but not within one recipe', () => {

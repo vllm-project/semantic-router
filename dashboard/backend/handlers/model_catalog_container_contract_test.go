@@ -3,8 +3,11 @@ package handlers
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -56,6 +59,8 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		"DASHBOARD_RECIPE_STORE_WRITABLE=false",
 		`PROVENANCE_FILE_PATH=${CONFIG_FILE_PATH%.*}.provenance.json`,
 		`prepare-file "$PROVENANCE_FILE_PATH" "$STATE_GID"`,
+		`VLLM_SR_STATE_ROOT_DIR=/app/data/runtime-config`,
+		`prepare-private-directory`,
 		`exec "$@"`,
 	} {
 		if !strings.Contains(entrypoint, required) {
@@ -76,6 +81,55 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		if !strings.Contains(openShiftDeployment, required) {
 			t.Fatalf("OpenShift Dashboard deployment omitted startup contract %q", required)
 		}
+	}
+}
+
+func TestEntrypointPermissionHelperRepairsPrivateRecipeStoreAncestors(t *testing.T) {
+	repositoryRoot := filepath.Clean(filepath.Join(packageWorkingDirectory(t), "..", "..", ".."))
+	helper := filepath.Join(repositoryRoot, "dashboard", "backend", "entrypoint_permissions.py")
+	stateRoot := t.TempDir()
+	privateParent := filepath.Join(stateRoot, ".vllm-sr")
+	recipeStore := filepath.Join(privateParent, "recipe-store")
+	if err := os.Mkdir(privateParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command(
+		"python3",
+		helper,
+		"ensure-shared-directory",
+		stateRoot,
+		recipeStore,
+		strconv.Itoa(os.Getgid()),
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("prepare Recipe store: %v: %s", err, output)
+	}
+	for _, path := range []string{privateParent, recipeStore} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mode := info.Sys().(*syscall.Stat_t).Mode
+		if mode&0o2070 != 0o2070 {
+			t.Fatalf("%s mode = %#o, want group rwx and setgid", path, mode)
+		}
+	}
+}
+
+func TestEntrypointPermissionHelperRejectsRecipeStoreOutsideStateRoot(t *testing.T) {
+	repositoryRoot := filepath.Clean(filepath.Join(packageWorkingDirectory(t), "..", "..", ".."))
+	helper := filepath.Join(repositoryRoot, "dashboard", "backend", "entrypoint_permissions.py")
+	command := exec.Command(
+		"python3",
+		helper,
+		"ensure-shared-directory",
+		t.TempDir(),
+		t.TempDir(),
+		strconv.Itoa(os.Getgid()),
+	)
+	if err := command.Run(); err == nil {
+		t.Fatal("Recipe store outside the state root must be rejected")
 	}
 }
 

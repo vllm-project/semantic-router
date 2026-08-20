@@ -1,0 +1,118 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(3, 3, 4, 0.68);
+  backdrop-filter: blur(14px);
+}
+
+.dialog {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 2rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  outline: none;
+  background:
+    radial-gradient(circle at 85% 0, rgba(101, 131, 211, 0.16), transparent 14rem), #101114;
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.58);
+  text-align: center;
+}
+
+.dialog::before {
+  position: absolute;
+  top: 0;
+  right: 2rem;
+  left: 2rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand-amd), transparent);
+  content: '';
+}
+
+.icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  margin: 0 auto 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #ffffff;
+}
+
+.icon svg {
+  width: 25px;
+  height: 25px;
+}
+
+.eyebrow {
+  color: #ff9a9e;
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dialog h2 {
+  margin: 0.7rem 0 0;
+  color: #ffffff;
+  font-size: clamp(1.8rem, 6vw, 2.35rem);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+
+.dialog p {
+  max-width: 32ch;
+  margin: 0.85rem auto 0;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.6rem;
+}
+
+.primaryAction,
+.secondaryAction {
+  min-height: 48px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 690;
+}
+
+.primaryAction {
+  border: 1px solid #ffffff;
+  background: #ffffff;
+  color: #0b0c0e;
+}
+
+.primaryAction:hover {
+  background: #e7e7e9;
+}
+
+.secondaryAction {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.secondaryAction:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+@media (max-width: 520px) {
+  .dialog {
+    padding: 1.5rem;
+  }
+}

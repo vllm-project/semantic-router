@@ -60,13 +60,13 @@ export default function ConfigPageDecisionsSection({
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const {
-    applyScopedConfig,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  } = useRoutingScopeManager(config, saveConfig)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -773,7 +773,7 @@ export default function ConfigPageDecisionsSection({
       }
 
       newConfig.decisions.push(newDecision)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<DecisionFormState>(
@@ -809,7 +809,7 @@ export default function ConfigPageDecisionsSection({
       }
       const newConfig: ConfigData = cloneConfigData(scopedConfig)
       removeDecisionByName(newConfig, decisionPendingDelete.name)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setDecisionPendingDelete(null)
     } catch (error) {
       setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')

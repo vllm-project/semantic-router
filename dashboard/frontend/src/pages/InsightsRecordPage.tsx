@@ -5,6 +5,7 @@ import ViewPanel, { type ViewPanelAction } from '../components/ViewPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessReplayFlowDetails } from '../utils/accessControl'
+import { copyText } from '../utils/clipboard'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -74,14 +75,13 @@ export default function InsightsRecordPage() {
   }, [recordId])
 
   const handleCopyLink = useCallback(async () => {
-    if (!shareUrl || !navigator.clipboard?.writeText) {
+    if (!shareUrl) {
       return
     }
 
-    try {
-      await navigator.clipboard.writeText(shareUrl)
+    if (await copyText(shareUrl)) {
       setCopyState('copied')
-    } catch {
+    } else {
       setCopyState('idle')
     }
   }, [shareUrl])
@@ -130,7 +130,11 @@ export default function InsightsRecordPage() {
               </p>
             </div>
             <div className={styles.toolbarActions}>
-              <button type="button" onClick={() => void loadRecord()} className={styles.refreshButton}>
+              <button
+                type="button"
+                onClick={() => void loadRecord()}
+                className={styles.refreshButton}
+              >
                 Refresh
               </button>
             </div>

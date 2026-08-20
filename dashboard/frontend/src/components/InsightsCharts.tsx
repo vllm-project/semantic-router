@@ -14,7 +14,6 @@ import {
 
 import type {
   InsightsAggregateResponse,
-  InsightsAggregateSummary,
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
@@ -33,35 +32,6 @@ const CHART_COLORS = [
   '#55585e',
   '#393b40',
 ]
-
-interface PieLabelProps {
-  cx: number
-  cy: number
-  midAngle: number
-  outerRadius: number
-  percent: number
-  name: string
-}
-
-const renderCustomLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: PieLabelProps) => {
-  const radian = Math.PI / 180
-  const radius = outerRadius + 25
-  const x = cx + radius * Math.cos(-midAngle * radian)
-  const y = cy + radius * Math.sin(-midAngle * radian)
-
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="#e4e4e7"
-      textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central"
-      style={{ fontSize: '11px', fontWeight: 500 }}
-    >
-      {`${name}: ${(percent * 100).toFixed(0)}%`}
-    </text>
-  )
-}
 
 const generateBarColors = (count: number): string[] => {
   return Array.from({ length: count }, (_, index) => CHART_COLORS[index % CHART_COLORS.length])
@@ -93,14 +63,6 @@ const formatCompactTokenCount = (value: number) =>
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(value)
-
-const formatPercent = (value?: number) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return 'N/A'
-  }
-
-  return `${(value * 100).toFixed(1)}%`
-}
 
 const formatAxisLabel = (value: string) => (value.length > 20 ? `${value.slice(0, 17)}...` : value)
 
@@ -165,32 +127,29 @@ function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
   )
 }
 
-const summaryCards = (summary: InsightsAggregateSummary) => [
+const summaryCards = (aggregate: InsightsAggregateResponse) => [
   {
-    label: 'Total Saved',
-    value: formatCurrency(summary.total_saved, summary.currency),
-    accentClassName: styles.summaryValuePositive,
-    cardClassName: '',
-  },
-  {
-    label: 'Saved %',
-    value:
-      summary.cost_record_count > 0 && summary.baseline_spend > 0
-        ? formatPercent(summary.total_saved / summary.baseline_spend)
-        : 'N/A',
-    accentClassName: styles.summaryValueHighlight,
-    cardClassName: styles.summaryCardHighlight,
-  },
-  {
-    label: 'Baseline Spend',
-    value: formatCurrency(summary.baseline_spend, summary.currency),
+    label: 'Requests',
+    value: formatCompactTokenCount(aggregate.record_count),
     accentClassName: '',
     cardClassName: '',
   },
   {
-    label: 'Actual Spend',
-    value: formatCurrency(summary.actual_spend, summary.currency),
-    accentClassName: styles.summaryValueNeutral,
+    label: 'Tokens',
+    value: formatCompactTokenCount(aggregate.token_volume.total_tokens),
+    accentClassName: styles.summaryValueHighlight,
+    cardClassName: styles.summaryCardHighlight,
+  },
+  {
+    label: 'Models Used',
+    value: formatCompactTokenCount(aggregate.model_selection.length),
+    accentClassName: '',
+    cardClassName: '',
+  },
+  {
+    label: 'Total Saved',
+    value: formatCurrency(aggregate.summary.total_saved, aggregate.summary.currency),
+    accentClassName: styles.summaryValuePositive,
     cardClassName: '',
   },
 ]
@@ -209,14 +168,10 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   ]
   const barColors = generateBarColors(modelData.length)
 
-  if (aggregate.record_count === 0) {
-    return null
-  }
-
   return (
     <section className={styles.container}>
       <div className={styles.summaryGrid}>
-        {summaryCards(summary).map((card) => (
+        {summaryCards(aggregate).map((card) => (
           <article
             key={card.label}
             className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
@@ -237,201 +192,218 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
         </p>
       ) : null}
 
-      <div className={styles.chartsRow}>
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="3" width="7" height="18" />
-              <rect x="14" y="8" width="7" height="13" />
-            </svg>
-            Model Selection
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={modelData} margin={{ top: 20, right: 0, left: 0, bottom: 60 }}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.1)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-              />
-              <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
-              <Tooltip
-                cursor={false}
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-              <Bar dataKey="value" name="Count">
-                {modelData.map((_entry, index) => (
-                  <Cell key={`model-${index}`} fill={barColors[index]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      {aggregate.record_count === 0 ? (
+        <div className={styles.emptyOverview}>
+          <strong>No request data yet</strong>
+          <span>Your first routed request will bring this overview to life.</span>
         </div>
-
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2 L12 12 L20 12" />
-            </svg>
-            Decision Distribution
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={decisionData}
-                cx="50%"
-                cy="50%"
-                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
-                label={renderCustomLabel}
-                outerRadius={70}
-                dataKey="value"
-              >
-                {decisionData.map((_entry, index) => (
-                  <Cell
-                    key={`decision-${index}`}
-                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+      ) : (
+        <>
+          <div className={styles.chartsRow}>
+            <div className={styles.chartSection}>
+              <h3 className={styles.chartTitle}>
+                <svg
+                  className={styles.chartIcon}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="3" y="3" width="7" height="18" />
+                  <rect x="14" y="8" width="7" height="13" />
+                </svg>
+                Model Selection
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={modelData} margin={{ top: 20, right: 0, left: 0, bottom: 60 }}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255,255,255,0.1)"
+                    vertical={false}
                   />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+                  <XAxis
+                    dataKey="name"
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                    tickFormatter={formatAxisLabel}
+                  />
+                  <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+                  <Tooltip
+                    cursor={false}
+                    contentStyle={{
+                      background: 'var(--color-bg-secondary)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '4px',
+                      color: 'var(--color-text)',
+                    }}
+                    itemStyle={{ color: 'var(--color-text)' }}
+                  />
+                  <Bar dataKey="value" name="Count">
+                    {modelData.map((_entry, index) => (
+                      <Cell key={`model-${index}`} fill={barColors[index]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
 
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2 L12 12 L20 12" />
-            </svg>
-            Signal Distribution
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={signalData}
-                cx="50%"
-                cy="50%"
-                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
-                label={renderCustomLabel}
-                outerRadius={70}
-                dataKey="value"
+            <div className={styles.chartSection}>
+              <h3 className={styles.chartTitle}>
+                <svg
+                  className={styles.chartIcon}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2 L12 12 L20 12" />
+                </svg>
+                Decision Distribution
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={decisionData} cx="50%" cy="45%" outerRadius={76} dataKey="value">
+                    {decisionData.map((_entry, index) => (
+                      <Cell
+                        key={`decision-${index}`}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--color-bg-secondary)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '4px',
+                      color: 'var(--color-text)',
+                    }}
+                    itemStyle={{ color: 'var(--color-text)' }}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={44}
+                    formatter={(value) => formatAxisLabel(String(value))}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className={styles.chartSection}>
+              <h3 className={styles.chartTitle}>
+                <svg
+                  className={styles.chartIcon}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2 L12 12 L20 12" />
+                </svg>
+                Signal Distribution
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={signalData} cx="50%" cy="45%" outerRadius={76} dataKey="value">
+                    {signalData.map((_entry, index) => (
+                      <Cell
+                        key={`signal-${index}`}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--color-bg-secondary)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '4px',
+                      color: 'var(--color-text)',
+                    }}
+                    itemStyle={{ color: 'var(--color-text)' }}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={44}
+                    formatter={(value) => formatAxisLabel(String(value))}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className={styles.chartSection}>
+            <h3 className={styles.chartTitle}>
+              <svg
+                className={styles.chartIcon}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
               >
-                {signalData.map((_entry, index) => (
-                  <Cell key={`signal-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+                <path d="M4 19h16" />
+                <path d="M7 16V8" />
+                <path d="M12 16V5" />
+                <path d="M17 16v-6" />
+              </svg>
+              Token Volume
+            </h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={tokenValues} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255,255,255,0.1)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                  tickFormatter={formatCompactTokenCount}
+                />
+                <Tooltip
+                  cursor={false}
+                  formatter={(value: number | string) => [
+                    formatTokenCount(Number(value)),
+                    'Tokens',
+                  ]}
+                  contentStyle={{
+                    background: 'var(--color-bg-secondary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '4px',
+                    color: 'var(--color-text)',
+                  }}
+                  itemStyle={{ color: 'var(--color-text)' }}
+                />
+                <Bar dataKey="value" name="Tokens" radius={[8, 8, 0, 0]}>
+                  {tokenValues.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            {tokenVolume.excluded_record_count > 0 ? (
+              <p className={styles.summaryHint}>
+                {tokenVolume.excluded_record_count} filtered record
+                {tokenVolume.excluded_record_count === 1 ? '' : 's'} excluded from token totals
+                because usage data is incomplete.
+              </p>
+            ) : null}
+          </div>
 
-      <div className={styles.chartSection}>
-        <h3 className={styles.chartTitle}>
-          <svg
-            className={styles.chartIcon}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M4 19h16" />
-            <path d="M7 16V8" />
-            <path d="M12 16V5" />
-            <path d="M17 16v-6" />
-          </svg>
-          Token Volume
-        </h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={tokenValues} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
-            <YAxis
-              tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-              tickFormatter={formatCompactTokenCount}
+          <div className={styles.tokenBreakdownRow}>
+            <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
+            <TokenBreakdownChart
+              title="Tokens by Selected Model"
+              data={tokenBreakdown.by_selected_model}
             />
-            <Tooltip
-              cursor={false}
-              formatter={(value: number | string) => [formatTokenCount(Number(value)), 'Tokens']}
-              contentStyle={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                color: 'var(--color-text)',
-              }}
-              itemStyle={{ color: 'var(--color-text)' }}
-            />
-            <Bar dataKey="value" name="Tokens" radius={[8, 8, 0, 0]}>
-              {tokenValues.map((entry) => (
-                <Cell key={entry.name} fill={entry.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        {tokenVolume.excluded_record_count > 0 ? (
-          <p className={styles.summaryHint}>
-            {tokenVolume.excluded_record_count} filtered record
-            {tokenVolume.excluded_record_count === 1 ? '' : 's'} excluded from token totals because
-            usage data is incomplete.
-          </p>
-        ) : null}
-      </div>
-
-      <div className={styles.tokenBreakdownRow}>
-        <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
-        <TokenBreakdownChart
-          title="Tokens by Selected Model"
-          data={tokenBreakdown.by_selected_model}
-        />
-      </div>
+          </div>
+        </>
+      )}
     </section>
   )
 }

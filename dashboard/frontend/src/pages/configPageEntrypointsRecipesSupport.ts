@@ -5,6 +5,7 @@ import type {
   EntrypointConfig,
   NormalizedModel,
   RecipeConfig,
+  RecipeRoutingConfig,
   RoutingStrategy,
 } from './configPageSupport'
 import { DEFAULT_ROUTING_STRATEGY } from './configPageSupport'
@@ -21,7 +22,9 @@ export interface RecipeFormState {
   description: string
   strategy: RoutingStrategy
   signals: ConfigSignals
+  projections?: RecipeRoutingConfig['projections']
   decisions: DecisionConfig[]
+  routing?: RecipeRoutingConfig
 }
 
 export function normalizeRecipeStrategy(value: unknown): RoutingStrategy {
@@ -67,6 +70,17 @@ export function getRecipeByName(
   return (config?.recipes ?? []).find((recipe) => recipe.name === recipeName) ?? null
 }
 
+export function getDefaultMixtureRecipeName(config: ConfigData): string {
+  const recipeNames = getRecipeNames(config)
+  return (
+    recipeNames.find(
+      (recipeName) => (getRecipeByName(config, recipeName)?.routing.decisions?.length ?? 0) > 0,
+    ) ??
+    recipeNames[0] ??
+    DEFAULT_RECIPE_NAME
+  )
+}
+
 export function collectRecipeTargetModels(recipe: RecipeConfig | null): string[] {
   if (!recipe) return []
   const models = new Set<string>()
@@ -76,6 +90,56 @@ export function collectRecipeTargetModels(recipe: RecipeConfig | null): string[]
     }
   }
   return [...models]
+}
+
+export interface RecipeReadiness {
+  ready: boolean
+  reason: string
+}
+
+export function getRecipeReadiness(
+  recipe: RecipeConfig | null,
+  models: NormalizedModel[],
+): RecipeReadiness {
+  if (!recipe) return { ready: false, reason: 'Recipe not found.' }
+  const decisions = recipe.routing.decisions ?? []
+  if (decisions.length === 0) return { ready: false, reason: 'Add a decision.' }
+
+  const knownModels = new Set(
+    models.flatMap((model) => [model.name, ...(model.loras ?? []).map((adapter) => adapter.name)]),
+  )
+  const targets = collectRecipeTargetModels(recipe)
+  if (targets.length === 0) return { ready: false, reason: 'Assign a model to a decision.' }
+  const unknownModel = targets.find((model) => !knownModels.has(model))
+  if (unknownModel) return { ready: false, reason: `Model "${unknownModel}" is not configured.` }
+
+  const signalNames = new Set<string>()
+  for (const value of Object.values(recipe.routing.signals ?? {})) {
+    if (!Array.isArray(value)) continue
+    for (const signal of value) {
+      if (signal && typeof signal === 'object' && 'name' in signal) {
+        const name = String((signal as { name?: unknown }).name ?? '').trim()
+        if (name) signalNames.add(name)
+      }
+    }
+  }
+  const projectionNames = new Set(
+    (recipe.routing.projections?.mappings ?? []).flatMap((mapping) =>
+      (mapping.outputs ?? []).map((output) => output.name),
+    ),
+  )
+  const complete = decisions.some((decision) => {
+    if (collectDecisionTargetModels(decision).length === 0) return false
+    return (decision.rules?.conditions ?? []).every((condition) => {
+      const name = condition.name?.trim()
+      if (!name) return false
+      if (condition.type === 'projection') return projectionNames.has(name)
+      return signalNames.has(name) || signalNames.has(name.split(':')[0])
+    })
+  })
+  return complete
+    ? { ready: true, reason: 'Ready to publish.' }
+    : { ready: false, reason: 'Connect a decision to its Signal or Projection.' }
 }
 
 export function collectDecisionTargetModels(decision: DecisionConfig): string[] {
@@ -241,8 +305,10 @@ export function validateRecipeForm(
     description: form.description.trim() || undefined,
     routing: {
       ...existingRouting,
+      ...form.routing,
       strategy: form.strategy,
       signals,
+      projections: form.projections ?? form.routing?.projections ?? existingRouting?.projections,
       decisions,
     },
   }

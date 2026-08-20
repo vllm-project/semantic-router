@@ -12,6 +12,12 @@ SERVER_READONLY=${DASHBOARD_READONLY:-false}
 RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
 RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
+DASHBOARD_RUNTIME_STATE_DEFAULTED=false
+if [ -z "${VLLM_SR_STATE_ROOT_DIR:-}" ]; then
+    VLLM_SR_STATE_ROOT_DIR=/app/data/runtime-config
+    DASHBOARD_RUNTIME_STATE_DEFAULTED=true
+fi
+export VLLM_SR_STATE_ROOT_DIR
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
@@ -66,7 +72,13 @@ if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; 
 fi
 
 if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ]; then
-    if ! python3 "$PERMISSION_HELPER" ensure-directory "$RECIPE_STORE_DIR"; then
+    RECIPE_STORE_GID=65532
+    add_nonroot_group_gid "$RECIPE_STORE_GID"
+    if ! python3 "$PERMISSION_HELPER" ensure-shared-directory \
+        "$STATE_DIR" "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" ||
+       ! python3 "$PERMISSION_HELPER" prepare-tree \
+        "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" \
+        --credential-relative-path credentials/router-management.token; then
         echo "Dashboard Recipe package store is read-only; package import is disabled" >&2
         RECIPE_STORE_WRITABLE=false
     fi
@@ -96,18 +108,14 @@ if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; 
         python3 "$PERMISSION_HELPER" prepare-file "$VLLM_SR_ENVOY_CONFIG_PATH" "$ENVOY_STATE_GID"
     fi
 fi
-if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ] &&
-   [ -d "$RECIPE_STORE_DIR" ]; then
-    RECIPE_STORE_GID=65532
-    add_nonroot_group_gid "$RECIPE_STORE_GID"
-    python3 "$PERMISSION_HELPER" prepare-tree \
-        "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" \
-        --credential-relative-path credentials/router-management.token
-fi
 if [ -d /app/data ]; then
     DATA_GID=65532
     add_nonroot_group_gid "$DATA_GID"
     python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID"
+fi
+if [ "$DASHBOARD_RUNTIME_STATE_DEFAULTED" = "true" ]; then
+    python3 "$PERMISSION_HELPER" prepare-private-directory \
+        "$VLLM_SR_STATE_ROOT_DIR" 65532 65532
 fi
 
 # The dashboard is deliberately nonroot, but managed Recipe topology and

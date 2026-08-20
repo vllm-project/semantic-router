@@ -80,16 +80,16 @@ const GUIDE_STEPS: GuideStep[] = [
   },
   {
     id: 'clawos',
-    pageLabel: 'ClawOS',
+    pageLabel: 'OpenClaw',
     title: 'Orchestrate multi-claw worker systems',
-    description: 'Use ClawOS when one router needs multi-agent orchestration.',
+    description: 'Use OpenClaw when one router needs multi-agent orchestration.',
     highlights: [
       'Create teams with one leader and workers',
       'Connect workers to routed models and memory',
       'Inspect live agents, teams, and runtime health',
     ],
     route: '/clawos',
-    actionLabel: 'Open ClawOS',
+    actionLabel: 'Open OpenClaw',
   },
 ]
 

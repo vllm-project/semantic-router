@@ -129,11 +129,22 @@ func TestManagedEnvoyReadyURLPrefersExplicitAdminURL(t *testing.T) {
 	}
 }
 
-func TestManagedEnvoyReadyURLFallsBackToListenerURL(t *testing.T) {
+func TestManagedEnvoyReadyURLUsesSplitContainerAdminPortInContainer(t *testing.T) {
+	t.Setenv("TARGET_ENVOY_ADMIN_URL", "")
+	t.Setenv("TARGET_ENVOY_URL", "http://lane-a-vllm-sr-envoy-container:8899")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+
+	if got := managedEnvoyReadyURLForEnvironment(true); got != "http://lane-a-vllm-sr-envoy-container:9901/ready" {
+		t.Fatalf("envoy ready url = %q", got)
+	}
+}
+
+func TestManagedEnvoyReadyURLUsesListenerFallbackOutsideContainer(t *testing.T) {
 	t.Setenv("TARGET_ENVOY_ADMIN_URL", "")
 	t.Setenv("TARGET_ENVOY_URL", "http://lane-a-vllm-sr-envoy-container:8899")
 
-	if got := managedEnvoyReadyURL(); got != "http://lane-a-vllm-sr-envoy-container:8899/ready" {
+	if got := managedEnvoyReadyURLForEnvironment(false); got != "http://lane-a-vllm-sr-envoy-container:8899/ready" {
 		t.Fatalf("envoy ready url = %q", got)
 	}
 }

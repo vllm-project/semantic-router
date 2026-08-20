@@ -9,17 +9,6 @@ interface ConfigPageModelLiveVerificationProps {
   onVerify: () => void
 }
 
-function formatVerificationTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
 export default function ConfigPageModelLiveVerification({
   model,
   hasBackend,
@@ -29,12 +18,12 @@ export default function ConfigPageModelLiveVerification({
 }: ConfigPageModelLiveVerificationProps) {
   const pending = state.status === 'pending'
   const buttonLabel = pending
-    ? 'Verifying…'
+    ? 'Checking'
     : state.status === 'verified'
-      ? 'Verify again'
+      ? 'Live'
       : state.status === 'failed'
         ? 'Retry'
-        : 'Verify'
+        : 'Check'
 
   return (
     <div className={styles.liveVerification} aria-live="polite">
@@ -52,43 +41,25 @@ export default function ConfigPageModelLiveVerification({
           aria-hidden="true"
         />
         <span className={styles.liveVerificationLabel}>
-          {!hasBackend
-            ? 'No backend'
-            : !allowed
-              ? 'Run permission required'
-              : state.status === 'verified'
-                ? 'Live verified'
-                : state.status === 'failed'
-                  ? 'Verification failed'
-                  : pending
-                    ? 'Sending test query'
-                    : 'Not live verified'}
+          {!hasBackend ? 'No backend' : !allowed ? 'Unavailable' : buttonLabel}
         </span>
       </div>
-
-      {state.status === 'verified' ? (
-        <div className={styles.liveVerificationEvidence}>
-          <span title={state.evidence.summary}>{state.evidence.summary}</span>
-          <small title={`${state.evidence.providerModel} via ${state.evidence.backend}`}>
-            {state.evidence.provider} · {state.evidence.latencyMs} ms ·{' '}
-            {formatVerificationTime(state.evidence.verifiedAt)}
-          </small>
-        </div>
-      ) : null}
-      {state.status === 'failed' ? (
-        <span className={styles.liveVerificationError} role="alert" title={state.message}>
-          {state.message}
-        </span>
-      ) : null}
 
       <button
         type="button"
         className={styles.liveVerificationButton}
         disabled={!hasBackend || !allowed || pending}
         onClick={onVerify}
-        aria-label={`${buttonLabel} ${model} with a real inference query`}
+        aria-label={`${buttonLabel} ${model} with a live inference query`}
+        title={
+          state.status === 'failed'
+            ? state.message
+            : state.status === 'verified'
+              ? `Live · ${state.evidence.latencyMs} ms`
+              : undefined
+        }
       >
-        {buttonLabel}
+        {state.status === 'verified' ? '↻' : buttonLabel}
       </button>
     </div>
   )

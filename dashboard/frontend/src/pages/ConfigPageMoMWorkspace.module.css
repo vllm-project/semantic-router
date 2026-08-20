@@ -1,22 +1,24 @@
 .tabs {
   display: flex;
-  gap: 4px;
-  padding: 4px;
+  width: fit-content;
+  gap: 2px;
+  padding: 3px;
   overflow-x: auto;
-  border: 1px solid var(--graphite-border, #2d333b);
-  border-radius: 10px;
-  background: #101012;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  background: #0d0d0f;
 }
 
 .tab {
-  min-height: 38px;
-  padding: 0 16px;
+  min-width: 96px;
+  min-height: 36px;
+  padding: 0 15px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--graphite-text-muted, #9da7b3);
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 680;
   white-space: nowrap;
 }
@@ -27,12 +29,13 @@
 }
 
 .activeTab {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--graphite-text, #f0f3f6);
+  background: #f2f2f3;
+  color: #111113;
 }
 
 .tabPanel {
   min-width: 0;
+  margin-top: 14px;
 }
 
 .overviewStack {

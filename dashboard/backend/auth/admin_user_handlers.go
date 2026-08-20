@@ -120,6 +120,11 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := svc.provisionModelUser(r.Context(), user.ID, user.Email, user.Name, nil); err != nil {
+		_ = svc.store.DeleteUser(r.Context(), user.ID)
+		http.Error(w, "could not prepare model access", http.StatusServiceUnavailable)
+		return
+	}
 
 	writeAudit(r, svc, "user.create", "/api/admin/users", ac.UserID)
 	respondJSON(w, user)
@@ -256,7 +261,12 @@ func handleAdminUserDelete(
 		return
 	}
 
+	if err := svc.removeModelUser(r.Context(), userID); err != nil {
+		http.Error(w, "remove the user's API keys before deleting this user", http.StatusConflict)
+		return
+	}
 	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
+		_ = svc.provisionModelUser(r.Context(), target.ID, target.Email, target.Name, nil)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -1,5 +1,3 @@
-import { useId } from 'react'
-
 import type { RoutingScope } from '../utils/routingScopes'
 import styles from './RoutingScopeSelector.module.css'
 
@@ -11,34 +9,38 @@ interface RoutingScopeSelectorProps {
 }
 
 export default function RoutingScopeSelector({
-  label = 'Routing profile',
+  label = 'Recipe',
   onChange,
   scopes,
   value,
 }: RoutingScopeSelectorProps) {
-  const selectId = useId()
   const selected = scopes.find((scope) => scope.id === value) ?? scopes[0]
   if (!selected) return null
 
   return (
     <div className={styles.root}>
-      <label htmlFor={selectId}>{label}</label>
-      <select
-        id={selectId}
-        value={selected.id}
-        onChange={(event) => onChange(event.target.value)}
-      >
+      <div className={styles.heading}>
+        <span className={styles.label}>{label}</span>
+        <span className={styles.detail}>
+          {selected.entrypointModelNames.length > 0
+            ? selected.entrypointModelNames.join(', ')
+            : selected.description || 'Draft Recipe'}
+        </span>
+      </div>
+      <div className={styles.tabs} role="tablist" aria-label={label}>
         {scopes.map((scope) => (
-          <option key={scope.id} value={scope.id}>
+          <button
+            key={scope.id}
+            type="button"
+            role="tab"
+            aria-selected={scope.id === selected.id}
+            className={scope.id === selected.id ? styles.activeTab : styles.tab}
+            onClick={() => onChange(scope.id)}
+          >
             {scope.label}
-          </option>
+          </button>
         ))}
-      </select>
-      <span className={styles.detail}>
-        {selected.entrypointModelNames.length > 0
-          ? selected.entrypointModelNames.join(', ')
-          : selected.description || 'Top-level automatic routing'}
-      </span>
+      </div>
     </div>
   )
 }

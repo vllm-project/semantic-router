@@ -17,6 +17,7 @@ import {
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
+  loadAccessControlPage,
   loadBuilderPage,
   loadDashboardPage,
   loadEvaluationPage,
@@ -34,12 +35,10 @@ import {
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadPluginOperationsPage,
-  loadSecurityPolicyPage,
   loadSetupWizardPage,
   loadStatusPage,
   loadTopologyPage,
   loadTracingPage,
-  loadUsersPage,
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
@@ -51,8 +50,11 @@ interface AuthenticatedAppRoutesProps {
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
+  'access-control': (
+    <RecoverableLazyRoute loader={loadAccessControlPage} routeLabel="Access Control" />
+  ),
   builder: <RecoverableLazyRoute loader={loadBuilderPage} routeLabel="Config Builder" />,
-  clawos: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="ClawOS" />,
+  clawos: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   'fleet-sim': <RecoverableLazyRoute loader={loadFleetSimOverviewPage} routeLabel="Fleet Sim" />,
@@ -73,11 +75,9 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   plugins: (
     <RecoverableLazyRoute loader={loadPluginOperationsPage} routeLabel="Plugin Operations" />
   ),
-  security: <RecoverableLazyRoute loader={loadSecurityPolicyPage} routeLabel="Security" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
   tracing: <RecoverableLazyRoute loader={loadTracingPage} routeLabel="Tracing" />,
-  users: <RecoverableLazyRoute loader={loadUsersPage} routeLabel="Users" />,
 }
 
 const renderShellContent = (

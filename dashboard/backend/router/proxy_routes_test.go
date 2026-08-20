@@ -9,6 +9,22 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
+func TestSmartAPIRouterReturnsNotFoundForUnknownAPIPath(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	registerSmartAPIRouter(mux, dashboardProxySet{})
+
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/security-policy", nil))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+	if recorder.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("content type = %q, want application/json", recorder.Header().Get("Content-Type"))
+	}
+}
+
 func TestRegisterFleetSimRoutesReturnsBadGatewayWhenDisabled(t *testing.T) {
 	t.Parallel()
 

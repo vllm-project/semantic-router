@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import RouterModelInventory from '../components/RouterModelInventory'
-import DashboardManagerLayout from '../components/DashboardManagerLayout'
 import EmbeddingProviderStatusPanel from './EmbeddingProviderStatusPanel'
 import {
   getActiveRouterRuntime,
@@ -11,8 +10,15 @@ import {
 } from '../utils/routerRuntime'
 import StatusOverview from './StatusOverview'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
-import { clampPage, filterServices, type ServiceHealthFilter } from './statusPageSupport'
 import styles from './StatusPage.module.css'
+
+type StatusHistorySample = {
+  at: number
+  overall: string
+  services: Record<string, boolean>
+}
+
+const STATUS_HISTORY_KEY = 'vllm-sr.status.history.v1'
 
 const StatusPage: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null)
@@ -20,9 +26,7 @@ const StatusPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [serviceQuery, setServiceQuery] = useState('')
-  const [serviceHealth, setServiceHealth] = useState<ServiceHealthFilter>('all')
-  const [servicePage, setServicePage] = useState(1)
+  const [history, setHistory] = useState<StatusHistorySample[]>([])
   const scrolledHashRef = useRef<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -75,22 +79,6 @@ const StatusPage: React.FC = () => {
   )
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
   const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
-  const filteredServices = useMemo(
-    () => filterServices(status?.services ?? [], serviceQuery, serviceHealth),
-    [serviceHealth, serviceQuery, status?.services],
-  )
-  const servicePageSize = 9
-  const currentServicePage = clampPage(servicePage, filteredServices.length, servicePageSize)
-  const servicePageCount = Math.max(1, Math.ceil(filteredServices.length / servicePageSize))
-  const visibleServices = filteredServices.slice(
-    (currentServicePage - 1) * servicePageSize,
-    currentServicePage * servicePageSize,
-  )
-
-  useEffect(() => {
-    setServicePage(1)
-  }, [serviceHealth, serviceQuery])
-
   useEffect(() => {
     if (!status?.models?.models?.length) {
       return
@@ -111,6 +99,34 @@ const StatusPage: React.FC = () => {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [status?.models?.models?.length])
 
+  useEffect(() => {
+    if (!status) return
+    const sample: StatusHistorySample = {
+      at: Date.now(),
+      overall: status.overall,
+      services: Object.fromEntries(
+        status.services.map((service) => [service.name, service.healthy]),
+      ),
+    }
+    let previous: StatusHistorySample[] = []
+    try {
+      previous = JSON.parse(
+        window.localStorage.getItem(STATUS_HISTORY_KEY) || '[]',
+      ) as StatusHistorySample[]
+    } catch {
+      previous = []
+    }
+    const last = previous[previous.length - 1]
+    const changed =
+      !last ||
+      last.overall !== sample.overall ||
+      JSON.stringify(last.services) !== JSON.stringify(sample.services)
+    const stale = !last || sample.at - last.at >= 5 * 60 * 1000
+    const next = (changed || stale ? [...previous, sample] : previous).slice(-90)
+    window.localStorage.setItem(STATUS_HISTORY_KEY, JSON.stringify(next))
+    setHistory(next)
+  }, [status])
+
   if (loading && !status) {
     return (
       <div className={styles.container} data-testid="status-page">
@@ -128,255 +144,202 @@ const StatusPage: React.FC = () => {
 
   return (
     <div className={styles.container} data-testid="status-page">
-      <DashboardManagerLayout
-        compactHero
-        eyebrow="Operate"
-        title="System Status"
-        description="Live router health, model readiness, and deployment details in one operational view."
-        meta={[
-          { label: 'Overall health', value: healthLabel },
-          {
-            label: 'Services',
-            value: status ? `${healthyServices}/${status.services.length}` : '—',
-          },
-          { label: 'Models ready', value: status ? `${loadedModels}/${knownModels}` : '—' },
-        ]}
-        panelEyebrow="Live runtime"
-        panelTitle="Readiness control"
-        panelDescription="Keep the current deployment and model fleet visible while checking individual service health below."
-        pills={[
-          { label: autoRefresh ? 'Auto-refresh on' : 'Auto-refresh off', active: autoRefresh },
-          {
-            label: lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Awaiting status',
-          },
-        ]}
-        panelFooter={
-          <div className={styles.headerRight}>
-            <label className={styles.autoRefreshToggle}>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-              />
-              <span>Auto-refresh</span>
-            </label>
-            <button
-              onClick={() => void statusRequest.run({ allowHidden: true })}
-              className={styles.refreshButton}
-              aria-label="Refresh system status"
-            >
-              Refresh
-            </button>
+      <header className={styles.statusMasthead}>
+        <div>
+          <div className={styles.eyebrowRow}>
+            <span className={styles.pageEyebrow}>Status</span>
+            <span className={styles.brandLockup}>
+              <img src="/vllm.png" alt="" />
+              vllm-sr
+            </span>
           </div>
-        }
-      >
-        {error && (
-          <div className={styles.error} role="alert">
-            <span className={styles.errorIcon}>⚠️</span>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {status && modelStatus && (
-          <>
-            <StatusOverview
-              status={status}
-              modelStatus={modelStatus}
-              runtime={runtime}
-              healthyServices={healthyServices}
-              loadedModels={loadedModels}
-              knownModels={knownModels}
+          <h1>System status</h1>
+          <p>Models and services, live at a glance.</p>
+        </div>
+        <div className={styles.headerRight}>
+          <span className={styles.headerTimestamp}>
+            <i className={styles.liveDot} />
+            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Checking now'}
+          </span>
+          <label className={styles.autoRefreshToggle}>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(event) => setAutoRefresh(event.target.checked)}
             />
+            <span>Auto-refresh</span>
+          </label>
+          <button
+            onClick={() => void statusRequest.run({ allowHidden: true })}
+            className={styles.refreshButton}
+            aria-label="Refresh system status"
+          >
+            Refresh
+          </button>
+        </div>
+      </header>
 
-            {status.router_runtime?.embedding_provider ? (
-              <EmbeddingProviderStatusPanel provider={status.router_runtime.embedding_provider} />
-            ) : null}
+      <section
+        className={`${styles.overallBanner} ${status?.overall === 'healthy' ? styles.overallHealthy : styles.overallDegraded}`}
+      >
+        <span className={styles.overallIcon}>{status?.overall === 'healthy' ? '✓' : '!'}</span>
+        <div>
+          <h2>{status?.overall === 'healthy' ? 'All systems operational' : `${healthLabel}`}</h2>
+          <p>
+            {status?.overall === 'healthy'
+              ? 'Every monitored component is responding normally.'
+              : 'One or more components need attention.'}
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>Services</dt>
+            <dd>{status ? `${healthyServices}/${status.services.length}` : '—'}</dd>
+          </div>
+          <div>
+            <dt>Models ready</dt>
+            <dd>{knownModels > 0 ? `${loadedModels}/${knownModels}` : '—'}</dd>
+          </div>
+          <div>
+            <dt>Deployment</dt>
+            <dd>{status?.deployment_type || '—'}</dd>
+          </div>
+        </dl>
+      </section>
 
-            <section
-              className={styles.servicesSection}
-              data-testid="status-model-inventory-section"
-              aria-labelledby="status-model-inventory-title"
-            >
-              <div className={styles.servicesSectionHeader}>
-                <div>
-                  <h2 id="status-model-inventory-title" className={styles.servicesSectionTitle}>
-                    Model Inventory
-                  </h2>
-                  <p className={styles.servicesSectionDescription}>
-                    The router-reported model list, load state, and metadata exposed by{' '}
-                    <code>/info/models</code>.
-                  </p>
-                </div>
-              </div>
+      {status && modelStatus ? (
+        <StatusOverview
+          status={status}
+          modelStatus={modelStatus}
+          runtime={runtime}
+          healthyServices={healthyServices}
+          loadedModels={loadedModels}
+          knownModels={knownModels}
+        />
+      ) : null}
 
-              <div className={styles.sectionBody}>
-                <RouterModelInventory
-                  mode="full"
-                  showSummary={false}
-                  modelsInfo={status.models}
-                  emptyMessage="The router has not exposed any model metadata yet."
-                />
-              </div>
-            </section>
-
-            <section
-              className={styles.servicesSection}
-              data-testid="status-services-section"
-              aria-labelledby="status-services-title"
-            >
-              <div className={styles.servicesSectionHeader}>
-                <div>
-                  <h2 id="status-services-title" className={styles.servicesSectionTitle}>
-                    Services
-                  </h2>
-                  <p className={styles.servicesSectionDescription}>
-                    Process-level health for the router, proxy, dashboard, and runtime helpers.
-                  </p>
-                </div>
-                <div className={styles.servicesHeaderMeta}>
-                  <span className={styles.servicesCountChip}>
-                    {healthyServices}/{status.services.length} healthy
-                  </span>
-                </div>
-              </div>
-
-              {status.services.length > 0 && (
-                <div className={styles.servicesToolbar}>
-                  <label className={styles.serviceSearchField}>
-                    <span className={styles.srOnly}>Search services</span>
-                    <input
-                      type="search"
-                      value={serviceQuery}
-                      onChange={(event) => setServiceQuery(event.target.value)}
-                      placeholder="Search service, component, or status"
-                    />
-                  </label>
-                  <label className={styles.serviceFilterField}>
-                    <span>Health</span>
-                    <select
-                      value={serviceHealth}
-                      onChange={(event) =>
-                        setServiceHealth(event.target.value as ServiceHealthFilter)
-                      }
-                    >
-                      <option value="all">All services</option>
-                      <option value="healthy">Healthy</option>
-                      <option value="unhealthy">Needs attention</option>
-                    </select>
-                  </label>
-                  <span className={styles.serviceResultCount} aria-live="polite">
-                    {filteredServices.length} of {status.services.length} services
-                  </span>
-                </div>
-              )}
-
-              <div className={styles.servicesGrid}>
-                {status.services.length > 0 && visibleServices.length > 0 ? (
-                  visibleServices.map((service, index) => (
-                    <article
-                      key={`${service.name}-${index}`}
-                      className={`${styles.serviceCard} ${
-                        service.healthy ? styles.serviceCardHealthy : styles.serviceCardUnhealthy
-                      }`}
-                    >
-                      <div className={styles.serviceCardTop}>
-                        <div className={styles.serviceNameWrap}>
-                          <span
-                            className={`${styles.serviceStateDot} ${
-                              service.healthy
-                                ? styles.serviceStateDotHealthy
-                                : styles.serviceStateDotUnhealthy
-                            }`}
-                          />
-                          <h3 className={styles.serviceName}>{service.name}</h3>
-                          {service.component && (
-                            <span className={styles.componentBadge}>{service.component}</span>
-                          )}
-                        </div>
-                        <span
-                          className={`${styles.serviceHealthChip} ${
-                            service.healthy
-                              ? styles.serviceHealthHealthy
-                              : styles.serviceHealthUnhealthy
-                          }`}
-                        >
-                          <span className={styles.serviceHealthDot} />
-                          {service.status}
-                        </span>
-                      </div>
-
-                      {service.message ? (
-                        <p className={styles.serviceMessage}>{service.message}</p>
-                      ) : (
-                        <p className={styles.serviceMessageMuted}>
-                          No additional details reported.
-                        </p>
-                      )}
-                    </article>
-                  ))
-                ) : status.services.length === 0 ? (
-                  <div className={styles.noServices}>
-                    <span className={styles.noServicesIcon}>🔍</span>
-                    <h3>No Running Services Detected</h3>
-                    <p>Start the semantic router using one of these methods:</p>
-                    <div className={styles.startOptions}>
-                      <div className={styles.startOption}>
-                        <strong>Local:</strong>
-                        <code>vllm-sr serve</code>
-                      </div>
-                      <div className={styles.startOption}>
-                        <strong>Docker:</strong>
-                        <code>docker compose up</code>
-                      </div>
-                      <div className={styles.startOption}>
-                        <strong>Kubernetes:</strong>
-                        <code>kubectl apply -f deploy/kubernetes/</code>
-                      </div>
-                    </div>
+      {status ? (
+        <section className={styles.componentBoard} aria-labelledby="component-status-title">
+          <div className={styles.componentBoardHeader}>
+            <div>
+              <span>Current availability</span>
+              <h2 id="component-status-title">Components</h2>
+            </div>
+            <span>
+              {history.length} recorded {history.length === 1 ? 'check' : 'checks'}
+            </span>
+          </div>
+          <div className={styles.componentRows}>
+            {status.services.map((service) => {
+              const samples = history.slice(-30)
+              return (
+                <article key={service.name} className={styles.componentRow}>
+                  <div>
+                    <strong>{service.name}</strong>
+                    <span>{service.message || service.component || 'Live health check'}</span>
                   </div>
-                ) : (
-                  <div className={styles.noServices}>
-                    <h3>No matching services</h3>
-                    <p>Change the search or health filter.</p>
-                    <button
-                      type="button"
-                      className={styles.clearServiceFilters}
-                      onClick={() => {
-                        setServiceQuery('')
-                        setServiceHealth('all')
-                      }}
-                    >
-                      Clear filters
-                    </button>
+                  <div className={styles.uptimeBars} aria-label={`${service.name} recent checks`}>
+                    {samples.length ? (
+                      samples.map((sample) => (
+                        <i
+                          key={sample.at}
+                          className={
+                            sample.services[service.name] === false
+                              ? styles.uptimeDown
+                              : styles.uptimeUp
+                          }
+                          title={`${new Date(sample.at).toLocaleString()} · ${sample.services[service.name] === false ? 'Unavailable' : 'Operational'}`}
+                        />
+                      ))
+                    ) : (
+                      <i className={service.healthy ? styles.uptimeUp : styles.uptimeDown} />
+                    )}
                   </div>
-                )}
-              </div>
-
-              {servicePageCount > 1 && (
-                <nav className={styles.servicePagination} aria-label="Service inventory pages">
-                  <button
-                    type="button"
-                    disabled={currentServicePage === 1}
-                    onClick={() => setServicePage((value) => Math.max(1, value - 1))}
+                  <span
+                    className={
+                      service.healthy ? styles.componentOperational : styles.componentIssue
+                    }
                   >
-                    Previous
-                  </button>
-                  <span>
-                    Page {currentServicePage} of {servicePageCount}
+                    {service.healthy ? 'Operational' : service.status}
                   </span>
-                  <button
-                    type="button"
-                    disabled={currentServicePage === servicePageCount}
-                    onClick={() => setServicePage((value) => Math.min(servicePageCount, value + 1))}
-                  >
-                    Next
-                  </button>
-                </nav>
-              )}
-            </section>
-          </>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className={styles.incidentHistory}>
+        <div>
+          <span>History</span>
+          <h2>Recent incidents</h2>
+        </div>
+        {history.some((sample) => sample.overall !== 'healthy') ? (
+          history
+            .filter((sample) => sample.overall !== 'healthy')
+            .slice(-5)
+            .reverse()
+            .map((sample) => (
+              <article key={sample.at}>
+                <i />
+                <div>
+                  <strong>{sample.overall.replace(/_/g, ' ')}</strong>
+                  <span>{new Date(sample.at).toLocaleString()}</span>
+                </div>
+                <p>
+                  {Object.entries(sample.services)
+                    .filter(([, healthy]) => !healthy)
+                    .map(([name]) => name)
+                    .join(', ') || 'Runtime health degraded'}
+                </p>
+              </article>
+            ))
+        ) : (
+          <div className={styles.noIncidents}>
+            <strong>No incidents recorded</strong>
+            <span>Incident history appears here.</span>
+          </div>
         )}
-      </DashboardManagerLayout>
+      </section>
+
+      {error && (
+        <div className={styles.error} role="alert">
+          <span className={styles.errorIcon}>⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {status && modelStatus && (
+        <>
+          {status.router_runtime?.embedding_provider ? (
+            <EmbeddingProviderStatusPanel provider={status.router_runtime.embedding_provider} />
+          ) : null}
+
+          <section
+            className={styles.servicesSection}
+            data-testid="status-model-inventory-section"
+            aria-labelledby="status-model-inventory-title"
+          >
+            <div className={styles.servicesSectionHeader}>
+              <div>
+                <h2 id="status-model-inventory-title" className={styles.servicesSectionTitle}>
+                  Model inventory
+                </h2>
+                <p className={styles.servicesSectionDescription}>Models available to the router.</p>
+              </div>
+            </div>
+
+            <div className={styles.sectionBody}>
+              <RouterModelInventory
+                mode="full"
+                showSummary={false}
+                modelsInfo={status.models}
+                emptyMessage="The router has not exposed any model metadata yet."
+              />
+            </div>
+          </section>
+        </>
+      )}
     </div>
   )
 }

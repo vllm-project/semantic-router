@@ -1,336 +1,171 @@
-import type { ClassifierSignal, ConfigSignals, MetadataSignal } from './configPageSupport'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+
+import type { ConfigSignals } from './configPageSupport'
 import styles from './ConfigPageEntrypointsRecipesSection.module.css'
+import { RECIPE_SIGNAL_FAMILIES, type RecipeSignalFamily } from './recipeSignalCatalog'
 
 interface ConfigPageRecipePolicyEditorProps {
   value: ConfigSignals
+  catalog?: ConfigSignals
   onChange: (value: ConfigSignals) => void
 }
 
-type MetadataPredicateType = 'equals' | 'in' | 'exists'
-
-const emptyMetadataSignal = (): MetadataSignal => ({
-  name: '',
-  key: '',
-  predicate: { equals: '' },
-})
-
-const emptyClassifierSignal = (): ClassifierSignal => ({
-  name: '',
-  type: 'local',
-  model_path: '',
-  labels: ['SAFE', 'MATCH'],
-  use_cpu: true,
-})
-
-function metadataPredicateType(signal: MetadataSignal): MetadataPredicateType {
-  if (signal.predicate.in !== undefined) return 'in'
-  if (signal.predicate.exists !== undefined) return 'exists'
-  return 'equals'
+interface SignalEntry extends RecipeSignalFamily {
+  name: string
+  value: unknown
 }
 
-function metadataPredicateForType(
-  signal: MetadataSignal,
-  type: MetadataPredicateType,
-): MetadataSignal['predicate'] {
-  if (type === 'in') return { in: signal.predicate.in ?? [] }
-  if (type === 'exists') return { exists: signal.predicate.exists ?? true }
-  return { equals: signal.predicate.equals ?? '' }
+function entriesOf(signals?: ConfigSignals): SignalEntry[] {
+  const record = (signals ?? {}) as unknown as Record<string, unknown>
+  return RECIPE_SIGNAL_FAMILIES.flatMap((family) => {
+    const values = record[family.key]
+    if (!Array.isArray(values)) return []
+    return values.flatMap((value) => {
+      if (!value || typeof value !== 'object') return []
+      const name = (value as { name?: unknown }).name
+      return typeof name === 'string' && name.trim()
+        ? [{ ...family, name: name.trim(), value }]
+        : []
+    })
+  })
+}
+
+function signalKey(signal: Pick<SignalEntry, 'key' | 'name'>) {
+  return `${signal.key}:${signal.name}`
 }
 
 export default function ConfigPageRecipePolicyEditor({
   value,
+  catalog,
   onChange,
 }: ConfigPageRecipePolicyEditorProps) {
-  const signals = value ?? {}
-  const metadata = signals.metadata ?? []
-  const classifiers = signals.classifiers ?? []
+  const [query, setQuery] = useState('')
+  const [family, setFamily] = useState('all')
+  const selected = useMemo(() => entriesOf(value), [value])
+  const selectedKeys = useMemo(() => new Set(selected.map(signalKey)), [selected])
+  const available = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return entriesOf(catalog).filter(
+      (entry) =>
+        !selectedKeys.has(signalKey(entry)) &&
+        (family === 'all' || entry.key === family) &&
+        (!normalized ||
+          entry.name.toLowerCase().includes(normalized) ||
+          entry.type.toLowerCase().includes(normalized)),
+    )
+  }, [catalog, family, query, selectedKeys])
 
-  const updateMetadata = (index: number, patch: Partial<MetadataSignal>) => {
+  const add = (entry: SignalEntry) => {
+    const record = value as unknown as Record<string, unknown>
+    const current = Array.isArray(record[entry.key]) ? (record[entry.key] as unknown[]) : []
     onChange({
-      ...signals,
-      metadata: metadata.map((signal, signalIndex) =>
-        signalIndex === index ? { ...signal, ...patch } : signal,
-      ),
-    })
+      ...record,
+      [entry.key]: [...current, structuredClone(entry.value)],
+    } as unknown as ConfigSignals)
   }
 
-  const updateClassifier = (index: number, patch: Partial<ClassifierSignal>) => {
+  const remove = (entry: SignalEntry) => {
+    const record = value as unknown as Record<string, unknown>
+    const current = Array.isArray(record[entry.key]) ? (record[entry.key] as unknown[]) : []
     onChange({
-      ...signals,
-      classifiers: classifiers.map((signal, signalIndex) =>
-        signalIndex === index ? { ...signal, ...patch } : signal,
+      ...record,
+      [entry.key]: current.filter(
+        (item) =>
+          !item || typeof item !== 'object' || (item as { name?: unknown }).name !== entry.name,
       ),
-    })
+    } as unknown as ConfigSignals)
   }
+
+  const catalogCount = entriesOf(catalog).length
 
   return (
-    <div className={styles.decisionEditor}>
-      <p className={styles.editorHint}>
-        These policy signals belong only to this recipe. Existing signal families are preserved.
-      </p>
+    <div className={styles.signalComposer}>
+      <header className={styles.signalComposerHeader}>
+        <div>
+          <span>Signal library</span>
+          <h3>Choose what this recipe can see.</h3>
+          <p>{RECIPE_SIGNAL_FAMILIES.length} signal types · one reusable catalog.</p>
+        </div>
+        <Link to="/config/signals">Manage signals</Link>
+      </header>
 
-      <div className={styles.modelPoolHeader}>
-        <span>Metadata signals</span>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={() =>
-            onChange({
-              ...signals,
-              metadata: [...metadata, emptyMetadataSignal()],
-            })
-          }
-        >
-          Add metadata signal
-        </button>
-      </div>
-      <div className={styles.modelPool}>
-        {metadata.map((signal, index) => {
-          const predicateType = metadataPredicateType(signal)
-          return (
-            <article key={`${signal.name || 'metadata'}-${index}`} className={styles.decisionCard}>
-              <div className={styles.editorGrid}>
-                <label>
-                  <span>Name</span>
-                  <input
-                    value={signal.name}
-                    onChange={(event) => updateMetadata(index, { name: event.target.value })}
-                    placeholder="tenant_tier"
-                  />
-                </label>
-                <label>
-                  <span>Metadata key</span>
-                  <input
-                    value={signal.key}
-                    onChange={(event) => updateMetadata(index, { key: event.target.value })}
-                    placeholder="tier"
-                  />
-                </label>
-                <label>
-                  <span>Predicate</span>
-                  <select
-                    value={predicateType}
-                    onChange={(event) =>
-                      updateMetadata(index, {
-                        predicate: metadataPredicateForType(
-                          signal,
-                          event.target.value as MetadataPredicateType,
-                        ),
-                      })
-                    }
-                  >
-                    <option value="equals">Equals</option>
-                    <option value="in">In list</option>
-                    <option value="exists">Exists</option>
-                  </select>
-                </label>
-                {predicateType === 'equals' ? (
-                  <label>
-                    <span>Value</span>
-                    <input
-                      value={signal.predicate.equals ?? ''}
-                      onChange={(event) =>
-                        updateMetadata(index, {
-                          predicate: { equals: event.target.value },
-                        })
-                      }
-                    />
-                  </label>
-                ) : null}
-                {predicateType === 'in' ? (
-                  <label>
-                    <span>Values</span>
-                    <input
-                      value={(signal.predicate.in ?? []).join(', ')}
-                      onChange={(event) =>
-                        updateMetadata(index, {
-                          predicate: {
-                            in: event.target.value
-                              .split(',')
-                              .map((item) => item.trim())
-                              .filter(Boolean),
-                          },
-                        })
-                      }
-                      placeholder="gold, platinum"
-                    />
-                  </label>
-                ) : null}
-                {predicateType === 'exists' ? (
-                  <label className={styles.checkboxControl}>
-                    <input
-                      type="checkbox"
-                      checked={signal.predicate.exists ?? true}
-                      onChange={(event) =>
-                        updateMetadata(index, {
-                          predicate: { exists: event.target.checked },
-                        })
-                      }
-                    />
-                    <span>Must exist</span>
-                  </label>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className={styles.dangerButton}
-                onClick={() =>
-                  onChange({
-                    ...signals,
-                    metadata: metadata.filter((_, signalIndex) => signalIndex !== index),
-                  })
-                }
-              >
-                Remove metadata signal
-              </button>
-            </article>
-          )
-        })}
-      </div>
-
-      <div className={styles.modelPoolHeader}>
-        <span>Classifier signals</span>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={() =>
-            onChange({
-              ...signals,
-              classifiers: [...classifiers, emptyClassifierSignal()],
-            })
-          }
-        >
-          Add classifier signal
-        </button>
-      </div>
-      <div className={styles.modelPool}>
-        {classifiers.map((signal, index) => (
-          <article key={`${signal.name || 'classifier'}-${index}`} className={styles.decisionCard}>
-            <div className={styles.editorGrid}>
-              <label>
-                <span>Name</span>
-                <input
-                  value={signal.name}
-                  onChange={(event) => updateClassifier(index, { name: event.target.value })}
-                  placeholder="risk_score"
-                />
-              </label>
-              <label>
-                <span>Classifier type</span>
-                <select
-                  value={signal.type}
-                  onChange={(event) => {
-                    const type = event.target.value as ClassifierSignal['type']
-                    updateClassifier(
-                      index,
-                      type === 'local'
-                        ? {
-                            type,
-                            model: undefined,
-                            instructions: undefined,
-                            model_path: signal.model_path ?? '',
-                            use_cpu: signal.use_cpu ?? true,
-                          }
-                        : {
-                            type,
-                            model_path: undefined,
-                            use_cpu: undefined,
-                            model: signal.model ?? '',
-                            instructions: signal.instructions ?? '',
-                          },
-                    )
-                  }}
+      <section className={styles.selectedSignals} aria-labelledby="selected-signals-title">
+        <div className={styles.signalSectionHeading}>
+          <strong id="selected-signals-title">Selected</strong>
+          <span>{selected.length}</span>
+        </div>
+        {selected.length ? (
+          <div className={styles.signalSelectionGrid}>
+            {selected.map((entry) => (
+              <article key={signalKey(entry)} className={styles.signalSelectionCard}>
+                <span>{entry.type}</span>
+                <strong>{entry.name}</strong>
+                <button
+                  type="button"
+                  onClick={() => remove(entry)}
+                  aria-label={`Remove ${entry.name}`}
                 >
-                  <option value="local">Local</option>
-                  <option value="llm">LLM</option>
-                </select>
-              </label>
-              <label>
-                <span>Labels</span>
-                <input
-                  value={signal.labels.join(', ')}
-                  onChange={(event) =>
-                    updateClassifier(index, {
-                      labels: event.target.value
-                        .split(',')
-                        .map((item) => item.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="SAFE, RISKY"
-                />
-              </label>
-              {signal.type === 'local' ? (
-                <>
-                  <label>
-                    <span>Model path</span>
-                    <input
-                      value={signal.model_path ?? ''}
-                      onChange={(event) =>
-                        updateClassifier(index, {
-                          model_path: event.target.value,
-                        })
-                      }
-                      placeholder="models/risk"
-                    />
-                  </label>
-                  <label className={styles.checkboxControl}>
-                    <input
-                      type="checkbox"
-                      checked={signal.use_cpu === true}
-                      onChange={(event) =>
-                        updateClassifier(index, {
-                          use_cpu: event.target.checked,
-                        })
-                      }
-                    />
-                    <span>Use CPU</span>
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label>
-                    <span>External model</span>
-                    <input
-                      value={signal.model ?? ''}
-                      onChange={(event) =>
-                        updateClassifier(index, {
-                          model: event.target.value,
-                        })
-                      }
-                      placeholder="classification-judge"
-                    />
-                  </label>
-                  <label className={styles.fullWidthControl}>
-                    <span>Instructions</span>
-                    <textarea
-                      value={signal.instructions ?? ''}
-                      onChange={(event) =>
-                        updateClassifier(index, {
-                          instructions: event.target.value,
-                        })
-                      }
-                      placeholder="Return one declared label."
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              className={styles.dangerButton}
-              onClick={() =>
-                onChange({
-                  ...signals,
-                  classifiers: classifiers.filter((_, signalIndex) => signalIndex !== index),
-                })
-              }
-            >
-              Remove classifier signal
-            </button>
-          </article>
-        ))}
-      </div>
+                  Remove
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.signalEmpty}>No signals selected yet.</p>
+        )}
+      </section>
+
+      <section className={styles.signalCatalog} aria-labelledby="signal-catalog-title">
+        <div className={styles.signalSectionHeading}>
+          <strong id="signal-catalog-title">Available</strong>
+          <span>{catalogCount}</span>
+        </div>
+        <div className={styles.signalFilters}>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search signals"
+            aria-label="Search signal library"
+          />
+          <select
+            value={family}
+            onChange={(event) => setFamily(event.target.value)}
+            aria-label="Signal type"
+          >
+            <option value="all">All 20 types</option>
+            {RECIPE_SIGNAL_FAMILIES.map((item) => (
+              <option value={item.key} key={item.key}>
+                {item.type}
+              </option>
+            ))}
+          </select>
+        </div>
+        {available.length ? (
+          <div className={styles.signalLibraryList}>
+            {available.map((entry) => (
+              <button type="button" key={signalKey(entry)} onClick={() => add(entry)}>
+                <span>
+                  <strong>{entry.name}</strong>
+                  <small>{entry.type}</small>
+                </span>
+                <b aria-hidden="true">＋</b>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className={styles.signalEmptyState}>
+            <strong>{catalogCount ? 'No matching signals' : 'Your signal library is empty'}</strong>
+            <p>
+              {catalogCount
+                ? 'Try another name or type.'
+                : 'Create a signal once, then reuse it in any recipe.'}
+            </p>
+            {!catalogCount ? <Link to="/config/signals">Create signal</Link> : null}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

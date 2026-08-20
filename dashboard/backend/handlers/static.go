@@ -16,12 +16,18 @@ func StaticFileServer(staticDir string) http.Handler {
 	}
 	fs := http.FileServer(http.Dir(staticDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Never serve index.html for API or embedded proxy routes
-		// These should be handled by their respective handlers
 		p := r.URL.Path
+		// Unknown API paths are absent resources, not upstream failures. Keep
+		// them out of the SPA and return a stable JSON 404 contract.
+		if strings.HasPrefix(p, "/api/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not_found","message":"API route not found"}`))
+			return
+		}
+
 		// Never serve static files for proxy routes
-		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/embedded/") ||
-			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
+		if strings.HasPrefix(p, "/embedded/") || strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
 			strings.HasPrefix(p, "/avatar/") || strings.HasPrefix(p, "/static/") ||
 			p == "/logout" ||
 			strings.HasPrefix(p, "/r/") {

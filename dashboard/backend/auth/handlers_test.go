@@ -277,9 +277,10 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	var payload struct {
 		Token string `json:"token"`
 		User  struct {
-			ID          string   `json:"id"`
-			Role        string   `json:"role"`
-			Permissions []string `json:"permissions"`
+			ID                  string   `json:"id"`
+			Role                string   `json:"role"`
+			InferenceConsumerID string   `json:"inferenceConsumerId"`
+			Permissions         []string `json:"permissions"`
 		} `json:"user"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&payload); err != nil {
@@ -293,6 +294,9 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	}
 	if payload.User.Role != RoleWrite {
 		t.Fatalf("user.role = %q, want %q", payload.User.Role, RoleWrite)
+	}
+	if payload.User.InferenceConsumerID != user.InferenceConsumerID {
+		t.Fatalf("user.inferenceConsumerId = %q, want %q", payload.User.InferenceConsumerID, user.InferenceConsumerID)
 	}
 	if !slices.Contains(payload.User.Permissions, PermConfigDeploy) {
 		t.Fatalf("login response permissions missing %q: %v", PermConfigDeploy, payload.User.Permissions)

@@ -71,13 +71,13 @@ export default function ConfigPageSignalsSection({
   const [deleteError, setDeleteError] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const {
-    applyScopedConfig,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  } = useRoutingScopeManager(config, saveConfig)
   React.useEffect(() => {
     setSelectedSignalKeys(new Set())
     setSignalsPendingDelete([])
@@ -1260,7 +1260,7 @@ export default function ConfigPageSignalsSection({
           throw new Error('Unsupported signal type.')
       }
 
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<AddSignalFormState>(
@@ -1319,7 +1319,7 @@ export default function ConfigPageSignalsSection({
       removeSignalByName(newConfig, signal.type, signal.name),
     )
     try {
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setSelectedSignalKeys(new Set())
       setSignalsPendingDelete([])
     } catch (err) {

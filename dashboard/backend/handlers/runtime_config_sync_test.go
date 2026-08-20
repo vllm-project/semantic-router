@@ -74,6 +74,22 @@ func TestRuntimeOwnedConfigPathDoesNotResyncIntoNestedStateDirectory(t *testing.
 	}
 }
 
+func TestDashboardManagedConfigWithoutOverridesIsAlreadyEffective(t *testing.T) {
+	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "")
+	t.Setenv("VLLM_SR_ALGORITHM_OVERRIDE", "")
+	t.Setenv("VLLM_SR_PLATFORM", "")
+	t.Setenv("DASHBOARD_PLATFORM", "")
+
+	configPath := filepath.Join(t.TempDir(), "mounted-config", "config.yaml")
+	got, err := syncRuntimeConfigForCurrentRuntime(configPath)
+	if err != nil {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() returned error: %v", err)
+	}
+	if got != configPath {
+		t.Fatalf("runtime config path = %q, want active config %q", got, configPath)
+	}
+}
+
 func TestSyncRuntimeConfigLocallyWritesInternalRuntimeConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
@@ -201,7 +217,7 @@ func TestSyncRuntimeConfigInManagedContainerUsesDashboardVenvPythonForSplitRunti
 	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
 	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
 
-	runtimePath, err := syncRuntimeConfigInManagedContainer()
+	runtimePath, err := syncRuntimeConfigInManagedContainer("/app/config/config.yaml")
 	if err != nil {
 		t.Fatalf("syncRuntimeConfigInManagedContainer returned error: %v", err)
 	}
@@ -228,6 +244,9 @@ func TestSyncRuntimeConfigInManagedContainerUsesDashboardVenvPythonForSplitRunti
 	}
 	if args[3] != "-c" {
 		t.Fatalf("python exec flag = %q", args[3])
+	}
+	if !strings.Contains(string(argsData), `Path("/app/config/config.yaml")`) {
+		t.Fatalf("runtime sync script did not use the active dashboard config path: %#v", args)
 	}
 }
 

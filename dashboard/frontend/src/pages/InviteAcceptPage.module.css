@@ -1,0 +1,168 @@
+.inviteStoryTitle {
+  max-width: 10ch;
+  font-size: clamp(2.45rem, 4.2vw, 3.75rem);
+  line-height: 0.98;
+}
+
+.storySlogan {
+  margin: 0.25rem 0 -0.15rem;
+  color: #ffffff;
+  font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+  font-weight: 620;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.invitationForm {
+  justify-content: center;
+  gap: 1.2rem;
+  padding: clamp(1.6rem, 3vw, 2.25rem);
+}
+
+.invitationForm > button[type='submit'] {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 0.15rem;
+}
+
+.invitationTicket {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(124, 168, 255, 0.26);
+  border-radius: 9px;
+  background:
+    linear-gradient(120deg, rgba(88, 136, 255, 0.11), transparent 55%), rgba(0, 0, 0, 0.25);
+  box-shadow: inset 3px 0 0 rgba(112, 165, 255, 0.75);
+}
+
+.ticketTopline,
+.ticketExpiry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ticketTopline > span {
+  color: #dce8ff;
+  font-size: 0.68rem;
+  font-weight: 780;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.ticketTopline > strong {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(118, 214, 155, 0.1);
+  color: #91e9b5;
+  font-size: 0.61rem;
+}
+
+.ticketIdentity {
+  display: grid;
+  gap: 0.22rem;
+}
+.ticketIdentity small,
+.ticketExpiry span {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.61rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ticketIdentity strong {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.ticketIdentity > span {
+  color: rgba(255, 255, 255, 0.53);
+  font-size: 0.7rem;
+}
+.ticketExpiry {
+  padding-top: 0.75rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+.ticketExpiry time {
+  color: rgba(255, 255, 255, 0.68);
+  font-family: var(--font-mono);
+  font-size: 0.63rem;
+}
+
+.prefilled {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.prefilled label {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.prefilled span {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.prefilled strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.76rem;
+  font-weight: 560;
+  text-overflow: ellipsis;
+}
+
+.passwordInput {
+  position: relative;
+}
+
+.passwordInput input {
+  padding-right: 4.2rem;
+}
+.passwordInput button {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 0.85rem;
+  border: 0;
+  background: #090a0c;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.67rem;
+  border-radius: 0 7px 7px 0;
+}
+.passwordHint {
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.63rem;
+}
+.passwordReady {
+  color: #86e4a2;
+}
+
+.backLink {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .inviteStoryTitle {
+    font-size: 2.75rem;
+  }
+}

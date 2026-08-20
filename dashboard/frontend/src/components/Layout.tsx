@@ -6,6 +6,7 @@ import LayoutMegaMenu from './LayoutMegaMenu'
 import LayoutMobileNavigation from './LayoutMobileNavigation'
 import PlatformBranding from './PlatformBranding'
 import {
+  ACCESS_MENU_CATEGORIES,
   ANALYZE_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
   filterLayoutMenuCategories,
@@ -21,7 +22,7 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
+import { canAccessDashboardPath, canAccessMLSetup } from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
@@ -33,14 +34,14 @@ interface LayoutProps {
 }
 
 const DESKTOP_MENU_IDS: Record<LayoutDropdownKey, string> = {
+  access: 'layout-mega-menu-access',
   build: 'layout-mega-menu-build',
-  analyze: 'layout-mega-menu-analyze',
   operate: 'layout-mega-menu-operate',
 }
 
 const DESKTOP_MENU_TRIGGER_IDS: Record<LayoutDropdownKey, string> = {
+  access: 'layout-mega-menu-trigger-access',
   build: 'layout-mega-menu-trigger-build',
-  analyze: 'layout-mega-menu-trigger-analyze',
   operate: 'layout-mega-menu-trigger-operate',
 }
 
@@ -63,40 +64,35 @@ const Layout: React.FC<LayoutProps> = ({
   const { fleetSimEnabled } = useReadonly()
   const location = useLocation()
   const navigate = useNavigate()
-  const canAccessUsers = canViewUsers(user)
   const canUseMLSetup = canAccessMLSetup(user)
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
+  const accessMenuCategories = filterLayoutMenuCategories(ACCESS_MENU_CATEGORIES, canAccessMenuItem)
   const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
-  const analyzeMenuCategories = filterLayoutMenuCategories(
-    ANALYZE_MENU_CATEGORIES,
+  const operateMenuCategories = filterLayoutMenuCategories(
+    [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
     (item, category) =>
       canAccessMenuItem(item) &&
       (fleetSimEnabled || category.key !== 'fleet-simulation') &&
       (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
-  const operateMenuCategories = filterLayoutMenuCategories(
-    OPERATE_MENU_CATEGORIES,
-    (item) =>
-      canAccessMenuItem(item) && (canAccessUsers || item.kind !== 'route' || item.to !== '/users'),
-  )
   const hasWorkflowNavigation =
+    accessMenuCategories.length > 0 ||
     buildMenuCategories.length > 0 ||
-    analyzeMenuCategories.length > 0 ||
     operateMenuCategories.length > 0
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
 
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
-  const isBuildActive = hasActiveLayoutMenuCategory(
-    buildMenuCategories,
+  const isAccessActive = hasActiveLayoutMenuCategory(
+    accessMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
   )
-  const isAnalyzeActive = hasActiveLayoutMenuCategory(
-    analyzeMenuCategories,
+  const isBuildActive = hasActiveLayoutMenuCategory(
+    buildMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
@@ -108,14 +104,14 @@ const Layout: React.FC<LayoutProps> = ({
     configSection,
   )
 
-  const activeBuildCategory = findActiveLayoutMenuCategory(
-    buildMenuCategories,
+  const activeAccessCategory = findActiveLayoutMenuCategory(
+    accessMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
   )
-  const activeAnalyzeCategory = findActiveLayoutMenuCategory(
-    analyzeMenuCategories,
+  const activeBuildCategory = findActiveLayoutMenuCategory(
+    buildMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
@@ -333,8 +329,8 @@ const Layout: React.FC<LayoutProps> = ({
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent} data-testid="layout-header-content">
           <NavLink to="/" className={styles.brand}>
-            <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}>Semantic Router</span>
+            <img src="/vllm.png" alt="" className={styles.logo} />
+            <span className={styles.brandText}>vllm-sr</span>
           </NavLink>
 
           <nav className={styles.nav} aria-label="Global navigation">
@@ -349,18 +345,18 @@ const Layout: React.FC<LayoutProps> = ({
                 aria-label="Workflow navigation"
               >
                 {renderDesktopDropdown(
+                  'access',
+                  'Access',
+                  accessMenuCategories,
+                  isAccessActive,
+                  activeAccessCategory,
+                )}
+                {renderDesktopDropdown(
                   'build',
                   'Build',
                   buildMenuCategories,
                   isBuildActive,
                   activeBuildCategory,
-                )}
-                {renderDesktopDropdown(
-                  'analyze',
-                  'Analyze',
-                  analyzeMenuCategories,
-                  isAnalyzeActive,
-                  activeAnalyzeCategory,
                 )}
                 {renderDesktopDropdown(
                   'operate',
@@ -435,10 +431,10 @@ const Layout: React.FC<LayoutProps> = ({
                   const next = !current
                   setOpenMobileSection(
                     next
-                      ? isBuildActive
-                        ? 'build'
-                        : isAnalyzeActive
-                          ? 'analyze'
+                      ? isAccessActive
+                        ? 'access'
+                        : isBuildActive
+                          ? 'build'
                           : isOperateActive
                             ? 'operate'
                             : null
@@ -484,8 +480,8 @@ const Layout: React.FC<LayoutProps> = ({
             openSection={openMobileSection}
             pathname={location.pathname}
             sections={[
+              { key: 'access', label: 'Access', categories: accessMenuCategories },
               { key: 'build', label: 'Build', categories: buildMenuCategories },
-              { key: 'analyze', label: 'Analyze', categories: analyzeMenuCategories },
               { key: 'operate', label: 'Operate', categories: operateMenuCategories },
             ]}
             onConfigSelect={handleMenuItemSelect}

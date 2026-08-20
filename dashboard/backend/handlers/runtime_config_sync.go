@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	legacyManagedContainerConfigPath = "/app/config.yaml"
-	dashboardVenvPythonPath          = "/opt/vllm-sr-dashboard-venv/bin/python3"
+	defaultManagedContainerConfigPath = "/app/config.yaml"
+	dashboardVenvPythonPath           = "/opt/vllm-sr-dashboard-venv/bin/python3"
 )
 
 func configuredRuntimeConfigPath(configPath string) string {
@@ -26,12 +26,22 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 	if isExplicitRuntimeConfigPath(configPath) {
 		return filepath.Clean(configPath), nil
 	}
-	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
+	// A Dashboard-managed config without runtime overrides is already the
+	// effective config. Materializing it again would create a second private
+	// state tree beside an arbitrary bind mount and, in a split deployment,
+	// can also target the wrong container-local path.
+	if !hasRuntimeOverrideEnv() {
+		return filepath.Clean(configPath), nil
+	}
+	// The Dashboard image includes the canonical CLI and owns configPath. Run
+	// the sync in-process so it inherits the entrypoint's private state root;
+	// docker-exec is reserved for a Dashboard backend running on the host.
+	if isRunningInContainer() {
 		return syncRuntimeConfigLocally(configPath)
 	}
 
 	if getDockerContainerStatus(managedRuntimeSyncContainerName()) == "running" {
-		return syncRuntimeConfigInManagedContainer()
+		return syncRuntimeConfigInManagedContainer(configPath)
 	}
 
 	return filepath.Clean(configPath), nil
@@ -69,13 +79,17 @@ func isExplicitRuntimeConfigPath(configPath string) bool {
 	return runtimePath != "" && filepath.Clean(configPath) == filepath.Clean(runtimePath)
 }
 
-func syncRuntimeConfigInManagedContainer() (string, error) {
+func syncRuntimeConfigInManagedContainer(sourceConfigPath ...string) (string, error) {
 	containerName := managedRuntimeSyncContainerName()
 	pythonBinary := "python3"
 	if managedRuntimeUsesSplitContainers() {
 		pythonBinary = dashboardVenvPythonPath
 	}
-	managedConfigPath := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
+	configPath := defaultManagedContainerConfigPath
+	if len(sourceConfigPath) > 0 && strings.TrimSpace(sourceConfigPath[0]) != "" {
+		configPath = filepath.Clean(sourceConfigPath[0])
+	}
+	managedConfigPath := configuredRuntimeConfigPath(configPath)
 	output, err := execInManagedContainer(
 		containerName,
 		30*time.Second,

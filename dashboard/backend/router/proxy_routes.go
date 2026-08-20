@@ -329,7 +329,8 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 
 		log.Printf("No handler available for: %s", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"not_found","message":"API route not found"}`))
 	})
 }
 

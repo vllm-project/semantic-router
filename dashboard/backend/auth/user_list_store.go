@@ -74,7 +74,7 @@ func (s *Store) ListUsers(ctx context.Context, options UserListOptions) ([]*User
 	where, args := userListPredicate(options)
 	// #nosec G202 -- Sort and Order are replaced by fixed allowlisted SQL tokens in
 	// normalizeUserListOptions; user-provided text only reaches bound parameters.
-	query := `SELECT id, email, name, role, status, created_at, updated_at, last_login_at FROM users` +
+	query := `SELECT id, email, name, role, status, created_at, updated_at, last_login_at, inference_consumer_id FROM users` +
 		where + fmt.Sprintf(" ORDER BY %s %s LIMIT ? OFFSET ?", options.Sort, options.Order)
 	args = append(args, options.Limit, options.Offset)
 

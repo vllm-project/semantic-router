@@ -5,7 +5,8 @@ import TableHeader from '../components/TableHeader'
 import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
 import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
-import { TABLE_COLUMN_WIDTH, type NormalizedModel } from './configPageSupport'
+import ModelProviderLogo from './ModelProviderLogo'
+import type { NormalizedModel } from './configPageSupport'
 import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
   modelLiveVerificationState,
@@ -87,27 +88,34 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'name',
       header: 'Model Name',
+      width: '320px',
       sortable: true,
       render: (row) => (
-        <div className={styles.modelIdentity}>
-          <div className={styles.modelIdentityPrimary}>
-            <span className={styles.modelName} title={row.name}>
-              {row.name}
+        <div className={styles.modelIdentityWithLogo}>
+          <ModelProviderLogo
+            provider={row.backend_refs?.[0]?.type || row.backend_refs?.[0]?.provider}
+            size="small"
+          />
+          <div className={styles.modelIdentity}>
+            <div className={styles.modelIdentityPrimary}>
+              <span className={styles.modelName} title={row.name}>
+                {row.name}
+              </span>
+              {row.name === defaultModel ? (
+                <span className={styles.defaultBadge}>Default</span>
+              ) : null}
+            </div>
+            <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
+              {row.provider_model_id || row.name}
             </span>
-            {row.name === defaultModel ? (
-              <span className={styles.defaultBadge}>Default</span>
-            ) : null}
           </div>
-          <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
-            {row.provider_model_id || row.name}
-          </span>
         </div>
       ),
     },
     {
       key: 'references',
       header: 'Routing Use',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '124px',
       align: 'center',
       render: (row) => {
         const references = modelReferenceCounts.get(row.name) ?? 0
@@ -123,7 +131,7 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'reasoning_family',
       header: 'Reasoning Family',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '150px',
       sortable: true,
       render: (row) =>
         row.reasoning_family ? (
@@ -135,7 +143,7 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'endpoints',
       header: 'Endpoints',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '108px',
       align: 'center',
       render: (row) => {
         const count = row.endpoints?.length || 0
@@ -148,8 +156,8 @@ export default function ConfigPageModelInventoryPanel({
     },
     {
       key: 'live_verification',
-      header: 'Live Verification',
-      width: '240px',
+      header: 'Live',
+      width: '112px',
       render: (row) => (
         <ConfigPageModelLiveVerification
           model={row.name}
@@ -163,13 +171,19 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'pricing',
       header: 'Pricing',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '140px',
       render: (row) => {
         if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
         const currency = row.pricing.currency || 'USD'
         const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
         return (
-          <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+          <span
+            style={{
+              fontSize: '0.875rem',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {prompt} {currency}/1M
           </span>
         )
@@ -186,7 +200,7 @@ export default function ConfigPageModelInventoryPanel({
         searchValue={modelsSearch}
         onSearchChange={onModelsSearchChange}
         onAdd={onAddModel}
-        addButtonText="Add Model"
+        addButtonText="Add model"
         disabled={isReadonly}
         variant="embedded"
       />

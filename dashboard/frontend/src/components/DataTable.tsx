@@ -196,6 +196,14 @@ export function DataTable<T>({
     <div className={`${styles.tableContainer} ${className}`}>
       <div className={styles.tableViewport}>
         <table className={styles.table}>
+          <colgroup>
+            {selection ? <col className={styles.selectionColumn} /> : null}
+            {expandable ? <col className={styles.expandColumn} /> : null}
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            {hasActions ? <col className={styles.actionsColumnWidth} /> : null}
+          </colgroup>
           <thead className={styles.thead}>
             <tr>
               {selection ? (

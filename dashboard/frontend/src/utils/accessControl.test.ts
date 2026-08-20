@@ -4,10 +4,10 @@ import {
   canAccessMLSetup,
   canAccessDashboardPath,
   canAccessReplayFlowDetails,
+  canManageInferenceAccess,
   canDeployConfig,
   canManageMCP,
   canManageOpenClaw,
-  canManageSecurity,
   canManageUsers,
   canRunEvaluation,
   canViewUsers,
@@ -71,6 +71,8 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['access.read'] }, '/access/api-keys')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/access/api-keys')).toBe(false)
   })
 
   it('separates read, write, run, and manage actions', () => {
@@ -83,8 +85,8 @@ describe('config write access', () => {
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
-    expect(canManageSecurity({ role: 'write' })).toBe(false)
-    expect(canManageSecurity({ role: 'admin' })).toBe(true)
+    expect(canManageInferenceAccess({ permissions: ['access.manage'] })).toBe(true)
+    expect(canManageInferenceAccess({ permissions: ['access.read'] })).toBe(false)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {

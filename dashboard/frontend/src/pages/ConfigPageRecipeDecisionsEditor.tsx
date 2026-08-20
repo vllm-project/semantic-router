@@ -1,28 +1,19 @@
-import type {
-  DecisionCondition,
-  DecisionConfig,
-  DecisionModelRef,
-  NormalizedModel,
-} from './configPageSupport'
+import { useState } from 'react'
+import type { DecisionCondition, DecisionConfig } from './configPageSupport'
 import styles from './ConfigPageEntrypointsRecipesSection.module.css'
 
 interface ConfigPageRecipeDecisionsEditorProps {
   value: DecisionConfig[]
-  models: NormalizedModel[]
+  catalog?: DecisionConfig[]
   onChange: (value: DecisionConfig[]) => void
 }
-
-const emptyReference = (): DecisionModelRef => ({
-  model: '',
-  use_reasoning: false,
-})
 
 const emptyDecision = (): DecisionConfig => ({
   name: '',
   description: '',
   priority: 100,
   rules: { operator: 'AND', conditions: [] },
-  modelRefs: [emptyReference()],
+  modelRefs: [],
 })
 
 const emptyCondition = (): DecisionCondition => ({
@@ -56,45 +47,16 @@ const conditionTypes = [
 
 export default function ConfigPageRecipeDecisionsEditor({
   value,
-  models,
+  catalog = [],
   onChange,
 }: ConfigPageRecipeDecisionsEditorProps) {
   const rows = Array.isArray(value) ? value : []
-  const modelOptions = models.flatMap((model) => [
-    model.name,
-    ...(model.loras ?? []).map((adapter) => adapter.name),
-  ])
+  const [reuseName, setReuseName] = useState('')
 
   const updateDecision = (index: number, patch: Partial<DecisionConfig>) => {
     onChange(
       rows.map((decision, rowIndex) => (rowIndex === index ? { ...decision, ...patch } : decision)),
     )
-  }
-
-  const updateReference = (
-    decisionIndex: number,
-    referenceIndex: number,
-    patch: Partial<DecisionModelRef>,
-  ) => {
-    const decision = rows[decisionIndex]
-    const modelRefs = (decision.modelRefs ?? []).map((reference, rowIndex) =>
-      rowIndex === referenceIndex ? { ...reference, ...patch } : reference,
-    )
-    updateDecision(decisionIndex, { modelRefs })
-  }
-
-  const addReference = (decisionIndex: number) => {
-    const decision = rows[decisionIndex]
-    updateDecision(decisionIndex, {
-      modelRefs: [...(decision.modelRefs ?? []), emptyReference()],
-    })
-  }
-
-  const removeReference = (decisionIndex: number, referenceIndex: number) => {
-    const decision = rows[decisionIndex]
-    updateDecision(decisionIndex, {
-      modelRefs: (decision.modelRefs ?? []).filter((_, index) => index !== referenceIndex),
-    })
   }
 
   const updateCondition = (
@@ -129,8 +91,35 @@ export default function ConfigPageRecipeDecisionsEditor({
   return (
     <div className={styles.decisionEditor}>
       <p className={styles.editorHint}>
-        Model allocation is editable here. Existing rules, algorithms, and plugins are preserved.
+        Reuse or compose a decision. Models are assigned when you create a model.
       </p>
+      {catalog.length ? (
+        <div className={styles.modelPoolHeader}>
+          <label>
+            <span>Reuse decision</span>
+            <select value={reuseName} onChange={(event) => setReuseName(event.target.value)}>
+              <option value="">Choose from your library</option>
+              {catalog.map((decision) => (
+                <option key={decision.name} value={decision.name}>
+                  {decision.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            disabled={!reuseName}
+            onClick={() => {
+              const source = catalog.find((decision) => decision.name === reuseName)
+              if (source) onChange([...rows, JSON.parse(JSON.stringify(source)) as DecisionConfig])
+              setReuseName('')
+            }}
+          >
+            Add to recipe
+          </button>
+        </div>
+      ) : null}
       {rows.map((decision, decisionIndex) => (
         <article key={decisionIndex} className={styles.decisionCard}>
           <div className={styles.decisionCardHeader}>
@@ -180,6 +169,11 @@ export default function ConfigPageRecipeDecisionsEditor({
               placeholder="Explain the policy outcome for this route"
             />
           </label>
+
+          <DecisionExecutionEditor
+            decision={decision}
+            onChange={(patch) => updateDecision(decisionIndex, patch)}
+          />
 
           <div className={styles.modelPoolHeader}>
             <span>Policy conditions</span>
@@ -328,111 +322,6 @@ export default function ConfigPageRecipeDecisionsEditor({
               )
             })}
           </div>
-
-          <div className={styles.modelPoolHeader}>
-            <span>Target model pool</span>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => addReference(decisionIndex)}
-            >
-              Add model
-            </button>
-          </div>
-
-          <div className={styles.modelPool}>
-            {(decision.modelRefs ?? []).map((reference, referenceIndex) => (
-              <div
-                key={`${reference.model || 'model'}-${referenceIndex}`}
-                className={styles.modelReferenceCard}
-              >
-                <label>
-                  <span>Model</span>
-                  <select
-                    value={reference.model ?? ''}
-                    onChange={(event) =>
-                      updateReference(decisionIndex, referenceIndex, {
-                        model: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">Select model</option>
-                    {reference.model && !modelOptions.includes(reference.model) ? (
-                      <option value={reference.model}>{reference.model}</option>
-                    ) : null}
-                    {modelOptions.map((modelName) => (
-                      <option key={modelName} value={modelName}>
-                        {modelName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Reasoning effort</span>
-                  <select
-                    value={reference.reasoning_effort ?? ''}
-                    onChange={(event) =>
-                      updateReference(decisionIndex, referenceIndex, {
-                        reasoning_effort: event.target.value || undefined,
-                      })
-                    }
-                  >
-                    <option value="">Default</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-                <label>
-                  <span>LoRA adapter</span>
-                  <input
-                    value={reference.lora_name ?? ''}
-                    onChange={(event) =>
-                      updateReference(decisionIndex, referenceIndex, {
-                        lora_name: event.target.value || undefined,
-                      })
-                    }
-                    placeholder="Optional"
-                  />
-                </label>
-                <label>
-                  <span>Weight</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={reference.weight ?? ''}
-                    onChange={(event) =>
-                      updateReference(decisionIndex, referenceIndex, {
-                        weight: event.target.value === '' ? undefined : Number(event.target.value),
-                      })
-                    }
-                    placeholder="Optional"
-                  />
-                </label>
-                <label className={styles.checkboxControl}>
-                  <input
-                    type="checkbox"
-                    checked={reference.use_reasoning === true}
-                    onChange={(event) =>
-                      updateReference(decisionIndex, referenceIndex, {
-                        use_reasoning: event.target.checked,
-                      })
-                    }
-                  />
-                  <span>Use reasoning</span>
-                </label>
-                <button
-                  type="button"
-                  className={styles.iconDangerButton}
-                  aria-label={`Remove model reference ${referenceIndex + 1}`}
-                  onClick={() => removeReference(decisionIndex, referenceIndex)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
         </article>
       ))}
       <button
@@ -440,8 +329,122 @@ export default function ConfigPageRecipeDecisionsEditor({
         className={styles.addDecisionButton}
         onClick={() => onChange([...rows, emptyDecision()])}
       >
-        Add recipe decision
+        Add decision
       </button>
     </div>
+  )
+}
+
+const ALGORITHM_TYPES = [
+  'static',
+  'multi_factor',
+  'latency_aware',
+  'confidence',
+  'ratings',
+  'fusion',
+  'remom',
+  'workflows',
+]
+
+function DecisionExecutionEditor({
+  decision,
+  onChange,
+}: {
+  decision: DecisionConfig
+  onChange: (patch: Partial<DecisionConfig>) => void
+}) {
+  const algorithmType =
+    typeof decision.algorithm?.type === 'string' ? decision.algorithm.type : 'static'
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [algorithmJSON, setAlgorithmJSON] = useState(() =>
+    JSON.stringify(decision.algorithm ?? { type: 'static' }, null, 2),
+  )
+  const [pluginsJSON, setPluginsJSON] = useState(() =>
+    JSON.stringify(decision.plugins ?? [], null, 2),
+  )
+  const [iterationsJSON, setIterationsJSON] = useState(() =>
+    JSON.stringify(decision.candidateIterations ?? [], null, 2),
+  )
+  const [error, setError] = useState('')
+  const commit = () => {
+    try {
+      const algorithm = JSON.parse(algorithmJSON) as Record<string, unknown>
+      const plugins = JSON.parse(pluginsJSON) as DecisionConfig['plugins']
+      const candidateIterations = JSON.parse(iterationsJSON) as unknown
+      onChange({ algorithm, plugins, candidateIterations })
+      setError('')
+    } catch {
+      setError('Execution options must be valid JSON.')
+    }
+  }
+  return (
+    <section className={styles.modelPool}>
+      <div className={styles.editorGrid}>
+        <label>
+          <span>Algorithm</span>
+          <select
+            value={algorithmType}
+            onChange={(event) => {
+              const type = event.target.value
+              const next = type === 'static' ? { type } : { type, [type]: {} }
+              setAlgorithmJSON(JSON.stringify(next, null, 2))
+              onChange({ algorithm: next })
+            }}
+          >
+            {ALGORITHM_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={() => setDetailsOpen((value) => !value)}
+        >
+          {detailsOpen ? 'Hide execution options' : 'Configure execution'}
+        </button>
+      </div>
+      {detailsOpen ? (
+        <div className={styles.editorGrid}>
+          {error ? (
+            <p className={styles.editorHint} role="alert">
+              {error}
+            </p>
+          ) : null}
+          <label className={styles.fullWidthControl}>
+            <span>Algorithm configuration</span>
+            <textarea
+              rows={7}
+              value={algorithmJSON}
+              onChange={(event) => setAlgorithmJSON(event.target.value)}
+              onBlur={commit}
+              spellCheck={false}
+            />
+          </label>
+          <label className={styles.fullWidthControl}>
+            <span>Plugins</span>
+            <textarea
+              rows={7}
+              value={pluginsJSON}
+              onChange={(event) => setPluginsJSON(event.target.value)}
+              onBlur={commit}
+              spellCheck={false}
+            />
+          </label>
+          <label className={styles.fullWidthControl}>
+            <span>Candidate iterations</span>
+            <textarea
+              rows={7}
+              value={iterationsJSON}
+              onChange={(event) => setIterationsJSON(event.target.value)}
+              onBlur={commit}
+              spellCheck={false}
+            />
+          </label>
+        </div>
+      ) : null}
+    </section>
   )
 }

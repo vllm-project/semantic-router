@@ -1,7 +1,14 @@
 .modelIdentity {
   display: grid;
-  min-width: 220px;
+  min-width: 0;
   gap: 0.32rem;
+}
+
+.modelIdentityWithLogo {
+  display: flex;
+  min-width: 260px;
+  align-items: center;
+  gap: 12px;
 }
 
 .modelIdentityPrimary {
@@ -64,9 +71,10 @@
 }
 
 .liveVerification {
-  display: grid;
-  min-width: 210px;
-  gap: 0.34rem;
+  display: flex;
+  align-items: center;
+  min-width: 108px;
+  gap: 0.5rem;
 }
 
 .liveVerificationHeading {
@@ -148,8 +156,9 @@
 
 .liveVerificationButton {
   width: fit-content;
-  min-height: 28px;
-  padding: 0.28rem 0.58rem;
+  min-width: 28px;
+  min-height: 26px;
+  padding: 0.22rem 0.46rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.045);

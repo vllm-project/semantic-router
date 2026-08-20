@@ -1,11 +1,8 @@
 import React, { useId } from 'react'
 import { createPortal } from 'react-dom'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import {
-  formatAccountRole,
-  getAccountInitials,
-  groupAccountPermissions,
-} from './LayoutAccountControlSupport'
+import { formatAccountRole, getAccountInitials } from './LayoutAccountControlSupport'
+import PermissionList from './PermissionList'
 import styles from './LayoutAccountControl.module.css'
 
 interface LayoutAccountControlProps {
@@ -33,11 +30,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
 }) => {
   const initials = getAccountInitials(accountName, accountEmail)
   const roleLabel = formatAccountRole(accountRole)
-  const permissionGroups = groupAccountPermissions(accountPermissions)
-  const permissionCount = permissionGroups.reduce(
-    (count, group) => count + group.permissions.length,
-    0,
-  )
+  const permissionCount = new Set(accountPermissions).size
   const dialogId = useId()
   const dialogTitleId = `${dialogId}-title`
   const dialogDescriptionId = `${dialogId}-description`
@@ -143,26 +136,11 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
                       <span>Session permissions</span>
                       <span className={styles.permissionCount}>{permissionCount}</span>
                     </div>
-                    {permissionGroups.length > 0 ? (
-                      <div className={styles.permissionGroups}>
-                        {permissionGroups.map((group) => (
-                          <div key={group.key} className={styles.permissionGroup}>
-                            <h3>{group.label}</h3>
-                            <ul className={styles.permissionList}>
-                              {group.permissions.map((permission) => (
-                                <li key={permission} className={styles.permissionPill}>
-                                  {permission}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className={styles.emptyState}>
-                        No explicit permissions returned for this session.
-                      </p>
-                    )}
+                    <PermissionList
+                      permissions={accountPermissions}
+                      emptyMessage="No explicit permissions returned for this session."
+                      compact
+                    />
                   </section>
                 </div>
 

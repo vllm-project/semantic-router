@@ -64,24 +64,25 @@ export default function ConfigPageProjectionsSection({
   openViewModal,
 }: ConfigPageProjectionsSectionProps) {
   const [search, setSearch] = useState('')
-  const [projectionPendingDelete, setProjectionPendingDelete] = useState<ProjectionDeleteTarget | null>(null)
+  const [projectionPendingDelete, setProjectionPendingDelete] =
+    useState<ProjectionDeleteTarget | null>(null)
   const [projectionDeletePending, setProjectionDeletePending] = useState(false)
   const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
   const {
-    applyScopedConfig,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  } = useRoutingScopeManager(config, saveConfig)
   useEffect(() => {
     setProjectionPendingDelete(null)
     setProjectionDeleteError(null)
   }, [selectedScopeId])
   const projections = useMemo<ConfigProjections>(
     () => scopedConfig?.projections || EMPTY_PROJECTIONS,
-    [scopedConfig?.projections]
+    [scopedConfig?.projections],
   )
   const partitions = projections.partitions || EMPTY_PARTITIONS
   const scores = projections.scores || EMPTY_SCORES
@@ -94,9 +95,9 @@ export default function ConfigPageProjectionsSection({
         [partition.name, partition.semantics, partition.default || '', ...(partition.members || [])]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [partitions, search]
+    [partitions, search],
   )
 
   const filteredScores = useMemo(
@@ -105,13 +106,17 @@ export default function ConfigPageProjectionsSection({
         [
           score.name,
           score.method,
-          ...(score.inputs || []).flatMap((input) => [input.type, input.name, input.value_source || '']),
+          ...(score.inputs || []).flatMap((input) => [
+            input.type,
+            input.name,
+            input.value_source || '',
+          ]),
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [scores, search]
+    [scores, search],
   )
 
   const filteredMappings = useMemo(
@@ -126,9 +131,9 @@ export default function ConfigPageProjectionsSection({
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [mappings, search]
+    [mappings, search],
   )
 
   const partitionFields: FieldConfig<ProjectionPartitionFormState>[] = [
@@ -179,8 +184,7 @@ export default function ConfigPageProjectionsSection({
       label: 'Inputs',
       type: 'custom',
       required: true,
-      description:
-        'Weighted signal, knowledge-base metric, or earlier projection contributions.',
+      description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
       customRender: (value, onChange) => (
         <ProjectionInputsEditor value={value} onChange={onChange} />
       ),
@@ -229,7 +233,7 @@ export default function ConfigPageProjectionsSection({
     if (!scopedConfig) return
     const next = cloneConfigData(scopedConfig)
     mutate(next)
-    await saveConfig(applyScopedConfig(next))
+    await saveScopedConfig(next)
   }
 
   const handleAddPartition = () => {
@@ -260,7 +264,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.partitions = [...projectionConfig.partitions!, nextPartition]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -290,10 +294,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.partitions = cloneProjections(next).partitions?.map((entry) =>
-            entry.name === partition.name ? nextPartition : entry
+            entry.name === partition.name ? nextPartition : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -319,7 +323,9 @@ export default function ConfigPageProjectionsSection({
         ],
       },
     ]
-    openViewModal(`Projection Partition: ${partition.name}`, sections, () => handleEditPartition(partition))
+    openViewModal(`Projection Partition: ${partition.name}`, sections, () =>
+      handleEditPartition(partition),
+    )
   }
 
   const handleAddScore = () => {
@@ -344,7 +350,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.scores = [...projectionConfig.scores!, nextScore]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -368,10 +374,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.scores = cloneProjections(next).scores?.map((entry) =>
-            entry.name === score.name ? nextScore : entry
+            entry.name === score.name ? nextScore : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -427,7 +433,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.mappings = [...projectionConfig.mappings!, nextMapping]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -458,10 +464,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.mappings = cloneProjections(next).mappings?.map((entry) =>
-            entry.name === mapping.name ? nextMapping : entry
+            entry.name === mapping.name ? nextMapping : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -485,7 +491,9 @@ export default function ConfigPageProjectionsSection({
         const projectionConfig = ensureProjectionConfig(next)
         const cloned = cloneProjections(next)
         if (target.kind === 'partition') {
-          projectionConfig.partitions = cloned.partitions?.filter((entry) => entry.name !== target.name)
+          projectionConfig.partitions = cloned.partitions?.filter(
+            (entry) => entry.name !== target.name,
+          )
         } else if (target.kind === 'score') {
           projectionConfig.scores = cloned.scores?.filter((entry) => entry.name !== target.name)
         } else {
@@ -494,7 +502,9 @@ export default function ConfigPageProjectionsSection({
       })
       setProjectionPendingDelete(null)
     } catch (error) {
-      setProjectionDeleteError(error instanceof Error ? error.message : 'Failed to delete projection.')
+      setProjectionDeleteError(
+        error instanceof Error ? error.message : 'Failed to delete projection.',
+      )
     } finally {
       setProjectionDeletePending(false)
     }
@@ -510,9 +520,11 @@ export default function ConfigPageProjectionsSection({
           { label: 'Method', value: mapping.method },
           {
             label: 'Calibration',
-            value: mapping.calibration
-              ? <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
-              : 'N/A',
+            value: mapping.calibration ? (
+              <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
+            ) : (
+              'N/A'
+            ),
             fullWidth: true,
           },
           {
@@ -577,7 +589,11 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) => row.inputs?.map((input) => `${input.type}:${input.name}`).slice(0, 3).join(', ') || 'N/A',
+      render: (row) =>
+        row.inputs
+          ?.map((input) => `${input.type}:${input.name}`)
+          .slice(0, 3)
+          .join(', ') || 'N/A',
     },
   ]
 
@@ -639,10 +655,11 @@ export default function ConfigPageProjectionsSection({
             color: 'var(--color-text-secondary)',
           }}
         >
-          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router replay is on,
-          each Insights record can include a structured{' '}
-          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and winners, score
-          contributions, mapping confidence and boundary distance, per-output threshold steps). See{' '}
+          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router
+          replay is on, each Insights record can include a structured{' '}
+          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and
+          winners, score contributions, mapping confidence and boundary distance, per-output
+          threshold steps). See{' '}
           <a
             href="https://vllm-sr.ai/docs/tutorials/projection/traces"
             target="_blank"
@@ -750,7 +767,9 @@ export default function ConfigPageProjectionsSection({
         eyebrow="Destructive configuration change"
         confirmLabel={`Delete ${projectionPendingDelete?.kind || 'projection'}`}
         pending={projectionDeletePending}
-        details={projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined}
+        details={
+          projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined
+        }
         onCancel={() => {
           if (projectionDeletePending) return
           setProjectionPendingDelete(null)

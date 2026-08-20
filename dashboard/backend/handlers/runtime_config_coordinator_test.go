@@ -11,8 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
+	"time"
 )
 
 func TestOrdinaryRuntimeMutationRejectsAnyManagedMarkerWithoutMutation(t *testing.T) {
@@ -60,6 +59,27 @@ func TestRuntimeMutationCrossProcessLockIsNonBlocking(t *testing.T) {
 		}
 		t.Fatalf("second lock error = %v", err)
 	}
+}
+
+func TestRuntimeMutationCrossProcessLockWaitsForReplica(t *testing.T) {
+	storeDir := t.TempDir()
+	first, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	if err != nil || !exists {
+		t.Fatalf("first lock = %#v, %v", first, err)
+	}
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		_ = first.close()
+		close(released)
+	}()
+
+	second, exists, err := acquireRuntimeConfigStoreLockWithin(storeDir, 500*time.Millisecond)
+	if err != nil || !exists || second == nil {
+		t.Fatalf("second lock = %#v, exists=%t, err=%v", second, exists, err)
+	}
+	_ = second.close()
+	<-released
 }
 
 func TestRuntimeMutationLockPreservesSharedGroupAccess(t *testing.T) {
@@ -181,7 +201,7 @@ func TestManagedMarkerGuardsAllOrdinaryRuntimeWriters(t *testing.T) {
 	}
 }
 
-func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
+func TestManagedMarkerGuardsSetupActivation(t *testing.T) {
 	root := t.TempDir()
 	storeDir := filepath.Join(root, "recipe-store")
 	if err := os.Mkdir(storeDir, 0o700); err != nil {
@@ -198,19 +218,9 @@ func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	SetupActivateHandler(setupPath, false, root, setupmode.New(setupPath, false))(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
+	SetupActivateHandler(setupPath, false, root)(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
 	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
 		t.Fatalf("setup response=%d body=%s", response.Code, response.Body.String())
-	}
-
-	configPath := createValidTestConfig(t, root)
-	previousPath, previousDir := securityPolicyConfigPath, securityPolicyConfigDir
-	SetSecurityPolicyConfigPaths(configPath, root)
-	t.Cleanup(func() { SetSecurityPolicyConfigPaths(previousPath, previousDir) })
-	response = httptest.NewRecorder()
-	HandleUpdateSecurityPolicy(response, httptest.NewRequest(http.MethodPut, "/api/security/policy", bytes.NewBufferString(`{"role_mappings":[],"rate_tiers":[]}`)))
-	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
-		t.Fatalf("security response=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

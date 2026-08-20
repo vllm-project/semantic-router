@@ -93,6 +93,53 @@ func TestModelVerificationHandlerRunsDirectOpenAIInference(t *testing.T) {
 	}
 }
 
+func TestModelVerificationHandlerAcceptsReasoningOnlyGeneration(t *testing.T) {
+	t.Parallel()
+
+	const privateReasoning = "Internal reasoning proves the model generated tokens."
+	client := modelVerificationRoundTripper(func(*http.Request) (*http.Response, error) {
+		return modelVerificationHTTPResponse(
+			http.StatusOK,
+			`{"choices":[{"message":{"content":null,"reasoning_content":"`+privateReasoning+`"},"finish_reason":"length"}]}`,
+		), nil
+	})
+	config := modelVerificationTestConfig(t, "https://provider.example", "openai", "")
+	handler := newModelVerificationHandler("active-config.yaml", modelVerificationOptions{
+		client:     client,
+		loadConfig: func(string) (*routerconfig.RouterConfig, error) { return config, nil },
+	})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(
+		response,
+		httptest.NewRequest(http.MethodPost, modelVerificationPath, strings.NewReader(`{"model":"logical-model"}`)),
+	)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), modelVerificationReasoningSummary) {
+		t.Fatalf("reasoning evidence missing from response: %s", response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), privateReasoning) {
+		t.Fatalf("private reasoning escaped verification evidence: %s", response.Body.String())
+	}
+}
+
+func TestDecodeModelVerificationContentChecksEveryOpenAIChoice(t *testing.T) {
+	t.Parallel()
+
+	content, err := decodeModelVerificationContent(
+		[]byte(`{"choices":[{"message":{"content":null}},{"message":{"content":"OK from second choice"}}]}`),
+		"vllm",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != "OK from second choice" {
+		t.Fatalf("content = %q", content)
+	}
+}
+
 func TestModelVerificationHandlerRunsAnthropicInference(t *testing.T) {
 	t.Parallel()
 
@@ -290,7 +337,10 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 	t.Parallel()
 
 	config := &routerconfig.RouterConfig{BackendModels: routerconfig.BackendModels{
-		ModelConfig: map[string]routerconfig.ModelParams{"metadata-only": {}},
+		ModelConfig: map[string]routerconfig.ModelParams{
+			"metadata-only":  {},
+			"metadata-other": {},
+		},
 	}}
 	now := time.Date(2026, 8, 15, 5, 6, 7, 0, time.UTC)
 	auditor := &modelVerificationTestAuditor{}
@@ -300,31 +350,37 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 		now:        func() time.Time { return now },
 	})
 
-	requestForUser := func(userID string) *http.Request {
-		request := httptest.NewRequest(http.MethodPost, modelVerificationPath, strings.NewReader(`{"model":"metadata-only"}`))
+	requestForUserModel := func(userID, model string) *http.Request {
+		request := httptest.NewRequest(http.MethodPost, modelVerificationPath, strings.NewReader(`{"model":"`+model+`"}`))
 		return request.WithContext(dashboardauth.WithAuthContext(request.Context(), dashboardauth.AuthContext{UserID: userID}))
 	}
 	for attempt := 0; attempt < modelVerificationRateLimitCount; attempt++ {
 		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, requestForUser("user-a"))
+		handler.ServeHTTP(response, requestForUserModel("user-a", "metadata-only"))
 		if response.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("attempt %d status = %d, body = %s", attempt+1, response.Code, response.Body.String())
 		}
 	}
 	now = now.Add(100 * time.Millisecond)
 	rateLimited := httptest.NewRecorder()
-	handler.ServeHTTP(rateLimited, requestForUser("user-a"))
+	handler.ServeHTTP(rateLimited, requestForUserModel("user-a", "metadata-only"))
 	if rateLimited.Code != http.StatusTooManyRequests || rateLimited.Header().Get("Retry-After") != "60" {
 		t.Fatalf("rate-limited status = %d, Retry-After = %q, body = %s", rateLimited.Code, rateLimited.Header().Get("Retry-After"), rateLimited.Body.String())
 	}
 
+	otherModel := httptest.NewRecorder()
+	handler.ServeHTTP(otherModel, requestForUserModel("user-a", "metadata-other"))
+	if otherModel.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("other model status = %d, body = %s", otherModel.Code, otherModel.Body.String())
+	}
+
 	otherUser := httptest.NewRecorder()
-	handler.ServeHTTP(otherUser, requestForUser("user-b"))
+	handler.ServeHTTP(otherUser, requestForUserModel("user-b", "metadata-only"))
 	if otherUser.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("other user status = %d, body = %s", otherUser.Code, otherUser.Body.String())
 	}
 	entries := auditor.Entries()
-	if len(entries) != modelVerificationRateLimitCount+2 {
+	if len(entries) != modelVerificationRateLimitCount+3 {
 		t.Fatalf("audit entries = %d", len(entries))
 	}
 	lastRateLimited := entries[modelVerificationRateLimitCount]

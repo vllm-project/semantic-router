@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'build' | 'analyze' | 'operate'
+export type LayoutDropdownKey = 'access' | 'build' | 'operate'
 
 export type LayoutConfigSection =
   | 'models'
@@ -51,6 +51,70 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', to: '/playground' },
 ]
 
+export const ACCESS_MENU_CATEGORIES: LayoutMenuCategory[] = [
+  {
+    key: 'credentials',
+    label: 'Credentials',
+    description: 'Issue and manage credentials for model access.',
+    sections: [
+      {
+        title: 'Credentials',
+        description: 'Keys and live access posture.',
+        items: [
+          { kind: 'route', label: 'Statistics', to: '/access/statistics' },
+          { kind: 'route', label: 'API Keys', to: '/access/api-keys' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'identity',
+    label: 'Identity',
+    description: 'People, invitations, teams, and ownership.',
+    sections: [
+      {
+        title: 'Identity',
+        description: 'Connect Dashboard members to model identities.',
+        items: [
+          { kind: 'route', label: 'Users', to: '/access/users' },
+          { kind: 'route', label: 'Teams', to: '/access/teams' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'policy',
+    label: 'Policy',
+    description: 'Model grants and globally enforced quota.',
+    sections: [
+      {
+        title: 'Policy',
+        description: 'Compose reusable access and capacity rules.',
+        items: [
+          { kind: 'route', label: 'Access Groups', to: '/access/access-groups' },
+          { kind: 'route', label: 'Budgets', to: '/access/budgets' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'observe',
+    label: 'Observe',
+    description: 'Usage, requests, and administrative activity.',
+    sections: [
+      {
+        title: 'Observe',
+        description: 'Follow every managed request and policy change.',
+        items: [
+          { kind: 'route', label: 'Usage', to: '/access/usage' },
+          { kind: 'route', label: 'Request Logs', to: '/logs' },
+          { kind: 'route', label: 'Audit Logs', to: '/access/audit-logs' },
+        ],
+      },
+    ],
+  },
+]
+
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'routing',
@@ -58,32 +122,32 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     description: 'Design the signal-to-decision path that selects each model route.',
     sections: [
       {
-        title: 'Design',
-        description: 'Author and inspect the routing graph.',
+        title: 'Models',
+        description: 'Configure provider models and compose the available fleet.',
         items: [
-          { kind: 'route', label: 'Config Builder', to: '/builder' },
+          { kind: 'config', label: 'Models', configSection: 'models' },
           {
             kind: 'config',
             label: 'Mixture-of-Models',
             configSection: 'entrypoints-recipes',
           },
-          { kind: 'route', label: 'Brain Topology', to: '/topology' },
         ],
       },
       {
-        title: 'Evidence',
-        description: 'Define the facts and projections every decision can use.',
+        title: 'Routing Logic',
+        description: 'Define the signals, projections, and decisions that select a route.',
         items: [
           { kind: 'config', label: 'Signals', configSection: 'signals' },
           { kind: 'config', label: 'Projections', configSection: 'projections' },
+          { kind: 'config', label: 'Decisions', configSection: 'decisions' },
         ],
       },
       {
-        title: 'Dispatch',
-        description: 'Bind policy outcomes to the available model fleet.',
+        title: 'Design',
+        description: 'Inspect the routing graph or author its DSL.',
         items: [
-          { kind: 'config', label: 'Decisions', configSection: 'decisions' },
-          { kind: 'config', label: 'Models', configSection: 'models' },
+          { kind: 'route', label: 'Brain Topology', to: '/topology' },
+          { kind: 'route', label: 'DSL Builder', to: '/builder' },
         ],
       },
     ],
@@ -111,21 +175,16 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   },
   {
     key: 'integrations',
-    label: 'Integrations & Policy',
-    description: 'Connect external capabilities and enforce request-path controls.',
+    label: 'Integrations',
+    description: 'Connect external capabilities and agent runtimes.',
     sections: [
       {
         title: 'Integrations',
         description: 'Extend the control plane with tools and agent runtimes.',
         items: [
           { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
-          { kind: 'route', label: 'ClawOS', to: '/clawos' },
+          { kind: 'route', label: 'OpenClaw', to: '/clawos' },
         ],
-      },
-      {
-        title: 'Policy',
-        description: 'Review the security controls applied around routing.',
-        items: [{ kind: 'route', label: 'Security Policy', to: '/security' }],
       },
     ],
   },
@@ -229,19 +288,14 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
     ],
   },
   {
-    key: 'platform-access',
-    label: 'Platform & Access',
-    description: 'Manage global defaults and who can change the control plane.',
+    key: 'platform',
+    label: 'Platform',
+    description: 'Manage router-wide defaults and infrastructure bindings.',
     sections: [
       {
         title: 'Platform',
         description: 'Configure router-wide defaults and infrastructure bindings.',
         items: [{ kind: 'config', label: 'Global Config', configSection: 'global-config' }],
-      },
-      {
-        title: 'Access',
-        description: 'Administer dashboard identities and roles.',
-        items: [{ kind: 'route', label: 'Users', to: '/users' }],
       },
     ],
   },

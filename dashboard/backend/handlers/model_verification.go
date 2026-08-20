@@ -29,7 +29,7 @@ type ModelVerificationRequest struct {
 }
 
 // ModelVerificationResponse proves that the selected physical model returned
-// generated content. It intentionally omits endpoint URLs and credentials.
+// generated output. It intentionally omits endpoint URLs and credentials.
 type ModelVerificationResponse struct {
 	Verified      bool   `json:"verified"`
 	Model         string `json:"model"`
@@ -94,7 +94,7 @@ func newModelVerificationHandler(configPath string, options modelVerificationOpt
 			return
 		}
 		model = request.Model
-		identity := modelVerificationUserIdentity(r)
+		identity := modelVerificationRateLimitIdentity(r, request.Model)
 		allowed, retryAfter := rateLimiter.Allow(identity)
 		if !allowed {
 			status = http.StatusTooManyRequests
@@ -134,6 +134,10 @@ func modelVerificationUserIdentity(r *http.Request) string {
 		return strings.TrimSpace(authContext.UserID)
 	}
 	return "unauthenticated"
+}
+
+func modelVerificationRateLimitIdentity(r *http.Request, model string) string {
+	return modelVerificationUserIdentity(r) + "\x00" + strings.TrimSpace(model)
 }
 
 func auditModelVerificationAttempt(

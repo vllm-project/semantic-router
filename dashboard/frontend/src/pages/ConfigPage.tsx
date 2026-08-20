@@ -5,7 +5,7 @@ import EditModal, { type EditFormData, FieldConfig } from '../components/EditMod
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
-import { canDeployConfig, canRunEvaluation, canWriteConfig } from '../utils/accessControl'
+import { canAccessDashboardPath, canWriteConfig } from '../utils/accessControl'
 import { getActiveRecipe } from '../utils/recipeApi'
 import type { RecipeDescriptor } from '../types/recipe'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
@@ -18,7 +18,6 @@ import ConfigPageMCPSection from './ConfigPageMCPSection'
 import ConfigPageManagedRecipeBanner from './ConfigPageManagedRecipeBanner'
 import {
   resolveManagedRecipeProtection,
-  resolveRecipePackageCapabilities,
   presentRuntimeConfigMutationError,
 } from './configPageMoMPackagesSupport'
 import {
@@ -44,15 +43,10 @@ interface ConfigPageProps {
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
-  const { isReadonly, serverReadonly, runtimeConfigWritable } = useReadonly()
+  const { isReadonly } = useReadonly()
   const { user } = useAuth()
   const isMCPSection = activeSection === 'mcp'
   const configReadonly = isReadonly || !canWriteConfig(user)
-  const recipePackageCapabilities = resolveRecipePackageCapabilities(
-    serverReadonly,
-    runtimeConfigWritable,
-    canDeployConfig(user),
-  )
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
@@ -174,14 +168,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     } finally {
       if (showLoading) setRecipeProtectionLoading(false)
     }
-  }
-
-  const refreshAfterRecipeLifecycleChange = async (): Promise<boolean> => {
-    const [configRefreshed, protectionRefreshed] = await Promise.all([
-      fetchConfig(false),
-      fetchManagedRecipeProtection(false),
-    ])
-    return configRefreshed && protectionRefreshed
   }
 
   const fetchRouterDefaults = async () => {
@@ -446,7 +432,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       config={config}
       isPythonCLI={isPythonCLI}
       isReadonly={configEditorReadonly}
-      canVerifyModels={canRunEvaluation(user)}
+      canVerifyModels={canAccessDashboardPath(user, '/config/models')}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -467,10 +453,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         config={config}
         isReadonly={configEditorReadonly}
         models={models}
-        packageCapabilities={recipePackageCapabilities}
-        refreshConfig={refreshAfterRecipeLifecycleChange}
         saveConfig={saveConfig}
-        openEditModal={openEditModal}
         openViewModal={openViewModal}
       />
     ) : null

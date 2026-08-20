@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // ========================
@@ -60,10 +58,10 @@ const (
 	maxRetries         = 3 // Retry attempts for transient failures
 	retryBaseDelay     = 1 * time.Second
 	rateLimitWindow    = time.Minute // Rate limit window
-	rateLimitMaxReqs   = 5           // Max requests per window per client (strict for public service)
+	rateLimitMaxReqs   = 5           // Max requests per window per IP (strict for public service)
 	globalRateLimit    = 30          // Global max requests per window (0.5 req/sec to avoid ban)
 	maxConcurrent      = 2           // Max concurrent outgoing requests (very conservative)
-	maxTrackedClients  = 10000       // Max clients to track (memory protection)
+	maxTrackedIPs      = 10000       // Max IPs to track (memory protection)
 	minRequestInterval = 1 * time.Second
 	maxRequestInterval = 3 * time.Second
 )
@@ -156,83 +154,51 @@ var globalRateLimiter = &rateLimiter{
 // Semaphore for concurrent request limiting
 var concurrentSem = make(chan struct{}, maxConcurrent)
 
-// allowClient charges one request against the caller's own window. It is the
-// abuse control, so it is checked before the request body is read: a malformed
-// request still costs the sender a slot.
-func (rl *rateLimiter) allowClient(key string) bool {
+// isAllowed checks if a request from the given IP is allowed
+func (rl *rateLimiter) isAllowed(ip string) (bool, SearchErrorCode) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	now := time.Now()
 	windowStart := now.Add(-rateLimitWindow)
 
-	if _, tracked := rl.requests[key]; !tracked && len(rl.requests) >= maxTrackedClients {
-		rl.evictLocked(windowStart)
-	}
-
-	recent := withinWindow(rl.requests[key], windowStart)
-	if len(recent) >= rateLimitMaxReqs {
-		rl.requests[key] = recent
-		return false
-	}
-
-	recent = append(recent, now)
-	rl.requests[key] = recent
-	return true
-}
-
-// reserveUpstream charges one request against the shared budget that keeps
-// DuckDuckGo from banning us. It is taken immediately before the outbound call
-// so requests rejected earlier do not spend somebody else's quota.
-func (rl *rateLimiter) reserveUpstream() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	recent := withinWindow(rl.globalReqs, now.Add(-rateLimitWindow))
-	if len(recent) >= globalRateLimit {
-		rl.globalReqs = recent
-		return false
-	}
-
-	recent = append(recent, now)
-	rl.globalReqs = recent
-	return true
-}
-
-// evictLocked frees a slot for an untracked client. Refusing unknown clients
-// would turn a memory guard into a way to deny service, so drop expired windows
-// first and the least recently active client only if that was not enough.
-func (rl *rateLimiter) evictLocked(windowStart time.Time) {
-	for key, times := range rl.requests {
-		if len(times) == 0 || !times[len(times)-1].After(windowStart) {
-			delete(rl.requests, key)
-		}
-	}
-	if len(rl.requests) < maxTrackedClients {
-		return
-	}
-
-	oldestKey := ""
-	var oldestSeen time.Time
-	for key, times := range rl.requests {
-		lastSeen := times[len(times)-1]
-		if oldestKey == "" || lastSeen.Before(oldestSeen) {
-			oldestKey, oldestSeen = key, lastSeen
-		}
-	}
-	delete(rl.requests, oldestKey)
-}
-
-// withinWindow returns the timestamps that are still inside the window.
-func withinWindow(times []time.Time, windowStart time.Time) []time.Time {
-	kept := times[:0:0]
-	for _, t := range times {
+	// Check global rate limit first
+	var recentGlobal []time.Time
+	for _, t := range rl.globalReqs {
 		if t.After(windowStart) {
-			kept = append(kept, t)
+			recentGlobal = append(recentGlobal, t)
 		}
 	}
-	return kept
+	if len(recentGlobal) >= globalRateLimit {
+		rl.globalReqs = recentGlobal
+		return false, ErrCodeRateLimited
+	}
+
+	// Memory protection: limit tracked IPs
+	if len(rl.requests) >= maxTrackedIPs {
+		if _, exists := rl.requests[ip]; !exists {
+			return false, ErrCodeRateLimited
+		}
+	}
+
+	// Check per-IP rate limit
+	var recentReqs []time.Time
+	for _, t := range rl.requests[ip] {
+		if t.After(windowStart) {
+			recentReqs = append(recentReqs, t)
+		}
+	}
+
+	if len(recentReqs) >= rateLimitMaxReqs {
+		rl.requests[ip] = recentReqs
+		return false, ErrCodeRateLimited
+	}
+
+	// Record the request
+	rl.requests[ip] = append(recentReqs, now)
+	recentGlobal = append(recentGlobal, now)
+	rl.globalReqs = recentGlobal
+	return true, ""
 }
 
 // cleanup removes stale entries (call periodically)
@@ -242,21 +208,34 @@ func (rl *rateLimiter) cleanup() {
 
 	windowStart := time.Now().Add(-rateLimitWindow)
 
-	for key, times := range rl.requests {
-		valid := withinWindow(times, windowStart)
+	// Clean per-IP entries
+	for ip, times := range rl.requests {
+		var valid []time.Time
+		for _, t := range times {
+			if t.After(windowStart) {
+				valid = append(valid, t)
+			}
+		}
 		if len(valid) == 0 {
-			delete(rl.requests, key)
+			delete(rl.requests, ip)
 		} else {
-			rl.requests[key] = valid
+			rl.requests[ip] = valid
 		}
 	}
 
-	rl.globalReqs = withinWindow(rl.globalReqs, windowStart)
+	// Clean global entries
+	var validGlobal []time.Time
+	for _, t := range rl.globalReqs {
+		if t.After(windowStart) {
+			validGlobal = append(validGlobal, t)
+		}
+	}
+	rl.globalReqs = validGlobal
 }
 
 // getStats returns current rate limiter statistics (for monitoring/debugging)
 // nolint:unused // Reserved for future monitoring endpoint
-func (rl *rateLimiter) getStats() (trackedClients int, globalReqCount int) {
+func (rl *rateLimiter) getStats() (trackedIPs int, globalReqCount int) {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
 	return len(rl.requests), len(rl.globalReqs)
@@ -615,25 +594,23 @@ func cleanExtraWhitespace(s string) string {
 // HTTP Handler
 // ========================
 
-// rateLimitKey identifies who to charge for a request.
-//
-// Every /api/ route is authenticated, so the session user ID is available and,
-// unlike a forwarded header, cannot be chosen by the caller. Forwarded headers
-// are deliberately not consulted: a key the caller picks is no limit at all.
-func rateLimitKey(r *http.Request) string {
-	if ac, ok := auth.AuthFromContext(r); ok && ac.UserID != "" {
-		return "user:" + ac.UserID
+// getClientIP extracts client IP from request
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (for proxied requests)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
 	}
-	return "ip:" + remoteHost(r)
-}
-
-// remoteHost returns the peer address without its port.
-func remoteHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
 	}
-	return host
+	// Fall back to RemoteAddr
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		ip = ip[:idx]
+	}
+	return ip
 }
 
 // sendErrorResponse sends a JSON error response with code
@@ -667,11 +644,12 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		// Per-client rate limiting
-		clientKey := rateLimitKey(r)
-		if !globalRateLimiter.allowClient(clientKey) {
-			log.Printf("Rate limit exceeded for client: %s", clientKey)
-			sendErrorResponse(w, "", ErrCodeRateLimited, http.StatusTooManyRequests)
+		// Rate limiting check (per-IP + global)
+		clientIP := getClientIP(r)
+		allowed, errCode := globalRateLimiter.isAllowed(clientIP)
+		if !allowed {
+			log.Printf("Rate limit exceeded for IP: %s (code: %s)", clientIP, errCode)
+			sendErrorResponse(w, "", errCode, http.StatusTooManyRequests)
 			return
 		}
 
@@ -689,14 +667,7 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		// Shared upstream budget, charged only for requests that reach DuckDuckGo
-		if !globalRateLimiter.reserveUpstream() {
-			log.Printf("Upstream search budget exhausted, rejecting client: %s", clientKey)
-			sendErrorResponse(w, req.Query, ErrCodeRateLimited, http.StatusTooManyRequests)
-			return
-		}
-
-		log.Printf("Web search request: query_bytes=%d, num_results=%d, client=%s", len(req.Query), req.NumResults, clientKey)
+		log.Printf("Web search request: query_bytes=%d, num_results=%d, ip=%s", len(req.Query), req.NumResults, clientIP)
 
 		// Perform search with retry
 		results, err := searchDuckDuckGo(req.Query, req.NumResults)

@@ -9,6 +9,9 @@
   border-radius: var(--radius-lg);
   margin-bottom: 1rem;
   gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .embedded {
@@ -64,6 +67,7 @@
   align-items: center;
   gap: 0.75rem;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .searchInput {
@@ -74,6 +78,8 @@
   color: var(--color-text);
   font-size: 0.875rem;
   width: 240px;
+  max-width: 100%;
+  min-height: 42px;
   transition: all var(--transition-fast);
 }
 
@@ -98,6 +104,7 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  min-height: 42px;
 }
 
 .addButton:hover {
@@ -116,6 +123,7 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  min-height: 42px;
 }
 
 .secondaryButton:hover {
@@ -158,10 +166,13 @@
   .actions {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
   }
 
-  .searchInput {
+  .searchInput,
+  .embedded .searchInput {
     width: 100%;
+    max-width: none;
   }
 
   .addButton,

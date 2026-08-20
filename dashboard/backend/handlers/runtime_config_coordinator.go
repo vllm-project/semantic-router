@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
@@ -15,6 +17,8 @@ import (
 const recipeStoreDirectoryEnv = "VLLM_SR_RECIPE_STORE_DIR"
 
 var errRuntimeConfigLockBusy = errors.New("runtime config coordination lock is busy")
+
+const runtimeConfigLockWait = 2 * time.Second
 
 type runtimeConfigMutationError struct {
 	code   string
@@ -45,12 +49,14 @@ func beginRuntimeConfigMutation(storeDir string, allowManaged bool) (func(), err
 		}
 	}
 	releaseDeploy := func() { deployMu.Unlock() }
-	lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	lock, exists, err := acquireRuntimeConfigStoreLockWithin(storeDir, runtimeConfigLockWait)
 	if err != nil {
 		releaseDeploy()
 		status, code, safe := http.StatusInternalServerError, "config_coordination_failed", "Runtime config coordination is unavailable."
 		if errors.Is(err, errRuntimeConfigLockBusy) {
 			status, code, safe = http.StatusConflict, "deploy_in_progress", "Another config operation is in progress. Please try again."
+		} else {
+			log.Printf("runtime config coordination failed: %v", err)
 		}
 		return nil, &runtimeConfigMutationError{code: code, status: status, safe: safe, cause: err}
 	}
@@ -83,6 +89,17 @@ func beginRuntimeConfigMutation(storeDir string, allowManaged bool) (func(), err
 		}
 	}
 	return release, nil
+}
+
+func acquireRuntimeConfigStoreLockWithin(storeDir string, wait time.Duration) (*runtimeConfigStoreLock, bool, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+		if !errors.Is(err, errRuntimeConfigLockBusy) || time.Now().After(deadline) {
+			return lock, exists, err
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
 }
 
 func runtimeRecipeStoreDir(configDir string) string {
