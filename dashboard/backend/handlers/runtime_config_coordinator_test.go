@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func TestOrdinaryRuntimeMutationRejectsAnyManagedMarkerWithoutMutation(t *testing.T) {
@@ -196,7 +198,7 @@ func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	SetupActivateHandler(setupPath, false, root)(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
+	SetupActivateHandler(setupPath, false, root, setupmode.New(setupPath, false))(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
 	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
 		t.Fatalf("setup response=%d body=%s", response.Code, response.Body.String())
 	}
