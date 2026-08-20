@@ -42,22 +42,26 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 	return nil
 }
 
-// validatePromptGuardWiring rejects an enabled prompt_guard whose backend is
-// not fully wired up.
+// validatePromptGuardWiring rejects a remote prompt_guard backend that is not
+// fully wired up.
 //
-// Every field checked here is one that IsPromptGuardEnabled() requires. When
-// one is missing that helper just returns false, which drops the jailbreak
-// signal from the dispatch set - so the guardrail silently never runs and
-// on_error: block becomes a no-op, the exact fail-open it exists to prevent.
-// Failing config load instead makes the misconfiguration visible.
+// Every field checked here is one IsPromptGuardEnabled() requires for a
+// protocol backend. When one is missing that helper just returns false, which
+// drops the jailbreak signal from the dispatch set - so the guardrail silently
+// never runs and on_error: block becomes a no-op, the exact fail-open it exists
+// to prevent. Failing config load instead makes the misconfiguration visible.
+//
+// jailbreak_mapping_path is deliberately NOT required here even though
+// IsPromptGuardEnabled() also needs it. It is the same class of fail-open, but
+// the operator path reaches it through a serialization bug rather than an
+// author's mistake: the CRD drops `enabled: false` (omitempty on a bool) so the
+// router falls back to its default `Enabled: true`, while
+// CanonicalPromptGuardModule emits `jailbreak_mapping_path: ""` (no omitempty)
+// and blanks the default path. Requiring it here turns that into a hard startup
+// failure for every operator deployment. Tracked separately - fixing it means
+// changing how the operator serializes those two fields, not adding a check.
 func validatePromptGuardWiring(cfg *RouterConfig) error {
-	if !cfg.PromptGuard.Enabled {
-		return nil
-	}
-	if cfg.PromptGuard.JailbreakMappingPath == "" {
-		return fmt.Errorf("prompt_guard.jailbreak_mapping_path is required when prompt_guard is enabled")
-	}
-	if cfg.PromptGuard.Protocol == "" {
+	if !cfg.PromptGuard.Enabled || cfg.PromptGuard.Protocol == "" {
 		return nil
 	}
 

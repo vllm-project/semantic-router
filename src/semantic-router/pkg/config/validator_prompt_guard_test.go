@@ -74,18 +74,17 @@ func TestValidatePromptGuardBackend_RemoteProtocolRequiresGuardrailAddress(t *te
 	}
 }
 
-// An empty jailbreak_mapping_path also makes IsPromptGuardEnabled() false,
-// silently disabling an explicitly enabled guardrail.
-func TestValidatePromptGuardBackend_EnabledRequiresJailbreakMappingPath(t *testing.T) {
+// An empty jailbreak_mapping_path is the same class of fail-open, but the
+// operator path reaches it through a serialization bug rather than an author's
+// mistake (see validatePromptGuardWiring's comment), so requiring it here would
+// break every operator deployment at startup. Guard the deliberate omission so
+// nobody re-adds the check without fixing that first.
+func TestValidatePromptGuardBackend_DoesNotRequireJailbreakMappingPath(t *testing.T) {
 	cfg := remotePromptGuardConfig()
 	cfg.PromptGuard.JailbreakMappingPath = ""
 
-	err := validatePromptGuardBackend(cfg)
-	if err == nil {
-		t.Fatal("expected an error when an enabled prompt_guard has no jailbreak_mapping_path")
-	}
-	if !strings.Contains(err.Error(), "jailbreak_mapping_path") {
-		t.Errorf("error %q should name the missing field jailbreak_mapping_path", err)
+	if err := validatePromptGuardBackend(cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
