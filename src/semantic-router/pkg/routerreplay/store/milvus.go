@@ -296,21 +296,7 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 		return "", fmt.Errorf("failed to marshal record: %w", err)
 	}
 
-	fn := func() error {
-		// Create columns
-		idColumn := entity.NewColumnVarChar("id", []string{record.ID})
-		timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
-		dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
-		vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
-
-		// Insert
-		_, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn)
-		if err != nil {
-			return err
-		}
-		m.wrote.Store(true)
-		return nil
-	}
+	fn := func() error { return m.insertRecord(ctx, record, data) }
 
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error {
@@ -336,6 +322,22 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 	}
 
 	return record.ID, nil
+}
+
+// insertRecord inserts a single marshaled record and marks the store as
+// having written, so Session-level reads keep read-your-writes semantics.
+func (m *MilvusStore) insertRecord(ctx context.Context, record Record, data []byte) error {
+	idColumn := entity.NewColumnVarChar("id", []string{record.ID})
+	timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
+	dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
+	vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
+
+	_, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn)
+	if err != nil {
+		return err
+	}
+	m.wrote.Store(true)
+	return nil
 }
 
 // Get retrieves a record by ID from Milvus.
