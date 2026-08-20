@@ -262,3 +262,64 @@ var ruleTreeErrorLocationCorpus = []ruleTreeCase{
 func TestDecisionRuleTreeErrorLocationCorpus(t *testing.T) {
 	runRuleTreeCorpus(t, ruleTreeErrorLocationCorpus)
 }
+
+// routingFragmentWithRules renders the DSL-owned routing fragment surface, which
+// ParseRoutingYAMLBytes loads without the provider/global cross-reference
+// validators — including validateDecisionSignalReferences. Rule-tree shape
+// therefore has to be enforced by validateDecisionContracts to hold on this path
+// too, not only on the full-config path.
+func routingFragmentWithRules(rules string) []byte {
+	return []byte(`
+routing:
+  modelCards:
+    - name: m1
+  signals:
+    keywords:
+      - name: k1
+        operator: OR
+        keywords:
+          - alpha
+  decisions:
+    - name: d1
+      priority: 1
+      rules:
+` + indentRuleBlock(rules) + `
+      modelRefs:
+        - model: m1
+`)
+}
+
+// A leaf without a name references no signal at all: evalLeaf looks for a
+// matched rule named "", so the decision can never match.
+var ruleTreeFragmentCorpus = []ruleTreeCase{
+	{
+		name:  "leaf_with_name",
+		rules: "type: keyword\nname: k1",
+	},
+	{
+		name:    "root_leaf_without_name",
+		rules:   "type: keyword",
+		wantErr: "rules: leaf condition requires a name",
+	},
+	{
+		name:    "nested_leaf_without_name",
+		rules:   "operator: AND\nconditions:\n  - type: keyword",
+		wantErr: "rules.conditions[0]: leaf condition requires a name",
+	},
+}
+
+func TestDecisionRuleTreeFragmentCorpus(t *testing.T) {
+	for _, tc := range ruleTreeFragmentCorpus {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseRoutingYAMLBytes(routingFragmentWithRules(tc.rules))
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("rule tree should be accepted, got: %v", err)
+			case tc.wantErr != "" && err == nil:
+				t.Fatalf("rule tree should be rejected with %q, got nil", tc.wantErr)
+			case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
+				t.Fatalf("error should mention %q, got: %v", tc.wantErr, err)
+			}
+		})
+	}
+}

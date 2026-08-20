@@ -65,7 +65,9 @@ func validateDecisionRuleTree(cfg *RouterConfig, decisionName, path string, node
 // is treated as a combination and loses what the author wrote: with `name` set
 // it evaluates as an empty OR, a decision that can never match, and with only
 // `label`, `predicate` or `on_error` set it also satisfies IsEmpty, which the
-// engine short-circuits into an unconditional match.
+// engine short-circuits into an unconditional match. A leaf without a name
+// references no signal at all: evalLeaf looks up the empty name and never
+// matches.
 func validateRuleNodeShape(decisionName, path string, node *RuleNode) error {
 	if !ruleNodeHasLeafFields(node) {
 		return nil
@@ -76,6 +78,9 @@ func validateRuleNodeShape(decisionName, path string, node *RuleNode) error {
 	}
 	if node.Type == "" {
 		return ruleTreeError(decisionName, path, "leaf condition requires a type")
+	}
+	if node.Name == "" {
+		return ruleTreeError(decisionName, path, "leaf condition requires a name")
 	}
 	if len(node.Conditions) > 0 {
 		return ruleTreeError(decisionName, path, "leaf condition cannot declare child conditions")

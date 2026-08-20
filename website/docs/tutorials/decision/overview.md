@@ -75,6 +75,7 @@ The config loader rejects a rule tree the evaluator cannot honour, naming both t
 - a `NOT` with any number of children other than one, which would otherwise never match
 - a node that is both a leaf (`type`/`name`) and a combination (`operator`/`conditions`), which would otherwise drop its conditions
 - a node that carries leaf fields without a `type`, which would otherwise either never match or, worse, match every request
+- a leaf without a `name`, which references no signal at all
 - a leaf that declares `conditions`, which would otherwise be ignored
 - a combination with no conditions anywhere but the root, which would otherwise never match under `OR` and match everything under `AND`
 
