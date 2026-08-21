@@ -41,4 +41,23 @@ describe('InsightsCharts summary', () => {
     expect(markup).toContain('$7.50 actual')
     expect(markup).toContain('$10.00 baseline')
   })
+
+  it('keeps a percentage visible before priced requests arrive', () => {
+    const markup = renderToStaticMarkup(
+      createElement(InsightsCharts, {
+        aggregate: {
+          ...aggregate,
+          summary: {
+            ...aggregate.summary,
+            total_saved: 0,
+            baseline_spend: 0,
+            actual_spend: 0,
+            cost_record_count: 0,
+          },
+        },
+      }),
+    )
+
+    expect(markup).toContain('0.0% saved')
+  })
 })

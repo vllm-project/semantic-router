@@ -64,8 +64,8 @@ const formatCompactTokenCount = (value: number) =>
     maximumFractionDigits: 1,
   }).format(value)
 
-const formatSavingsRate = (saved: number, baseline: number, pricedRequests: number) => {
-  if (pricedRequests <= 0 || baseline <= 0) return 'No priced requests'
+const formatSavingsRate = (saved: number, baseline: number) => {
+  if (baseline <= 0) return '0.0% saved'
   return `${((saved / baseline) * 100).toFixed(1)}% saved`
 }
 
@@ -154,11 +154,7 @@ const summaryCards = (aggregate: InsightsAggregateResponse) => [
   {
     label: 'Total Saved',
     value: formatCurrency(aggregate.summary.total_saved, aggregate.summary.currency),
-    indicator: formatSavingsRate(
-      aggregate.summary.total_saved,
-      aggregate.summary.baseline_spend,
-      aggregate.summary.cost_record_count,
-    ),
+    indicator: formatSavingsRate(aggregate.summary.total_saved, aggregate.summary.baseline_spend),
     detail:
       aggregate.summary.cost_record_count > 0
         ? `${formatCurrency(aggregate.summary.actual_spend, aggregate.summary.currency)} actual · ${formatCurrency(aggregate.summary.baseline_spend, aggregate.summary.currency)} baseline`
