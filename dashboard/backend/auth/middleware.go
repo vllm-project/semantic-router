@@ -462,6 +462,11 @@ func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	}
 
 	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
+		// A credential in a URL is recorded by proxy access logs, browser history and the
+		// Referer header. Log that it happened so an operator can find the stale bookmark
+		// or automation — never the value. Becomes a rejection in the follow-up PR.
+		log.Printf("WARNING: request to %s authenticated with the deprecated ?authToken= "+
+			"query parameter; use the session cookie or an Authorization: Bearer header", r.URL.Path)
 		return token, tokenSourceQuery
 	}
 	return "", tokenSourceNone

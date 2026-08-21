@@ -262,3 +262,38 @@ func TestWSOutboundFromLastRoomEvent(t *testing.T) {
 		t.Fatalf("expected replay message to be copied")
 	}
 }
+
+func TestWSCheckOrigin(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		origin  string
+		referer string
+		want    bool
+	}{
+		{name: "same origin", origin: "http://example.com", want: true},
+		{name: "cross origin", origin: "https://evil.example"},
+		{name: "cross origin wins over a same-origin referer", origin: "https://evil.example", referer: "http://example.com/rooms"},
+		{name: "null origin", origin: "null"},
+		// No Origin means a non-browser client; see auth.OriginChecker.
+		{name: "no origin at all", want: true},
+		{name: "no origin, cross-origin referer", referer: "https://evil.example/rooms", want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms/r1/ws", nil)
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			if got := wsUpgrader.CheckOrigin(r); got != tc.want {
+				t.Fatalf("CheckOrigin = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

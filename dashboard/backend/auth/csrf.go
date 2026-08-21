@@ -114,6 +114,27 @@ func originAllowed(r *http.Request, allowed []string) bool {
 	return false
 }
 
+// OriginChecker returns a CheckOrigin function for the WebSocket upgrader, which cannot
+// rely on CORS: a handshake is exempt from it, so this is the only origin control a
+// WebSocket server has. Takes the allowlist as a closure so the caller needs no *Service;
+// with a nil list it accepts our own origin and rejects genuinely cross-origin handshakes.
+//
+// A handshake carrying no Origin is accepted, because RFC 6455 requires browser clients to
+// send one: its absence means a non-browser client (a Go dialer, curl, CI), which no
+// hostile page can drive cross-site. Same reasoning as the Authorization: Bearer exemption,
+// and such a client still has to authenticate.
+func OriginChecker(allowedOrigins []string) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		if r == nil {
+			return false
+		}
+		if strings.TrimSpace(r.Header.Get("Origin")) == "" {
+			return true
+		}
+		return originAllowed(r, allowedOrigins)
+	}
+}
+
 // requiresCSRFCheck exempts the RFC 9110 safe methods, which holds only while no GET route
 // mutates state.
 func requiresCSRFCheck(method string) bool {
