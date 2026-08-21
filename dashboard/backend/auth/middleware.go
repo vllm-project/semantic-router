@@ -33,7 +33,7 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			token, tokenSource := extractAccessTokenWithSource(r)
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -43,6 +43,33 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
+			}
+
+			// Backfill for sessions created before this feature shipped, which would
+			// otherwise 403 on every write with no way to discover that re-logging-in is
+			// the fix. Done on safe methods too, so a page load repairs the session. It
+			// sets a response cookie only and deliberately does not authorise this
+			// request; skipping the check here would be a trivial bypass.
+			if tokenSource == tokenSourceCookie {
+				if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
+					!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
+					setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
+				}
+			}
+
+			// A browser attaches the session cookie to any request aimed at this origin,
+			// including one a hostile page caused, so a state-changing request that was
+			// authenticated by cookie must prove it originated here. Bearer requests are
+			// exempt: a browser never attaches that header on its own. See #2465.
+			if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
+				if !originAllowed(r, service.allowedOrigins) {
+					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+					return
+				}
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
+					return
+				}
 			}
 
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
@@ -411,18 +438,38 @@ func extractBearer(raw string) string {
 	return normalizeAccessToken(parts[1])
 }
 
-func extractAccessToken(r *http.Request) string {
+// accessTokenSource records which transport supplied the credential, so the CSRF check can
+// apply to cookie-authenticated requests only: the browser attaches a cookie by itself,
+// while an Authorization header is only ever attached by code that already holds the token.
+type accessTokenSource int
+
+const (
+	tokenSourceNone accessTokenSource = iota
+	tokenSourceHeader
+	tokenSourceCookie
+	tokenSourceQuery // removed in the follow-up PR for #2465; still accepted here
+)
+
+func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
+		return token, tokenSourceHeader
 	}
 
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
+			return token, tokenSourceCookie
 		}
 	}
 
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
+		return token, tokenSourceQuery
+	}
+	return "", tokenSourceNone
+}
+
+func extractAccessToken(r *http.Request) string {
+	token, _ := extractAccessTokenWithSource(r)
+	return token
 }
 
 func normalizeAccessToken(raw string) string {

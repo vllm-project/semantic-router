@@ -17,12 +17,12 @@ func logoutHandler(svc *Service) http.HandlerFunc {
 
 		if token := extractAccessToken(r); token != "" && svc != nil {
 			if err := svc.RevokeToken(r.Context(), token); err != nil {
-				clearAuthSessionCookie(w, r)
+				clearSessionCookies(w, r)
 				http.Error(w, "logout failed", http.StatusInternalServerError)
 				return
 			}
 		}
-		clearAuthSessionCookie(w, r)
+		clearSessionCookies(w, r)
 		respondJSON(w, map[string]bool{"ok": true})
 	}
 }
@@ -54,6 +54,58 @@ func clearAuthSessionCookie(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   requestUsesHTTPS(r),
+	})
+}
+
+// setSessionCookies issues the session cookie plus the CSRF cookie derived from the
+// session id inside the token we just minted. The token is parsed back rather than
+// threading the id out of issueTokenForContext, which would ripple through every caller.
+func setSessionCookies(w http.ResponseWriter, r *http.Request, svc *Service, token string) {
+	setAuthSessionCookie(w, r, token, svc.ttlDuration)
+	if claims, err := svc.ParseToken(token); err == nil {
+		setCSRFCookie(w, r, claims.ID, svc.jwtSecret, svc.ttlDuration)
+	}
+}
+
+func clearSessionCookies(w http.ResponseWriter, r *http.Request) {
+	clearAuthSessionCookie(w, r)
+	clearCSRFCookie(w, r)
+}
+
+// setCSRFCookie delivers the CSRF token so the frontend can echo it back in the
+// X-CSRF-Token header. Not HttpOnly, deliberately: the page must read it, and the value
+// authenticates nothing without the HttpOnly session cookie. Every other attribute matches
+// the session cookie so the two expire together.
+func setCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string, secret []byte, ttl time.Duration) {
+	value := csrfTokenFor(secret, sessionID)
+	if value == "" {
+		return
+	}
+
+	effectiveTTL := authSessionCookieTTL(ttl)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   int(effectiveTTL.Seconds()),
+		Expires:  time.Now().Add(effectiveTTL),
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   requestUsesHTTPS(r),
+	})
+}
+
+func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   requestUsesHTTPS(r),
 	})

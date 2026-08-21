@@ -247,6 +247,303 @@ func TestRequiresCSRFCheck(t *testing.T) {
 	}
 }
 
+// csrfFixture is a real user with a real minted token, plus the CSRF value derived from
+// that token's session id.
+type csrfFixture struct {
+	svc       *Service
+	token     string
+	sessionID string
+	csrf      string
+}
+
+func newCSRFFixture(t *testing.T) csrfFixture {
+	t.Helper()
+
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "csrf@example.com", RoleAdmin, "active")
+	token, err := svc.issueToken(user)
+	if err != nil {
+		t.Fatalf("issueToken() error = %v", err)
+	}
+	claims, err := svc.ParseToken(token)
+	if err != nil {
+		t.Fatalf("ParseToken() error = %v", err)
+	}
+	return csrfFixture{svc: svc, token: token, sessionID: claims.ID, csrf: csrfTokenFor(svc.jwtSecret, claims.ID)}
+}
+
+func (f csrfFixture) serve(t *testing.T, r *http.Request) (*httptest.ResponseRecorder, bool) {
+	t.Helper()
+
+	handlerRan := false
+	handler := AuthenticateRequest(f.svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerRan = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+	return recorder, handlerRan
+}
+
+func optionalResponseCookie(recorder *httptest.ResponseRecorder, name string) *http.Cookie {
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
+}
+
+func TestCSRFEnforcement(t *testing.T) {
+	f := newCSRFFixture(t)
+	const sameOrigin = "http://example.com"
+
+	cases := []struct {
+		name        string
+		method      string
+		path        string
+		authVia     string
+		origin      string
+		referer     string
+		csrfHeader  string
+		wantStatus  int
+		wantHandler bool
+	}{
+		{name: "safe read by cookie", method: http.MethodGet, authVia: "cookie", wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "HEAD without origin", method: http.MethodHead, authVia: "cookie", wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "OPTIONS from a hostile origin is a safe method", method: http.MethodOptions, authVia: "cookie", origin: "https://evil.example", wantStatus: http.StatusNoContent, wantHandler: true},
+
+		{name: "the attack", method: http.MethodPost, authVia: "cookie", origin: "https://evil.example", wantStatus: http.StatusForbidden},
+		{name: "the attack with a valid token", method: http.MethodPost, authVia: "cookie", origin: "https://evil.example", csrfHeader: f.csrf, wantStatus: http.StatusForbidden},
+		{name: "same origin, no token", method: http.MethodPost, authVia: "cookie", origin: sameOrigin, wantStatus: http.StatusForbidden},
+		{name: "same origin, garbage token", method: http.MethodPost, authVia: "cookie", origin: sameOrigin, csrfHeader: "garbage", wantStatus: http.StatusForbidden},
+		{name: "same origin, token for another session", method: http.MethodPost, authVia: "cookie", origin: sameOrigin, csrfHeader: csrfTokenFor([]byte("test-secret"), "another-session"), wantStatus: http.StatusForbidden},
+		{name: "no origin, no referer", method: http.MethodPost, authVia: "cookie", csrfHeader: f.csrf, wantStatus: http.StatusForbidden},
+
+		{name: "the happy path", method: http.MethodPost, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "PUT happy path", method: http.MethodPut, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "DELETE happy path", method: http.MethodDelete, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "referer fallback", method: http.MethodPost, authVia: "cookie", referer: sameOrigin + "/dashboard", csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+
+		{name: "query transport is not exempt", method: http.MethodPost, authVia: "query", origin: "https://evil.example", wantStatus: http.StatusForbidden},
+		{name: "query transport needs the token too", method: http.MethodPost, authVia: "query", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+
+		{name: "unauthenticated fails before CSRF", method: http.MethodPost, authVia: "none", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
+		{name: "public route is untouched", method: http.MethodPost, path: "/api/auth/login", authVia: "none", origin: "https://evil.example", wantStatus: http.StatusNoContent, wantHandler: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := tc.path
+			if path == "" {
+				path = "/api/status"
+			}
+			if tc.authVia == "query" {
+				path += "?authToken=" + f.token
+			}
+
+			r := httptest.NewRequest(tc.method, path, nil)
+			switch tc.authVia {
+			case "cookie":
+				r.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: f.token})
+			case "header":
+				r.Header.Set("Authorization", "Bearer "+f.token)
+			}
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			if tc.csrfHeader != "" {
+				r.Header.Set(csrfHeaderName, tc.csrfHeader)
+			}
+
+			recorder, handlerRan := f.serve(t, r)
+			if recorder.Code != tc.wantStatus {
+				t.Fatalf("status = %d (%s), want %d", recorder.Code, strings.TrimSpace(recorder.Body.String()), tc.wantStatus)
+			}
+			if handlerRan != tc.wantHandler {
+				t.Fatalf("handler ran = %v, want %v", handlerRan, tc.wantHandler)
+			}
+		})
+	}
+}
+
+// TestCSRF_BearerAuthenticatedRequestsAreExempt documents why the exemption exists: a
+// browser never attaches Authorization on its own, so curl and CI clients need no token.
+func TestCSRF_BearerAuthenticatedRequestsAreExempt(t *testing.T) {
+	f := newCSRFFixture(t)
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			r := httptest.NewRequest(method, "/api/status", nil)
+			r.Header.Set("Authorization", "Bearer "+f.token)
+			r.Header.Set("Origin", "https://evil.example")
+
+			recorder, handlerRan := f.serve(t, r)
+			if recorder.Code != http.StatusNoContent || !handlerRan {
+				t.Fatalf("status = %d, handler ran = %v; want 204 and true", recorder.Code, handlerRan)
+			}
+			if cookie := optionalResponseCookie(recorder, csrfCookieName); cookie != nil {
+				t.Fatalf("bearer request should not be issued a CSRF cookie, got %q", cookie.Value)
+			}
+		})
+	}
+}
+
+func TestCSRFCookieBackfill(t *testing.T) {
+	f := newCSRFFixture(t)
+
+	newRequest := func(method string, csrfCookie string) *http.Request {
+		r := httptest.NewRequest(method, "/api/status", nil)
+		r.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: f.token})
+		if csrfCookie != "" {
+			r.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookie})
+		}
+		return r
+	}
+
+	t.Run("a page load repairs a session with no CSRF cookie", func(t *testing.T) {
+		recorder, _ := f.serve(t, newRequest(http.MethodGet, ""))
+		cookie := optionalResponseCookie(recorder, csrfCookieName)
+		if cookie == nil || cookie.Value != f.csrf {
+			t.Fatalf("backfilled cookie = %v, want %q", cookie, f.csrf)
+		}
+		if cookie.HttpOnly {
+			t.Fatal("the CSRF cookie must be readable by the frontend")
+		}
+	})
+
+	t.Run("a stale value is replaced", func(t *testing.T) {
+		recorder, _ := f.serve(t, newRequest(http.MethodGet, "stale"))
+		if cookie := optionalResponseCookie(recorder, csrfCookieName); cookie == nil || cookie.Value != f.csrf {
+			t.Fatalf("stale cookie was not replaced: %v", cookie)
+		}
+	})
+
+	t.Run("a correct value is not re-issued", func(t *testing.T) {
+		recorder, _ := f.serve(t, newRequest(http.MethodGet, f.csrf))
+		if cookie := optionalResponseCookie(recorder, csrfCookieName); cookie != nil {
+			t.Fatalf("expected no Set-Cookie, got %q", cookie.Value)
+		}
+	})
+
+	t.Run("the rejected write still repairs the session", func(t *testing.T) {
+		r := newRequest(http.MethodPost, "")
+		r.Header.Set("Origin", "http://example.com")
+		recorder, handlerRan := f.serve(t, r)
+		if recorder.Code != http.StatusForbidden || handlerRan {
+			t.Fatalf("status = %d, handler ran = %v; want 403 and false", recorder.Code, handlerRan)
+		}
+		if cookie := optionalResponseCookie(recorder, csrfCookieName); cookie == nil || cookie.Value != f.csrf {
+			t.Fatalf("403 response did not backfill the cookie: %v", cookie)
+		}
+	})
+}
+
+func TestCSRFCookieIssuance(t *testing.T) {
+	t.Run("login sets both cookies", func(t *testing.T) {
+		svc := newTestAuthService(t)
+		_ = newTestUser(t, svc, "csrf-login@example.com", RoleWrite, "active")
+
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+			strings.NewReader(`{"email":"csrf-login@example.com","password":"secret-password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		loginHandler(svc).ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", recorder.Code)
+		}
+		session := responseCookie(t, recorder, authSessionCookieName)
+		if !session.HttpOnly {
+			t.Fatal("session cookie should be HttpOnly")
+		}
+		csrf := responseCookie(t, recorder, csrfCookieName)
+		if csrf.HttpOnly {
+			t.Fatal("CSRF cookie must not be HttpOnly")
+		}
+		if csrf.Secure {
+			t.Fatal("CSRF cookie should not be Secure over plain HTTP")
+		}
+		if csrf.SameSite != http.SameSiteLaxMode || csrf.Path != "/" {
+			t.Fatalf("sameSite = %v, path = %q", csrf.SameSite, csrf.Path)
+		}
+
+		claims, err := svc.ParseToken(session.Value)
+		if err != nil {
+			t.Fatalf("ParseToken() error = %v", err)
+		}
+		if want := csrfTokenFor(svc.jwtSecret, claims.ID); csrf.Value != want {
+			t.Fatalf("csrf cookie = %q, want %q", csrf.Value, want)
+		}
+	})
+
+	t.Run("the CSRF cookie is Secure behind an HTTPS proxy", func(t *testing.T) {
+		svc := newTestAuthService(t)
+		_ = newTestUser(t, svc, "csrf-secure@example.com", RoleWrite, "active")
+
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+			strings.NewReader(`{"email":"csrf-secure@example.com","password":"secret-password"}`))
+		req.Header.Set("X-Forwarded-Proto", "https")
+		loginHandler(svc).ServeHTTP(recorder, req)
+
+		if csrf := responseCookie(t, recorder, csrfCookieName); !csrf.Secure {
+			t.Fatal("CSRF cookie should be Secure behind an HTTPS proxy")
+		}
+	})
+
+	t.Run("a failed login sets no CSRF cookie", func(t *testing.T) {
+		svc := newTestAuthService(t)
+		_ = newTestUser(t, svc, "csrf-badpass@example.com", RoleWrite, "active")
+
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+			strings.NewReader(`{"email":"csrf-badpass@example.com","password":"wrong-password"}`))
+		loginHandler(svc).ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", recorder.Code)
+		}
+		if cookie := optionalResponseCookie(recorder, csrfCookieName); cookie != nil {
+			t.Fatalf("failed login issued a CSRF cookie: %q", cookie.Value)
+		}
+	})
+
+	t.Run("bootstrap register sets both cookies", func(t *testing.T) {
+		svc := newBootstrapService(t, true)
+		recorder := postRegister(svc, "csrf-bootstrap@example.com")
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", recorder.Code)
+		}
+
+		session := responseCookie(t, recorder, authSessionCookieName)
+		csrf := responseCookie(t, recorder, csrfCookieName)
+		claims, err := svc.ParseToken(session.Value)
+		if err != nil {
+			t.Fatalf("ParseToken() error = %v", err)
+		}
+		if want := csrfTokenFor(svc.jwtSecret, claims.ID); csrf.Value != want {
+			t.Fatalf("csrf cookie = %q, want %q", csrf.Value, want)
+		}
+	})
+
+	t.Run("logout clears both cookies", func(t *testing.T) {
+		svc := newTestAuthService(t)
+		recorder := httptest.NewRecorder()
+		logoutHandler(svc).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil))
+
+		for _, name := range []string{authSessionCookieName, csrfCookieName} {
+			cookie := responseCookie(t, recorder, name)
+			if cookie.Value != "" || cookie.MaxAge != -1 {
+				t.Fatalf("%s: value = %q, maxAge = %d; want empty and -1", name, cookie.Value, cookie.MaxAge)
+			}
+		}
+	})
+}
+
 func TestCSRFCookieAndHeaderNames(t *testing.T) {
 	if csrfCookieName != "vsr_csrf" {
 		t.Errorf("csrfCookieName = %q", csrfCookieName)
