@@ -29,6 +29,7 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 }
 
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
+  Accept: 'text/event-stream',
   'Content-Type': 'application/json',
   'x-session-id': conversationId,
   'x-vsr-debug': 'true',

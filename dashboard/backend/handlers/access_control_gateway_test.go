@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 func TestAccessGatewayRejectsAnonymousOpenAIEndpoints(t *testing.T) {
@@ -37,5 +40,42 @@ func TestAccessGatewayRejectsAnonymousOpenAIEndpoints(t *testing.T) {
 				t.Fatalf("response must explain the missing API key: %s", response.Body.String())
 			}
 		})
+	}
+}
+
+func TestDashboardIndividualModelAccessIsAdminOnly(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/playground/v1/chat/completions", nil)
+	if dashboardAllowsIndividualModels(request) {
+		t.Fatal("anonymous request must not access individual models")
+	}
+
+	for _, test := range []struct {
+		role string
+		want bool
+	}{
+		{role: auth.RoleRead, want: false},
+		{role: auth.RoleWrite, want: false},
+		{role: auth.RoleAdmin, want: true},
+	} {
+		ctx := auth.WithAuthContext(context.Background(), auth.AuthContext{Role: test.role})
+		if got := dashboardAllowsIndividualModels(request.WithContext(ctx)); got != test.want {
+			t.Fatalf("role %q allowed = %v, want %v", test.role, got, test.want)
+		}
+	}
+}
+
+func TestGatewayResponseHeadersPreserveRouterMetadata(t *testing.T) {
+	for _, header := range []string{
+		"Content-Type",
+		"X-Request-ID",
+		"X-VSR-Selected-Model",
+		"x-vsr-selected-decision",
+	} {
+		if !isGatewayResponseHeader(header) {
+			t.Fatalf("expected %q to be forwarded", header)
+		}
+	}
+	if isGatewayResponseHeader("X-Internal-Secret") {
+		t.Fatal("unrecognized upstream headers must remain private")
 	}
 }

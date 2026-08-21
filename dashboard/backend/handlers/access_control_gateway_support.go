@@ -112,7 +112,11 @@ func copyGatewayResponse(w http.ResponseWriter, response *http.Response, body []
 }
 
 func isGatewayResponseHeader(key string) bool {
-	switch strings.ToLower(key) {
+	normalized := strings.ToLower(key)
+	if strings.HasPrefix(normalized, "x-vsr-") {
+		return true
+	}
+	switch normalized {
 	case "content-type", "cache-control", "x-request-id", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset":
 		return true
 	default:

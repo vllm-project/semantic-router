@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CANONICAL_AUTO_MODEL,
   getRouterModelsEndpoint,
+  listConfiguredBackendModels,
   listRouterModels,
   selectRouterAutoModel,
 } from './routerModelSelection'
@@ -163,6 +164,34 @@ describe('router model selection', () => {
         ],
       }),
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
+  })
+
+  it('lists configured backend models for admin playground testing', () => {
+    expect(
+      listConfiguredBackendModels({
+        providers: {
+          models: [
+            { name: 'local/qwen', provider_model_id: 'upstream/qwen' },
+            { name: ' local/qwen ', provider_model_id: 'duplicate' },
+            { name: 'hosted/claude' },
+            { name: '' },
+            null,
+          ],
+        },
+      }),
+    ).toEqual([
+      {
+        id: 'local/qwen',
+        description: 'upstream/qwen',
+        kind: 'individual',
+      },
+      {
+        id: 'hosted/claude',
+        description: 'Configured backend model',
+        kind: 'individual',
+      },
+    ])
+    expect(listConfiguredBackendModels({ providers: { models: 'invalid' } })).toEqual([])
   })
 
   it('rejects model records without valid routing metadata', () => {

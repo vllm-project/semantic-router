@@ -31,6 +31,9 @@ export default function ChatComposerModelSelect({
       model.description.toLowerCase().includes(normalized)
     )
   })
+  const mixtureModels = filteredModels.filter((model) => model.kind !== 'individual')
+  const individualModels = filteredModels.filter((model) => model.kind === 'individual')
+  const orderedModels = [...mixtureModels, ...individualModels]
 
   const closeMenu = (restoreFocus = false) => {
     setOpen(false)
@@ -38,8 +41,8 @@ export default function ChatComposerModelSelect({
   }
 
   const focusOption = (index: number) => {
-    if (filteredModels.length === 0) return
-    const normalizedIndex = (index + filteredModels.length) % filteredModels.length
+    if (orderedModels.length === 0) return
+    const normalizedIndex = (index + orderedModels.length) % orderedModels.length
     optionRefs.current[normalizedIndex]?.focus()
   }
 
@@ -55,7 +58,7 @@ export default function ChatComposerModelSelect({
       focusOption(0)
     } else if (event.key === 'End') {
       event.preventDefault()
-      focusOption(filteredModels.length - 1)
+      focusOption(orderedModels.length - 1)
     } else if (event.key === 'Escape') {
       event.preventDefault()
       closeMenu(true)
@@ -125,38 +128,49 @@ export default function ChatComposerModelSelect({
                 focusOption(0)
               } else if (event.key === 'ArrowUp') {
                 event.preventDefault()
-                focusOption(filteredModels.length - 1)
+                focusOption(orderedModels.length - 1)
               }
             }}
             autoFocus
           />
           <div id={listboxId} role="listbox" aria-label="Select routing model">
-            {filteredModels.map((model, index) => {
+            {individualModels.length > 0 ? (
+              <span className={styles.groupLabel}>Mixture-of-Models</span>
+            ) : null}
+            {orderedModels.map((model, index) => {
               const active = model.id === value
+              const startsIndividualModels =
+                model.kind === 'individual' && index === mixtureModels.length
               return (
-                <button
-                  ref={(element) => {
-                    optionRefs.current[index] = element
-                  }}
-                  key={model.id}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  className={`${styles.option} ${active ? styles.optionActive : ''}`}
-                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                  onClick={() => {
-                    onChange(model.id)
-                    closeMenu(true)
-                  }}
-                >
-                  <span className={styles.optionIdentity}>
-                    <span className={styles.optionModelId}>{model.id}</span>
-                    {model.recipe ? (
-                      <span className={styles.objectiveChip}>{model.recipe}</span>
-                    ) : null}
-                  </span>
-                  {active ? <span className={styles.activeMark}>✓</span> : null}
-                </button>
+                <div key={model.id}>
+                  {startsIndividualModels ? (
+                    <div className={styles.groupDivider}>
+                      <span>Individual models</span>
+                    </div>
+                  ) : null}
+                  <button
+                    ref={(element) => {
+                      optionRefs.current[index] = element
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={`${styles.option} ${active ? styles.optionActive : ''}`}
+                    onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                    onClick={() => {
+                      onChange(model.id)
+                      closeMenu(true)
+                    }}
+                  >
+                    <span className={styles.optionIdentity}>
+                      <span className={styles.optionModelId}>{model.id}</span>
+                      {model.recipe ? (
+                        <span className={styles.objectiveChip}>{model.recipe}</span>
+                      ) : null}
+                    </span>
+                    {active ? <span className={styles.activeMark}>✓</span> : null}
+                  </button>
+                </div>
               )
             })}
             {filteredModels.length === 0 ? (

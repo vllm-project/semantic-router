@@ -18,4 +18,20 @@ describe('OnboardingGuide contract', () => {
     expect(styles).toContain('overflow-y: auto')
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)')
   })
+
+  it('guides the current model-to-insights product journey', () => {
+    const source = readFileSync(new URL('./OnboardingGuide.tsx', import.meta.url), 'utf8')
+
+    for (const step of [
+      'Connect your models',
+      'Build a Mixture-of-Models',
+      'Test your model path',
+      'Give your team access',
+      'See what the router saved',
+    ]) {
+      expect(source).toContain(step)
+    }
+    expect(source).toContain("route: '/access/teams'")
+    expect(source).toContain("route: '/insights'")
+  })
 })

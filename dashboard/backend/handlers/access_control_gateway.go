@@ -123,7 +123,7 @@ func (h *AccessGatewayHandler) ChatCompletions(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	h.chatCompletions(w, r, principal, "api_key")
+	h.chatCompletions(w, r, principal, "api_key", false)
 }
 
 func (h *AccessGatewayHandler) DashboardChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -135,10 +135,10 @@ func (h *AccessGatewayHandler) DashboardChatCompletions(w http.ResponseWriter, r
 	if !ok {
 		return
 	}
-	h.chatCompletions(w, r, principal, "dashboard_session")
+	h.chatCompletions(w, r, principal, "dashboard_session", dashboardAllowsIndividualModels(r))
 }
 
-func (h *AccessGatewayHandler) chatCompletions(w http.ResponseWriter, r *http.Request, principal *accesscontrol.Principal, credentialType string) {
+func (h *AccessGatewayHandler) chatCompletions(w http.ResponseWriter, r *http.Request, principal *accesscontrol.Principal, credentialType string, allowIndividualModels bool) {
 	started := time.Now()
 	requestID := uuid.NewString()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxGatewayBody))
@@ -152,7 +152,7 @@ func (h *AccessGatewayHandler) chatCompletions(w http.ResponseWriter, r *http.Re
 		writeAccessError(w, http.StatusBadRequest, "model and a valid JSON body are required")
 		return
 	}
-	if !accesscontrol.ModelAllowed(envelope.Model, principal.ModelPatterns) {
+	if !allowIndividualModels && !accesscontrol.ModelAllowed(envelope.Model, principal.ModelPatterns) {
 		h.recordGatewayUsage(principal, requestID, envelope.Model, http.StatusForbidden, started, 0, 0, 0, 0, "model_forbidden", gatewayUsageMetadata(body, nil, envelope.Stream, credentialType))
 		writeAccessError(w, http.StatusForbidden, "this API key is not authorized for the requested model")
 		return
@@ -239,6 +239,10 @@ func (h *AccessGatewayHandler) proxyChatCompletion(
 		}
 	}
 	w.Header().Set("X-Request-ID", requestID)
+	if envelope.Stream {
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("X-Accel-Buffering", "no")
+	}
 	w.WriteHeader(response.StatusCode)
 
 	capture := &limitedCapture{limit: maxGatewayBody}
@@ -288,6 +292,11 @@ func (h *AccessGatewayHandler) proxyChatCompletion(
 		metadata["usageEstimated"] = true
 	}
 	h.recordGatewayUsage(principal, requestID, envelope.Model, response.StatusCode, started, ttft, prompt, completion, total, errorCode, metadata)
+}
+
+func dashboardAllowsIndividualModels(r *http.Request) bool {
+	ac, ok := auth.AuthFromContext(r)
+	return ok && ac.Role == auth.RoleAdmin
 }
 
 func (h *AccessGatewayHandler) authenticate(w http.ResponseWriter, r *http.Request) (*accesscontrol.Principal, bool) {

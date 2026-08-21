@@ -100,6 +100,36 @@
   border-color: rgba(255, 255, 255, 0.22);
 }
 
+.groupLabel {
+  display: block;
+  padding: 7px 10px 5px;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.groupDivider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 7px 10px 3px;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.groupDivider::before,
+.groupDivider::after {
+  height: 1px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  content: '';
+}
+
 .option {
   position: relative;
   display: flex;

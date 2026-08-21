@@ -21,7 +21,19 @@ interface RouterModelsResponse {
 export interface RouterModelOption {
   id: string
   description: string
+  kind?: 'individual'
   recipe?: string
+}
+
+interface ConfiguredBackendModelRecord {
+  name?: unknown
+  provider_model_id?: unknown
+}
+
+interface RouterConfigResponse {
+  providers?: {
+    models?: unknown
+  }
 }
 
 type RouterModelResolution = 'virtual' | 'passthrough'
@@ -153,6 +165,34 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
 
   const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)
   return canonical ? [toOption(canonical)] : models.slice(0, 1).map(toOption)
+}
+
+export function listConfiguredBackendModels(payload: unknown): RouterModelOption[] {
+  if (!payload || typeof payload !== 'object') return []
+
+  const models = (payload as RouterConfigResponse).providers?.models
+  if (!Array.isArray(models)) return []
+
+  const seen = new Set<string>()
+  return models
+    .filter((entry): entry is ConfiguredBackendModelRecord =>
+      Boolean(entry && typeof entry === 'object' && !Array.isArray(entry)),
+    )
+    .map((entry) => {
+      const id = typeof entry.name === 'string' ? entry.name.trim() : ''
+      const providerModelId =
+        typeof entry.provider_model_id === 'string' ? entry.provider_model_id.trim() : ''
+      return {
+        id,
+        description: providerModelId || 'Configured backend model',
+        kind: 'individual' as const,
+      }
+    })
+    .filter((model) => {
+      if (!model.id || seen.has(model.id)) return false
+      seen.add(model.id)
+      return true
+    })
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {

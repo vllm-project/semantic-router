@@ -39,6 +39,17 @@ describe('dashboard product surfaces', () => {
     expect(access).toContain("openCreate('key')")
   })
 
+  it('uses invitation as the only dashboard user creation path', () => {
+    const access = readSource('./AccessControlPage.tsx')
+    const invitation = readSource('./DashboardMemberInviteDialog.tsx')
+
+    expect(access).toContain('<span aria-hidden="true">+</span> Invite user')
+    expect(access).not.toContain("target === 'user'")
+    expect(access).not.toContain("? 'New user'")
+    expect(invitation).toContain('Team (optional)')
+    expect(invitation).toContain('Dashboard role')
+  })
+
   it('keeps every Build manager on the shared banner composition', () => {
     const manager = readSource('./ConfigPageManagerLayout.tsx')
 

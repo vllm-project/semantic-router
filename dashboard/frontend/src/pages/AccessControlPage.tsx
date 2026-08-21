@@ -312,20 +312,17 @@ const AccessControlPage: React.FC = () => {
   )
 
   const openCreate = useCallback(
-    (kind?: AccessEditor['kind']) => {
+    (kind?: Exclude<AccessEditor['kind'], 'user'>) => {
       setEditorError('')
       const target =
         kind ||
         (activeView === 'api-keys'
           ? 'key'
-          : activeView === 'users'
-            ? 'user'
-            : activeView === 'teams'
-              ? 'team'
-              : activeView === 'access-groups'
-                ? 'group'
-                : 'budget')
-      if (target === 'user') setEditor({ kind: 'user', value: { status: 'active' } })
+          : activeView === 'teams'
+            ? 'team'
+            : activeView === 'access-groups'
+              ? 'group'
+              : 'budget')
       if (target === 'team') setEditor({ kind: 'team', value: { status: 'active', userIds: [] } })
       if (target === 'key')
         setEditor({
@@ -412,21 +409,17 @@ const AccessControlPage: React.FC = () => {
 
   const closeDetail = () => navigate(location.pathname, { replace: true })
 
-  const hasCreateAction = ['api-keys', 'users', 'teams', 'access-groups', 'budgets'].includes(
-    activeView,
-  )
+  const hasCreateAction = ['api-keys', 'teams', 'access-groups', 'budgets'].includes(activeView)
   const canCreateCurrent =
     canManage || (selfService && activeView === 'api-keys' && entityTotals['api-keys'] === 0)
   const createLabel =
-    activeView === 'users'
-      ? 'New user'
-      : activeView === 'api-keys'
-        ? 'Create key'
-        : activeView === 'access-groups'
-          ? 'New group'
-          : activeView === 'budgets'
-            ? 'New budget'
-            : 'New team'
+    activeView === 'api-keys'
+      ? 'Create key'
+      : activeView === 'access-groups'
+        ? 'New group'
+        : activeView === 'budgets'
+          ? 'New budget'
+          : 'New team'
 
   useEffect(() => {
     if (activeView !== 'api-keys' || requestedCreateKind !== 'key') {
@@ -524,8 +517,8 @@ const AccessControlPage: React.FC = () => {
           </div>
           <div className={styles.headerActions}>
             {activeView === 'users' && canManageDashboardMembers ? (
-              <button type="button" className={styles.secondaryButton} onClick={() => invite()}>
-                Invite user
+              <button type="button" className={styles.primaryButton} onClick={() => invite()}>
+                <span aria-hidden="true">+</span> Invite user
               </button>
             ) : null}
             {canCreateCurrent && hasCreateAction ? (

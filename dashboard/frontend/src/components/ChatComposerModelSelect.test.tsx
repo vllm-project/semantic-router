@@ -16,6 +16,11 @@ const models = [
     description: 'Latency-first Mixture-of-Models profile',
     recipe: 'speed-first',
   },
+  {
+    id: 'local/qwen',
+    description: 'upstream/qwen',
+    kind: 'individual' as const,
+  },
 ]
 
 describe('ChatComposerModelSelect', () => {
@@ -66,5 +71,18 @@ describe('ChatComposerModelSelect', () => {
     expect(source).toContain('styles.objectiveChip')
     expect(source).not.toContain('recipe: {model.recipe}')
     expect(source).not.toContain('styles.optionDescription')
+  })
+
+  it('separates individual models from Mixture-of-Models', () => {
+    const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(
+      new URL('./ChatComposerModelSelect.module.css', import.meta.url),
+      'utf8',
+    )
+
+    expect(source).toContain('Mixture-of-Models')
+    expect(source).toContain('Individual models')
+    expect(source).toContain("model.kind === 'individual'")
+    expect(styles).toContain('.groupDivider::before')
   })
 })

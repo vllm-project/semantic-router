@@ -36,7 +36,7 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: clamp(0.7rem, 1.2vw, 1.15rem);
+  gap: 0.3rem;
   justify-self: start;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .navSectionSecondary {
-  padding-left: 0.125rem;
+  padding-left: 0;
 }
 
 .navLink {

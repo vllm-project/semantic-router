@@ -55,13 +55,14 @@ const ChatComponent = ({
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const [probeDraft, setProbeDraft] = useState<ActivePlaygroundInvocationDraft | null>(null)
+  const { user, isLoading: authLoading } = useAuth()
   const {
     model,
     models: routingModels,
     retry: retryRoutingModelDiscovery,
     setModel,
     status: routingModelStatus,
-  } = usePlaygroundRoutingModel(endpoint)
+  } = usePlaygroundRoutingModel(endpoint, user?.role === 'admin')
   const isRoutingModelReady = routingModelStatus === 'ready'
   const {
     conversationErrors,
@@ -79,7 +80,6 @@ const ChatComponent = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
-  const { user, isLoading: authLoading } = useAuth()
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
