@@ -119,8 +119,9 @@ type anthropicServerToolUsageBlock struct {
 // anthropicErrorEnvelope is the wire shape Anthropic uses for all
 // error responses on POST /v1/messages.
 type anthropicErrorEnvelope struct {
-	Type  string               `json:"type"`
-	Error anthropicErrorDetail `json:"error"`
+	Type      string               `json:"type"`
+	Error     anthropicErrorDetail `json:"error"`
+	RequestID string               `json:"request_id,omitempty"`
 }
 
 type anthropicErrorDetail struct {
@@ -150,8 +151,12 @@ type anthropicErrorDetail struct {
 //     stop reasons "pause_turn" or "refusal"), it overrides the
 //     OpenAI-derived mapping.
 func EmitAnthropicResponse(responseBody []byte, ext *ir.IRExtensions, model string) ([]byte, error) {
-	if errType, errMsg, ok := openAIErrorBody(responseBody); ok {
-		return EmitAnthropicError(anthropicErrorType(errType), errMsg), nil
+	if errEnvelope, ok := openAIErrorBody(responseBody); ok {
+		return emitAnthropicErrorEnvelope(
+			anthropicErrorType(errEnvelope.Error.Type),
+			errEnvelope.Error.Message,
+			ext.ErrorRequestID(),
+		), nil
 	}
 
 	var oa openai.ChatCompletion
@@ -197,6 +202,12 @@ func EmitAnthropicResponse(responseBody []byte, ext *ir.IRExtensions, model stri
 // unknown errorType is coerced to "api_error" to keep the response
 // structurally valid.
 func EmitAnthropicError(errorType, message string) []byte {
+	return emitAnthropicErrorEnvelope(errorType, message, "")
+}
+
+// emitAnthropicErrorEnvelope is the request_id-aware form of
+// EmitAnthropicError; an empty requestID is omitted from the wire.
+func emitAnthropicErrorEnvelope(errorType, message, requestID string) []byte {
 	if errorType == "" {
 		errorType = anthropicErrorTypeAPI
 	}
@@ -206,6 +217,7 @@ func EmitAnthropicError(errorType, message string) []byte {
 			Type:    errorType,
 			Message: message,
 		},
+		RequestID: requestID,
 	}
 	// Marshal cannot fail for this fixed struct shape.
 	out, _ := json.Marshal(envelope)

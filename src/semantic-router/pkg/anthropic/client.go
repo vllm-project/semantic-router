@@ -165,7 +165,7 @@ func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExte
 	// an empty, success-shaped chat.completion — losing the upstream error
 	// entirely. Preserve it as an OpenAI-shape error body instead; the
 	// upstream HTTP status is forwarded unchanged by the extproc layer.
-	if errBody, ok := anthropicErrorToOpenAIBody(anthropicResponse); ok {
+	if errBody, ok := anthropicErrorToOpenAIBody(anthropicResponse, ext); ok {
 		return errBody, nil
 	}
 

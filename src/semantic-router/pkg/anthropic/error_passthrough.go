@@ -15,6 +15,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
 // openAIErrorEnvelope is the OpenAI error wire shape ({"error":{...}}).
@@ -36,17 +38,22 @@ type openAIErrorDetail struct {
 // anthropicErrorToOpenAIBody converts an Anthropic error envelope
 // ({"type":"error","error":{...}}) into the OpenAI error wire shape
 // ({"error":{"message":...,"type":...}}) so the upstream failure reason
-// survives translation for OpenAI-protocol clients. Returns ok=false for
-// non-error bodies.
+// survives translation for OpenAI-protocol clients. The envelope's
+// request_id is captured onto the sidecar (not the body) for the Anthropic
+// re-emit; OpenAI clients get it via the request-id response header.
+// Returns ok=false for non-error bodies.
 //
 // This is the entry half of a two-stage relay: the OpenAI error body it
 // produces travels through the router's OpenAI-shaped pipeline, and — when
 // the client speaks the Anthropic protocol — openAIErrorBody recognizes it
 // on the way out so EmitAnthropicResponse can re-wrap it as the envelope.
-func anthropicErrorToOpenAIBody(anthropicResponse []byte) ([]byte, bool) {
+func anthropicErrorToOpenAIBody(anthropicResponse []byte, ext *ir.IRExtensions) ([]byte, bool) {
 	var probe anthropic.ErrorResponse
 	if err := json.Unmarshal(anthropicResponse, &probe); err != nil || probe.Type != constant.ValueOf[constant.Error]() {
 		return nil, false
+	}
+	if ext != nil {
+		ext.AnthropicErrorRequestID = probe.RequestID
 	}
 	body, err := json.Marshal(openAIErrorEnvelope{
 		Error: &openAIErrorDetail{
@@ -61,19 +68,19 @@ func anthropicErrorToOpenAIBody(anthropicResponse []byte) ([]byte, bool) {
 }
 
 // openAIErrorBody reports whether responseBody is an OpenAI-shape error
-// ({"error":{...}}) and returns its type and message. Success bodies (and
+// ({"error":{...}}) and returns the parsed envelope. Success bodies (and
 // bodies where "error" is null or a non-object) return ok=false.
 //
 // This is the exit half of the relay: it recognizes error bodies in the
 // pipeline's OpenAI shape — whether produced by anthropicErrorToOpenAIBody
 // or returned natively by an OpenAI-format backend — so the Anthropic
 // emitter re-wraps them instead of flattening them into an empty message.
-func openAIErrorBody(responseBody []byte) (string, string, bool) {
+func openAIErrorBody(responseBody []byte) (*openAIErrorEnvelope, bool) {
 	var probe openAIErrorEnvelope
 	if err := json.Unmarshal(responseBody, &probe); err != nil || probe.Error == nil {
-		return "", "", false
+		return nil, false
 	}
-	return probe.Error.Type, probe.Error.Message, true
+	return &probe, true
 }
 
 // anthropicErrorType maps an arbitrary error-type token to one of

@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
-const anthropicAuthErrorEnvelope = `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`
+const anthropicAuthErrorEnvelope = `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CSHoEeqs5DZitY69wyoEE"}`
 
 // An Anthropic error envelope must survive the Anthropic→OpenAI response
 // translation as an OpenAI-shape error body, not be flattened into an
@@ -29,6 +29,9 @@ func TestToOpenAIResponseBody_PreservesErrorEnvelope(t *testing.T) {
 
 	_, hasChoices := body["choices"]
 	assert.False(t, hasChoices, "error body must not be shaped like a completion")
+
+	_, hasRequestID := body["request_id"]
+	assert.False(t, hasRequestID, "OpenAI error bodies stay spec-pure; request_id rides the sidecar")
 }
 
 // The ext-aware entrypoint takes the same guard path, and the early return
@@ -43,6 +46,7 @@ func TestToOpenAIResponseBodyWithExt_PreservesErrorEnvelope(t *testing.T) {
 	assert.Empty(t, ext.AnthropicStopReason)
 	assert.Zero(t, ext.CacheReadInputTokens)
 	assert.Zero(t, ext.CacheCreationInputTokens)
+	assert.Equal(t, "req_011CSHoEeqs5DZitY69wyoEE", ext.AnthropicErrorRequestID, "request_id captured onto the sidecar")
 }
 
 // A success-shaped message must never be converted into an error body —
@@ -68,7 +72,7 @@ func TestAnthropicErrorToOpenAIBody_IgnoresSuccessBodies(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, ok := anthropicErrorToOpenAIBody([]byte(tc.body))
+			_, ok := anthropicErrorToOpenAIBody([]byte(tc.body), nil)
 			assert.False(t, ok)
 		})
 	}
@@ -106,6 +110,9 @@ func TestEmitAnthropicResponse_OpenAIBackendErrorWithoutType(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "api_error", errObj["type"])
 	assert.Equal(t, "Rate limit reached", errObj["message"])
+
+	_, hasRequestID := envelope["request_id"]
+	assert.False(t, hasRequestID, "absent request_id must be omitted, not empty")
 }
 
 // The emit path applies the error-type mapping, not just the helper in
@@ -143,6 +150,7 @@ func TestAnthropicErrorEnvelopeRoundTrip(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "authentication_error", errObj["type"])
 	assert.Equal(t, "invalid x-api-key", errObj["message"])
+	assert.Equal(t, "req_011CSHoEeqs5DZitY69wyoEE", envelope["request_id"], "request_id survives the round trip")
 }
 
 // OpenAI-only error-type tokens are mapped to Anthropic's defined error
@@ -180,7 +188,7 @@ func TestOpenAIErrorBody_IgnoresNullAndNonObjectError(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, ok := openAIErrorBody([]byte(tc.body))
+			_, ok := openAIErrorBody([]byte(tc.body))
 			assert.False(t, ok)
 		})
 	}
