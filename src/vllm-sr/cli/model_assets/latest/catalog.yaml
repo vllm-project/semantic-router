@@ -54,6 +54,11 @@ models:
         minimum_candidates: 1
         traits: [chat, reasoning, text, long_context]
         recommended_pool: [remote/glm-5.2]
+      - name: agentic
+        required: true
+        minimum_candidates: 1
+        traits: [code, reasoning, tools, structured_output]
+        recommended_pool: [local/qwen3.6-27b-coder]
     verification:
       authority: vllm-sr-maintainers
       asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
@@ -89,6 +94,11 @@ models:
         minimum_candidates: 1
         traits: [chat, reasoning, text, long_context]
         recommended_pool: [remote/glm-5.2]
+      - name: reasoning
+        required: true
+        minimum_candidates: 1
+        traits: [code, reasoning, tools]
+        recommended_pool: [local/qwen3.6-27b-coder]
     verification:
       authority: vllm-sr-maintainers
       asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
@@ -124,6 +134,13 @@ models:
         minimum_candidates: 1
         traits: [chat, reasoning, text, long_context]
         recommended_pool: [remote/glm-5.2]
+      - name: heavy
+        required: true
+        minimum_candidates: 1
+        traits: [code, reasoning, tools, low_latency]
+        recommended_pool:
+          - local/qwen3.6-27b-coder
+          - local/deepseek-v4-flash-analyst
     verification:
       authority: vllm-sr-maintainers
       asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
@@ -163,6 +180,11 @@ models:
           - local/qwen3.6-35b-flash
           - local/deepseek-v4-flash-analyst
           - remote/glm-5.2
+      - name: planner
+        required: true
+        minimum_candidates: 1
+        traits: [code, reasoning, tools, structured_output]
+        recommended_pool: [local/qwen3.6-27b-coder]
     verification:
       authority: vllm-sr-maintainers
       asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
