@@ -1911,25 +1911,6 @@
   padding: 2.4rem 2rem 2rem;
   text-align: center;
 }
-.inviteAvatar {
-  width: 58px;
-  height: 58px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
-  border: 1px solid rgba(112, 165, 255, 0.28);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 35% 30%,
-    rgba(144, 189, 255, 0.28),
-    rgba(112, 165, 255, 0.08)
-  );
-  color: #d7e6ff;
-  font-size: 0.88rem;
-  font-weight: 760;
-  letter-spacing: 0.04em;
-}
 .inviteResult h2 {
   margin: 0.35rem 0 0;
   font-size: 1.55rem;

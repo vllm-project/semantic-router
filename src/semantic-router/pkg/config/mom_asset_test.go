@@ -28,11 +28,12 @@ func TestMoMRuntimeContract(t *testing.T) {
 		}
 		decisionCount += len(recipe.Profile.Decisions)
 	}
-	if decisionCount != 23 {
-		t.Fatalf("decision count = %d, want 23", decisionCount)
+	if decisionCount != 26 {
+		t.Fatalf("decision count = %d, want 26", decisionCount)
 	}
 
 	assertMoMModelPool(t, cfg)
+	assertMoMCapabilityLanes(t, cfg)
 	assertMoMNoSystemPromptPlugins(t, cfg)
 	assertMoMOrchestrationBudgets(t, cfg)
 	assertMoMReplayBoundary(t, cfg)
@@ -126,8 +127,8 @@ func assertMoMVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
 	if !ok {
 		t.Fatal("missing Vault recipe")
 	}
-	if len(vault.Profile.Decisions) != 4 {
-		t.Fatalf("Vault decision count = %d, want 4", len(vault.Profile.Decisions))
+	if len(vault.Profile.Decisions) != 5 {
+		t.Fatalf("Vault decision count = %d, want 5", len(vault.Profile.Decisions))
 	}
 	for index := range vault.Profile.Decisions {
 		decision := &vault.Profile.Decisions[index]
@@ -142,8 +143,9 @@ func assertMoMModelPool(t *testing.T, cfg *RouterConfig) {
 	want := []string{
 		"local/deepseek-v4-flash-analyst",
 		"local/gemma4-26b-balanced",
+		"local/qwen3-coder-next",
 		"local/qwen3.5-122b-frontier",
-		"local/qwen3.6-27b-coder",
+		"local/qwen3.6-27b-omni",
 		"local/qwen3.6-35b-flash",
 		"remote/glm-5.2",
 	}
@@ -154,6 +156,25 @@ func assertMoMModelPool(t *testing.T, cfg *RouterConfig) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Fatalf("vLLM-SR MoM model pool = %v, want %v", got, want)
+	}
+}
+
+func assertMoMCapabilityLanes(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	for _, recipeName := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
+		decision := momDecision(t, cfg, recipeName, "omni")
+		if len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "local/qwen3.6-27b-omni" {
+			t.Fatalf("recipe %q omni lane = %+v", recipeName, decision.ModelRefs)
+		}
+	}
+	agentic := momDecision(t, cfg, "balance", "agentic")
+	if len(agentic.ModelRefs) == 0 || agentic.ModelRefs[0].Model != "local/qwen3-coder-next" {
+		t.Fatalf("balance agentic lane = %+v", agentic.ModelRefs)
+	}
+	workflow := momDecision(t, cfg, "accuracy", "orchestrate")
+	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
+		workflow.Algorithm.Workflows.Planner.Model != "local/qwen3-coder-next" {
+		t.Fatalf("accuracy planner lane = %+v", workflow.Algorithm)
 	}
 }
 

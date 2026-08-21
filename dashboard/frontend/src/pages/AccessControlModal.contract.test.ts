@@ -25,6 +25,14 @@ describe('access-control modal experience', () => {
     expect(page).toContain("openDetail('key', keyID)")
   })
 
+  it('keeps the generated invitation result focused on the vLLM mark', () => {
+    const dialog = readSource('./DashboardMemberInviteDialog.tsx')
+
+    expect(dialog).toContain('Invitation ready')
+    expect(dialog).toContain('<img src="/vllm.png" alt="" />')
+    expect(dialog).not.toContain('styles.inviteAvatar')
+  })
+
   it('uses a centered vLLM entity dialog with an explicit Team member roster', () => {
     const detail = readSource('./AccessEntityDetail.tsx')
     const styles = readSource('./AccessControlPage.module.css')

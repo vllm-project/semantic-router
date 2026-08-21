@@ -73,9 +73,7 @@ const Layout: React.FC<LayoutProps> = ({
     canAccessMenuItem,
   )
   const operateMenuCategories = filterLayoutMenuCategories(
-    modelConsumer
-      ? OPERATE_MENU_CATEGORIES.filter((category) => category.key === 'platform')
-      : [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
+    modelConsumer ? [] : [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
     (item, category) =>
       canAccessMenuItem(item) &&
       (fleetSimEnabled || category.key !== 'fleet-simulation') &&

@@ -291,9 +291,10 @@ fixtures:
                 fixture: pixel
 """
         for item_type in ("IMAGE_FIXTURE", "' image_fixture '"):
-            with self.subTest(
-                item_type=item_type
-            ), tempfile.TemporaryDirectory() as tempdir:
+            with (
+                self.subTest(item_type=item_type),
+                tempfile.TemporaryDirectory() as tempdir,
+            ):
                 manifest_path = Path(tempdir) / "probes.yaml"
                 _write_probe_manifest(
                     manifest_path,
@@ -632,11 +633,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "875a7fd68bf9a58ac2a6ea3ad099cdb71ab70c9ab3a1392b1c7234e495022db3",
+            "6ee8e85b50c8842e7b2dd3cafd044a7b52da0a96b617025d2cedba48c0a14486",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "a42d6fa0ef2c132cccee91ca4d8621aaf1cef3282569a17727cc042f9e47f5a8",
+            "f31220cda72519458dde092fc8a1ea9d7be00c3b446044ac780f748352097f02",
         )
 
 

@@ -64,10 +64,7 @@ func TestReadOnlyUsersReceiveScopedAnalysisWithoutOperatorPermissions(t *testing
 			t.Fatalf("role %q replay permission = %v", role, hasReplay)
 		}
 	}
-	if !containsPermission(DefaultRolePermissions[RoleRead], PermEvalRead) {
-		t.Fatalf("read role should have scoped evaluation access")
-	}
-	for _, permission := range []string{PermOpenClawRead, PermMcpRead, PermStatusRead} {
+	for _, permission := range []string{PermEvalRead, PermOpenClawRead, PermMcpRead, PermStatusRead} {
 		if containsPermission(DefaultRolePermissions[RoleRead], permission) {
 			t.Fatalf("read role should not have operate permission %q", permission)
 		}

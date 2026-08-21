@@ -46,7 +46,7 @@ var DefaultRolePermissions = map[string][]string{
 	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermAccessRead, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead, PermStatusRead},
 	// Read is the model-consumer surface: routing is inspectable while model
 	// credentials, request logs, and usage remain scoped to the signed-in user.
-	RoleRead: {PermConfigRead, PermEvalRead, PermTopologyRead, PermToolsUse, PermReplayRead, PermAccessSelf, PermUsageSelf},
+	RoleRead: {PermConfigRead, PermTopologyRead, PermToolsUse, PermReplayRead, PermAccessSelf, PermUsageSelf},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}

@@ -95,6 +95,7 @@ export function canAccessDashboardPath(
       normalizedPath.startsWith('/taxonomy') ||
       normalizedPath.startsWith('/fleet-sim') ||
       normalizedPath.startsWith('/ml-setup') ||
+      normalizedPath.startsWith('/evaluation') ||
       normalizedPath.startsWith('/status') ||
       normalizedPath.startsWith('/clawos') ||
       normalizedPath.startsWith('/openclaw') ||

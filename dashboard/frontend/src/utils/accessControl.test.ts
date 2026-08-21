@@ -95,9 +95,10 @@ describe('config write access', () => {
     expect(canAccessDashboardPath(consumer, '/config/global-config')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/status')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/insights')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/evaluation')).toBe(false)
   })
 
-  it('keeps live verification operator-only while allowing scoped read-only analysis', () => {
+  it('keeps operator surfaces unavailable to model consumers', () => {
     const reader = {
       role: 'read',
       permissions: [
@@ -111,7 +112,7 @@ describe('config write access', () => {
     }
     expect(isModelConsumer(reader)).toBe(true)
     expect(canAccessDashboardPath(reader, '/insights')).toBe(true)
-    expect(canAccessDashboardPath(reader, '/evaluation')).toBe(true)
+    expect(canAccessDashboardPath(reader, '/evaluation')).toBe(false)
     expect(canVerifyModels(reader)).toBe(false)
     expect(canVerifyModels({ permissions: ['status.read'] })).toBe(true)
   })

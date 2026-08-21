@@ -4,7 +4,7 @@
 
 ## Overview
 
-vLLM-SR MoM V1 exposes five stable virtual models over six complementary
+vLLM-SR MoM V1 exposes five stable virtual models over seven complementary
 OpenAI-compatible backends. Each entrypoint applies a distinct objective while
 keeping physical model placement and checkpoint details out of client code.
 
@@ -15,11 +15,11 @@ services before serving these entrypoints.
 
 | Public model ID | Best for | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | General-purpose traffic across quality, latency, cost, and workload complexity. | `simple`, `medium`, `complex`, `agentic` |
-| `vllm-sr/mom-v1-flash` | Interactive applications, tools, and visual requests. | `instant`, `heavy`, `visual`, `tooling`, `extended` |
-| `vllm-sr/mom-v1-lite` | High-volume traffic with bounded spend on harder work. | `economy`, `reasoning`, `visual`, `extended` |
-| `vllm-sr/mom-v1-ultra` | Verification, expert synthesis, and bounded orchestration. | `direct`, `verify`, `experts`, `orchestrate`, `extended`, `resume` |
-| `vllm-sr/mom-v1-vault` | Sensitive workloads that must remain on the local pool. | `private`, `restricted_tools`, `containment`, `sensitive` |
+| `vllm-sr/mom-v1-blend` | General-purpose traffic across quality, latency, cost, and workload complexity. | `simple`, `medium`, `complex`, `agentic`, `omni` |
+| `vllm-sr/mom-v1-flash` | Interactive applications, tools, and visual requests. | `instant`, `heavy`, `omni`, `tooling`, `extended` |
+| `vllm-sr/mom-v1-lite` | High-volume traffic with bounded spend on harder work. | `economy`, `reasoning`, `omni`, `extended` |
+| `vllm-sr/mom-v1-ultra` | Verification, expert synthesis, and bounded orchestration. | `direct`, `verify`, `experts`, `orchestrate`, `extended`, `resume`, `omni` |
+| `vllm-sr/mom-v1-vault` | Sensitive workloads that must remain on the local pool. | `private`, `restricted_tools`, `containment`, `sensitive`, `omni` |
 
 The public IDs are stable within MoM V1. Decision and provider assignments can
 evolve with a new policy version.
@@ -40,7 +40,8 @@ backend safety controls.
 | --- | --- | ---: |
 | `local/qwen3.6-35b-flash` | Default low-latency chat, tools, structured output, and vision | 262,144 |
 | `local/gemma4-26b-balanced` | Architecture-diverse multilingual and multimodal balance | 131,072 |
-| `local/qwen3.6-27b-coder` | Coding, tool use, planning, and structured agentic work | 262,144 |
+| `local/qwen3.6-27b-omni` | Dedicated image understanding, documents, and multimodal tool use | 262,144 |
+| `local/qwen3-coder-next` | Dedicated coding, tool use, planning, and structured agentic work | 262,144 |
 | `local/qwen3.5-122b-frontier` | Local frontier synthesis, review, privacy, and vision | 262,144 |
 | `local/deepseek-v4-flash-analyst` | Independent text analysis, code, and long-context review | 262,144 |
 | `remote/glm-5.2` | Remote frontier synthesis, judging, and terminal text context | 524,288 |
@@ -51,9 +52,9 @@ capabilities, context limits, API dialects, and tool behavior match the card.
 
 ## Routing behavior
 
-Blend maps ordinary work to the fast local pair, multimodal and conversational
-work to a broader local pool, difficult text synthesis to the remote frontier,
-and tool-driven work to coding and analysis specialists.
+Blend maps ordinary work to the fast local pair, images to the dedicated omni
+model, difficult text synthesis to the remote frontier, and tool-driven work to
+coding and analysis specialists.
 
 Flash chooses from latency-aware local pools and reserves the remote frontier
 for text beyond the conservative 240K boundary. Lite weights cost most heavily

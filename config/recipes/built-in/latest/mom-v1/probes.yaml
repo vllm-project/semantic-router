@@ -55,7 +55,7 @@ decisions:
   model: vllm-sr/mom-v1-blend
   expected_recipe: balance
   expected_decision: agentic
-  expected_algorithm: multi_factor
+  expected_algorithm: static
   variants:
   - id: balance_over_240k_text_guard__boundary_orchestration_tools_collision
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the result.
@@ -673,11 +673,12 @@ decisions:
       - balance_multi_turn
       projection:
       - balance_needs_recovery
-- id: balance_medium
+- id: balance_omni
   model: vllm-sr/mom-v1-blend
   expected_recipe: balance
-  expected_decision: medium
-  expected_algorithm: multi_factor
+  expected_decision: omni
+  expected_algorithm: static
+  expected_alias: local/qwen3.6-27b-omni
   variants:
   - id: balance_over_240k_image_guard__image_at_first_over_240k_token
     display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual finding.
@@ -1109,6 +1110,12 @@ decisions:
       - balance_context_from_120k_to_240k
       conversation:
       - balance_has_images
+- id: balance_medium
+  model: vllm-sr/mom-v1-blend
+  expected_recipe: balance
+  expected_decision: medium
+  expected_algorithm: multi_factor
+  variants:
   - id: balance_standard__ordinary_messages
     messages:
     - role: user
@@ -1160,20 +1167,14 @@ decisions:
       projection:
       - balance_direct_workload
       - balance_no_recovery_needed
-  - id: balance_standard__long_context_without_deliberate_pressure
-    display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled in
-        Playground.
+  - id: balance_standard__background_without_deliberate_pressure
     query: Background service inventory for a direct summary with no additional analysis requested.
-    repeat: 900
+    repeat: 120
     tags:
     - language:en
     - balanced
     - negative
     - benign-negative
-    - stress:long-input
   - id: balance_standard__negated_deliberation
     query: Do not analyze the tradeoffs; answer briefly in one sentence.
     tags:
@@ -1489,12 +1490,12 @@ decisions:
       - speed_has_tools
       projection:
       - speed_heavy_workload_required
-- id: speed_visual
+- id: speed_omni
   model: vllm-sr/mom-v1-flash
   expected_recipe: speed
-  expected_decision: visual
+  expected_decision: omni
   expected_algorithm: static
-  expected_alias: local/qwen3.6-35b-flash
+  expected_alias: local/qwen3.6-27b-omni
   variants:
   - id: speed_over_240k_image_guard__image_at_first_over_240k_token
     display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual finding.
@@ -2277,12 +2278,12 @@ decisions:
     expected_signals:
       context:
       - cost_exceeds_240k_context
-- id: cost_visual
+- id: cost_omni
   model: vllm-sr/mom-v1-lite
   expected_recipe: cost
-  expected_decision: visual
+  expected_decision: omni
   expected_algorithm: static
-  expected_alias: local/qwen3.6-35b-flash
+  expected_alias: local/qwen3.6-27b-omni
   variants:
   - id: cost_over_240k_image_guard__image_at_first_over_240k_token
     display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual finding.
@@ -3048,8 +3049,6 @@ decisions:
       keywords:
       - cost_reasoning_opt_out_phrases
       - cost_reasoning_request_phrases
-      complexity:
-      - cost_complexity:easy
       projection:
       - cost_allows_direct_economy
 - id: accuracy_resume
@@ -3088,8 +3087,6 @@ decisions:
       conversation:
       - accuracy_active_tool_loop
       - accuracy_has_tool_result
-      projection:
-      - accuracy_direct_without_workflow
   - id: accuracy_text_tool_result_synthesis__workflow_marker_tool_result_collision
     messages:
     - role: user
@@ -3256,8 +3253,6 @@ decisions:
       - accuracy_has_images
       - accuracy_active_tool_loop
       - accuracy_has_tool_result
-      projection:
-      - accuracy_direct_without_workflow
   - id: accuracy_image_tool_result_synthesis__image_tool_result_from_120k_to_240k
     display_prompt: Synthesize the verified image-tool result from this long conversation, preserving its sentinel and visual
       finding.
@@ -3614,8 +3609,6 @@ decisions:
     expected_signals:
       keywords:
       - accuracy_multi_round_exploration_phrases
-      complexity:
-      - accuracy_complexity:hard
       projection:
       - accuracy_requires_multi_round_exploration
   - id: accuracy_multi_round_exploration__recursive_search_zh
@@ -3882,8 +3875,6 @@ decisions:
     expected_signals:
       keywords:
       - accuracy_verification_request_phrases
-      embeddings:
-      - accuracy_verification_intent
       projection:
       - accuracy_requires_confidence_escalation
   - id: accuracy_confidence_escalation__factual_escalation_zh
@@ -3895,16 +3886,18 @@ decisions:
     expected_signals:
       keywords:
       - accuracy_verification_request_phrases
+      embeddings:
+      - accuracy_verification_intent
       projection:
       - accuracy_requires_confidence_escalation
       language:
       - zh
-- id: accuracy_direct
+- id: accuracy_omni
   model: vllm-sr/mom-v1-ultra
   expected_recipe: accuracy
-  expected_decision: direct
+  expected_decision: omni
   expected_algorithm: static
-  expected_alias: local/qwen3.5-122b-frontier
+  expected_alias: local/qwen3.6-27b-omni
   variants:
   - id: accuracy_over_240k_image_guard__image_at_first_over_240k_token
     display_prompt: Analyze the attached image at the 240K context boundary and explain the most important visual finding.
@@ -4194,8 +4187,6 @@ decisions:
     expected_signals:
       conversation:
       - accuracy_active_tool_loop
-      projection:
-      - accuracy_direct_without_workflow
   - id: accuracy_direct__orchestration_words_without_request_phrases
     query: Summarize why workflow, fusion, confidence, and recursion are architecture labels.
     tags:
@@ -4236,7 +4227,6 @@ decisions:
       conversation:
       - accuracy_multiple_tools_available
       projection:
-      - accuracy_direct_without_workflow
       - accuracy_direct_single_pass
   - id: accuracy_direct__exact_json_direct
     query: Return exactly one JSON object that must preserve identifier 9007199254740993 and include at least three fields.
@@ -4352,15 +4342,15 @@ decisions:
       - ru
       projection:
       - accuracy_direct_single_pass
-- id: vault_sensitive
+- id: vault_omni
   model: vllm-sr/mom-v1-vault
   expected_recipe: vault
-  expected_decision: sensitive
+  expected_decision: omni
   expected_algorithm: static
   expected_plugins:
   - tools
   - router_replay
-  expected_alias: local/qwen3.5-122b-frontier
+  expected_alias: local/qwen3.6-27b-omni
   variants:
   - id: vault_over_240k_image_guard__image_above_qwen36_native_limit
     display_prompt: Evaluate an image request whose context exceeds the native 262K limit and verify that it stays on the
@@ -4397,6 +4387,55 @@ decisions:
       - vault_exceeds_240k_context
       conversation:
       - vault_has_images
+  - id: vault_image__image_description
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Describe the object in this image in one sentence.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      conversation:
+      - vault_has_images
+  - id: vault_image__chart_followup_paraphrase
+    messages:
+    - role: user
+      content: I need a concise chart summary.
+    - role: assistant
+      content: Please provide the chart.
+    - role: user
+      content:
+      - type: text
+        text: State the main trend shown here.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multi_turn
+    - multimodal
+    - image
+    - paraphrase
+    expected_signals:
+      conversation:
+      - vault_has_images
+- id: vault_sensitive
+  model: vllm-sr/mom-v1-vault
+  expected_recipe: vault
+  expected_decision: sensitive
+  expected_algorithm: static
+  expected_plugins:
+  - tools
+  - router_replay
+  expected_alias: local/qwen3.5-122b-frontier
+  variants:
   - id: vault_over_240k_text_guard__text_at_first_over_240k_band
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
@@ -4469,45 +4508,6 @@ decisions:
     expected_signals:
       context:
       - vault_context_from_120k_to_240k
-  - id: vault_image__image_description
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Describe the object in this image in one sentence.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - positive
-    expected_signals:
-      conversation:
-      - vault_has_images
-  - id: vault_image__chart_followup_paraphrase
-    messages:
-    - role: user
-      content: I need a concise chart summary.
-    - role: assistant
-      content: Please provide the chart.
-    - role: user
-      content:
-      - type: text
-        text: State the main trend shown here.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multi_turn
-    - multimodal
-    - image
-    - paraphrase
-    expected_signals:
-      conversation:
-      - vault_has_images
   - id: vault_sensitive__local_only_en
     query: Summarize this confidential customer incident using local processing only, and do not send any of its details to
       the cloud.
@@ -4538,10 +4538,9 @@ decisions:
       - vault_privacy_policy
       projection:
       - vault_sensitive_risk
-  - id: vault_sensitive__privacy_kb_only
+  - id: vault_sensitive__due_diligence_policy
     query: Summarize the M&A due diligence report for the upcoming acquisition.
-    notes: The privacy knowledge base alone must be able to select the stronger local minimization lane; no sensitive phrase,
-      PII, or jailbreak evidence is present.
+    notes: Explicit due-diligence language and matching privacy policy evidence jointly select the protected local lane.
     tags:
     - language:en
     - privacy
@@ -4549,6 +4548,8 @@ decisions:
     - signal:kb
     - positive
     expected_signals:
+      keywords:
+      - vault_sensitive_request_phrases
       kb:
       - vault_privacy_policy
       projection:

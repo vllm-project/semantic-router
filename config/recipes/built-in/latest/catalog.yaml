@@ -21,7 +21,7 @@ defaults:
 assets:
   - id: mom-v1
     bundle: mom-v1
-    sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+    sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62
 models:
   - id: vllm-sr/mom-v1-blend
     display_name: MoM V1 Blend
@@ -29,7 +29,7 @@ models:
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-blend
     recipe: balance
@@ -54,21 +54,26 @@ models:
         minimum_candidates: 1
         traits: [chat, reasoning, text, long_context]
         recommended_pool: [remote/glm-5.2]
+      - name: omni
+        required: true
+        minimum_candidates: 1
+        traits: [chat, vision, multimodal, tools, long_context]
+        recommended_pool: [local/qwen3.6-27b-omni]
       - name: agentic
         required: true
         minimum_candidates: 1
         traits: [code, reasoning, tools, structured_output]
-        recommended_pool: [local/qwen3.6-27b-coder]
+        recommended_pool: [local/qwen3-coder-next]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+      asset_sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62
   - id: vllm-sr/mom-v1-lite
     display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-lite
     recipe: cost
@@ -86,9 +91,7 @@ models:
         required: true
         minimum_candidates: 1
         traits: [chat, vision, multimodal, long_context]
-        recommended_pool:
-          - local/qwen3.6-35b-flash
-          - local/gemma4-26b-balanced
+        recommended_pool: [local/qwen3.6-27b-omni]
       - name: terminal_context
         required: true
         minimum_candidates: 1
@@ -98,17 +101,17 @@ models:
         required: true
         minimum_candidates: 1
         traits: [code, reasoning, tools]
-        recommended_pool: [local/qwen3.6-27b-coder]
+        recommended_pool: [local/qwen3-coder-next]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+      asset_sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62
   - id: vllm-sr/mom-v1-flash
     display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-flash
     recipe: speed
@@ -123,12 +126,10 @@ models:
           - local/qwen3.6-35b-flash
           - local/gemma4-26b-balanced
       - name: vision
-        required: false
+        required: true
         minimum_candidates: 1
         traits: [vision, multimodal, tools]
-        recommended_pool:
-          - local/qwen3.6-35b-flash
-          - local/gemma4-26b-balanced
+        recommended_pool: [local/qwen3.6-27b-omni]
       - name: terminal_context
         required: true
         minimum_candidates: 1
@@ -139,18 +140,18 @@ models:
         minimum_candidates: 1
         traits: [code, reasoning, tools, low_latency]
         recommended_pool:
-          - local/qwen3.6-27b-coder
+          - local/qwen3-coder-next
           - local/deepseek-v4-flash-analyst
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+      asset_sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62
   - id: vllm-sr/mom-v1-ultra
     display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-ultra
     recipe: accuracy
@@ -184,17 +185,22 @@ models:
         required: true
         minimum_candidates: 1
         traits: [code, reasoning, tools, structured_output]
-        recommended_pool: [local/qwen3.6-27b-coder]
+        recommended_pool: [local/qwen3-coder-next]
+      - name: omni
+        required: true
+        minimum_candidates: 1
+        traits: [vision, multimodal, structured_output, long_context]
+        recommended_pool: [local/qwen3.6-27b-omni]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+      asset_sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62
   - id: vllm-sr/mom-v1-vault
     display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
     kind: virtual
     family: mom
     generation: 1
-    policy_version: 1.1.0
+    policy_version: 1.2.0
     asset: mom-v1
     entrypoint: vllm-sr/mom-v1-vault
     recipe: vault
@@ -214,6 +220,7 @@ models:
         minimum_candidates: 1
         traits: [local_only, vision, multimodal]
         recommended_pool:
+          - local/qwen3.6-27b-omni
           - local/qwen3.5-122b-frontier
           - local/qwen3.6-35b-flash
           - local/gemma4-26b-balanced
@@ -224,4 +231,4 @@ models:
         recommended_pool: [local/qwen3.5-122b-frontier]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
+      asset_sha256: sha256:f918dcccde1ceea624e371b5329acc234e1bf713dbe1168ab0b628c4eee49c62

@@ -33,7 +33,7 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual([recipe.name for recipe in inventory], ["mom-v1"])
         mom = inventory[0]
         self.assertEqual(len(mom.entrypoints), 5)
-        self.assertEqual(len(mom.decisions), 23)
+        self.assertEqual(len(mom.decisions), 26)
         self.assertEqual(mom.variants, 223)
         self.assertTrue(mom.coverage["passed"])
 

@@ -1,9 +1,9 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: mom-v1
 name: vLLM-SR MoM V1
-version: 1.1.0
+version: 1.2.0
 description: >-
-  A five-entrypoint reference recipe that composes six complementary local and
+  A five-entrypoint reference recipe that composes seven complementary local and
   remote models across balanced, cost, speed, accuracy, and privacy profiles.
 authors:
   - name: vLLM Semantic Router Maintainers

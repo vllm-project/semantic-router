@@ -112,14 +112,6 @@ export default function DashboardMemberInviteDialog({
               <div className={styles.modalLogo} aria-hidden="true">
                 <img src="/vllm.png" alt="" />
               </div>
-              <div className={styles.inviteAvatar}>
-                {result.name
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((part) => part[0])
-                  .join('')
-                  .toUpperCase()}
-              </div>
               <span className={styles.modalEyebrow}>Invitation ready</span>
               <h2 id="invite-title">We’re ready for {result.name}.</h2>
               <p>
