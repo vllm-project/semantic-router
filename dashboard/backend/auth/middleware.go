@@ -20,11 +20,10 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID       string
-	AccessUserID string
-	Email        string
-	Role         string
-	Perms        map[string]bool
+	UserID string
+	Email  string
+	Role   string
+	Perms  map[string]bool
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
@@ -60,11 +59,10 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID:       user.ID,
-				AccessUserID: user.InferenceConsumerID,
-				Email:        user.Email,
-				Role:         user.Role,
-				Perms:        perms,
+				UserID: user.ID,
+				Email:  user.Email,
+				Role:   user.Role,
+				Perms:  perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

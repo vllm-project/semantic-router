@@ -5,8 +5,17 @@ export interface AccessUser {
   email: string
   name: string
   status: AccessStatus
+  accessGroupIds: string[]
+  budgetId?: string
+  memberships: TeamMembership[]
   createdAt?: string
   updatedAt?: string
+}
+
+export interface TeamMembership {
+  teamId: string
+  userId: string
+  role: 'admin' | 'member'
 }
 
 export interface AccessTeam {
@@ -14,27 +23,36 @@ export interface AccessTeam {
   name: string
   description: string
   status: AccessStatus
-  userIds: string[]
+  members: TeamMembership[]
   accessGroupIds: string[]
-  budget?: { rpm: number; tpm: number; dailyTokens: number }
+  budgetId: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface SelfTeamCatalog {
+  items: AccessTeam[]
+  members: Array<Pick<AccessUser, 'id' | 'email' | 'name' | 'status'>>
+  accessGroups: AccessGroup[]
+  budgets: AccessBudget[]
 }
 
 export interface AccessAPIKey {
   id: string
   name: string
   prefix: string
-  userId?: string
-  teamId?: string
-  effectiveTeamId?: string
+  contextTeamId?: string
+  ownerType: 'user' | 'team'
+  ownerId: string
   budgetId?: string
   status: AccessStatus
   expiresAt?: string
   lastUsedAt?: string
   accessGroupIds: string[]
   modelPatterns?: string[]
-  budget?: { rpm: number; tpm: number; dailyTokens: number }
+  modelPolicySource?: 'key' | 'user' | 'team'
+  effectiveBudgetId?: string
+  budgetPolicySource?: 'key' | 'user' | 'team'
   createdAt?: string
 }
 
@@ -42,17 +60,12 @@ export interface CreatedAccessAPIKey extends AccessAPIKey {
   secret: string
 }
 
-export interface AccessBinding {
-  subjectType: 'user' | 'team' | 'key'
-  subjectId: string
-}
-
 export interface AccessGroup {
   id: string
   name: string
   description: string
   modelPatterns: string[]
-  bindings: AccessBinding[]
+  assignmentCount: number
   createdAt?: string
   updatedAt?: string
 }
@@ -60,12 +73,12 @@ export interface AccessGroup {
 export interface AccessBudget {
   id: string
   name: string
-  scopeType: 'global' | 'user' | 'team' | 'key'
-  scopeId: string
+  description: string
   rpm: number
   tpm: number
   dailyTokens: number
   enabled: boolean
+  assignmentCount: number
   createdAt?: string
   updatedAt?: string
 }
@@ -212,9 +225,9 @@ export const inferenceAccessApi = {
   users: (params: AccessListParams = {}) =>
     request<AccessPage<AccessUser>>(`/users${query(params)}`),
   user: (id: string) => request<AccessUser>(`/users/${encodeURIComponent(id)}`),
-  saveUser: (item: Partial<AccessUser>) =>
-    request<AccessUser>(item.id ? `/users/${item.id}` : '/users', {
-      method: item.id ? 'PUT' : 'POST',
+  saveUser: (item: Partial<AccessUser> & { id: string }) =>
+    request<AccessUser>(`/users/${encodeURIComponent(item.id)}`, {
+      method: 'PUT',
       body: JSON.stringify(item),
     }),
   deleteUser: (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
@@ -271,15 +284,26 @@ export const inferenceAccessApi = {
   auditLogs: (filter: AccessListParams = {}) =>
     request<AccessPage<AccessAuditEvent>>(`/audit-logs${query(filter)}`),
   selfOverview: () => selfRequest<AccessOverview>('/overview'),
-  selfTeams: () => selfRequest<{ items: AccessTeam[] }>('/teams'),
+  selfTeams: () => selfRequest<SelfTeamCatalog>('/teams'),
+  selfTeam: (id: string) => selfRequest<AccessTeam>(`/teams/${encodeURIComponent(id)}`),
+  saveSelfTeam: (item: Partial<AccessTeam> & { id: string }) =>
+    selfRequest<AccessTeam>(`/teams/${encodeURIComponent(item.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    }),
   selfKeys: () => selfRequest<AccessPage<AccessAPIKey>>('/api-keys'),
   selfKey: (id: string) => selfRequest<AccessAPIKey>(`/api-keys/${encodeURIComponent(id)}`),
   selfKeySecret: (id: string) =>
     selfRequest<{ secret: string }>(`/api-keys/${encodeURIComponent(id)}/secret`),
-  createSelfKey: (name: string) =>
+  createSelfKey: (
+    name: string,
+    ownerType: 'user' | 'team',
+    ownerId: string,
+    contextTeamId?: string,
+  ) =>
     selfRequest<CreatedAccessAPIKey>('/api-keys', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, ownerType, ownerId, contextTeamId }),
     }),
   rotateSelfKey: (id: string) =>
     selfRequest<CreatedAccessAPIKey>(`/api-keys/${encodeURIComponent(id)}/rotate`, {

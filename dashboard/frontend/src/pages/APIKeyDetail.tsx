@@ -89,6 +89,9 @@ export function APIKeyDetail({
   }, [copied])
 
   const patterns = useMemo(() => (key ? effectivePatterns(key, groups) : []), [groups, key])
+  const effectiveBudget = key
+    ? budgets.find((budget) => budget.id === (key.effectiveBudgetId || key.budgetId))
+    : undefined
   const model = patterns.find((pattern) => !pattern.includes('*')) || 'vllm-sr/mom-v1-lite'
   const baseURL = `${window.location.origin}/v1`
   const snippets = useMemo(
@@ -173,14 +176,19 @@ export function APIKeyDetail({
         tabIndex={-1}
       >
         <header className={styles.detailHeader}>
-          <div>
-            <span>API Key</span>
-            <h2 id="key-detail-title">{key?.name || 'Key details'}</h2>
-            <p>
-              {key
-                ? `${key.prefix}•••••••• · ${ownerLabel(key, users, teams)}`
-                : 'Loading key details…'}
-            </p>
+          <div className={styles.detailHeaderIdentity}>
+            <div className={styles.modalLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span>API Key</span>
+              <h2 id="key-detail-title">{key?.name || 'Key details'}</h2>
+              <p>
+                {key
+                  ? `${key.prefix}•••••••• · ${ownerLabel(key, users, teams)}`
+                  : 'Loading key details…'}
+              </p>
+            </div>
           </div>
           <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
             ×
@@ -276,9 +284,18 @@ export function APIKeyDetail({
                   <div>
                     <dt>Budget</dt>
                     <dd>
-                      {key.budgetId
-                        ? budgets.find((budget) => budget.id === key.budgetId)?.name || key.budgetId
-                        : 'None linked'}
+                      {effectiveBudget
+                        ? `${effectiveBudget.name} · ${key.budgetPolicySource || 'key'} policy`
+                        : 'No quota policy'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Team context</dt>
+                    <dd>
+                      {key.contextTeamId
+                        ? teams.find((team) => team.id === key.contextTeamId)?.name ||
+                          key.contextTeamId
+                        : 'Personal policy'}
                     </dd>
                   </div>
                   <div>
@@ -298,17 +315,23 @@ export function APIKeyDetail({
                     </dd>
                   </div>
                   <div>
+                    <dt>Model policy</dt>
+                    <dd>
+                      {key.modelPolicySource ? `${key.modelPolicySource} policy` : 'Not assigned'}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>RPM</dt>
-                    <dd>{key.budget?.rpm ? formatNumber(key.budget.rpm) : 'Inherited'}</dd>
+                    <dd>{effectiveBudget ? formatNumber(effectiveBudget.rpm) : 'Unlimited'}</dd>
                   </div>
                   <div>
                     <dt>TPM</dt>
-                    <dd>{key.budget?.tpm ? formatNumber(key.budget.tpm) : 'Inherited'}</dd>
+                    <dd>{effectiveBudget ? formatNumber(effectiveBudget.tpm) : 'Unlimited'}</dd>
                   </div>
                   <div>
                     <dt>Daily tokens</dt>
                     <dd>
-                      {key.budget?.dailyTokens ? formatNumber(key.budget.dailyTokens) : 'Inherited'}
+                      {effectiveBudget ? formatNumber(effectiveBudget.dailyTokens) : 'Unlimited'}
                     </dd>
                   </div>
                   <div>

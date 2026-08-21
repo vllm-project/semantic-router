@@ -1635,6 +1635,116 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
 }
+.formNote {
+  grid-column: 1 / -1;
+  margin: -0.25rem 0 0;
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.63rem;
+}
+.ownerSection {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ownerSection legend {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.69rem;
+  font-weight: 650;
+}
+.ownerSection legend small {
+  color: rgba(255, 255, 255, 0.32);
+  font-weight: 450;
+}
+.ownerChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+.ownerChoice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.18rem 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.76);
+  text-align: left;
+}
+.ownerChoice span {
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+.ownerChoice small {
+  grid-column: 1;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.62rem;
+}
+.ownerChoice i {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #a9c8ff;
+  font-style: normal;
+}
+.ownerChoiceActive {
+  border-color: rgba(126, 174, 255, 0.42);
+  background: rgba(112, 165, 255, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(126, 174, 255, 0.08);
+}
+.advancedSection {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.advancedSection summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.78rem 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 0.69rem;
+  font-weight: 650;
+  list-style: none;
+}
+.advancedSection summary::-webkit-details-marker {
+  display: none;
+}
+.advancedSection summary small {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.61rem;
+  font-weight: 450;
+}
+.advancedSection[open] summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.advancedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 0.85rem;
+}
+.memberChoice {
+  min-width: 0;
+  display: grid;
+  gap: 0.38rem;
+}
+.memberChoice select {
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: #090a0c;
+  color: rgba(255, 255, 255, 0.68);
+  padding: 0 0.6rem;
+  font-size: 0.64rem;
+}
 .toggleField {
   position: relative;
   grid-column: 1 / -1;
@@ -1880,21 +1990,29 @@
   z-index: 1900;
   inset: 0;
   display: flex;
-  justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(7px);
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem;
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
   animation: detailFade 160ms ease-out;
 }
 .detailDrawer {
-  width: min(780px, calc(100vw - 2rem));
-  height: 100%;
+  width: min(900px, 100%);
+  max-height: calc(100vh - 2.8rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(255, 255, 255, 0.13);
-  background: #0c0d0f;
-  box-shadow: -32px 0 90px rgba(0, 0, 0, 0.48);
-  animation: detailSlide 190ms ease-out;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
+  animation: detailLift 190ms ease-out;
 }
 .entityDetailBackdrop {
   align-items: center;
@@ -2520,7 +2638,9 @@
     grid-column: 1;
   }
   .choiceGrid,
-  .quotaInputs {
+  .quotaInputs,
+  .ownerChoices,
+  .advancedGrid {
     grid-template-columns: 1fr;
   }
   .modalBackdrop {
@@ -2544,6 +2664,8 @@
   .detailDrawer {
     width: 100%;
     max-width: none;
+    max-height: calc(100vh - 1.2rem);
+    border-radius: 14px;
   }
   .entityDetailBackdrop {
     padding: 0.6rem;

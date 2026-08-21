@@ -8,31 +8,31 @@ export const ACCESS_EDITOR_TITLES: Record<
     eyebrow: 'Identity',
     create: 'Add user',
     edit: 'Edit user',
-    description: 'A user can own API keys, join teams, and optionally receive Dashboard access.',
+    description: 'Set the personal model and quota policy that keys may inherit.',
   },
   team: {
     eyebrow: 'Identity',
     create: 'Create team',
     edit: 'Edit team',
-    description: 'Group users under shared model grants and quota.',
+    description: 'Choose Team defaults, then add members and their Team roles.',
   },
   key: {
     eyebrow: 'Credential',
     create: 'Create API key',
     edit: 'API key',
-    description: 'Choose an owner, model visibility, and an optional key-specific limit.',
+    description: 'Name it, choose one owner, and keep overrides optional.',
   },
   group: {
     eyebrow: 'Model policy',
     create: 'Create access group',
     edit: 'Edit access group',
-    description: 'Compose reusable model grants and assign them to identities or keys.',
+    description: 'Create a reusable collection of visible models.',
   },
   budget: {
     eyebrow: 'Rate limit',
     create: 'Create budget',
     edit: 'Edit budget',
-    description: 'Enforce RPM, TPM, and daily tokens at any scope.',
+    description: 'Create a reusable quota for users, Teams, or API keys.',
   },
 }
 

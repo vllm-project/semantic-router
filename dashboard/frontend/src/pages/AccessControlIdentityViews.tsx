@@ -115,10 +115,14 @@ export function UsersView(props: Props) {
             </div>
             {paged.map((row) => {
               const teamCount = row.access
-                ? props.teams.filter((team) => team.userIds.includes(row.access!.id)).length
+                ? props.teams.filter((team) =>
+                    team.members.some((member) => member.userId === row.access!.id),
+                  ).length
                 : 0
               const keyCount = row.access
-                ? props.keys.filter((key) => key.userId === row.access!.id).length
+                ? props.keys.filter(
+                    (key) => key.ownerType === 'user' && key.ownerId === row.access!.id,
+                  ).length
                 : 0
               return (
                 <div
@@ -127,13 +131,13 @@ export function UsersView(props: Props) {
                   role={row.access || row.member ? 'link' : undefined}
                   tabIndex={row.access || row.member ? 0 : undefined}
                   onClick={() => {
-                    if (row.access) props.onOpenEntity(row.access.id)
-                    else if (row.member) props.onOpenDashboardMember(row.member.id)
+                    if (row.member) props.onOpenDashboardMember(row.member.id)
+                    else if (row.access) props.onOpenEntity(row.access.id)
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter') return
-                    if (row.access) props.onOpenEntity(row.access.id)
-                    else if (row.member) props.onOpenDashboardMember(row.member.id)
+                    if (row.member) props.onOpenDashboardMember(row.member.id)
+                    else if (row.access) props.onOpenEntity(row.access.id)
                   }}
                 >
                   <div className={styles.identityCell}>
@@ -371,20 +375,27 @@ export function TeamsView(props: Props) {
             </div>
           </div>
           <div className={styles.avatarPile}>
-            {team.userIds.slice(0, 4).map((id) => (
-              <span key={id} title={props.users.find((user) => user.id === id)?.name}>
-                {initials(props.users.find((user) => user.id === id)?.name || id)}
+            {team.members.slice(0, 4).map((member) => (
+              <span
+                key={member.userId}
+                title={props.users.find((user) => user.id === member.userId)?.name}
+              >
+                {initials(
+                  props.users.find((user) => user.id === member.userId)?.name || member.userId,
+                )}
               </span>
             ))}
-            <small>{team.userIds.length} users</small>
+            <small>{team.members.length} users</small>
           </div>
           <div className={styles.stackCell}>
             <span>{team.accessGroupIds.length} groups</span>
             <small>Team default</small>
           </div>
           <div className={styles.stackCell}>
-            <span>{team.budget ? `${team.budget.rpm || '∞'} RPM` : 'Not set'}</span>
-            <small>{team.budget ? `${team.budget.tpm || '∞'} TPM` : 'Required'}</small>
+            <span>
+              {props.budgets.find((budget) => budget.id === team.budgetId)?.name || 'Not set'}
+            </span>
+            <small>Team default</small>
           </div>
           <Status value={team.status} />
           <span className={styles.rowChevron} aria-hidden="true">

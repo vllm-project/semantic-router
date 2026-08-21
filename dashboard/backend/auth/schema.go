@@ -14,13 +14,6 @@ const (
 )
 
 const (
-	legacyRoleSuperAdmin = "super_admin"
-	legacyRoleOperator   = "operator"
-	legacyRoleUser       = "user"
-	legacyRoleReadonly   = "readonly"
-)
-
-const (
 	PermUsersManage    = "users.manage"
 	PermUsersView      = "users.view"
 	PermConfigRead     = "config.read"
@@ -58,13 +51,6 @@ var DefaultRolePermissions = map[string][]string{
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
 
-var legacyRoleAliases = map[string]string{
-	legacyRoleSuperAdmin: RoleAdmin,
-	legacyRoleOperator:   RoleWrite,
-	legacyRoleUser:       RoleRead,
-	legacyRoleReadonly:   RoleRead,
-}
-
 var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
@@ -79,24 +65,12 @@ func normalizeRole(raw string) (string, error) {
 	if role == "" {
 		return "", nil
 	}
-	if aliased, ok := legacyRoleAliases[role]; ok {
-		role = aliased
-	}
-
 	switch role {
 	case RoleAdmin, RoleWrite, RoleRead:
 		return role, nil
 	default:
 		return "", fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
 	}
-}
-
-func canonicalRole(raw string) string {
-	role, err := normalizeRole(raw)
-	if err != nil || role == "" {
-		return strings.ToLower(strings.TrimSpace(raw))
-	}
-	return role
 }
 
 type User struct {
@@ -109,19 +83,14 @@ type User struct {
 	UpdatedAt   int64    `json:"updatedAt"`
 	LastLoginAt *int64   `json:"lastLoginAt,omitempty"`
 	Permissions []string `json:"permissions,omitempty"`
-	// InferenceConsumerID links this control-plane login to an inference consumer.
-	// It is intentionally an opaque reference: dashboard authentication and
-	// inference authorization have independent stores and lifecycles.
-	InferenceConsumerID string `json:"inferenceConsumerId,omitempty"`
 }
 
 func scanUser(row *sql.Row) (*User, error) {
 	u := &User{}
 	var lastLogin sql.NullInt64
-	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin, &u.InferenceConsumerID); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin); err != nil {
 		return nil, err
 	}
-	u.Role = canonicalRole(u.Role)
 	if lastLogin.Valid {
 		t := lastLogin.Int64
 		u.LastLoginAt = &t
@@ -132,10 +101,9 @@ func scanUser(row *sql.Row) (*User, error) {
 func scanUserRows(rows *sql.Rows) (*User, error) {
 	u := &User{}
 	var lastLogin sql.NullInt64
-	if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin, &u.InferenceConsumerID); err != nil {
+	if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin); err != nil {
 		return nil, err
 	}
-	u.Role = canonicalRole(u.Role)
 	if lastLogin.Valid {
 		t := lastLogin.Int64
 		u.LastLoginAt = &t
@@ -153,8 +121,7 @@ CREATE TABLE IF NOT EXISTS users (
   status TEXT NOT NULL DEFAULT 'active',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  last_login_at INTEGER,
-  inference_consumer_id TEXT NOT NULL DEFAULT ''
+  last_login_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS dashboard_member_invitations (
@@ -163,6 +130,7 @@ CREATE TABLE IF NOT EXISTS dashboard_member_invitations (
   name TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL,
   team_id TEXT NOT NULL DEFAULT '',
+  team_role TEXT NOT NULL DEFAULT 'member',
   token_digest TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL DEFAULT 'pending',
   expires_at INTEGER NOT NULL,
@@ -246,6 +214,7 @@ type DashboardMemberInvitation struct {
 	Name            string `json:"name"`
 	Role            string `json:"role"`
 	TeamID          string `json:"teamId,omitempty"`
+	TeamRole        string `json:"teamRole,omitempty"`
 	Status          string `json:"status"`
 	ExpiresAt       int64  `json:"expiresAt"`
 	AcceptedAt      *int64 `json:"acceptedAt,omitempty"`

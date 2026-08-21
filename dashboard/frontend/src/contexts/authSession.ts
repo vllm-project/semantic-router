@@ -4,7 +4,6 @@ export interface AuthUser {
   name: string
   role?: string
   permissions?: string[]
-  inferenceConsumerId?: string
 }
 
 export interface AuthSessionRefreshResult {

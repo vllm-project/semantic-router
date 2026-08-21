@@ -90,70 +90,13 @@ func effectiveModelPatterns(keyPatterns, userPatterns, teamPatterns []string) []
 	return uniqueStrings(teamPatterns)
 }
 
-// effectiveBudgets keeps global limits as the workspace ceiling and selects
-// exactly one identity tier beneath it: Key, User, then Team. An explicitly
-// linked budget belongs to the Key tier, alongside an inline Key limit.
-func effectiveBudgets(linkedBudgetID string, candidates []Budget) []Budget {
-	global := make([]Budget, 0, len(candidates))
-	key := make([]Budget, 0, len(candidates))
-	user := make([]Budget, 0, len(candidates))
-	team := make([]Budget, 0, len(candidates))
-	seen := make(map[string]struct{}, len(candidates))
-
-	appendUnique := func(target *[]Budget, budget Budget) {
-		if _, exists := seen[budget.ID]; exists {
-			return
-		}
-		seen[budget.ID] = struct{}{}
-		*target = append(*target, budget)
-	}
-
-	for _, budget := range candidates {
-		if budget.ScopeType == "global" {
-			appendUnique(&global, budget)
+// effectiveBudgetID selects one reusable quota policy. Key overrides User,
+// and User overrides the explicit Team context.
+func effectiveBudgetID(keyBudgetID, userBudgetID, teamBudgetID string) string {
+	for _, candidate := range []string{keyBudgetID, userBudgetID, teamBudgetID} {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			return candidate
 		}
 	}
-	for _, budget := range candidates {
-		if budget.ScopeType == "key" || (linkedBudgetID != "" && budget.ID == linkedBudgetID) {
-			appendUnique(&key, budget)
-		}
-	}
-	for _, budget := range candidates {
-		if budget.ScopeType == "user" {
-			appendUnique(&user, budget)
-		}
-	}
-	for _, budget := range candidates {
-		if budget.ScopeType == "team" {
-			appendUnique(&team, budget)
-		}
-	}
-
-	selected := key
-	if len(selected) == 0 {
-		selected = user
-	}
-	if len(selected) == 0 {
-		selected = team
-	}
-	return append(global, selected...)
-}
-
-func uniqueBindings(values []Binding) []Binding {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]Binding, 0, len(values))
-	for _, value := range values {
-		value.SubjectType = strings.TrimSpace(value.SubjectType)
-		value.SubjectID = strings.TrimSpace(value.SubjectID)
-		key := value.SubjectType + ":" + value.SubjectID
-		if value.SubjectID == "" || (value.SubjectType != "user" && value.SubjectType != "team" && value.SubjectType != "key") {
-			continue
-		}
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		result = append(result, value)
-	}
-	return result
+	return ""
 }

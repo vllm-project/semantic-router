@@ -47,6 +47,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				Name           string `json:"name"`
 				Role           string `json:"role"`
 				TeamID         string `json:"teamId"`
+				TeamRole       string `json:"teamRole"`
 				ExpiresInHours int    `json:"expiresInHours"`
 				SendEmail      bool   `json:"sendEmail"`
 			}
@@ -55,7 +56,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				return
 			}
 			item, err := svc.CreateInvitation(r.Context(), invitationInput{
-				Email: req.Email, Name: req.Name, Role: req.Role, TeamID: req.TeamID,
+				Email: req.Email, Name: req.Name, Role: req.Role, TeamID: req.TeamID, TeamRole: req.TeamRole,
 				ExpiresInHours: req.ExpiresInHours, SendEmail: req.SendEmail, CreatedBy: ac.UserID,
 			})
 			if err != nil {
@@ -128,7 +129,7 @@ func invitationInfoHandler(svc *Service) http.HandlerFunc {
 		}
 		respondJSON(w, map[string]any{
 			"email": item.Email, "name": item.Name, "role": item.Role,
-			"teamId": item.TeamID, "teamName": svc.modelTeamName(r.Context(), item.TeamID),
+			"teamId": item.TeamID, "teamName": svc.modelTeamName(r.Context(), item.TeamID), "teamRole": item.TeamRole,
 			"expiresAt": item.ExpiresAt,
 		})
 	}

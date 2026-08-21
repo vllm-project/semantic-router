@@ -79,10 +79,15 @@ export function DashboardAccessDialog({
         tabIndex={-1}
       >
         <header className={styles.modalHeader}>
-          <div>
-            <span className={styles.modalEyebrow}>Dashboard access</span>
-            <h2 id="dashboard-access-title">Manage {member.name}</h2>
-            <p>Update their Dashboard role, sign-in status, or password.</p>
+          <div className={styles.modalHeading}>
+            <div className={styles.modalLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span className={styles.modalEyebrow}>Dashboard access</span>
+              <h2 id="dashboard-access-title">Manage {member.name}</h2>
+              <p>Update their Dashboard role, sign-in status, or password.</p>
+            </div>
           </div>
           <button
             type="button"

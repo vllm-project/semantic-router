@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Service struct {
@@ -64,15 +65,20 @@ func (s *Service) GetTeam(ctx context.Context, id string) (Team, error) {
 // EnsureModelUser keeps the model-serving identity aligned with its Dashboard
 // account. Dashboard roles never participate in inference authorization.
 func (s *Service) EnsureModelUser(ctx context.Context, id, email, name string) error {
-	_, err := s.SaveUser(ctx, Actor{}, User{
+	item := User{
 		ID: id, Email: email, Name: name, Status: StatusActive,
-	})
+	}
+	if existing, err := s.store.GetUser(ctx, id); err == nil {
+		item.AccessGroupIDs = existing.AccessGroupIDs
+		item.BudgetID = existing.BudgetID
+	}
+	_, err := s.SaveUser(ctx, Actor{}, item)
 	return err
 }
 
-// AssignModelUserTeam replaces the optional Team selected for a Dashboard user.
-func (s *Service) AssignModelUserTeam(ctx context.Context, id, teamID string) error {
-	return s.store.SetUserTeam(ctx, id, strings.TrimSpace(teamID))
+// AssignModelUserTeam adds the invited user to the selected Team.
+func (s *Service) AssignModelUserTeam(ctx context.Context, id, teamID, role string) error {
+	return s.store.SetUserTeamMembership(ctx, id, strings.TrimSpace(teamID), role)
 }
 
 func (s *Service) ModelTeamName(ctx context.Context, teamID string) (string, error) {
@@ -89,7 +95,12 @@ func (s *Service) RemoveModelUser(ctx context.Context, id string) error {
 }
 
 func (s *Service) ListAPIKeys(ctx context.Context, filter ListFilter) ([]APIKey, int64, error) {
-	return s.store.ListAPIKeys(ctx, filter)
+	items, total, err := s.store.ListAPIKeys(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err = s.store.ResolveAPIKeyPolicies(ctx, items)
+	return items, total, err
 }
 
 func (s *Service) GetAPIKey(ctx context.Context, id string) (APIKey, error) {
@@ -97,8 +108,29 @@ func (s *Service) GetAPIKey(ctx context.Context, id string) (APIKey, error) {
 	if err != nil {
 		return APIKey{}, err
 	}
-	item.ModelPatterns, err = s.store.ModelPatternsForKey(ctx, item)
-	return item, err
+	if err = s.resolveAPIKeyPolicy(ctx, &item); err != nil {
+		return APIKey{}, err
+	}
+	return item, nil
+}
+
+func (s *Service) resolveAPIKeyPolicy(ctx context.Context, item *APIKey) error {
+	items, err := s.store.ResolveAPIKeyPolicies(ctx, []APIKey{*item})
+	if err != nil {
+		return err
+	}
+	*item = items[0]
+	return nil
+}
+
+func (s *Service) UpdateUser(ctx context.Context, actor Actor, item User) (User, error) {
+	if strings.TrimSpace(item.ID) == "" {
+		return User{}, validationError("user id is required")
+	}
+	if _, err := s.store.GetUser(ctx, item.ID); err != nil {
+		return User{}, err
+	}
+	return s.SaveUser(ctx, actor, item)
 }
 
 func (s *Service) ListAccessGroups(ctx context.Context, filter ListFilter) ([]AccessGroup, int64, error) {
@@ -121,16 +153,23 @@ func (s *Service) SaveUser(ctx context.Context, actor Actor, item User) (User, e
 	item.Email = strings.ToLower(strings.TrimSpace(item.Email))
 	item.Name = strings.TrimSpace(item.Name)
 	if _, err := mail.ParseAddress(item.Email); err != nil {
-		return User{}, errors.New("a valid email is required")
+		return User{}, validationError("a valid email is required")
 	}
 	if item.Name == "" {
-		return User{}, errors.New("name is required")
+		return User{}, validationError("name is required")
 	}
 	if item.Status == "" {
 		item.Status = StatusActive
 	}
 	if item.Status != StatusActive && item.Status != StatusDisabled {
-		return User{}, errors.New("status must be active or disabled")
+		return User{}, validationError("status must be active or disabled")
+	}
+	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
+	item.BudgetID = strings.TrimSpace(item.BudgetID)
+	if item.BudgetID != "" {
+		if err := s.validateAssignableBudget(ctx, item.BudgetID); err != nil {
+			return User{}, err
+		}
 	}
 	created := item.ID == ""
 	if created {
@@ -138,7 +177,7 @@ func (s *Service) SaveUser(ctx context.Context, actor Actor, item User) (User, e
 	}
 	result, err := s.store.SaveUser(ctx, item)
 	if err == nil {
-		s.audit(ctx, actor, choose(created, "user.created", "user.updated"), "user", result.ID, map[string]any{"email": result.Email, "status": result.Status})
+		s.audit(ctx, actor, choose(created, "user.created", "user.updated"), "user", result.ID, map[string]any{"email": result.Email, "status": result.Status, "accessGroupIds": result.AccessGroupIDs, "budgetId": result.BudgetID})
 	}
 	return result, err
 }
@@ -154,26 +193,41 @@ func (s *Service) DeleteUser(ctx context.Context, actor Actor, id string) error 
 func (s *Service) SaveTeam(ctx context.Context, actor Actor, item Team) (Team, error) {
 	item.Name = strings.TrimSpace(item.Name)
 	if item.Name == "" {
-		return Team{}, errors.New("name is required")
+		return Team{}, validationError("name is required")
 	}
 	if item.Status == "" {
 		item.Status = StatusActive
 	}
 	if item.Status != StatusActive && item.Status != StatusDisabled {
-		return Team{}, errors.New("status must be active or disabled")
+		return Team{}, validationError("status must be active or disabled")
+	}
+	var err error
+	item.Members, err = normalizeTeamMemberships(item.ID, item.Members)
+	if err != nil {
+		return Team{}, err
+	}
+	if len(item.Members) > 0 {
+		hasAdmin := false
+		for _, membership := range item.Members {
+			if membership.Role == TeamRoleAdmin {
+				hasAdmin = true
+				break
+			}
+		}
+		if !hasAdmin {
+			return Team{}, validationError("select at least one Team admin")
+		}
 	}
 	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
 	if len(item.AccessGroupIDs) == 0 {
-		return Team{}, errors.New("at least one access group is required")
+		return Team{}, validationError("at least one access group is required")
 	}
-	if item.Budget == nil {
-		return Team{}, errors.New("a team budget is required")
+	item.BudgetID = strings.TrimSpace(item.BudgetID)
+	if item.BudgetID == "" {
+		return Team{}, validationError("a budget is required")
 	}
-	if item.Budget.RPM < 0 || item.Budget.TPM < 0 || item.Budget.DailyTokens < 0 {
-		return Team{}, errors.New("quota limits cannot be negative")
-	}
-	if item.Budget.RPM == 0 && item.Budget.TPM == 0 && item.Budget.DailyTokens == 0 {
-		return Team{}, errors.New("at least one team quota limit is required")
+	if err = s.validateAssignableBudget(ctx, item.BudgetID); err != nil {
+		return Team{}, err
 	}
 	created := item.ID == ""
 	if created {
@@ -182,8 +236,8 @@ func (s *Service) SaveTeam(ctx context.Context, actor Actor, item Team) (Team, e
 	result, err := s.store.SaveTeam(ctx, item)
 	if err == nil {
 		s.audit(ctx, actor, choose(created, "team.created", "team.updated"), "team", result.ID, map[string]any{
-			"members": len(result.UserIDs), "status": result.Status,
-			"accessGroupIds": result.AccessGroupIDs, "hasBudget": result.Budget != nil,
+			"members": len(result.Members), "status": result.Status,
+			"accessGroupIds": result.AccessGroupIDs, "budgetId": result.BudgetID,
 		})
 	}
 	return result, err
@@ -200,23 +254,15 @@ func (s *Service) DeleteTeam(ctx context.Context, actor Actor, id string) error 
 func (s *Service) CreateAPIKey(ctx context.Context, actor Actor, item APIKey) (CreatedAPIKey, error) {
 	item.Name = strings.TrimSpace(item.Name)
 	if item.Name == "" {
-		return CreatedAPIKey{}, errors.New("name is required")
+		return CreatedAPIKey{}, validationError("name is required")
 	}
-	if (item.UserID == "") == (item.TeamID == "") {
-		return CreatedAPIKey{}, errors.New("exactly one of userId or teamId is required")
+	if err := s.normalizeAndValidateKeyOwner(ctx, &item); err != nil {
+		return CreatedAPIKey{}, err
 	}
 	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
 	if item.BudgetID != "" {
-		if _, err := s.store.GetBudget(ctx, item.BudgetID); err != nil {
+		if err := s.validateAssignableBudget(ctx, item.BudgetID); err != nil {
 			return CreatedAPIKey{}, err
-		}
-	}
-	if item.Budget != nil {
-		if item.Budget.RPM < 0 || item.Budget.TPM < 0 || item.Budget.DailyTokens < 0 {
-			return CreatedAPIKey{}, errors.New("quota limits cannot be negative")
-		}
-		if item.Budget.RPM == 0 && item.Budget.TPM == 0 && item.Budget.DailyTokens == 0 {
-			item.Budget = nil
 		}
 	}
 	secret, prefix, err := NewSecret()
@@ -238,7 +284,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, actor Actor, item APIKey) (C
 	if err != nil {
 		return CreatedAPIKey{}, err
 	}
-	s.audit(ctx, actor, "api_key.created", "api_key", created.ID, map[string]any{"prefix": created.Prefix, "userId": created.UserID, "teamId": created.TeamID, "accessGroupIds": created.AccessGroupIDs, "budgetId": created.BudgetID, "hasKeyBudget": created.Budget != nil})
+	s.audit(ctx, actor, "api_key.created", "api_key", created.ID, map[string]any{"prefix": created.Prefix, "ownerType": created.OwnerType, "ownerId": created.OwnerID, "contextTeamId": created.ContextTeamID, "accessGroupIds": created.AccessGroupIDs, "budgetId": created.BudgetID})
 	return CreatedAPIKey{APIKey: created, Secret: secret}, nil
 }
 
@@ -277,7 +323,7 @@ func (s *Service) RotateAPIKey(ctx context.Context, actor Actor, id string) (Cre
 
 func (s *Service) SetAPIKeyStatus(ctx context.Context, actor Actor, id, status string) (APIKey, error) {
 	if status != StatusActive && status != StatusDisabled {
-		return APIKey{}, errors.New("status must be active or disabled")
+		return APIKey{}, validationError("status must be active or disabled")
 	}
 	item, err := s.store.SetAPIKeyStatus(ctx, id, status)
 	if err == nil {
@@ -290,31 +336,23 @@ func (s *Service) UpdateAPIKey(ctx context.Context, actor Actor, item APIKey) (A
 	item.Name = strings.TrimSpace(item.Name)
 	item.BudgetID = strings.TrimSpace(item.BudgetID)
 	if item.ID == "" || item.Name == "" {
-		return APIKey{}, errors.New("id and name are required")
+		return APIKey{}, validationError("id and name are required")
 	}
-	if (item.UserID == "") == (item.TeamID == "") {
-		return APIKey{}, errors.New("exactly one of userId or teamId is required")
+	if err := s.normalizeAndValidateKeyOwner(ctx, &item); err != nil {
+		return APIKey{}, err
 	}
 	if item.Status != StatusActive && item.Status != StatusDisabled {
-		return APIKey{}, errors.New("status must be active or disabled")
+		return APIKey{}, validationError("status must be active or disabled")
 	}
 	if item.BudgetID != "" {
-		if _, err := s.store.GetBudget(ctx, item.BudgetID); err != nil {
+		if err := s.validateAssignableBudget(ctx, item.BudgetID); err != nil {
 			return APIKey{}, err
 		}
 	}
 	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
-	if item.Budget != nil {
-		if item.Budget.RPM < 0 || item.Budget.TPM < 0 || item.Budget.DailyTokens < 0 {
-			return APIKey{}, errors.New("quota limits cannot be negative")
-		}
-		if item.Budget.RPM == 0 && item.Budget.TPM == 0 && item.Budget.DailyTokens == 0 {
-			item.Budget = nil
-		}
-	}
 	result, err := s.store.UpdateAPIKey(ctx, item)
 	if err == nil {
-		s.audit(ctx, actor, "api_key.updated", "api_key", item.ID, map[string]any{"accessGroupIds": item.AccessGroupIDs, "budgetId": item.BudgetID, "hasKeyBudget": item.Budget != nil})
+		s.audit(ctx, actor, "api_key.updated", "api_key", item.ID, map[string]any{"ownerType": item.OwnerType, "ownerId": item.OwnerID, "contextTeamId": item.ContextTeamID, "accessGroupIds": item.AccessGroupIDs, "budgetId": item.BudgetID})
 	}
 	return result, err
 }
@@ -322,11 +360,11 @@ func (s *Service) UpdateAPIKey(ctx context.Context, actor Actor, item APIKey) (A
 func (s *Service) SaveAccessGroup(ctx context.Context, actor Actor, item AccessGroup) (AccessGroup, error) {
 	item.Name = strings.TrimSpace(item.Name)
 	if item.Name == "" {
-		return AccessGroup{}, errors.New("name is required")
+		return AccessGroup{}, validationError("name is required")
 	}
 	item.ModelPatterns = uniqueStrings(item.ModelPatterns)
 	if len(item.ModelPatterns) == 0 {
-		return AccessGroup{}, errors.New("at least one model pattern is required")
+		return AccessGroup{}, validationError("at least one model pattern is required")
 	}
 	created := item.ID == ""
 	if created {
@@ -334,7 +372,7 @@ func (s *Service) SaveAccessGroup(ctx context.Context, actor Actor, item AccessG
 	}
 	result, err := s.store.SaveAccessGroup(ctx, item)
 	if err == nil {
-		s.audit(ctx, actor, choose(created, "access_group.created", "access_group.updated"), "access_group", result.ID, map[string]any{"modelPatterns": result.ModelPatterns, "bindings": len(result.Bindings)})
+		s.audit(ctx, actor, choose(created, "access_group.created", "access_group.updated"), "access_group", result.ID, map[string]any{"modelPatterns": result.ModelPatterns})
 	}
 	return result, err
 }
@@ -349,24 +387,18 @@ func (s *Service) DeleteAccessGroup(ctx context.Context, actor Actor, id string)
 
 func (s *Service) SaveBudget(ctx context.Context, actor Actor, item Budget) (Budget, error) {
 	item.Name = strings.TrimSpace(item.Name)
-	item.ScopeType = strings.TrimSpace(item.ScopeType)
-	item.ScopeID = strings.TrimSpace(item.ScopeID)
+	item.Description = strings.TrimSpace(item.Description)
 	if item.Name == "" {
-		return Budget{}, errors.New("name is required")
-	}
-	if item.ScopeType != "global" && item.ScopeType != "user" && item.ScopeType != "team" && item.ScopeType != "key" {
-		return Budget{}, errors.New("scopeType must be global, user, team, or key")
-	}
-	if item.ScopeType == "global" {
-		item.ScopeID = ""
-	} else if item.ScopeID == "" {
-		return Budget{}, errors.New("scopeId is required for non-global budgets")
+		return Budget{}, validationError("name is required")
 	}
 	if item.RPM < 0 || item.TPM < 0 || item.DailyTokens < 0 {
-		return Budget{}, errors.New("quota limits cannot be negative")
+		return Budget{}, validationError("quota limits cannot be negative")
 	}
 	if item.RPM == 0 && item.TPM == 0 && item.DailyTokens == 0 {
-		return Budget{}, errors.New("at least one quota limit is required")
+		return Budget{}, validationError("at least one quota limit is required")
+	}
+	if err := s.validateBudgetMutation(ctx, item); err != nil {
+		return Budget{}, err
 	}
 	created := item.ID == ""
 	if created {
@@ -374,9 +406,49 @@ func (s *Service) SaveBudget(ctx context.Context, actor Actor, item Budget) (Bud
 	}
 	result, err := s.store.SaveBudget(ctx, item)
 	if err == nil {
-		s.audit(ctx, actor, choose(created, "budget.created", "budget.updated"), "budget", result.ID, map[string]any{"scopeType": result.ScopeType, "scopeId": result.ScopeID, "rpm": result.RPM, "tpm": result.TPM, "dailyTokens": result.DailyTokens})
+		s.audit(ctx, actor, choose(created, "budget.created", "budget.updated"), "budget", result.ID, map[string]any{"rpm": result.RPM, "tpm": result.TPM, "dailyTokens": result.DailyTokens})
 	}
 	return result, err
+}
+
+func (s *Service) normalizeAndValidateKeyOwner(ctx context.Context, item *APIKey) error {
+	item.OwnerType = strings.TrimSpace(item.OwnerType)
+	item.OwnerID = strings.TrimSpace(item.OwnerID)
+	item.ContextTeamID = strings.TrimSpace(item.ContextTeamID)
+	if item.OwnerType == "" {
+		if item.UserID != "" {
+			item.OwnerType, item.OwnerID = "user", item.UserID
+		} else if item.TeamID != "" {
+			item.OwnerType, item.OwnerID = "team", item.TeamID
+		}
+	}
+	switch item.OwnerType {
+	case "user":
+		item.UserID, item.TeamID = item.OwnerID, ""
+		if item.UserID == "" {
+			return validationError("select a user")
+		}
+		if _, err := s.store.GetUser(ctx, item.UserID); err != nil {
+			return validationError("selected user does not exist")
+		}
+		if item.ContextTeamID != "" {
+			var member bool
+			if err := s.store.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM access_team_members WHERE team_id=$1 AND user_id=$2)`, item.ContextTeamID, item.UserID).Scan(&member); err != nil || !member {
+				return validationError("the user must be a member of the selected Team")
+			}
+		}
+	case "team":
+		item.TeamID, item.UserID, item.ContextTeamID = item.OwnerID, "", item.OwnerID
+		if item.TeamID == "" {
+			return validationError("select a Team")
+		}
+		if _, err := s.store.GetTeam(ctx, item.TeamID); err != nil {
+			return validationError("selected Team does not exist")
+		}
+	default:
+		return validationError("owned by must be Personal or Team")
+	}
+	return nil
 }
 
 func (s *Service) DeleteBudget(ctx context.Context, actor Actor, id string) error {
@@ -432,10 +504,19 @@ func PublicError(err error) (int, string) {
 	if errors.Is(err, ErrSelfAPIKeyExists) {
 		return 409, ErrSelfAPIKeyExists.Error()
 	}
-	message := err.Error()
-	for _, marker := range []string{"required", "must be", "cannot be", "valid email", "quota limit"} {
-		if strings.Contains(message, marker) {
-			return 400, message
+	var validation *ValidationError
+	if errors.As(err, &validation) {
+		return 400, validation.Error()
+	}
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) {
+		switch databaseError.Code {
+		case "23505":
+			return 409, "a resource with these details already exists"
+		case "23503":
+			return 409, "this resource is still in use"
+		case "23514":
+			return 400, "the supplied values are not valid"
 		}
 	}
 	return 500, "access-control operation failed"

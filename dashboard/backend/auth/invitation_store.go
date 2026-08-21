@@ -14,7 +14,7 @@ func scanInvitation(scanner interface{ Scan(...any) error }) (*DashboardMemberIn
 	item := &DashboardMemberInvitation{}
 	var acceptedAt, revokedAt, lastSentAt sql.NullInt64
 	err := scanner.Scan(
-		&item.ID, &item.Email, &item.Name, &item.Role, &item.TeamID,
+		&item.ID, &item.Email, &item.Name, &item.Role, &item.TeamID, &item.TeamRole,
 		&item.Status, &item.ExpiresAt, &acceptedAt, &revokedAt, &item.CreatedAt,
 		&item.CreatedBy, &item.UpdatedAt, &lastSentAt, &item.DeliveryStatus, &item.DeliveryError,
 	)
@@ -37,7 +37,7 @@ func scanInvitation(scanner interface{ Scan(...any) error }) (*DashboardMemberIn
 	return item, nil
 }
 
-const invitationSelectColumns = `id,email,name,role,team_id,status,expires_at,accepted_at,revoked_at,created_at,created_by,updated_at,last_sent_at,delivery_status,delivery_error`
+const invitationSelectColumns = `id,email,name,role,team_id,team_role,status,expires_at,accepted_at,revoked_at,created_at,created_by,updated_at,last_sent_at,delivery_status,delivery_error`
 
 func (s *Store) ListInvitations(ctx context.Context) ([]DashboardMemberInvitation, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+invitationSelectColumns+` FROM dashboard_member_invitations ORDER BY created_at DESC`)
@@ -66,9 +66,9 @@ func (s *Store) CreateInvitation(ctx context.Context, item DashboardMemberInvita
 	now := nowUnix()
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO dashboard_member_invitations(
- id,email,name,role,team_id,token_digest,status,expires_at,created_at,created_by,updated_at,delivery_status
-) VALUES(?,?,?,?,?,?,?, ?,?,?,?,?)`, item.ID, strings.ToLower(item.Email), item.Name, item.Role,
-		item.TeamID, digest, InvitationPending, item.ExpiresAt, now, item.CreatedBy, now, item.DeliveryStatus)
+ id,email,name,role,team_id,team_role,token_digest,status,expires_at,created_at,created_by,updated_at,delivery_status
+) VALUES(?,?,?,?,?,?,?, ?,?,?,?,?,?)`, item.ID, strings.ToLower(item.Email), item.Name, item.Role,
+		item.TeamID, item.TeamRole, digest, InvitationPending, item.ExpiresAt, now, item.CreatedBy, now, item.DeliveryStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +129,9 @@ func (s *Store) AcceptInvitation(ctx context.Context, digest, userID, passwordHa
 	var invitation DashboardMemberInvitation
 	var storedName, storedStatus string
 	err = tx.QueryRowContext(ctx, `
-SELECT id,email,name,role,team_id,status,expires_at
+SELECT id,email,name,role,team_id,team_role,status,expires_at
 FROM dashboard_member_invitations WHERE token_digest=?`, digest).
-		Scan(&invitation.ID, &invitation.Email, &storedName, &invitation.Role, &invitation.TeamID, &storedStatus, &invitation.ExpiresAt)
+		Scan(&invitation.ID, &invitation.Email, &storedName, &invitation.Role, &invitation.TeamID, &invitation.TeamRole, &storedStatus, &invitation.ExpiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +149,11 @@ FROM dashboard_member_invitations WHERE token_digest=?`, digest).
 	user := &User{
 		ID: userID, Email: strings.ToLower(invitation.Email), Name: name,
 		Role: invitation.Role, Status: defaultUserStatusActive, CreatedAt: nowUnix(), UpdatedAt: nowUnix(),
-		InferenceConsumerID: userID,
 	}
 	_, err = tx.ExecContext(ctx, `
-INSERT INTO users(id,email,name,password_hash,role,status,created_at,updated_at,inference_consumer_id)
-VALUES(?,?,?,?,?,?,?,?,?)`, user.ID, user.Email, user.Name, passwordHash, user.Role, user.Status,
-		user.CreatedAt, user.UpdatedAt, user.InferenceConsumerID)
+INSERT INTO users(id,email,name,password_hash,role,status,created_at,updated_at)
+VALUES(?,?,?,?,?,?,?,?)`, user.ID, user.Email, user.Name, passwordHash, user.Role, user.Status,
+		user.CreatedAt, user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

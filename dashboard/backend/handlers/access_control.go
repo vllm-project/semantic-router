@@ -84,15 +84,17 @@ func (h *AccessControlHandler) handleUsers(w http.ResponseWriter, r *http.Reques
 		filter := accessListFilter(r)
 		items, total, err := h.service.ListUsers(r.Context(), filter)
 		writeAccessPage(w, items, total, filter, err)
-	case http.MethodPost, http.MethodPut:
+	case http.MethodPut:
+		if id == "" {
+			writeAccessError(w, http.StatusBadRequest, "user id is required")
+			return
+		}
 		var item accesscontrol.User
 		if !decodeAccessJSON(w, r, &item) {
 			return
 		}
-		if id != "" {
-			item.ID = id
-		}
-		result, err := h.service.SaveUser(r.Context(), accessActor(r), item)
+		item.ID = id
+		result, err := h.service.UpdateUser(r.Context(), accessActor(r), item)
 		writeAccessResult(w, result, err)
 	case http.MethodDelete:
 		if id == "" {

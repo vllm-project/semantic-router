@@ -1,11 +1,24 @@
 package accesscontrol
 
 const schema = `
+CREATE TABLE IF NOT EXISTS access_budgets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  rpm BIGINT NOT NULL DEFAULT 0 CHECK (rpm >= 0),
+  tpm BIGINT NOT NULL DEFAULT 0 CHECK (tpm >= 0),
+  daily_tokens BIGINT NOT NULL DEFAULT 0 CHECK (daily_tokens >= 0),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (rpm > 0 OR tpm > 0 OR daily_tokens > 0)
+);
 CREATE TABLE IF NOT EXISTS access_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
+  budget_id TEXT REFERENCES access_budgets(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -14,27 +27,16 @@ CREATE TABLE IF NOT EXISTS access_teams (
   name TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
+  budget_id TEXT NOT NULL REFERENCES access_budgets(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS access_team_members (
   team_id TEXT NOT NULL REFERENCES access_teams(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES access_users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'member')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (team_id, user_id)
-);
-CREATE TABLE IF NOT EXISTS access_budgets (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  scope_type TEXT NOT NULL CHECK (scope_type IN ('global', 'user', 'team', 'key')),
-  scope_id TEXT NOT NULL DEFAULT '',
-  rpm BIGINT NOT NULL DEFAULT 0 CHECK (rpm >= 0),
-  tpm BIGINT NOT NULL DEFAULT 0 CHECK (tpm >= 0),
-  daily_tokens BIGINT NOT NULL DEFAULT 0 CHECK (daily_tokens >= 0),
-  enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (scope_type, scope_id)
 );
 CREATE TABLE IF NOT EXISTS access_api_keys (
   id TEXT PRIMARY KEY,
@@ -44,6 +46,7 @@ CREATE TABLE IF NOT EXISTS access_api_keys (
   secret_ciphertext TEXT NOT NULL,
   user_id TEXT REFERENCES access_users(id) ON DELETE RESTRICT,
   team_id TEXT REFERENCES access_teams(id) ON DELETE RESTRICT,
+  context_team_id TEXT REFERENCES access_teams(id) ON DELETE RESTRICT,
   budget_id TEXT REFERENCES access_budgets(id) ON DELETE SET NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
   expires_at TIMESTAMPTZ,
@@ -61,7 +64,7 @@ CREATE TABLE IF NOT EXISTS access_groups (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS access_group_bindings (
-  group_id TEXT NOT NULL REFERENCES access_groups(id) ON DELETE CASCADE,
+  group_id TEXT NOT NULL REFERENCES access_groups(id) ON DELETE RESTRICT,
   subject_type TEXT NOT NULL CHECK (subject_type IN ('user', 'team', 'key')),
   subject_id TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -95,7 +98,7 @@ CREATE TABLE IF NOT EXISTS access_audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_access_keys_owner ON access_api_keys(user_id, team_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_access_team_members_user ON access_team_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_team_members_user ON access_team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_access_keys_status ON access_api_keys(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_access_keys_budget ON access_api_keys(budget_id);
 CREATE INDEX IF NOT EXISTS idx_access_group_bindings_subject ON access_group_bindings(subject_type, subject_id);

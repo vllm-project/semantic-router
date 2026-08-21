@@ -59,9 +59,17 @@ const AuthenticatedShell: React.FC = () => {
     setProvisioningFirstKey(true)
     setFirstKeyError('')
     try {
+      const teamPage = await inferenceAccessApi.selfTeams()
+      const contextTeamId = teamPage.items[0]?.id
       const key = await ensureFirstAPIKey(user.name, {
         list: inferenceAccessApi.selfKeys,
-        create: inferenceAccessApi.createSelfKey,
+        create: (name) =>
+          inferenceAccessApi.createSelfKey(
+            name,
+            'user',
+            user.id,
+            contextTeamId,
+          ),
       })
       const secret =
         'secret' in key ? key.secret : (await inferenceAccessApi.selfKeySecret(key.id)).secret

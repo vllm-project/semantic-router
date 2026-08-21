@@ -28,6 +28,7 @@ export default function DashboardMemberInviteDialog({
   const [name, setName] = useState('')
   const [role, setRole] = useState('read')
   const [teamId, setTeamId] = useState('')
+  const [teamRole, setTeamRole] = useState<'admin' | 'member'>('member')
   const [expiresInHours, setExpiresInHours] = useState(168)
   const [sendEmail, setSendEmail] = useState(true)
   const [result, setResult] = useState<DashboardMemberInvitation | null>(null)
@@ -48,6 +49,7 @@ export default function DashboardMemberInviteDialog({
     setEmail('')
     setName('')
     setTeamId('')
+    setTeamRole('member')
   }, [isOpen])
 
   const invitationURL = useMemo(() => (result ? absoluteInvitationURL(result) : ''), [result])
@@ -63,6 +65,7 @@ export default function DashboardMemberInviteDialog({
         name: name.trim(),
         role,
         teamId: teamId || undefined,
+        teamRole: teamId ? teamRole : undefined,
         expiresInHours,
         sendEmail,
       })
@@ -106,6 +109,9 @@ export default function DashboardMemberInviteDialog({
               ×
             </button>
             <div className={styles.inviteResult}>
+              <div className={styles.modalLogo} aria-hidden="true">
+                <img src="/vllm.png" alt="" />
+              </div>
               <div className={styles.inviteAvatar}>
                 {result.name
                   .split(/\s+/)
@@ -149,12 +155,17 @@ export default function DashboardMemberInviteDialog({
         ) : (
           <form onSubmit={submit}>
             <header className={styles.modalHeader}>
-              <div>
-                <span className={styles.modalEyebrow}>Personal invitation</span>
-                <h2 id="invite-title">Invite a user</h2>
-                <p>
-                  They’ll see a welcome made for them, choose a password, and enter the Dashboard.
-                </p>
+              <div className={styles.modalHeading}>
+                <div className={styles.modalLogo} aria-hidden="true">
+                  <img src="/vllm.png" alt="" />
+                </div>
+                <div>
+                  <span className={styles.modalEyebrow}>Personal invitation</span>
+                  <h2 id="invite-title">Invite a user</h2>
+                  <p>
+                    They’ll see a welcome made for them, choose a password, and enter the Dashboard.
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -193,6 +204,37 @@ export default function DashboardMemberInviteDialog({
                   </select>
                   <small>Team grants and quota apply to Playground and API usage.</small>
                 </label>
+                {teamId ? (
+                  <fieldset className={`${styles.ownerSection} ${styles.formFieldWide}`}>
+                    <legend>
+                      Team role <small>Controls this Team only</small>
+                    </legend>
+                    <div className={styles.ownerChoices} role="radiogroup" aria-label="Team role">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={teamRole === 'member'}
+                        className={`${styles.ownerChoice} ${teamRole === 'member' ? styles.ownerChoiceActive : ''}`}
+                        onClick={() => setTeamRole('member')}
+                      >
+                        <span>Member</span>
+                        <small>Use Team models and quota</small>
+                        <i>{teamRole === 'member' ? '✓' : ''}</i>
+                      </button>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={teamRole === 'admin'}
+                        className={`${styles.ownerChoice} ${teamRole === 'admin' ? styles.ownerChoiceActive : ''}`}
+                        onClick={() => setTeamRole('admin')}
+                      >
+                        <span>Team admin</span>
+                        <small>Manage members and Team keys</small>
+                        <i>{teamRole === 'admin' ? '✓' : ''}</i>
+                      </button>
+                    </div>
+                  </fieldset>
+                ) : null}
                 <label className={styles.formField}>
                   <span>Name</span>
                   <input

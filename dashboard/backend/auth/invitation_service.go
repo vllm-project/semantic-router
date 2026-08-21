@@ -29,6 +29,7 @@ type invitationInput struct {
 	Name           string
 	Role           string
 	TeamID         string
+	TeamRole       string
 	ExpiresInHours int
 	SendEmail      bool
 	CreatedBy      string
@@ -41,6 +42,7 @@ func (s *Service) ConfigureInvitations(mailer InvitationMailer, publicBaseURL st
 
 func (s *Service) CreateInvitation(ctx context.Context, input invitationInput) (*DashboardMemberInvitation, error) {
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
+	input.TeamID = strings.TrimSpace(input.TeamID)
 	address, err := mail.ParseAddress(input.Email)
 	if err != nil || address.Address != input.Email {
 		return nil, errors.New("a valid email is required")
@@ -57,6 +59,19 @@ func (s *Service) CreateInvitation(ctx context.Context, input invitationInput) (
 	if role == "" {
 		role = RoleRead
 	}
+	input.TeamRole = strings.ToLower(strings.TrimSpace(input.TeamRole))
+	if input.TeamID == "" && input.TeamRole != "" {
+		return nil, errors.New("team role requires a Team")
+	}
+	if input.TeamID != "" && input.TeamRole == "" {
+		input.TeamRole = "member"
+	}
+	if input.TeamID != "" && input.TeamRole != "admin" && input.TeamRole != "member" {
+		return nil, errors.New("team role must be Admin or Member")
+	}
+	if input.TeamID != "" && s.modelTeamName(ctx, input.TeamID) == "" {
+		return nil, errors.New("selected Team does not exist")
+	}
 	if input.ExpiresInHours <= 0 {
 		input.ExpiresInHours = 7 * 24
 	}
@@ -69,7 +84,7 @@ func (s *Service) CreateInvitation(ctx context.Context, input invitationInput) (
 	}
 	item, err := s.store.CreateInvitation(ctx, DashboardMemberInvitation{
 		Email: input.Email, Name: strings.TrimSpace(input.Name), Role: role,
-		TeamID: strings.TrimSpace(input.TeamID), CreatedBy: input.CreatedBy,
+		TeamID: input.TeamID, TeamRole: input.TeamRole, CreatedBy: input.CreatedBy,
 		ExpiresAt:      time.Now().Add(time.Duration(input.ExpiresInHours) * time.Hour).Unix(),
 		DeliveryStatus: "link_ready",
 	}, digest)
@@ -153,6 +168,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, name, password st
 		invitation.Email,
 		acceptedName,
 		&teamID,
+		invitation.TeamRole,
 	); provisionErr != nil {
 		return "", nil, fmt.Errorf("prepare model access: %w", provisionErr)
 	}

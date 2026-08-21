@@ -21,7 +21,11 @@ export function AccessEntityDetail({
   users,
   teams,
   keys,
-  canManage,
+  groups,
+  budgets,
+  canEdit,
+  canDelete,
+  selfService = false,
   onEdit,
   onDelete,
   onClose,
@@ -31,7 +35,11 @@ export function AccessEntityDetail({
   users: AccessUser[]
   teams: AccessTeam[]
   keys: AccessAPIKey[]
-  canManage: boolean
+  groups: AccessGroup[]
+  budgets: AccessBudget[]
+  canEdit: boolean
+  canDelete: boolean
+  selfService?: boolean
   onEdit: (kind: EntityDetailKind, item: EntityDetailValue) => void
   onDelete: (kind: EntityDetailKind, id: string) => void
   onClose: () => void
@@ -48,7 +56,9 @@ export function AccessEntityDetail({
       kind === 'user'
         ? inferenceAccessApi.user(id)
         : kind === 'team'
-          ? inferenceAccessApi.team(id)
+          ? selfService
+            ? inferenceAccessApi.selfTeam(id)
+            : inferenceAccessApi.team(id)
           : kind === 'group'
             ? inferenceAccessApi.group(id)
             : inferenceAccessApi.budget(id)
@@ -57,7 +67,9 @@ export function AccessEntityDetail({
       kind === 'user'
         ? inferenceAccessApi.usage({ userId: id, from })
         : kind === 'team'
-          ? inferenceAccessApi.usage({ teamId: id, from })
+          ? selfService
+            ? Promise.resolve(null)
+            : inferenceAccessApi.usage({ teamId: id, from })
           : Promise.resolve(null)
     setTeamMembers([])
     void Promise.all([entityRequest, usageRequest])
@@ -68,16 +80,21 @@ export function AccessEntityDetail({
           const nextTeam = next as AccessTeam
           const knownMembers = new Map(users.map((user) => [user.id, user]))
           const missingMembers = await Promise.all(
-            nextTeam.userIds
+            nextTeam.members
+              .map((member) => member.userId)
               .filter((userID) => !knownMembers.has(userID))
-              .map((userID) => inferenceAccessApi.user(userID).catch(() => null)),
+              .map((userID) =>
+                selfService
+                  ? Promise.resolve(null)
+                  : inferenceAccessApi.user(userID).catch(() => null),
+              ),
           )
           missingMembers.forEach((member) => {
             if (member) knownMembers.set(member.id, member)
           })
           setTeamMembers(
-            nextTeam.userIds
-              .map((userID) => knownMembers.get(userID))
+            nextTeam.members
+              .map((member) => knownMembers.get(member.userId))
               .filter((member): member is AccessUser => Boolean(member)),
           )
         }
@@ -85,16 +102,33 @@ export function AccessEntityDetail({
       .catch((nextError) =>
         setError(nextError instanceof Error ? nextError.message : 'Could not load details'),
       )
-  }, [id, kind, users])
+  }, [id, kind, selfService, users])
 
   const title = item?.name || `${kind.charAt(0).toUpperCase()}${kind.slice(1)} details`
   const user = kind === 'user' ? (item as AccessUser | null) : null
   const team = kind === 'team' ? (item as AccessTeam | null) : null
   const group = kind === 'group' ? (item as AccessGroup | null) : null
   const budget = kind === 'budget' ? (item as AccessBudget | null) : null
-  const ownedKeys = keys.filter((key) => key.userId === user?.id || key.teamId === team?.id)
-  const memberTeams = user ? teams.filter((candidate) => candidate.userIds.includes(user.id)) : []
+  const ownedKeys = keys.filter(
+    (key) =>
+      (key.ownerType === 'user' && key.ownerId === user?.id) ||
+      (key.ownerType === 'team' && key.ownerId === team?.id),
+  )
+  const memberTeams = user
+    ? teams.filter((candidate) => candidate.members.some((member) => member.userId === user.id))
+    : []
   const linkedKeys = budget ? keys.filter((key) => key.budgetId === budget.id) : []
+  const linkedUsers = budget ? users.filter((candidate) => candidate.budgetId === budget.id) : []
+  const linkedTeams = budget ? teams.filter((candidate) => candidate.budgetId === budget.id) : []
+  const groupUsers = group
+    ? users.filter((candidate) => candidate.accessGroupIds.includes(group.id))
+    : []
+  const groupTeams = group
+    ? teams.filter((candidate) => candidate.accessGroupIds.includes(group.id))
+    : []
+  const groupKeys = group
+    ? keys.filter((candidate) => candidate.accessGroupIds.includes(group.id))
+    : []
 
   return (
     <div
@@ -123,7 +157,7 @@ export function AccessEntityDetail({
                 {user?.email ||
                   team?.description ||
                   group?.description ||
-                  (budget ? `${budget.scopeType} quota` : 'Loading…')}
+                  (budget ? budget.description || 'Reusable quota' : 'Loading…')}
               </p>
             </div>
           </div>
@@ -195,13 +229,32 @@ export function AccessEntityDetail({
                           : 'None'}
                       </dd>
                     </div>
+                    <div>
+                      <dt>Model access</dt>
+                      <dd>
+                        {user.accessGroupIds.length
+                          ? user.accessGroupIds
+                              .map((id) => groups.find((group) => group.id === id)?.name || id)
+                              .join(', ')
+                          : 'Inherited from Team context'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Budget</dt>
+                      <dd>
+                        {user.budgetId
+                          ? budgets.find((value) => value.id === user.budgetId)?.name ||
+                            user.budgetId
+                          : 'Inherited from Team context'}
+                      </dd>
+                    </div>
                   </>
                 ) : null}
                 {team ? (
                   <>
                     <div>
                       <dt>Members</dt>
-                      <dd>{team.userIds.length}</dd>
+                      <dd>{team.members.length}</dd>
                     </div>
                     <div>
                       <dt>API keys</dt>
@@ -214,9 +267,7 @@ export function AccessEntityDetail({
                     <div>
                       <dt>Team budget</dt>
                       <dd>
-                        {team.budget
-                          ? `${formatNumber(team.budget.rpm)} RPM · ${formatNumber(team.budget.tpm)} TPM`
-                          : 'Not configured'}
+                        {budgets.find((value) => value.id === team.budgetId)?.name || team.budgetId}
                       </dd>
                     </div>
                   </>
@@ -225,7 +276,7 @@ export function AccessEntityDetail({
                   <>
                     <div>
                       <dt>Assignments</dt>
-                      <dd>{group.bindings.length}</dd>
+                      <dd>{group.assignmentCount}</dd>
                     </div>
                     <div className={styles.detailGridWide}>
                       <dt>Visible models</dt>
@@ -235,15 +286,23 @@ export function AccessEntityDetail({
                         ))}
                       </dd>
                     </div>
+                    <div className={styles.detailGridWide}>
+                      <dt>Assigned to</dt>
+                      <dd className={styles.detailTags}>
+                        {[...groupUsers, ...groupTeams, ...groupKeys].length
+                          ? [...groupUsers, ...groupTeams, ...groupKeys].map((value) => (
+                              <code key={value.id}>{value.name}</code>
+                            ))
+                          : 'None'}
+                      </dd>
+                    </div>
                   </>
                 ) : null}
                 {budget ? (
                   <>
                     <div>
-                      <dt>Scope</dt>
-                      <dd>
-                        {budget.scopeType} · {budget.scopeId || 'all traffic'}
-                      </dd>
+                      <dt>Assignments</dt>
+                      <dd>{budget.assignmentCount}</dd>
                     </div>
                     <div>
                       <dt>RPM</dt>
@@ -262,6 +321,16 @@ export function AccessEntityDetail({
                       <dd className={styles.detailTags}>
                         {linkedKeys.length
                           ? linkedKeys.map((key) => <code key={key.id}>{key.name}</code>)
+                          : 'None'}
+                      </dd>
+                    </div>
+                    <div className={styles.detailGridWide}>
+                      <dt>Linked users & Teams</dt>
+                      <dd className={styles.detailTags}>
+                        {[...linkedUsers, ...linkedTeams].length
+                          ? [...linkedUsers, ...linkedTeams].map((value) => (
+                              <code key={value.id}>{value.name}</code>
+                            ))
                           : 'None'}
                       </dd>
                     </div>
@@ -291,7 +360,12 @@ export function AccessEntityDetail({
                       <strong>{member.name}</strong>
                       <span>{member.email}</span>
                     </div>
-                    <small>{member.status}</small>
+                    <small>
+                      {team.members.find((membership) => membership.userId === member.id)?.role ===
+                      'admin'
+                        ? 'Team admin'
+                        : 'Member'}
+                    </small>
                   </article>
                 ))}
                 {!teamMembers.length ? (
@@ -302,7 +376,7 @@ export function AccessEntityDetail({
           ) : null}
         </div>
         <footer className={styles.detailFooter}>
-          {item && canManage && confirmingDelete ? (
+          {item && canDelete && confirmingDelete ? (
             <div className={styles.detailConfirm} role="alert">
               <span>Delete {item.name}?</span>
               <button type="button" onClick={() => setConfirmingDelete(false)}>
@@ -312,22 +386,26 @@ export function AccessEntityDetail({
                 Delete
               </button>
             </div>
-          ) : item && canManage ? (
+          ) : item && (canEdit || canDelete) ? (
             <>
-              <button
-                type="button"
-                className={styles.dangerButton}
-                onClick={() => setConfirmingDelete(true)}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => onEdit(kind, item)}
-              >
-                Edit
-              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  Delete
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => onEdit(kind, item)}
+                >
+                  Edit
+                </button>
+              ) : null}
             </>
           ) : null}
           <button type="button" className={styles.primaryButton} onClick={onClose}>

@@ -5,51 +5,74 @@ import "time"
 const (
 	StatusActive   = "active"
 	StatusDisabled = "disabled"
+	TeamRoleAdmin  = "admin"
+	TeamRoleMember = "member"
 )
 
+type TeamMembership struct {
+	TeamID string `json:"teamId"`
+	UserID string `json:"userId"`
+	Role   string `json:"role"`
+}
+
+type TeamMemberIdentity struct {
+	ID     string `json:"id"`
+	Email  string `json:"email"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type SelfTeamCatalog struct {
+	Teams        []Team               `json:"items"`
+	Members      []TeamMemberIdentity `json:"members"`
+	AccessGroups []AccessGroup        `json:"accessGroups"`
+	Budgets      []Budget             `json:"budgets"`
+}
+
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID             string           `json:"id"`
+	Email          string           `json:"email"`
+	Name           string           `json:"name"`
+	Status         string           `json:"status"`
+	AccessGroupIDs []string         `json:"accessGroupIds"`
+	BudgetID       string           `json:"budgetId,omitempty"`
+	Memberships    []TeamMembership `json:"memberships"`
+	CreatedAt      time.Time        `json:"createdAt"`
+	UpdatedAt      time.Time        `json:"updatedAt"`
 }
 
 type Team struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	Status         string     `json:"status"`
-	UserIDs        []string   `json:"userIds"`
-	AccessGroupIDs []string   `json:"accessGroupIds"`
-	Budget         *KeyBudget `json:"budget,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	Description    string           `json:"description"`
+	Status         string           `json:"status"`
+	Members        []TeamMembership `json:"members"`
+	AccessGroupIDs []string         `json:"accessGroupIds"`
+	BudgetID       string           `json:"budgetId"`
+	CreatedAt      time.Time        `json:"createdAt"`
+	UpdatedAt      time.Time        `json:"updatedAt"`
 }
 
 type APIKey struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	Prefix          string     `json:"prefix"`
-	UserID          string     `json:"userId,omitempty"`
-	TeamID          string     `json:"teamId,omitempty"`
-	EffectiveTeamID string     `json:"effectiveTeamId,omitempty"`
-	BudgetID        string     `json:"budgetId,omitempty"`
-	Status          string     `json:"status"`
-	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
-	LastUsed        *time.Time `json:"lastUsedAt,omitempty"`
-	AccessGroupIDs  []string   `json:"accessGroupIds"`
-	ModelPatterns   []string   `json:"modelPatterns,omitempty"`
-	Budget          *KeyBudget `json:"budget,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-}
-
-type KeyBudget struct {
-	RPM         int64 `json:"rpm"`
-	TPM         int64 `json:"tpm"`
-	DailyTokens int64 `json:"dailyTokens"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	Prefix             string     `json:"prefix"`
+	UserID             string     `json:"-"`
+	TeamID             string     `json:"-"`
+	ContextTeamID      string     `json:"contextTeamId,omitempty"`
+	OwnerType          string     `json:"ownerType"`
+	OwnerID            string     `json:"ownerId"`
+	BudgetID           string     `json:"budgetId,omitempty"`
+	Status             string     `json:"status"`
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
+	LastUsed           *time.Time `json:"lastUsedAt,omitempty"`
+	AccessGroupIDs     []string   `json:"accessGroupIds"`
+	ModelPatterns      []string   `json:"modelPatterns,omitempty"`
+	ModelPolicySource  string     `json:"modelPolicySource,omitempty"`
+	EffectiveBudgetID  string     `json:"effectiveBudgetId,omitempty"`
+	BudgetPolicySource string     `json:"budgetPolicySource,omitempty"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 type CreatedAPIKey struct {
@@ -58,31 +81,26 @@ type CreatedAPIKey struct {
 }
 
 type AccessGroup struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	ModelPatterns []string  `json:"modelPatterns"`
-	Bindings      []Binding `json:"bindings"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-type Binding struct {
-	SubjectType string `json:"subjectType"`
-	SubjectID   string `json:"subjectId"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	ModelPatterns   []string  `json:"modelPatterns"`
+	AssignmentCount int64     `json:"assignmentCount"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type Budget struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	ScopeType   string    `json:"scopeType"`
-	ScopeID     string    `json:"scopeId,omitempty"`
-	RPM         int64     `json:"rpm"`
-	TPM         int64     `json:"tpm"`
-	DailyTokens int64     `json:"dailyTokens"`
-	Enabled     bool      `json:"enabled"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	RPM             int64     `json:"rpm"`
+	TPM             int64     `json:"tpm"`
+	DailyTokens     int64     `json:"dailyTokens"`
+	Enabled         bool      `json:"enabled"`
+	AssignmentCount int64     `json:"assignmentCount"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type Principal struct {

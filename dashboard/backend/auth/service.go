@@ -18,7 +18,7 @@ import (
 
 type ModelUserProvisioner interface {
 	EnsureModelUser(ctx context.Context, id, email, name string) error
-	AssignModelUserTeam(ctx context.Context, id, teamID string) error
+	AssignModelUserTeam(ctx context.Context, id, teamID, role string) error
 	ModelTeamName(ctx context.Context, teamID string) (string, error)
 	RemoveModelUser(ctx context.Context, id string) error
 }
@@ -76,6 +76,7 @@ func (s *Service) provisionModelUser(
 	email string,
 	name string,
 	teamID *string,
+	teamRole string,
 ) error {
 	if s.modelUsers == nil {
 		return nil
@@ -86,7 +87,7 @@ func (s *Service) provisionModelUser(
 	if teamID == nil {
 		return nil
 	}
-	if err := s.modelUsers.AssignModelUserTeam(ctx, id, *teamID); err != nil {
+	if err := s.modelUsers.AssignModelUserTeam(ctx, id, *teamID, teamRole); err != nil {
 		_ = s.modelUsers.RemoveModelUser(ctx, id)
 		return err
 	}
@@ -120,7 +121,7 @@ func (s *Service) ReconcileModelUsers(ctx context.Context) error {
 		return err
 	}
 	for _, user := range users {
-		if err := s.provisionModelUser(ctx, user.ID, user.Email, user.Name, nil); err != nil {
+		if err := s.provisionModelUser(ctx, user.ID, user.Email, user.Name, nil, ""); err != nil {
 			return fmt.Errorf("provision model user %s: %w", user.ID, err)
 		}
 	}

@@ -66,17 +66,31 @@ func (s *Store) Overview(ctx context.Context) (Overview, error) {
 
 func (s *Store) OverviewForUser(ctx context.Context, userID string) (Overview, error) {
 	var overview Overview
-	err := s.pool.QueryRow(ctx, `SELECT
+	err := s.pool.QueryRow(ctx, `WITH member_teams AS (
+  SELECT team_id,role FROM access_team_members WHERE user_id=$1
+), accessible_keys AS (
+  SELECT k.id,k.status,k.expires_at,k.budget_id
+  FROM access_api_keys k
+  WHERE k.user_id=$1 OR EXISTS(
+    SELECT 1 FROM member_teams membership
+    WHERE membership.team_id=k.team_id AND membership.role='admin'
+  )
+)
+SELECT
   (SELECT COUNT(*) FROM access_users WHERE id=$1),
-  (SELECT COUNT(*) FROM access_team_members WHERE user_id=$1),
-  (SELECT COUNT(*) FROM access_api_keys WHERE user_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at > NOW())),
-  (SELECT COUNT(*) FROM access_api_keys WHERE user_id=$1 AND status='active' AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'),
+  (SELECT COUNT(*) FROM member_teams),
+  (SELECT COUNT(*) FROM accessible_keys WHERE status='active' AND (expires_at IS NULL OR expires_at > NOW())),
+  (SELECT COUNT(*) FROM accessible_keys WHERE status='active' AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'),
   (SELECT COUNT(DISTINCT b.group_id) FROM access_group_bindings b
      WHERE (b.subject_type='user' AND b.subject_id=$1)
-        OR (b.subject_type='key' AND b.subject_id IN (SELECT id FROM access_api_keys WHERE user_id=$1))),
+        OR (b.subject_type='team' AND b.subject_id IN (SELECT team_id FROM member_teams))
+        OR (b.subject_type='key' AND b.subject_id IN (SELECT id FROM accessible_keys))),
   (SELECT COUNT(*) FROM access_budgets q
-     WHERE q.enabled=TRUE AND ((q.scope_type='user' AND q.scope_id=$1)
-        OR (q.scope_type='key' AND q.scope_id IN (SELECT id FROM access_api_keys WHERE user_id=$1)))),
+     WHERE q.enabled=TRUE AND q.id IN (
+       SELECT budget_id FROM access_users WHERE id=$1
+       UNION SELECT t.budget_id FROM access_teams t WHERE t.id IN (SELECT team_id FROM member_teams)
+       UNION SELECT budget_id FROM accessible_keys
+     )),
   (SELECT COUNT(*) FROM access_usage_events WHERE user_id=$1 AND created_at >= date_trunc('day',NOW() AT TIME ZONE 'UTC')),
   (SELECT COUNT(*) FROM access_usage_events WHERE user_id=$1 AND status_code BETWEEN 200 AND 399 AND created_at >= date_trunc('day',NOW() AT TIME ZONE 'UTC')),
   (SELECT COALESCE(SUM(total_tokens),0) FROM access_usage_events WHERE user_id=$1 AND created_at >= date_trunc('day',NOW() AT TIME ZONE 'UTC')),

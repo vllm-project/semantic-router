@@ -12,7 +12,7 @@ import (
 )
 
 type teamPolicyFixture struct {
-	userID, teamID, teamGroupID, userGroupID, keyID, userBudgetID, digest string
+	userID, teamID, teamGroupID, userGroupID, keyID, teamBudgetID, userBudgetID, digest string
 }
 
 func openIntegrationStore(t *testing.T) (context.Context, *Store) {
@@ -36,36 +36,42 @@ func seedTeamPolicyFixture(t *testing.T, ctx context.Context, store *Store) team
 	fixture := teamPolicyFixture{
 		userID: "user-" + suffix, teamID: "team-" + suffix,
 		teamGroupID: "team-group-" + suffix, userGroupID: "user-group-" + suffix,
-		keyID: "key-" + suffix, userBudgetID: "user-budget-" + suffix,
-		digest: "digest-" + suffix,
+		keyID: "key-" + suffix, teamBudgetID: "team-budget-" + suffix,
+		userBudgetID: "user-budget-" + suffix, digest: "digest-" + suffix,
 	}
 	t.Cleanup(func() {
 		_, _ = store.pool.Exec(ctx, `DELETE FROM access_api_keys WHERE id=$1`, fixture.keyID)
 		_ = store.DeleteTeam(ctx, fixture.teamID)
+		_ = store.DeleteUser(ctx, fixture.userID)
 		_ = store.DeleteAccessGroup(ctx, fixture.teamGroupID)
 		_ = store.DeleteAccessGroup(ctx, fixture.userGroupID)
+		_ = store.DeleteBudget(ctx, fixture.teamBudgetID)
 		_ = store.DeleteBudget(ctx, fixture.userBudgetID)
-		_ = store.DeleteUser(ctx, fixture.userID)
 	})
-	if _, err := store.SaveUser(ctx, User{
-		ID: fixture.userID, Email: suffix + "@example.test", Name: "Invited User", Status: StatusActive,
-	}); err != nil {
+	for _, budget := range []Budget{
+		{ID: fixture.teamBudgetID, Name: "Team quota " + suffix, RPM: 12, TPM: 30000, DailyTokens: 250000, Enabled: true},
+		{ID: fixture.userBudgetID, Name: "User quota " + suffix, RPM: 24, TPM: 60000, DailyTokens: 500000, Enabled: true},
+	} {
+		if _, err := store.SaveBudget(ctx, budget); err != nil {
+			t.Fatalf("SaveBudget() error = %v", err)
+		}
+	}
+	if _, err := store.SaveUser(ctx, User{ID: fixture.userID, Email: suffix + "@example.test", Name: "Invited User", Status: StatusActive}); err != nil {
 		t.Fatalf("SaveUser() error = %v", err)
 	}
-	if _, err := store.SaveAccessGroup(ctx, AccessGroup{
-		ID: fixture.teamGroupID, Name: "Team " + suffix, ModelPatterns: []string{"team/*"},
-	}); err != nil {
+	if _, err := store.SaveAccessGroup(ctx, AccessGroup{ID: fixture.teamGroupID, Name: "Team " + suffix, ModelPatterns: []string{"team/*"}}); err != nil {
 		t.Fatalf("SaveAccessGroup(team) error = %v", err)
 	}
 	if _, err := store.SaveTeam(ctx, Team{
 		ID: fixture.teamID, Name: "Team " + suffix, Status: StatusActive,
-		UserIDs: []string{fixture.userID}, AccessGroupIDs: []string{fixture.teamGroupID},
-		Budget: &KeyBudget{RPM: 12, TPM: 30000, DailyTokens: 250000},
+		Members:        []TeamMembership{{UserID: fixture.userID, Role: TeamRoleMember}},
+		AccessGroupIDs: []string{fixture.teamGroupID}, BudgetID: fixture.teamBudgetID,
 	}); err != nil {
 		t.Fatalf("SaveTeam() error = %v", err)
 	}
 	if _, err := store.CreateSelfAPIKey(ctx, APIKey{
-		ID: fixture.keyID, Name: "Invited User", Prefix: "vllm_test", UserID: fixture.userID, Status: StatusActive,
+		ID: fixture.keyID, Name: "Invited User", Prefix: "vllm_test", UserID: fixture.userID,
+		ContextTeamID: fixture.teamID, Status: StatusActive,
 	}, fixture.digest, "ciphertext"); err != nil {
 		t.Fatalf("CreateSelfAPIKey() error = %v", err)
 	}
@@ -77,67 +83,178 @@ func TestTeamPolicyInheritanceIntegration(t *testing.T) {
 	fixture := seedTeamPolicyFixture(t, ctx, store)
 
 	team, err := store.GetTeam(ctx, fixture.teamID)
-	if err != nil || !reflect.DeepEqual(team.AccessGroupIDs, []string{fixture.teamGroupID}) || team.Budget == nil {
-		t.Fatalf("GetTeam() = %#v, %v; want group and budget", team, err)
-	}
-	selfTeams, err := store.ListTeamsForUser(ctx, fixture.userID)
-	if err != nil || len(selfTeams) != 1 || selfTeams[0].Budget == nil {
-		t.Fatalf("ListTeamsForUser() = %#v, %v; want inherited Team policy", selfTeams, err)
+	if err != nil || !reflect.DeepEqual(team.AccessGroupIDs, []string{fixture.teamGroupID}) || team.BudgetID != fixture.teamBudgetID {
+		t.Fatalf("GetTeam() = %#v, %v; want reusable Team policy", team, err)
 	}
 	principal, err := store.PrincipalByDigest(ctx, fixture.digest)
-	if err != nil || !reflect.DeepEqual(principal.ModelPatterns, []string{"team/*"}) {
-		t.Fatalf("PrincipalByDigest(team) = %#v, %v; want Team patterns", principal, err)
+	if err != nil || !reflect.DeepEqual(principal.ModelPatterns, []string{"team/*"}) || len(principal.Budgets) != 1 || principal.Budgets[0].ID != fixture.teamBudgetID {
+		t.Fatalf("PrincipalByDigest(team) = %#v, %v", principal, err)
 	}
-	if got := budgetIDs(principal.Budgets); !reflect.DeepEqual(got, []string{"team-budget-" + fixture.teamID}) {
-		t.Fatalf("team budgets = %#v, want Team budget", got)
+	key, _ := store.GetAPIKey(ctx, fixture.keyID)
+	patterns, modelSource, err := store.ModelPolicyForKey(ctx, key)
+	if err != nil || !reflect.DeepEqual(patterns, []string{"team/*"}) || modelSource != "team" {
+		t.Fatalf("ModelPolicyForKey(team) = %#v, %q, %v", patterns, modelSource, err)
+	}
+	budgetID, budgetSource, err := store.BudgetPolicyForKey(ctx, key)
+	if err != nil || budgetID != fixture.teamBudgetID || budgetSource != "team" {
+		t.Fatalf("BudgetPolicyForKey(team) = %q, %q, %v", budgetID, budgetSource, err)
+	}
+	service := &Service{store: store}
+	keys, total, err := service.ListAPIKeys(ctx, ListFilter{KeyID: fixture.keyID, Limit: 10})
+	if err != nil || total != 1 || len(keys) != 1 ||
+		!reflect.DeepEqual(keys[0].ModelPatterns, []string{"team/*"}) ||
+		keys[0].ModelPolicySource != "team" || keys[0].EffectiveBudgetID != fixture.teamBudgetID ||
+		keys[0].BudgetPolicySource != "team" {
+		t.Fatalf("ListAPIKeys(effective Team policy) = %#v, %d, %v", keys, total, err)
 	}
 
-	if _, err = store.SaveAccessGroup(ctx, AccessGroup{
-		ID: fixture.userGroupID, Name: "User " + fixture.userID, ModelPatterns: []string{"user/*"},
-		Bindings: []Binding{{SubjectType: "user", SubjectID: fixture.userID}},
-	}); err != nil {
+	if _, err = store.SaveAccessGroup(ctx, AccessGroup{ID: fixture.userGroupID, Name: "User " + fixture.userID, ModelPatterns: []string{"user/*"}}); err != nil {
 		t.Fatalf("SaveAccessGroup(user) error = %v", err)
 	}
-	if _, err = store.SaveBudget(ctx, Budget{
-		ID: fixture.userBudgetID, Name: "User " + fixture.userID, ScopeType: "user", ScopeID: fixture.userID,
-		RPM: 24, TPM: 60000, DailyTokens: 500000, Enabled: true,
-	}); err != nil {
-		t.Fatalf("SaveBudget(user) error = %v", err)
+	user, _ := store.GetUser(ctx, fixture.userID)
+	user.AccessGroupIDs, user.BudgetID = []string{fixture.userGroupID}, fixture.userBudgetID
+	if _, err = store.SaveUser(ctx, user); err != nil {
+		t.Fatalf("SaveUser(policy) error = %v", err)
 	}
 	principal, err = store.PrincipalByDigest(ctx, fixture.digest)
-	if err != nil || !reflect.DeepEqual(principal.ModelPatterns, []string{"user/*"}) {
-		t.Fatalf("PrincipalByDigest(user) = %#v, %v; want User override", principal, err)
-	}
-	if got := budgetIDs(principal.Budgets); !reflect.DeepEqual(got, []string{fixture.userBudgetID}) {
-		t.Fatalf("user budgets = %#v, want User override", got)
+	if err != nil || !reflect.DeepEqual(principal.ModelPatterns, []string{"user/*"}) || len(principal.Budgets) != 1 || principal.Budgets[0].ID != fixture.userBudgetID {
+		t.Fatalf("PrincipalByDigest(user) = %#v, %v", principal, err)
 	}
 	assertTeamPolicyInvariants(t, ctx, store, fixture)
 }
 
+func TestTeamAdminSelfServiceScopeIntegration(t *testing.T) {
+	ctx, store := openIntegrationStore(t)
+	fixture := seedTeamPolicyFixture(t, ctx, store)
+	if err := store.SetUserTeamMembership(ctx, fixture.userID, fixture.teamID, TeamRoleAdmin); err != nil {
+		t.Fatalf("SetUserTeamMembership(admin) error = %v", err)
+	}
+	allowed, err := store.IsTeamAdmin(ctx, fixture.userID, fixture.teamID)
+	if err != nil || !allowed {
+		t.Fatalf("IsTeamAdmin() = %v, %v; want true", allowed, err)
+	}
+	teamKeyID := "team-key-" + uuid.NewString()
+	t.Cleanup(func() { _, _ = store.pool.Exec(ctx, `DELETE FROM access_api_keys WHERE id=$1`, teamKeyID) })
+	if _, err = store.CreateAPIKey(ctx, APIKey{
+		ID: teamKeyID, Name: "Shared Team key", Prefix: "vllm_team", TeamID: fixture.teamID,
+		OwnerType: "team", OwnerID: fixture.teamID, ContextTeamID: fixture.teamID, Status: StatusActive,
+	}, "digest-"+teamKeyID, "ciphertext"); err != nil {
+		t.Fatalf("CreateAPIKey(team) error = %v", err)
+	}
+	keys, err := store.ListAPIKeysForUser(ctx, fixture.userID)
+	if err != nil || len(keys) != 2 {
+		t.Fatalf("ListAPIKeysForUser() = %#v, %v; want personal and Team keys", keys, err)
+	}
+	members, err := store.ListUsersSharingTeam(ctx, fixture.userID)
+	if err != nil || len(members) != 1 || members[0].ID != fixture.userID {
+		t.Fatalf("ListUsersSharingTeam() = %#v, %v", members, err)
+	}
+	groups, budgets, err := store.ListPoliciesForUserTeams(ctx, fixture.userID)
+	if err != nil || len(groups) != 1 || len(budgets) != 1 {
+		t.Fatalf("ListPoliciesForUserTeams() = %#v, %#v, %v", groups, budgets, err)
+	}
+	overview, err := store.OverviewForUser(ctx, fixture.userID)
+	if err != nil || overview.Users != 1 || overview.Teams != 1 || overview.ActiveKeys != 2 ||
+		overview.AccessGroups != 1 || overview.EnabledBudgets != 1 {
+		t.Fatalf("OverviewForUser() = %#v, %v", overview, err)
+	}
+}
+
+func TestDeletingIdentityRemovesItsPolicyAssignments(t *testing.T) {
+	ctx, store := openIntegrationStore(t)
+	suffix := uuid.NewString()
+	groupID, budgetID := "group-"+suffix, "budget-"+suffix
+	userID, teamID := "user-"+suffix, "team-"+suffix
+	t.Cleanup(func() {
+		_ = store.DeleteTeam(ctx, teamID)
+		_ = store.DeleteUser(ctx, userID)
+		_ = store.DeleteAccessGroup(ctx, groupID)
+		_ = store.DeleteBudget(ctx, budgetID)
+	})
+	if _, err := store.SaveAccessGroup(ctx, AccessGroup{
+		ID: groupID, Name: "Group " + suffix, ModelPatterns: []string{"model/*"},
+	}); err != nil {
+		t.Fatalf("SaveAccessGroup() error = %v", err)
+	}
+	if _, err := store.SaveBudget(ctx, Budget{
+		ID: budgetID, Name: "Budget " + suffix, RPM: 10, Enabled: true,
+	}); err != nil {
+		t.Fatalf("SaveBudget() error = %v", err)
+	}
+	if _, err := store.SaveUser(ctx, User{
+		ID: userID, Email: suffix + "@example.test", Name: "User " + suffix,
+		Status: StatusActive, AccessGroupIDs: []string{groupID},
+	}); err != nil {
+		t.Fatalf("SaveUser() error = %v", err)
+	}
+	if _, err := store.SaveTeam(ctx, Team{
+		ID: teamID, Name: "Team " + suffix, Status: StatusActive, BudgetID: budgetID,
+		Members:        []TeamMembership{{UserID: userID, Role: TeamRoleAdmin}},
+		AccessGroupIDs: []string{groupID},
+	}); err != nil {
+		t.Fatalf("SaveTeam() error = %v", err)
+	}
+	if err := store.DeleteTeam(ctx, teamID); err != nil {
+		t.Fatalf("DeleteTeam() error = %v", err)
+	}
+	group, err := store.GetAccessGroup(ctx, groupID)
+	if err != nil || group.AssignmentCount != 1 {
+		t.Fatalf("GetAccessGroup() after Team delete = %#v, %v", group, err)
+	}
+	if err = store.DeleteUser(ctx, userID); err != nil {
+		t.Fatalf("DeleteUser() error = %v", err)
+	}
+	group, err = store.GetAccessGroup(ctx, groupID)
+	if err != nil || group.AssignmentCount != 0 {
+		t.Fatalf("GetAccessGroup() after User delete = %#v, %v", group, err)
+	}
+}
+
+func TestAssignedBudgetsCannotBeDisabledOrReusedWhileInactive(t *testing.T) {
+	ctx, store := openIntegrationStore(t)
+	fixture := seedTeamPolicyFixture(t, ctx, store)
+	service := &Service{store: store}
+
+	assigned, err := store.GetBudget(ctx, fixture.teamBudgetID)
+	if err != nil {
+		t.Fatalf("GetBudget(assigned) error = %v", err)
+	}
+	assigned.Enabled = false
+	if _, err = service.SaveBudget(ctx, Actor{}, assigned); err == nil {
+		t.Fatal("SaveBudget() disabled an assigned budget")
+	}
+
+	inactiveID := "inactive-budget-" + uuid.NewString()
+	t.Cleanup(func() { _ = store.DeleteBudget(ctx, inactiveID) })
+	if _, err = store.SaveBudget(ctx, Budget{
+		ID: inactiveID, Name: "Inactive quota " + inactiveID, RPM: 1, Enabled: false,
+	}); err != nil {
+		t.Fatalf("SaveBudget(inactive) error = %v", err)
+	}
+	user, err := store.GetUser(ctx, fixture.userID)
+	if err != nil {
+		t.Fatalf("GetUser() error = %v", err)
+	}
+	user.BudgetID = inactiveID
+	if _, err = service.SaveUser(ctx, Actor{}, user); err == nil {
+		t.Fatal("SaveUser() assigned an inactive budget")
+	}
+}
+
 func assertTeamPolicyInvariants(t *testing.T, ctx context.Context, store *Store, fixture teamPolicyFixture) {
 	t.Helper()
-	teamGroup, err := store.GetAccessGroup(ctx, fixture.teamGroupID)
-	if err != nil {
-		t.Fatalf("GetAccessGroup(team) error = %v", err)
+	if err := store.DeleteAccessGroup(ctx, fixture.teamGroupID); err == nil {
+		t.Fatal("DeleteAccessGroup() deleted an assigned policy")
 	}
-	teamGroup.Bindings = nil
-	if _, err = store.SaveAccessGroup(ctx, teamGroup); err == nil {
-		t.Fatal("SaveAccessGroup() removed a Team's last access group")
+	if err := store.DeleteBudget(ctx, fixture.teamBudgetID); err == nil {
+		t.Fatal("DeleteBudget() deleted an assigned policy")
 	}
-	if err = store.DeleteAccessGroup(ctx, fixture.teamGroupID); err == nil {
-		t.Fatal("DeleteAccessGroup() deleted a Team's last access group")
+	if !errors.Is(store.SetUserTeamMembership(ctx, fixture.userID, "missing-team", TeamRoleMember), pgx.ErrNoRows) {
+		t.Fatal("SetUserTeamMembership() accepted an unknown Team")
 	}
-	if err = store.DeleteBudget(ctx, "team-budget-"+fixture.teamID); err == nil {
-		t.Fatal("DeleteBudget() deleted a required Team budget")
-	}
-	if !errors.Is(store.SetUserTeam(ctx, fixture.userID, "missing-team"), pgx.ErrNoRows) {
-		t.Fatal("SetUserTeam() accepted an unknown Team")
-	}
-	if _, err = store.SaveTeam(ctx, Team{
-		ID: fixture.teamID, Name: "Team " + fixture.teamID, Status: StatusActive,
-		AccessGroupIDs: []string{fixture.teamGroupID},
-		Budget:         &KeyBudget{RPM: 12, TPM: 30000, DailyTokens: 250000},
-	}); err != nil {
+	team, _ := store.GetTeam(ctx, fixture.teamID)
+	team.Members = nil
+	if _, err := store.SaveTeam(ctx, team); err != nil {
 		t.Fatalf("SaveTeam(remove members) error = %v", err)
 	}
 	selfTeams, err := store.ListTeamsForUser(ctx, fixture.userID)

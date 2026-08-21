@@ -24,7 +24,7 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		writeAccessError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	if strings.TrimSpace(ac.AccessUserID) == "" {
+	if strings.TrimSpace(ac.UserID) == "" {
 		writeAccessError(w, http.StatusForbidden, "model access is not ready for this account")
 		return
 	}
@@ -41,7 +41,7 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	if len(parts) > 1 {
 		id = parts[1]
 	}
-	actor := accesscontrol.Actor{ID: ac.AccessUserID, Email: ac.Email}
+	actor := accesscontrol.Actor{ID: ac.UserID, Email: ac.Email}
 
 	switch resource {
 	case "overview":
@@ -49,15 +49,33 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 			methodNotAllowed(w)
 			return
 		}
-		result, err := h.service.SelfOverview(r.Context(), ac.AccessUserID)
+		result, err := h.service.SelfOverview(r.Context(), ac.UserID)
 		writeAccessResult(w, result, err)
 	case "teams":
-		if r.Method != http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
+			if id != "" {
+				result, err := h.service.GetSelfTeam(r.Context(), ac.UserID, id)
+				writeAccessResult(w, result, err)
+				return
+			}
+			result, err := h.service.SelfTeamCatalog(r.Context(), ac.UserID)
+			writeAccessResult(w, result, err)
+		case http.MethodPut:
+			if id == "" {
+				writeAccessError(w, http.StatusBadRequest, "Team id is required")
+				return
+			}
+			var item accesscontrol.Team
+			if !decodeAccessJSON(w, r, &item) {
+				return
+			}
+			item.ID = id
+			result, err := h.service.SaveSelfTeam(r.Context(), actor, item)
+			writeAccessResult(w, result, err)
+		default:
 			methodNotAllowed(w)
-			return
 		}
-		result, err := h.service.SelfTeams(r.Context(), ac.AccessUserID)
-		writeAccessResult(w, map[string]any{"items": result}, err)
 	case "api-keys":
 		h.handleAPIKeys(w, r, actor, id)
 	case "usage":
@@ -65,7 +83,7 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 			methodNotAllowed(w)
 			return
 		}
-		result, err := h.service.SelfUsage(r.Context(), ac.AccessUserID, boundedUsageSummaryFilter(r))
+		result, err := h.service.SelfUsage(r.Context(), ac.UserID, boundedUsageSummaryFilter(r))
 		writeAccessResult(w, result, err)
 	case "request-logs":
 		if r.Method != http.MethodGet {
@@ -73,12 +91,12 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if id != "" {
-			result, err := h.service.SelfRequestLog(r.Context(), ac.AccessUserID, id)
+			result, err := h.service.SelfRequestLog(r.Context(), ac.UserID, id)
 			writeAccessResult(w, result, err)
 			return
 		}
 		filter := boundedUsageFilter(r)
-		result, total, err := h.service.SelfRequestLogs(r.Context(), ac.AccessUserID, filter)
+		result, total, err := h.service.SelfRequestLogs(r.Context(), ac.UserID, filter)
 		writeAccessPage(w, result, total, filter, err)
 	default:
 		writeAccessError(w, http.StatusNotFound, "resource not found")
@@ -121,7 +139,10 @@ func (h *SelfAccessControlHandler) handleAPIKeys(
 			return
 		}
 		var input struct {
-			Name string `json:"name"`
+			Name          string `json:"name"`
+			OwnerType     string `json:"ownerType"`
+			OwnerID       string `json:"ownerId"`
+			ContextTeamID string `json:"contextTeamId"`
 		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
 		decoder.DisallowUnknownFields()
@@ -129,7 +150,9 @@ func (h *SelfAccessControlHandler) handleAPIKeys(
 			writeAccessError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
-		result, err := h.service.CreateSelfAPIKey(r.Context(), actor, input.Name)
+		result, err := h.service.CreateSelfAPIKey(
+			r.Context(), actor, input.Name, input.OwnerType, input.OwnerID, input.ContextTeamID,
+		)
 		writeAccessResult(w, result, err)
 	case http.MethodPatch:
 		if id == "" {

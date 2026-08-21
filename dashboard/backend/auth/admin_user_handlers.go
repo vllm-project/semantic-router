@@ -26,8 +26,6 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 		switch r.Method {
 		case http.MethodGet:
 			handleAdminUsersList(w, r, svc)
-		case http.MethodPost:
-			handleAdminUsersCreate(w, r, svc, ac)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -80,54 +78,6 @@ func positiveQueryInt(r *http.Request, key string, fallback, maximum int) int {
 		return maximum
 	}
 	return value
-}
-
-func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service, ac AuthContext) {
-	if !ac.Perms[PermUsersManage] {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	var req struct {
-		Email    string `json:"email"`
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	if req.Email == "" || req.Password == "" {
-		http.Error(w, "email and password are required", http.StatusBadRequest)
-		return
-	}
-
-	hash, err := svc.HashPassword(req.Password)
-	if err != nil {
-		writePasswordHashError(w, err)
-		return
-	}
-
-	normalizedRole, err := normalizeRole(req.Role)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	user, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, normalizedRole, "active")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := svc.provisionModelUser(r.Context(), user.ID, user.Email, user.Name, nil); err != nil {
-		_ = svc.store.DeleteUser(r.Context(), user.ID)
-		http.Error(w, "could not prepare model access", http.StatusServiceUnavailable)
-		return
-	}
-
-	writeAudit(r, svc, "user.create", "/api/admin/users", ac.UserID)
-	respondJSON(w, user)
 }
 
 func adminUserItemHandler(svc *Service) http.HandlerFunc {
@@ -266,7 +216,7 @@ func handleAdminUserDelete(
 		return
 	}
 	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
-		_ = svc.provisionModelUser(r.Context(), target.ID, target.Email, target.Name, nil)
+		_ = svc.provisionModelUser(r.Context(), target.ID, target.Email, target.Name, nil, "")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

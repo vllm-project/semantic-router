@@ -320,7 +320,7 @@ func (h *AccessGatewayHandler) authenticateDashboard(w http.ResponseWriter, r *h
 		writeAccessError(w, http.StatusUnauthorized, "a Dashboard session is required")
 		return nil, false
 	}
-	principal, err := h.service.PrincipalForDashboardUser(r.Context(), session.AccessUserID)
+	principal, err := h.service.PrincipalForDashboardUser(r.Context(), session.UserID)
 	if err != nil {
 		writeAccessError(w, http.StatusForbidden, "this Dashboard user has no active model access")
 		return nil, false

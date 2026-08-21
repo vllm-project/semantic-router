@@ -42,10 +42,6 @@ func NewStore(path string) (*Store, error) {
 	}
 
 	store := &Store{db: db}
-	if err := store.normalizeStoredRoles(); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	if err := store.syncDefaultRolePermissions(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -74,10 +70,6 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 }
 
 func (s *Store) CreateUser(ctx context.Context, email, name, hash, role, status string) (*User, error) {
-	return s.CreateLinkedUser(ctx, email, name, hash, role, status, "")
-}
-
-func (s *Store) CreateLinkedUser(ctx context.Context, email, name, hash, role, status, inferenceConsumerID string) (*User, error) {
 	if status == "" {
 		status = defaultUserStatusActive
 	}
@@ -92,22 +84,19 @@ func (s *Store) CreateLinkedUser(ctx context.Context, email, name, hash, role, s
 		role = normalizedRole
 	}
 	id := uuid.NewString()
-	if strings.TrimSpace(inferenceConsumerID) == "" {
-		inferenceConsumerID = id
-	}
 	createdAt := nowUnix()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO users(id, email, name, password_hash, role, status, created_at, updated_at, inference_consumer_id)
-		VALUES(?,?,?,?,?,?,?,?,?)`, id, strings.ToLower(email), name, hash, role, status, createdAt, createdAt, strings.TrimSpace(inferenceConsumerID))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO users(id, email, name, password_hash, role, status, created_at, updated_at)
+		VALUES(?,?,?,?,?,?,?,?)`, id, strings.ToLower(email), name, hash, role, status, createdAt, createdAt)
 	if err != nil {
 		return nil, err
 	}
-	return &User{ID: id, Email: strings.ToLower(email), Name: name, Role: role, Status: status, CreatedAt: createdAt, UpdatedAt: createdAt, InferenceConsumerID: strings.TrimSpace(inferenceConsumerID)}, nil
+	return &User{ID: id, Email: strings.ToLower(email), Name: name, Role: role, Status: status, CreatedAt: createdAt, UpdatedAt: createdAt}, nil
 }
 
 func (s *Store) ListAllUsers(ctx context.Context) ([]*User, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, email, name, role, status, created_at, updated_at, last_login_at, inference_consumer_id FROM users ORDER BY created_at ASC`,
+		`SELECT id, email, name, role, status, created_at, updated_at, last_login_at FROM users ORDER BY created_at ASC`,
 	)
 	if err != nil {
 		return nil, err
@@ -135,7 +124,6 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (id, emailOut,
 	if err != nil {
 		return id, emailOut, name, role, status, createdAt, updatedAt, lastLogin, hash, err
 	}
-	role = canonicalRole(role)
 	if last.Valid {
 		t := last.Int64
 		lastLogin = &t
@@ -144,19 +132,8 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (id, emailOut,
 }
 
 func (s *Store) GetUserByID(ctx context.Context, userID string) (*User, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, email, name, role, status, created_at, updated_at, last_login_at, inference_consumer_id FROM users WHERE id = ?`, userID)
+	row := s.db.QueryRowContext(ctx, `SELECT id, email, name, role, status, created_at, updated_at, last_login_at FROM users WHERE id = ?`, userID)
 	return scanUser(row)
-}
-
-func (s *Store) SetUserInferenceIdentity(ctx context.Context, userID, inferenceConsumerID string) (*User, error) {
-	result, err := s.db.ExecContext(ctx, `UPDATE users SET inference_consumer_id = ?, updated_at = ? WHERE id = ?`, strings.TrimSpace(inferenceConsumerID), nowUnix(), userID)
-	if err != nil {
-		return nil, err
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		return nil, sql.ErrNoRows
-	}
-	return s.GetUserByID(ctx, userID)
 }
 
 func (s *Store) UpdateUserRoleOrStatus(ctx context.Context, userID, role, status string) (*User, error) {

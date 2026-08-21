@@ -27,12 +27,7 @@ import {
   type DashboardMemberInvitation,
 } from '../utils/dashboardMemberInvitations'
 import AccessControlDialog from './AccessControlDialog'
-import {
-  AccessEntityDetail,
-  APIKeyDetail,
-  DashboardMemberDetail,
-  RequestLogDetail,
-} from './AccessControlDetails'
+import AccessControlDetailOverlays from './AccessControlDetailOverlays'
 import AccessControlViews, { type DashboardMember, type IdentityTab } from './AccessControlViews'
 import DashboardMemberInviteDialog from './DashboardMemberInviteDialog'
 import {
@@ -60,6 +55,7 @@ const AccessControlPage: React.FC = () => {
   const canSelfManage = canSelfManageInferenceAccess(currentUser)
   const selfService = canSelfManage && !canReadAll && !canManage
   const canManageDashboardMembers = canManageUsers(currentUser)
+  const selfUserId = currentUser?.id || ''
   const routeView = (
     location.pathname === '/logs'
       ? 'request-logs'
@@ -180,7 +176,9 @@ const AccessControlPage: React.FC = () => {
           selfService
             ? inferenceAccessApi.selfKeys()
             : inferenceAccessApi.keys(canReadAll ? { limit: 100 } : { limit: 1 }),
-          selfService ? inferenceAccessApi.selfTeams() : Promise.resolve({ items: [] }),
+          selfService
+            ? inferenceAccessApi.selfTeams()
+            : Promise.resolve({ items: [], members: [], accessGroups: [], budgets: [] }),
         ])
         setOverview(nextOverview)
         setKeys(nextKeys.items)
@@ -204,10 +202,28 @@ const AccessControlPage: React.FC = () => {
             budgets: nextBudgets.total,
           })
         } else {
-          setUsers([])
+          const visibleMembers = [...ownTeams.members]
+          if (selfUserId && !visibleMembers.some((member) => member.id === selfUserId)) {
+            visibleMembers.push({
+              id: selfUserId,
+              email: currentUser?.email || '',
+              name: currentUser?.name || currentUser?.email || 'You',
+              status: 'active',
+            })
+          }
+          setUsers(
+            visibleMembers.map((member) => ({
+              ...member,
+              accessGroupIds: [],
+              memberships: ownTeams.items.flatMap((team) =>
+                team.members.filter((membership) => membership.userId === member.id),
+              ),
+            })),
+          )
           setTeams(ownTeams.items)
-          setGroups([])
-          setBudgets([])
+          setGroups(ownTeams.accessGroups)
+          setBudgets(ownTeams.budgets)
+          setEntityTotals((current) => ({ ...current, teams: ownTeams.items.length }))
         }
         setLiveState('live')
         await loadDashboardIdentities().catch(() => undefined)
@@ -218,7 +234,14 @@ const AccessControlPage: React.FC = () => {
         if (showSpinner) setLoading(false)
       }
     },
-    [canReadAll, loadDashboardIdentities, selfService],
+    [
+      canReadAll,
+      currentUser?.email,
+      currentUser?.name,
+      loadDashboardIdentities,
+      selfService,
+      selfUserId,
+    ],
   )
 
   useEffect(() => {
@@ -345,10 +368,10 @@ const AccessControlPage: React.FC = () => {
   }, [loadCurrentView])
 
   const ownerName = useCallback(
-    (item: Pick<AccessAPIKey, 'userId' | 'teamId'>) =>
-      item.userId
-        ? users.find((user) => user.id === item.userId)?.name || item.userId
-        : teams.find((team) => team.id === item.teamId)?.name || item.teamId || 'Unassigned',
+    (item: Pick<AccessAPIKey, 'ownerType' | 'ownerId'>) =>
+      item.ownerType === 'user'
+        ? users.find((user) => user.id === item.ownerId)?.name || item.ownerId
+        : teams.find((team) => team.id === item.ownerId)?.name || item.ownerId || 'Unassigned',
     [teams, users],
   )
 
@@ -370,29 +393,41 @@ const AccessControlPage: React.FC = () => {
           kind: 'team',
           value: {
             status: 'active',
-            userIds: [],
+            members: [],
             accessGroupIds: [],
-            budget: { rpm: 60, tpm: 100000, dailyTokens: 1000000 },
+            budgetId: '',
           },
         })
       if (target === 'key')
-        setEditor({
-          kind: 'key',
-          ownerType: 'user',
-          value: {
-            status: 'active',
-            accessGroupIds: [],
-            budget: { rpm: 0, tpm: 0, dailyTokens: 0 },
-          },
+        setEditor(() => {
+          const personalExists = keys.some(
+            (key) => key.ownerType === 'user' && key.ownerId === selfUserId,
+          )
+          const firstManagedTeam = teams.find((team) =>
+            team.members.some(
+              (membership) => membership.userId === selfUserId && membership.role === 'admin',
+            ),
+          )
+          const ownerType = selfService && personalExists && firstManagedTeam ? 'team' : 'user'
+          const ownerId = ownerType === 'team' ? firstManagedTeam?.id || '' : selfUserId
+          return {
+            kind: 'key',
+            ownerType,
+            value: {
+              ownerType,
+              ownerId,
+              contextTeamId: ownerType === 'team' ? ownerId : undefined,
+              status: 'active',
+              accessGroupIds: [],
+            },
+          }
         })
       if (target === 'group')
-        setEditor({ kind: 'group', value: { modelPatterns: ['vllm-sr/mom-*'], bindings: [] } })
+        setEditor({ kind: 'group', value: { modelPatterns: ['vllm-sr/mom-*'] } })
       if (target === 'budget')
         setEditor({
           kind: 'budget',
           value: {
-            scopeType: 'global',
-            scopeId: '',
             rpm: 60,
             tpm: 100000,
             dailyTokens: 1000000,
@@ -400,7 +435,7 @@ const AccessControlPage: React.FC = () => {
           },
         })
     },
-    [activeView],
+    [activeView, keys, selfService, selfUserId, teams],
   )
 
   const saveEditor = async () => {
@@ -409,20 +444,34 @@ const AccessControlPage: React.FC = () => {
     setSaving(true)
     setEditorError('')
     try {
-      if (editor.kind === 'user') await inferenceAccessApi.saveUser(editor.value)
-      if (editor.kind === 'team') await inferenceAccessApi.saveTeam(editor.value)
+      if (editor.kind === 'user') {
+        if (!editor.value.id) throw new Error('User id is required')
+        await inferenceAccessApi.saveUser(editor.value as Partial<AccessUser> & { id: string })
+      }
+      if (editor.kind === 'team') {
+        if (selfService && editor.value.id) {
+          await inferenceAccessApi.saveSelfTeam(
+            editor.value as Partial<AccessTeam> & { id: string },
+          )
+        } else {
+          await inferenceAccessApi.saveTeam(editor.value)
+        }
+      }
       if (editor.kind === 'group') await inferenceAccessApi.saveGroup(editor.value)
       if (editor.kind === 'budget') await inferenceAccessApi.saveBudget(editor.value)
       if (editor.kind === 'key') {
-        const value = { ...editor.value }
-        if (editor.ownerType === 'user') value.teamId = undefined
-        else value.userId = undefined
+        const value = { ...editor.value, ownerType: editor.ownerType }
         if (value.id) {
           await inferenceAccessApi.saveKey(value as Partial<AccessAPIKey> & { id: string })
         } else {
           setCreatedKey(
             selfService
-              ? await inferenceAccessApi.createSelfKey(value.name || 'My API key')
+              ? await inferenceAccessApi.createSelfKey(
+                  value.name || 'My API key',
+                  value.ownerType || 'user',
+                  value.ownerId || selfUserId,
+                  value.contextTeamId,
+                )
               : await inferenceAccessApi.createKey(value),
           )
         }
@@ -466,9 +515,16 @@ const AccessControlPage: React.FC = () => {
 
   const closeDetail = () => navigate(location.pathname, { replace: true })
 
+  const managedTeams = teams.filter((team) =>
+    team.members.some(
+      (membership) => membership.userId === selfUserId && membership.role === 'admin',
+    ),
+  )
+  const hasPersonalKey = keys.some((key) => key.ownerType === 'user' && key.ownerId === selfUserId)
   const hasCreateAction = ['api-keys', 'teams', 'access-groups', 'budgets'].includes(activeView)
   const canCreateCurrent =
-    canManage || (selfService && activeView === 'api-keys' && entityTotals['api-keys'] === 0)
+    canManage ||
+    (selfService && activeView === 'api-keys' && (!hasPersonalKey || managedTeams.length > 0))
   const createLabel =
     activeView === 'api-keys'
       ? 'Create key'
@@ -651,6 +707,7 @@ const AccessControlPage: React.FC = () => {
           groups={groups}
           budgets={budgets}
           selfService={selfService}
+          selfUserId={selfUserId}
           error={editorError}
           saving={saving}
           onChange={setEditor}
@@ -691,71 +748,47 @@ const AccessControlPage: React.FC = () => {
           void loadDashboardIdentities()
         }}
       />
-      {detailKeyId ? (
-        <APIKeyDetail
-          keyId={detailKeyId}
-          users={users}
-          teams={teams}
-          groups={groups}
-          budgets={budgets}
-          canManage={canManage || selfService}
-          canEditPolicy={canManage}
-          selfService={selfService}
-          onEdit={(key) => {
-            setEntityEditorReturn(null)
-            setEditor({
-              kind: 'key',
-              value: key,
-              ownerType: key.userId ? 'user' : 'team',
-            })
-            closeDetail()
-          }}
-          onClose={closeDetail}
-          onChanged={() => void loadCatalog(false)}
-        />
-      ) : null}
-      {detailLogId ? (
-        <RequestLogDetail
-          logId={detailLogId}
-          users={users}
-          teams={teams}
-          keys={keys}
-          selfService={selfService}
-          onClose={closeDetail}
-        />
-      ) : null}
-      {detailEntityId && entityKind ? (
-        <AccessEntityDetail
-          kind={entityKind}
-          id={detailEntityId}
-          users={users}
-          teams={teams}
-          keys={keys}
-          canManage={canManage}
-          onEdit={(kind, item) => {
-            setEntityEditorReturn({ kind, id: item.id })
-            if (kind === 'user') setEditor({ kind, value: item as AccessUser })
-            if (kind === 'team') setEditor({ kind, value: item as AccessTeam })
-            if (kind === 'group') setEditor({ kind, value: item as AccessGroup })
-            if (kind === 'budget') setEditor({ kind, value: item as AccessBudget })
-            closeDetail()
-          }}
-          onDelete={(kind, id) => {
-            void remove(kind, id).then((deleted) => {
-              if (deleted) closeDetail()
-            })
-          }}
-          onClose={closeDetail}
-        />
-      ) : null}
-      {detailMemberId ? (
-        <DashboardMemberDetail
-          memberId={detailMemberId}
-          canManage={canManageDashboardMembers}
-          onChanged={() => void loadDashboardIdentities()}
-          onClose={closeDetail}
-        />
-      ) : null}
+      <AccessControlDetailOverlays
+        detailKeyId={detailKeyId}
+        detailLogId={detailLogId}
+        detailEntityId={detailEntityId}
+        detailMemberId={detailMemberId}
+        entityKind={entityKind}
+        users={users}
+        teams={teams}
+        keys={keys}
+        groups={groups}
+        budgets={budgets}
+        canManage={canManage}
+        canManageDashboardMembers={canManageDashboardMembers}
+        selfService={selfService}
+        selfUserId={selfUserId}
+        onClose={closeDetail}
+        onCatalogChanged={() => void loadCatalog(false)}
+        onDashboardMembersChanged={() => void loadDashboardIdentities()}
+        onEditKey={(key) => {
+          setEntityEditorReturn(null)
+          setEditor({ kind: 'key', value: key, ownerType: key.ownerType })
+          closeDetail()
+        }}
+        onEditEntity={(kind, item) => {
+          setEntityEditorReturn({ kind, id: item.id })
+          if (kind === 'user') setEditor({ kind, value: item as AccessUser })
+          if (kind === 'team') setEditor({ kind, value: item as AccessTeam })
+          if (kind === 'group') setEditor({ kind, value: item as AccessGroup })
+          if (kind === 'budget') setEditor({ kind, value: item as AccessBudget })
+          closeDetail()
+        }}
+        onDeleteEntity={(kind, id) => {
+          void remove(kind, id).then((deleted) => {
+            if (deleted) closeDetail()
+          })
+        }}
+        onEditModelAccess={(accessUser) => {
+          setEditor({ kind: 'user', value: accessUser })
+          closeDetail()
+        }}
+      />
     </div>
   )
 }

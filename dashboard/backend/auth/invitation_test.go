@@ -10,10 +10,12 @@ import (
 )
 
 type modelUserRecorder struct {
-	id     string
-	email  string
-	name   string
-	teamID string
+	id            string
+	email         string
+	name          string
+	teamID        string
+	teamRole      string
+	missingTeamID string
 }
 
 func (r *modelUserRecorder) EnsureModelUser(_ context.Context, id, email, name string) error {
@@ -21,12 +23,15 @@ func (r *modelUserRecorder) EnsureModelUser(_ context.Context, id, email, name s
 	return nil
 }
 
-func (r *modelUserRecorder) AssignModelUserTeam(_ context.Context, id, teamID string) error {
-	r.id, r.teamID = id, teamID
+func (r *modelUserRecorder) AssignModelUserTeam(_ context.Context, id, teamID, role string) error {
+	r.id, r.teamID, r.teamRole = id, teamID, role
 	return nil
 }
 
 func (r *modelUserRecorder) ModelTeamName(_ context.Context, teamID string) (string, error) {
+	if teamID == r.missingTeamID {
+		return "", nil
+	}
 	return teamID, nil
 }
 
@@ -42,7 +47,7 @@ func TestDashboardMemberInvitationAcceptsExactlyOnce(t *testing.T) {
 
 	invitation, err := svc.CreateInvitation(t.Context(), invitationInput{
 		Email: "operator@example.com", Name: "Operator", Role: RoleWrite,
-		TeamID: "team-42", CreatedBy: admin.ID, ExpiresInHours: 24,
+		TeamID: "team-42", TeamRole: "admin", CreatedBy: admin.ID, ExpiresInHours: 24,
 	})
 	if err != nil {
 		t.Fatalf("CreateInvitation() error = %v", err)
@@ -58,10 +63,10 @@ func TestDashboardMemberInvitationAcceptsExactlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptInvitation() error = %v", err)
 	}
-	if user.Role != RoleWrite || user.InferenceConsumerID != user.ID {
+	if user.Role != RoleWrite {
 		t.Fatalf("accepted user = %#v", user)
 	}
-	if provisioner.id != user.ID || provisioner.email != user.Email || provisioner.teamID != "team-42" {
+	if provisioner.id != user.ID || provisioner.email != user.Email || provisioner.teamID != "team-42" || provisioner.teamRole != "admin" {
 		t.Fatalf("model user provisioning = %#v", provisioner)
 	}
 	if _, _, secondErr := svc.AcceptInvitation(t.Context(), invitation.InvitationToken, "Again", "another-secure-password"); !errors.Is(secondErr, ErrInvitationUnavailable) {
@@ -90,6 +95,26 @@ func TestDashboardMemberInvitationResendRotatesSecret(t *testing.T) {
 	}
 	if _, err := svc.InvitationInfo(context.Background(), resent.InvitationToken); err != nil {
 		t.Fatalf("rotated token should be valid: %v", err)
+	}
+}
+
+func TestDashboardMemberInvitationRejectsUnknownTeam(t *testing.T) {
+	svc := newTestAuthService(t)
+	svc.ConfigureModelUsers(&modelUserRecorder{})
+	admin := newTestUser(t, svc, "admin-team@example.com", RoleAdmin, "active")
+	if _, err := svc.CreateInvitation(t.Context(), invitationInput{
+		Email: "member@example.com", Name: "Member", Role: RoleRead,
+		CreatedBy: admin.ID,
+	}); err != nil {
+		t.Fatalf("CreateInvitation() without Team error = %v", err)
+	}
+
+	svc.ConfigureModelUsers(&modelUserRecorder{missingTeamID: "missing"})
+	if _, err := svc.CreateInvitation(t.Context(), invitationInput{
+		Email: "other@example.com", Name: "Other", Role: RoleRead,
+		TeamID: "missing", TeamRole: "member", CreatedBy: admin.ID,
+	}); err == nil {
+		t.Fatal("CreateInvitation() accepted an unknown Team")
 	}
 }
 

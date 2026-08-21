@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PermissionList from '../components/PermissionList'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import { inferenceAccessApi, type AccessUser } from '../utils/inferenceAccessApi'
 import type { DashboardMember } from './AccessControlViewTypes'
 import DashboardAccessDialog from './DashboardAccessDialog'
 import { formatDate } from './AccessControlDetailSupport'
@@ -10,15 +11,18 @@ export function DashboardMemberDetail({
   memberId,
   canManage,
   onChanged,
+  onEditModelAccess,
   onClose,
 }: {
   memberId: string
   canManage: boolean
   onChanged: () => void
+  onEditModelAccess: (user: AccessUser) => void
   onClose: () => void
 }) {
   const [member, setMember] = useState<DashboardMember | null>(null)
   const [error, setError] = useState('')
+  const [modelUser, setModelUser] = useState<AccessUser | null>(null)
   const [editing, setEditing] = useState(false)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
 
@@ -30,7 +34,10 @@ export function DashboardMemberDetail({
           throw new Error((await response.text()) || 'Could not load Dashboard identity')
         return response.json() as Promise<DashboardMember>
       })
-      .then(setMember)
+      .then(async (nextMember) => {
+        setMember(nextMember)
+        setModelUser(await inferenceAccessApi.user(nextMember.id).catch(() => null))
+      })
       .catch((nextError) =>
         setError(
           nextError instanceof Error ? nextError.message : 'Could not load Dashboard identity',
@@ -54,10 +61,15 @@ export function DashboardMemberDetail({
         tabIndex={-1}
       >
         <header className={styles.detailHeader}>
-          <div>
-            <span>Dashboard identity</span>
-            <h2 id="member-detail-title">{member?.name || 'User details'}</h2>
-            <p>{member?.email || 'Loading identity…'}</p>
+          <div className={styles.detailHeaderIdentity}>
+            <div className={styles.modalLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span>User</span>
+              <h2 id="member-detail-title">{member?.name || 'User details'}</h2>
+              <p>{member?.email || 'Loading identity…'}</p>
+            </div>
           </div>
           <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
             ×
@@ -98,8 +110,8 @@ export function DashboardMemberDetail({
                   </strong>
                 </article>
                 <article>
-                  <span>Model identity</span>
-                  <strong>{member.inferenceConsumerId ? 'Active' : 'Provisioning'}</strong>
+                  <span>Teams</span>
+                  <strong>{modelUser?.memberships.length || 'None'}</strong>
                 </article>
               </div>
               <section className={styles.detailSection}>
@@ -109,6 +121,36 @@ export function DashboardMemberDetail({
                 </div>
                 <PermissionList permissions={member.permissions || []} />
               </section>
+              {modelUser ? (
+                <section className={styles.detailSection}>
+                  <div className={styles.detailSectionHeading}>
+                    <span>Model access</span>
+                    <h3>Inherited policy</h3>
+                  </div>
+                  <dl className={styles.detailGrid}>
+                    <div>
+                      <dt>Teams</dt>
+                      <dd>{modelUser.memberships.length || 'None'}</dd>
+                    </div>
+                    <div>
+                      <dt>API policy</dt>
+                      <dd>
+                        {modelUser.accessGroupIds.length
+                          ? `${modelUser.accessGroupIds.length} user overrides`
+                          : 'Team defaults'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Budget</dt>
+                      <dd>{modelUser.budgetId ? 'User override' : 'Team default'}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{modelUser.status}</dd>
+                    </div>
+                  </dl>
+                </section>
+              ) : null}
               <section className={styles.detailSection}>
                 <div className={styles.detailSectionHeading}>
                   <span>Identity</span>
@@ -140,13 +182,24 @@ export function DashboardMemberDetail({
         </div>
         <footer className={styles.detailFooter}>
           {member && canManage ? (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => setEditing(true)}
-            >
-              Manage login
-            </button>
+            <>
+              {modelUser ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => onEditModelAccess(modelUser)}
+                >
+                  Model access
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setEditing(true)}
+              >
+                Manage login
+              </button>
+            </>
           ) : null}
           <button type="button" className={styles.primaryButton} onClick={onClose}>
             Done

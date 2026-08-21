@@ -7,7 +7,7 @@ import {
   Quota,
   Status,
 } from './AccessControlViewPrimitives'
-import { assignmentSummary, date, keyPolicy, number, scopeName } from './AccessControlViewSupport'
+import { date, keyPolicy, number } from './AccessControlViewSupport'
 import styles from './AccessControlPage.module.css'
 
 export function KeysView(props: Props) {
@@ -39,7 +39,9 @@ export function KeysView(props: Props) {
       </div>
       {filtered.map((key) => {
         const policy = keyPolicy(key, props.groups)
-        const linkedBudget = props.budgets.find((budget) => budget.id === key.budgetId)
+        const linkedBudget = props.budgets.find(
+          (budget) => budget.id === (key.effectiveBudgetId || key.budgetId),
+        )
         return (
           <div
             className={`${styles.dataRow} ${styles.keyColumns} ${styles.dataRowInteractive}`}
@@ -57,25 +59,18 @@ export function KeysView(props: Props) {
             </div>
             <div className={styles.stackCell}>
               <span>{props.ownerName(key)}</span>
-              <small>{key.userId ? 'User' : 'Team'}</small>
+              <small>{key.ownerType === 'user' ? 'Personal' : 'Team'}</small>
             </div>
             <div className={styles.stackCell}>
               <span>{policy.patterns.length ? policy.patterns.join(', ') : 'No models'}</span>
               <small>{policy.direct ? 'Key override' : 'Inherited policy'}</small>
             </div>
             <div className={styles.stackCell}>
-              <span>
-                {linkedBudget?.name ||
-                  (key.budget
-                    ? `${number(key.budget.rpm)} RPM · ${number(key.budget.tpm)} TPM`
-                    : 'Inherited')}
-              </span>
+              <span>{linkedBudget?.name || 'Inherited'}</span>
               <small>
                 {linkedBudget
-                  ? `${number(linkedBudget.rpm)} RPM · ${number(linkedBudget.tpm)} TPM${key.budget ? ' · plus key limits' : ''}`
-                  : key.budget?.dailyTokens
-                    ? `${number(key.budget.dailyTokens)} tokens / day`
-                    : 'Owner and global limits apply'}
+                  ? `${number(linkedBudget.rpm)} RPM · ${number(linkedBudget.tpm)} TPM`
+                  : 'Owner policy applies'}
               </small>
             </div>
             <div className={styles.stackCell}>
@@ -142,8 +137,8 @@ export function GroupsView(props: Props) {
             ))}
           </div>
           <div className={styles.stackCell}>
-            <span>{group.bindings.length} assignments</span>
-            <small>{assignmentSummary(group)}</small>
+            <span>{group.assignmentCount} assignments</span>
+            <small>Assigned from users, Teams, or keys</small>
           </div>
           <span>{date(group.updatedAt)}</span>
           <span className={styles.rowChevron} aria-hidden="true">
@@ -182,7 +177,7 @@ export function BudgetsView(props: Props) {
     >
       <div className={`${styles.dataRow} ${styles.budgetColumns} ${styles.dataHeader}`}>
         <span>Budget</span>
-        <span>Scope</span>
+        <span>Used by</span>
         <span>Requests / min</span>
         <span>Tokens / min</span>
         <span>Daily tokens</span>
@@ -207,8 +202,8 @@ export function BudgetsView(props: Props) {
             />
           </div>
           <div className={styles.stackCell}>
-            <span className={styles.scopeBadge}>{budget.scopeType}</span>
-            <small>{scopeName(budget, props)}</small>
+            <span className={styles.scopeBadge}>{budget.assignmentCount} assignments</span>
+            <small>{budget.description || 'Reusable quota'}</small>
           </div>
           <Quota value={budget.rpm} />
           <Quota value={budget.tpm} />
@@ -221,7 +216,7 @@ export function BudgetsView(props: Props) {
       {filtered.length === 0 ? (
         <Empty
           title="No budgets found"
-          detail="Set a global limit or compose user, team, and key-specific limits."
+          detail="Create a quota once, then assign it to users, Teams, or keys."
         />
       ) : null}
     </EntityTable>

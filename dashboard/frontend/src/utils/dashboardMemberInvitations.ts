@@ -5,6 +5,7 @@ export interface DashboardMemberInvitation {
   role: 'admin' | 'write' | 'read'
   teamId?: string
   teamName?: string
+  teamRole?: 'admin' | 'member'
   status: 'pending' | 'accepted' | 'revoked' | 'expired'
   expiresAt: number
   acceptedAt?: number
@@ -24,6 +25,7 @@ export interface DashboardMemberInvitationInput {
   name: string
   role: string
   teamId?: string
+  teamRole?: 'admin' | 'member'
   expiresInHours: number
   sendEmail: boolean
 }

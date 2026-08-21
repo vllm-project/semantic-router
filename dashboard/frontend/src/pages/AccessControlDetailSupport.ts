@@ -36,25 +36,12 @@ export const formatDate = (value?: string) =>
 
 export function effectivePatterns(key: AccessAPIKey, groups: AccessGroup[]) {
   if (key.modelPatterns?.length) return key.modelPatterns
-  const direct = groups.filter((group) =>
-    group.bindings.some((binding) => binding.subjectType === 'key' && binding.subjectId === key.id),
-  )
-  const user = groups.filter((group) =>
-    group.bindings.some(
-      (binding) => binding.subjectType === 'user' && binding.subjectId === key.userId,
-    ),
-  )
-  const team = groups.filter((group) =>
-    group.bindings.some(
-      (binding) =>
-        binding.subjectType === 'team' && binding.subjectId === (key.effectiveTeamId || key.teamId),
-    ),
-  )
-  const effective = direct.length ? direct : user.length ? user : team
+  const effective = groups.filter((group) => key.accessGroupIds.includes(group.id))
   return [...new Set(effective.flatMap((group) => group.modelPatterns))]
 }
 
 export function ownerLabel(key: AccessAPIKey, users: AccessUser[], teams: AccessTeam[]) {
-  if (key.userId) return users.find((user) => user.id === key.userId)?.name || key.userId
-  return teams.find((team) => team.id === key.teamId)?.name || key.teamId || 'Unassigned'
+  if (key.ownerType === 'user')
+    return users.find((user) => user.id === key.ownerId)?.name || key.ownerId
+  return teams.find((team) => team.id === key.ownerId)?.name || key.ownerId || 'Unassigned'
 }

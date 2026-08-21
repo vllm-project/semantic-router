@@ -20,7 +20,6 @@ export interface DashboardMember {
   name: string
   role: string
   status: string
-  inferenceConsumerId?: string
   permissions?: string[]
   createdAt?: number
   lastLoginAt?: number
@@ -57,7 +56,7 @@ export interface AccessControlViewProps {
   loading: boolean
   canManage: boolean
   canManageDashboardMembers: boolean
-  ownerName: (item: Pick<AccessAPIKey, 'userId' | 'teamId'>) => string
+  ownerName: (item: Pick<AccessAPIKey, 'ownerType' | 'ownerId'>) => string
   onOpenKey: (id: string) => void
   onOpenLog: (id: string) => void
   onOpenEntity: (id: string) => void
