@@ -29,11 +29,21 @@ var multiModalEmbeddingDim = candle_binding.MultiModalGetEmbeddingDim
 // path is configured; it matches the canonical shipped checkpoint.
 const multiModalModelFallbackID = "multi-modal-embed-small"
 
-// imageTargetDimension returns the request dimension for image encoding. Image
-// requests are validated before encoding, so this must not silently cap the
-// image result to a different dimension than the text side.
+// imageTargetDimension resolves the image encode dimension. Image-only requests
+// use req.Dimension directly (validated <= native). Mixed requests target the
+// text side, so the image side caps at native and warns once per request rather
+// than forcing text recall down to the image width.
 func imageTargetDimension(req EmbeddingRequest) int {
-	return req.Dimension
+	if len(req.Images) == 0 || len(req.Texts) == 0 {
+		return req.Dimension
+	}
+	native := multiModalEmbeddingDim()
+	if native <= 0 || req.Dimension <= native {
+		return req.Dimension
+	}
+	logging.Warnf("Embedding request dimension %d exceeds the multimodal native dimension %d; encoding %d image input(s) at %d, so response dimensions differ by modality",
+		req.Dimension, native, len(req.Images), native)
+	return native
 }
 
 // isMultiModalModelName reports whether an explicit model selector names the
@@ -175,7 +185,7 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 		req.Model = "auto"
 	}
 	if req.Dimension == 0 {
-		req.Dimension = defaultEmbeddingDimensionFor(req.Images)
+		req.Dimension = defaultEmbeddingDimensionFor(req.Texts, req.Images)
 	}
 	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
 		req.QualityPriority = defaultEmbeddingPriority
@@ -183,12 +193,11 @@ func applyEmbeddingDefaults(req *EmbeddingRequest) {
 	}
 }
 
-// defaultEmbeddingDimensionFor picks the default embedding dimension when the
-// request omits one. Every image-bearing request uses the multimodal native
-// dimension so a successful mixed response cannot contain vectors of different
-// lengths; text-only requests use the API default.
-func defaultEmbeddingDimensionFor(images []string) int {
-	if len(images) == 0 {
+// defaultEmbeddingDimensionFor picks the default dimension when the request
+// omits one. req.Dimension targets the text side, so only an image-only request
+// defaults to the multimodal native dimension.
+func defaultEmbeddingDimensionFor(texts, images []string) int {
+	if len(texts) > 0 || len(images) == 0 {
 		return defaultEmbeddingDimension
 	}
 	if native := multiModalEmbeddingDim(); native > 0 {
@@ -225,10 +234,13 @@ func validateImageEmbeddingParams(req EmbeddingRequest) (string, string, bool) {
 	if len(req.Images) == 0 {
 		return "", "", true
 	}
-	// MRL only truncates down from the image model's native dimension. Apply
-	// the ceiling to mixed requests too, before either modality is encoded.
-	if native := multiModalEmbeddingDim(); native > 0 && req.Dimension > native {
-		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be <= %d for image inputs (multimodal model native dimension; got %d)", native, req.Dimension), false
+	// Image-only: req.Dimension is the image target, and MRL only truncates down
+	// from native. Mixed requests target the text side, so the image ceiling is
+	// applied at encode time instead of rejecting a text-legal dimension.
+	if len(req.Texts) == 0 {
+		if native := multiModalEmbeddingDim(); native > 0 && req.Dimension > native {
+			return "INVALID_DIMENSION", fmt.Sprintf("dimension must be <= %d for image inputs (multimodal model native dimension; got %d)", native, req.Dimension), false
+		}
 	}
 	// target_layer is a text-only mmbert 2DMSE control; it cannot apply to
 	// image encoding, so reject instead of silently ignoring it.
