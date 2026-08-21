@@ -11,6 +11,7 @@ import type {
   CreatedAccessAPIKey,
 } from '../utils/inferenceAccessApi'
 import type { AccessEditor } from './AccessControlPageSupport'
+import { ACCESS_EDITOR_TITLES, toLocalDateTime } from './AccessControlFormSupport'
 import styles from './AccessControlPage.module.css'
 
 type EditorProps = {
@@ -32,6 +33,7 @@ type EditorProps = {
 type SecretProps = {
   secret: CreatedAccessAPIKey
   onClose: () => void
+  onViewDetails: () => void
   editor?: never
   users?: never
   teams?: never
@@ -46,42 +48,6 @@ type SecretProps = {
 }
 
 type Props = EditorProps | SecretProps
-
-const TITLES: Record<
-  AccessEditor['kind'],
-  { eyebrow: string; create: string; edit: string; description: string }
-> = {
-  user: {
-    eyebrow: 'Identity',
-    create: 'Add user',
-    edit: 'Edit user',
-    description: 'A user can own API keys, join teams, and optionally receive Dashboard access.',
-  },
-  team: {
-    eyebrow: 'Identity',
-    create: 'Create team',
-    edit: 'Edit team',
-    description: 'Group users under shared model grants and quota.',
-  },
-  key: {
-    eyebrow: 'Credential',
-    create: 'Create API key',
-    edit: 'API key',
-    description: 'Choose an owner, model visibility, and an optional key-specific limit.',
-  },
-  group: {
-    eyebrow: 'Model policy',
-    create: 'Create access group',
-    edit: 'Edit access group',
-    description: 'Compose reusable model grants and assign them to identities or keys.',
-  },
-  budget: {
-    eyebrow: 'Rate limit',
-    create: 'Create budget',
-    edit: 'Edit budget',
-    description: 'Enforce RPM, TPM, and daily tokens at any scope.',
-  },
-}
 
 export default function AccessControlDialog(props: Props) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -115,7 +81,9 @@ export default function AccessControlDialog(props: Props) {
           >
             ×
           </button>
-          <div className={styles.secretIcon}>✓</div>
+          <div className={styles.secretIcon} aria-hidden="true">
+            <img src="/vllm.png" alt="" />
+          </div>
           <span className={styles.modalEyebrow}>API key created</span>
           <h2 id="api-secret-title">Save it somewhere safe.</h2>
           <p>Copy it now. You can securely reveal or rotate it later from the key details.</p>
@@ -144,9 +112,14 @@ export default function AccessControlDialog(props: Props) {
               {props.secret.prefix}
             </span>
           </div>
-          <button type="button" className={styles.primaryButton} onClick={props.onClose}>
-            I saved the key
-          </button>
+          <div className={styles.secretActions}>
+            <button type="button" className={styles.secondaryButton} onClick={props.onClose}>
+              Done
+            </button>
+            <button type="button" className={styles.primaryButton} onClick={props.onViewDetails}>
+              View details
+            </button>
+          </div>
         </section>
       </div>
     )
@@ -166,7 +139,7 @@ export default function AccessControlDialog(props: Props) {
     onSave,
     selfService = false,
   } = props
-  const meta = TITLES[editor.kind]
+  const meta = ACCESS_EDITOR_TITLES[editor.kind]
   const update = (patch: Record<string, unknown>) =>
     onChange({ ...editor, value: { ...editor.value, ...patch } } as AccessEditor)
   const subjectOptions =
@@ -195,10 +168,15 @@ export default function AccessControlDialog(props: Props) {
         tabIndex={-1}
       >
         <header className={styles.modalHeader}>
-          <div>
-            <span className={styles.modalEyebrow}>{meta.eyebrow}</span>
-            <h2 id="access-dialog-title">{editor.value.id ? meta.edit : meta.create}</h2>
-            <p>{meta.description}</p>
+          <div className={styles.modalHeading}>
+            <div className={styles.modalLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span className={styles.modalEyebrow}>{meta.eyebrow}</span>
+              <h2 id="access-dialog-title">{editor.value.id ? meta.edit : meta.create}</h2>
+              <p>{meta.description}</p>
+            </div>
           </div>
           <button
             type="button"
@@ -262,8 +240,79 @@ export default function AccessControlDialog(props: Props) {
                   onChange={(status) => update({ status })}
                 />
                 <SelectionSection
+                  title="Model access"
+                  detail={
+                    editor.value.accessGroupIds?.length
+                      ? `${editor.value.accessGroupIds.length} selected`
+                      : 'Required'
+                  }
+                >
+                  {groups.length ? (
+                    groups.map((group) => (
+                      <CheckCard
+                        key={group.id}
+                        checked={(editor.value.accessGroupIds || []).includes(group.id)}
+                        title={group.name}
+                        detail={group.modelPatterns.join(', ')}
+                        onChange={(checked) =>
+                          update({
+                            accessGroupIds: checked
+                              ? [...(editor.value.accessGroupIds || []), group.id]
+                              : (editor.value.accessGroupIds || []).filter((id) => id !== group.id),
+                          })
+                        }
+                      />
+                    ))
+                  ) : (
+                    <EmptyChoice text="Create an access group first." />
+                  )}
+                </SelectionSection>
+                <SelectionSection
+                  title="Team budget"
+                  detail="Shared by members without a user budget"
+                >
+                  <div className={styles.quotaInputs}>
+                    <NumberField
+                      label="RPM"
+                      value={editor.value.budget?.rpm || 0}
+                      onChange={(rpm) =>
+                        update({
+                          budget: {
+                            ...(editor.value.budget || { tpm: 0, dailyTokens: 0 }),
+                            rpm,
+                          },
+                        })
+                      }
+                    />
+                    <NumberField
+                      label="TPM"
+                      value={editor.value.budget?.tpm || 0}
+                      onChange={(tpm) =>
+                        update({
+                          budget: {
+                            ...(editor.value.budget || { rpm: 0, dailyTokens: 0 }),
+                            tpm,
+                          },
+                        })
+                      }
+                    />
+                    <NumberField
+                      label="Daily tokens"
+                      value={editor.value.budget?.dailyTokens || 0}
+                      onChange={(dailyTokens) =>
+                        update({
+                          budget: {
+                            ...(editor.value.budget || { rpm: 0, tpm: 0 }),
+                            dailyTokens,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </SelectionSection>
+                <SelectionSection
                   title="Members"
-                  detail={`${editor.value.userIds?.length || 0} selected`}
+                  detail={`${editor.value.userIds?.length || 0} selected · one Team per user`}
                 >
                   {users.length ? (
                     users.map((user) => (
@@ -403,7 +452,7 @@ export default function AccessControlDialog(props: Props) {
                     </Field>
                     <SelectionSection
                       title="Key limits"
-                      detail="Optional · enforced with the linked budget and inherited limits"
+                      detail="Optional · overrides User and Team limits"
                     >
                       <div className={styles.quotaInputs}>
                         <NumberField
@@ -713,11 +762,4 @@ function BindingChoices({
       )}
     </SelectionSection>
   )
-}
-
-function toLocalDateTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
 }

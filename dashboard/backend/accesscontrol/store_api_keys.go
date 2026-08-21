@@ -17,7 +17,9 @@ WHERE ($1='' OR name ILIKE '%' || $1 || '%' OR prefix ILIKE '%' || $1 || '%')
 		return nil, 0, err
 	}
 	rows, err := s.pool.Query(ctx, `
-SELECT k.id,k.name,k.prefix,COALESCE(k.user_id,''),COALESCE(k.team_id,''),COALESCE(k.budget_id,''),k.status,k.expires_at,k.last_used_at,k.created_at,k.updated_at,
+SELECT k.id,k.name,k.prefix,COALESCE(k.user_id,''),COALESCE(k.team_id,''),
+ COALESCE(k.team_id,(SELECT m.team_id FROM access_team_members m JOIN access_teams t ON t.id=m.team_id WHERE m.user_id=k.user_id AND t.status='active' LIMIT 1),''),
+ COALESCE(k.budget_id,''),k.status,k.expires_at,k.last_used_at,k.created_at,k.updated_at,
  COALESCE((SELECT jsonb_agg(b.group_id ORDER BY b.group_id) FROM access_group_bindings b WHERE b.subject_type='key' AND b.subject_id=k.id),'[]'::jsonb),
  COALESCE((SELECT jsonb_build_object('rpm',q.rpm,'tpm',q.tpm,'dailyTokens',q.daily_tokens) FROM access_budgets q WHERE q.scope_type='key' AND q.scope_id=k.id),'null'::jsonb)
 FROM access_api_keys k
@@ -41,7 +43,9 @@ ORDER BY k.created_at DESC LIMIT $5 OFFSET $6`, filter.Query, filter.UserID, fil
 
 func (s *Store) GetAPIKey(ctx context.Context, id string) (APIKey, error) {
 	return scanAPIKey(s.pool.QueryRow(ctx, `
-SELECT k.id,k.name,k.prefix,COALESCE(k.user_id,''),COALESCE(k.team_id,''),COALESCE(k.budget_id,''),k.status,k.expires_at,k.last_used_at,k.created_at,k.updated_at,
+SELECT k.id,k.name,k.prefix,COALESCE(k.user_id,''),COALESCE(k.team_id,''),
+ COALESCE(k.team_id,(SELECT m.team_id FROM access_team_members m JOIN access_teams t ON t.id=m.team_id WHERE m.user_id=k.user_id AND t.status='active' LIMIT 1),''),
+ COALESCE(k.budget_id,''),k.status,k.expires_at,k.last_used_at,k.created_at,k.updated_at,
  COALESCE((SELECT jsonb_agg(b.group_id ORDER BY b.group_id) FROM access_group_bindings b WHERE b.subject_type='key' AND b.subject_id=k.id),'[]'::jsonb),
  COALESCE((SELECT jsonb_build_object('rpm',q.rpm,'tpm',q.tpm,'dailyTokens',q.daily_tokens) FROM access_budgets q WHERE q.scope_type='key' AND q.scope_id=k.id),'null'::jsonb)
 FROM access_api_keys k WHERE k.id=$1`, id))
@@ -50,7 +54,7 @@ FROM access_api_keys k WHERE k.id=$1`, id))
 func scanAPIKey(row rowScanner) (APIKey, error) {
 	var item APIKey
 	var groupJSON, budgetJSON []byte
-	if err := row.Scan(&item.ID, &item.Name, &item.Prefix, &item.UserID, &item.TeamID, &item.BudgetID, &item.Status, &item.ExpiresAt, &item.LastUsed, &item.CreatedAt, &item.UpdatedAt, &groupJSON, &budgetJSON); err != nil {
+	if err := row.Scan(&item.ID, &item.Name, &item.Prefix, &item.UserID, &item.TeamID, &item.EffectiveTeamID, &item.BudgetID, &item.Status, &item.ExpiresAt, &item.LastUsed, &item.CreatedAt, &item.UpdatedAt, &groupJSON, &budgetJSON); err != nil {
 		return APIKey{}, err
 	}
 	if err := json.Unmarshal(groupJSON, &item.AccessGroupIDs); err != nil {

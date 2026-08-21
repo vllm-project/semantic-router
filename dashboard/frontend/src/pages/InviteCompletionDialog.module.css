@@ -5,53 +5,53 @@
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(3, 3, 4, 0.68);
-  backdrop-filter: blur(14px);
+  background: rgba(3, 3, 4, 0.62);
+  backdrop-filter: blur(18px);
 }
 
 .dialog {
   position: relative;
-  width: min(440px, 100%);
-  padding: 2rem;
+  width: min(560px, 100%);
+  height: 442px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.25rem;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
   outline: none;
   background:
-    radial-gradient(circle at 85% 0, rgba(101, 131, 211, 0.16), transparent 14rem), #101114;
-  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.58);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015)),
+    rgba(13, 14, 17, 0.82);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(28px) saturate(140%);
   text-align: center;
 }
 
-.dialog::before {
-  position: absolute;
-  top: 0;
-  right: 2rem;
-  left: 2rem;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--brand-amd), transparent);
-  content: '';
-}
-
-.icon {
+.logo {
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   place-items: center;
   margin: 0 auto 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.055);
-  color: #ffffff;
 }
 
-.icon svg {
-  width: 25px;
-  height: 25px;
+.logo img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .eyebrow {
-  color: #ff9a9e;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.66rem;
   font-weight: 750;
   letter-spacing: 0.12em;
@@ -75,7 +75,18 @@
   line-height: 1.55;
 }
 
+.error {
+  margin-top: 1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.08);
+  color: #fecaca;
+  font-size: 0.78rem;
+}
+
 .actions {
+  width: 100%;
   display: grid;
   gap: 0.65rem;
   margin-top: 1.6rem;
@@ -95,7 +106,7 @@
   color: #0b0c0e;
 }
 
-.primaryAction:hover {
+.primaryAction:hover:not(:disabled) {
   background: #e7e7e9;
 }
 
@@ -105,14 +116,22 @@
   color: rgba(255, 255, 255, 0.66);
 }
 
-.secondaryAction:hover {
+.secondaryAction:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.04);
   color: #ffffff;
 }
 
+.primaryAction:disabled,
+.secondaryAction:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 @media (max-width: 520px) {
   .dialog {
+    height: auto;
+    min-height: min(442px, calc(100vh - 2rem));
     padding: 1.5rem;
   }
 }

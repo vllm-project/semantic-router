@@ -162,13 +162,29 @@ func (s *Service) SaveTeam(ctx context.Context, actor Actor, item Team) (Team, e
 	if item.Status != StatusActive && item.Status != StatusDisabled {
 		return Team{}, errors.New("status must be active or disabled")
 	}
+	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
+	if len(item.AccessGroupIDs) == 0 {
+		return Team{}, errors.New("at least one access group is required")
+	}
+	if item.Budget == nil {
+		return Team{}, errors.New("a team budget is required")
+	}
+	if item.Budget.RPM < 0 || item.Budget.TPM < 0 || item.Budget.DailyTokens < 0 {
+		return Team{}, errors.New("quota limits cannot be negative")
+	}
+	if item.Budget.RPM == 0 && item.Budget.TPM == 0 && item.Budget.DailyTokens == 0 {
+		return Team{}, errors.New("at least one team quota limit is required")
+	}
 	created := item.ID == ""
 	if created {
 		item.ID = uuid.NewString()
 	}
 	result, err := s.store.SaveTeam(ctx, item)
 	if err == nil {
-		s.audit(ctx, actor, choose(created, "team.created", "team.updated"), "team", result.ID, map[string]any{"members": len(result.UserIDs), "status": result.Status})
+		s.audit(ctx, actor, choose(created, "team.created", "team.updated"), "team", result.ID, map[string]any{
+			"members": len(result.UserIDs), "status": result.Status,
+			"accessGroupIds": result.AccessGroupIDs, "hasBudget": result.Budget != nil,
+		})
 	}
 	return result, err
 }

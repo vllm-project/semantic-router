@@ -17,30 +17,33 @@ type User struct {
 }
 
 type Team struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	UserIDs     []string  `json:"userIds"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
-
-type APIKey struct {
 	ID             string     `json:"id"`
 	Name           string     `json:"name"`
-	Prefix         string     `json:"prefix"`
-	UserID         string     `json:"userId,omitempty"`
-	TeamID         string     `json:"teamId,omitempty"`
-	BudgetID       string     `json:"budgetId,omitempty"`
+	Description    string     `json:"description"`
 	Status         string     `json:"status"`
-	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
-	LastUsed       *time.Time `json:"lastUsedAt,omitempty"`
+	UserIDs        []string   `json:"userIds"`
 	AccessGroupIDs []string   `json:"accessGroupIds"`
-	ModelPatterns  []string   `json:"modelPatterns,omitempty"`
 	Budget         *KeyBudget `json:"budget,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
+type APIKey struct {
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Prefix          string     `json:"prefix"`
+	UserID          string     `json:"userId,omitempty"`
+	TeamID          string     `json:"teamId,omitempty"`
+	EffectiveTeamID string     `json:"effectiveTeamId,omitempty"`
+	BudgetID        string     `json:"budgetId,omitempty"`
+	Status          string     `json:"status"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	LastUsed        *time.Time `json:"lastUsedAt,omitempty"`
+	AccessGroupIDs  []string   `json:"accessGroupIds"`
+	ModelPatterns   []string   `json:"modelPatterns,omitempty"`
+	Budget          *KeyBudget `json:"budget,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 type KeyBudget struct {

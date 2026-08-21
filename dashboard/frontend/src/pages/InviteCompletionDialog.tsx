@@ -3,22 +3,27 @@ import styles from './InviteCompletionDialog.module.css'
 
 interface InviteCompletionDialogProps {
   firstName: string
+  busy: boolean
+  error: string
   onCreateKey: () => void
   onExplore: () => void
 }
 
 export default function InviteCompletionDialog({
   firstName,
+  busy,
+  error,
   onCreateKey,
   onExplore,
 }: InviteCompletionDialogProps) {
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: true,
     onClose: onExplore,
+    dismissible: !busy,
   })
 
   return (
-    <div className={styles.backdrop} onMouseDown={onExplore}>
+    <div className={styles.backdrop} onMouseDown={() => !busy && onExplore()}>
       <section
         ref={dialogRef}
         className={styles.dialog}
@@ -29,28 +34,34 @@ export default function InviteCompletionDialog({
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className={styles.icon} aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <circle cx="8.5" cy="15.5" r="3.5" />
-            <path d="M11.6 13.8 21 4.4M17.4 8l2.3 2.3M14.8 10.6l2.2 2.2" />
-          </svg>
+        <div className={styles.logo} aria-hidden="true">
+          <img src="/vllm.png" alt="" />
         </div>
         <span className={styles.eyebrow}>Welcome aboard</span>
-        <h2 id="invite-complete-title">You’re ready, {firstName}.</h2>
-        <p id="invite-complete-description">
-          Create your first API key and make the workspace yours.
-        </p>
+        <h2 id="invite-complete-title">You’re in, {firstName}.</h2>
+        <p id="invite-complete-description">Your workspace and Team access are ready.</p>
+        {error ? (
+          <div className={styles.error} role="alert">
+            {error}
+          </div>
+        ) : null}
         <div className={styles.actions}>
           <button
             type="button"
             className={styles.primaryAction}
             onClick={onCreateKey}
+            disabled={busy}
             data-dialog-initial-focus
           >
-            Create my API key
+            {busy ? 'Preparing your key…' : 'Continue with API key'}
           </button>
-          <button type="button" className={styles.secondaryAction} onClick={onExplore}>
-            Explore first
+          <button
+            type="button"
+            className={styles.secondaryAction}
+            onClick={onExplore}
+            disabled={busy}
+          >
+            Not now
           </button>
         </div>
       </section>

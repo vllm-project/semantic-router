@@ -3,6 +3,8 @@ package accesscontrol
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -56,15 +58,17 @@ func (s *Store) DeleteUser(ctx context.Context, id string) error {
 	return err
 }
 
-// SetUserTeam makes the invitation-time Team assignment deterministic. The
-// product currently exposes one primary Team per user, while the relational
-// schema remains ready for broader membership in the future.
+// SetUserTeam makes invitation-time assignment deterministic. A user belongs
+// to one Team so inherited grants and quota always resolve unambiguously.
 func (s *Store) SetUserTeam(ctx context.Context, userID, teamID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockTeamPolicy(ctx, tx); err != nil {
+		return err
+	}
 
 	var userExists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM access_users WHERE id=$1)`, userID).Scan(&userExists); err != nil {
@@ -92,7 +96,10 @@ SELECT id,$2 FROM access_teams WHERE id=$1 AND status='active'`, teamID, userID)
 
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string) ([]Team, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT t.id,t.name,t.description,t.status,t.created_at,t.updated_at
+SELECT t.id,t.name,t.description,t.status,t.created_at,t.updated_at,
+       jsonb_build_array($1::text),
+       COALESCE((SELECT jsonb_agg(b.group_id ORDER BY b.group_id) FROM access_group_bindings b WHERE b.subject_type='team' AND b.subject_id=t.id),'[]'::jsonb),
+       COALESCE((SELECT jsonb_build_object('rpm',q.rpm,'tpm',q.tpm,'dailyTokens',q.daily_tokens) FROM access_budgets q WHERE q.scope_type='team' AND q.scope_id=t.id),'null'::jsonb)
 FROM access_teams t JOIN access_team_members m ON m.team_id=t.id
 WHERE m.user_id=$1 ORDER BY t.created_at DESC`, userID)
 	if err != nil {
@@ -101,11 +108,10 @@ WHERE m.user_id=$1 ORDER BY t.created_at DESC`, userID)
 	defer rows.Close()
 	items := []Team{}
 	for rows.Next() {
-		var item Team
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Status, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
+		item, scanErr := scanTeam(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		item.UserIDs = []string{userID}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -119,23 +125,21 @@ func (s *Store) ListTeams(ctx context.Context, filter ListFilter) ([]Team, int64
 	}
 	rows, err := s.pool.Query(ctx, `
 SELECT t.id,t.name,t.description,t.status,t.created_at,t.updated_at,
-       COALESCE(jsonb_agg(m.user_id) FILTER (WHERE m.user_id IS NOT NULL),'[]'::jsonb)
-FROM access_teams t LEFT JOIN access_team_members m ON m.team_id=t.id
+       COALESCE((SELECT jsonb_agg(m.user_id ORDER BY m.user_id) FROM access_team_members m WHERE m.team_id=t.id),'[]'::jsonb),
+       COALESCE((SELECT jsonb_agg(b.group_id ORDER BY b.group_id) FROM access_group_bindings b WHERE b.subject_type='team' AND b.subject_id=t.id),'[]'::jsonb),
+       COALESCE((SELECT jsonb_build_object('rpm',q.rpm,'tpm',q.tpm,'dailyTokens',q.daily_tokens) FROM access_budgets q WHERE q.scope_type='team' AND q.scope_id=t.id),'null'::jsonb)
+FROM access_teams t
 WHERE ($1='' OR t.name ILIKE '%' || $1 || '%' OR t.description ILIKE '%' || $1 || '%')
-GROUP BY t.id ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`, filter.Query, filter.Limit, filter.Offset)
+ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`, filter.Query, filter.Limit, filter.Offset)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 	items := []Team{}
 	for rows.Next() {
-		var item Team
-		var memberJSON []byte
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Status, &item.CreatedAt, &item.UpdatedAt, &memberJSON); err != nil {
-			return nil, 0, err
-		}
-		if err := json.Unmarshal(memberJSON, &item.UserIDs); err != nil {
-			return nil, 0, err
+		item, scanErr := scanTeam(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
 		}
 		items = append(items, item)
 	}
@@ -143,26 +147,47 @@ GROUP BY t.id ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`, filter.Query, filt
 }
 
 func (s *Store) GetTeam(ctx context.Context, id string) (Team, error) {
-	var item Team
-	var memberJSON []byte
-	err := s.pool.QueryRow(ctx, `
+	return scanTeam(s.pool.QueryRow(ctx, `
 SELECT t.id,t.name,t.description,t.status,t.created_at,t.updated_at,
-       COALESCE(jsonb_agg(m.user_id) FILTER (WHERE m.user_id IS NOT NULL),'[]'::jsonb)
-FROM access_teams t LEFT JOIN access_team_members m ON m.team_id=t.id
-WHERE t.id=$1 GROUP BY t.id`, id).
-		Scan(&item.ID, &item.Name, &item.Description, &item.Status, &item.CreatedAt, &item.UpdatedAt, &memberJSON)
-	if err == nil {
-		err = json.Unmarshal(memberJSON, &item.UserIDs)
+       COALESCE((SELECT jsonb_agg(m.user_id ORDER BY m.user_id) FROM access_team_members m WHERE m.team_id=t.id),'[]'::jsonb),
+       COALESCE((SELECT jsonb_agg(b.group_id ORDER BY b.group_id) FROM access_group_bindings b WHERE b.subject_type='team' AND b.subject_id=t.id),'[]'::jsonb),
+       COALESCE((SELECT jsonb_build_object('rpm',q.rpm,'tpm',q.tpm,'dailyTokens',q.daily_tokens) FROM access_budgets q WHERE q.scope_type='team' AND q.scope_id=t.id),'null'::jsonb)
+FROM access_teams t WHERE t.id=$1`, id))
+}
+
+func scanTeam(row rowScanner) (Team, error) {
+	var item Team
+	var membersJSON, groupsJSON, budgetJSON []byte
+	if err := row.Scan(&item.ID, &item.Name, &item.Description, &item.Status, &item.CreatedAt, &item.UpdatedAt, &membersJSON, &groupsJSON, &budgetJSON); err != nil {
+		return Team{}, err
 	}
-	return item, err
+	if err := json.Unmarshal(membersJSON, &item.UserIDs); err != nil {
+		return Team{}, err
+	}
+	if err := json.Unmarshal(groupsJSON, &item.AccessGroupIDs); err != nil {
+		return Team{}, err
+	}
+	if string(budgetJSON) != "null" {
+		item.Budget = &KeyBudget{}
+		if err := json.Unmarshal(budgetJSON, item.Budget); err != nil {
+			return Team{}, err
+		}
+	}
+	return item, nil
 }
 
 func (s *Store) SaveTeam(ctx context.Context, item Team) (Team, error) {
+	if item.Budget == nil {
+		return Team{}, errors.New("team budget is required")
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Team{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockTeamPolicy(ctx, tx); err != nil {
+		return Team{}, err
+	}
 	err = tx.QueryRow(ctx, `
 INSERT INTO access_teams(id,name,description,status) VALUES($1,$2,$3,$4)
 ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,status=EXCLUDED.status,updated_at=NOW()
@@ -175,9 +200,36 @@ RETURNING id,name,description,status,created_at,updated_at`, item.ID, item.Name,
 		return Team{}, err
 	}
 	for _, userID := range uniqueStrings(item.UserIDs) {
+		if _, err = tx.Exec(ctx, `DELETE FROM access_team_members WHERE user_id=$1 AND team_id<>$2`, userID, item.ID); err != nil {
+			return Team{}, err
+		}
 		if _, err = tx.Exec(ctx, `INSERT INTO access_team_members(team_id,user_id) VALUES($1,$2)`, item.ID, userID); err != nil {
 			return Team{}, err
 		}
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM access_group_bindings WHERE subject_type='team' AND subject_id=$1`, item.ID); err != nil {
+		return Team{}, err
+	}
+	item.AccessGroupIDs = uniqueStrings(item.AccessGroupIDs)
+	for _, groupID := range item.AccessGroupIDs {
+		result, bindErr := tx.Exec(ctx, `
+INSERT INTO access_group_bindings(group_id,subject_type,subject_id)
+SELECT id,'team',$2 FROM access_groups WHERE id=$1`, groupID, item.ID)
+		if bindErr != nil {
+			return Team{}, bindErr
+		}
+		if result.RowsAffected() == 0 {
+			return Team{}, fmt.Errorf("access group %s does not exist", groupID)
+		}
+	}
+	_, err = tx.Exec(ctx, `
+INSERT INTO access_budgets(id,name,scope_type,scope_id,rpm,tpm,daily_tokens,enabled)
+VALUES($1,$2,'team',$3,$4,$5,$6,TRUE)
+ON CONFLICT(scope_type,scope_id) DO UPDATE SET name=EXCLUDED.name,rpm=EXCLUDED.rpm,tpm=EXCLUDED.tpm,
+ daily_tokens=EXCLUDED.daily_tokens,enabled=TRUE,updated_at=NOW()`, "team-budget-"+item.ID, item.Name+" team limits", item.ID,
+		item.Budget.RPM, item.Budget.TPM, item.Budget.DailyTokens)
+	if err != nil {
+		return Team{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return Team{}, err
@@ -187,9 +239,26 @@ RETURNING id,name,description,status,created_at,updated_at`, item.ID, item.Name,
 }
 
 func (s *Store) DeleteTeam(ctx context.Context, id string) error {
-	result, err := s.pool.Exec(ctx, `DELETE FROM access_teams WHERE id=$1`, id)
-	if err == nil && result.RowsAffected() == 0 {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err = lockTeamPolicy(ctx, tx); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM access_group_bindings WHERE subject_type='team' AND subject_id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM access_budgets WHERE scope_type='team' AND scope_id=$1`, id); err != nil {
+		return err
+	}
+	result, err := tx.Exec(ctx, `DELETE FROM access_teams WHERE id=$1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
-	return err
+	return tx.Commit(ctx)
 }

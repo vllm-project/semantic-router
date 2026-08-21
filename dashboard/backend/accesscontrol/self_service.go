@@ -13,7 +13,19 @@ var ErrSelfAPIKeyExists = errors.New("you already have an API key")
 
 func (s *Service) ListSelfAPIKeys(ctx context.Context, userID string) ([]APIKey, error) {
 	items, _, err := s.ListAPIKeys(ctx, ListFilter{UserID: userID, Limit: 100})
-	return items, err
+	if err != nil {
+		return nil, err
+	}
+	// Self-service users can own at most one key. Resolve its effective model
+	// visibility so the page reflects Team inheritance without exposing policy
+	// definitions from other Teams.
+	for index := range items {
+		items[index].ModelPatterns, err = s.store.ModelPatternsForKey(ctx, items[index])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 
 func (s *Service) GetSelfAPIKey(ctx context.Context, userID, id string) (APIKey, error) {

@@ -55,17 +55,27 @@ export function assignmentSummary(group: AccessGroup) {
 }
 
 export function keyPolicy(key: AccessAPIKey, groups: AccessGroup[]) {
+  if (key.modelPatterns?.length) {
+    return {
+      direct: key.accessGroupIds.length > 0,
+      patterns: [...new Set(key.modelPatterns)],
+    }
+  }
   const direct = groups.filter((group) =>
     group.bindings.some((binding) => binding.subjectType === 'key' && binding.subjectId === key.id),
   )
-  const inherited = groups.filter((group) =>
+  const user = groups.filter((group) =>
     group.bindings.some(
-      (binding) =>
-        (binding.subjectType === 'user' && binding.subjectId === key.userId) ||
-        (binding.subjectType === 'team' && binding.subjectId === key.teamId),
+      (binding) => binding.subjectType === 'user' && binding.subjectId === key.userId,
     ),
   )
-  const effective = direct.length ? direct : inherited
+  const team = groups.filter((group) =>
+    group.bindings.some(
+      (binding) =>
+        binding.subjectType === 'team' && binding.subjectId === (key.effectiveTeamId || key.teamId),
+    ),
+  )
+  const effective = direct.length ? direct : user.length ? user : team
   return {
     direct: direct.length > 0,
     patterns: [...new Set(effective.flatMap((group) => group.modelPatterns))],

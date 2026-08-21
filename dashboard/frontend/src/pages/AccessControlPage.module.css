@@ -482,7 +482,9 @@
     minmax(160px, 0.8fr);
 }
 .teamColumns {
-  grid-template-columns: minmax(250px, 1.4fr) minmax(170px, 0.8fr) 90px 110px minmax(150px, 0.75fr);
+  grid-template-columns:
+    minmax(240px, 1.25fr) minmax(150px, 0.7fr) minmax(140px, 0.65fr) minmax(150px, 0.7fr)
+    110px 24px;
 }
 .keyColumns {
   grid-template-columns:
@@ -1360,8 +1362,8 @@
   align-items: center;
   justify-content: center;
   padding: 1.4rem;
-  background: rgba(0, 0, 0, 0.76);
-  backdrop-filter: blur(9px);
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
 }
 .modal {
   width: min(720px, 100%);
@@ -1369,10 +1371,15 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: #101114;
-  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.58);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
 }
 .modalHeader {
   display: flex;
@@ -1380,7 +1387,29 @@
   justify-content: space-between;
   gap: 1.4rem;
   padding: 1.25rem 1.35rem 1.05rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
+}
+.modalHeading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+.modalLogo {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.modalLogo img {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
 }
 .modalHeader h2,
 .secretModal h2 {
@@ -1669,8 +1698,10 @@
 .secretModal {
   position: relative;
   width: min(560px, 100%);
+  height: 442px;
   align-items: center;
-  padding: 2rem;
+  justify-content: center;
+  padding: 2.25rem;
   text-align: center;
 }
 .secretModal .modalClose {
@@ -1679,17 +1710,20 @@
   right: 1rem;
 }
 .secretIcon {
-  width: 45px;
-  height: 45px;
+  width: 56px;
+  height: 56px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
-  border: 1px solid rgba(74, 222, 128, 0.25);
-  border-radius: 12px;
-  background: rgba(74, 222, 128, 0.08);
-  color: #8beca8;
-  font-size: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.065);
+}
+.secretIcon img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 .secretValue {
   width: 100%;
@@ -1699,14 +1733,14 @@
   gap: 0.6rem;
   margin-top: 1.2rem;
   padding: 0.55rem;
-  border: 1px solid rgba(112, 165, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.19);
   border-radius: 8px;
   background: #08090b;
 }
 .secretValue code {
   overflow: hidden;
   padding-left: 0.35rem;
-  color: #bed6ff;
+  color: rgba(255, 255, 255, 0.84);
   font-size: 0.72rem;
   text-align: left;
   text-overflow: ellipsis;
@@ -1742,6 +1776,15 @@
   color: rgba(255, 255, 255, 0.3);
   font-size: 0.59rem;
   text-transform: uppercase;
+}
+.secretActions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.secretActions button {
+  min-height: 46px;
 }
 
 .inviteClose {
@@ -1853,6 +1896,31 @@
   box-shadow: -32px 0 90px rgba(0, 0, 0, 0.48);
   animation: detailSlide 190ms ease-out;
 }
+.entityDetailBackdrop {
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem;
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
+}
+.entityDetailDialog {
+  width: min(900px, 100%);
+  max-height: calc(100vh - 2.8rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  outline: none;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
+  animation: detailLift 190ms ease-out;
+}
 .detailHeader {
   display: flex;
   align-items: flex-start;
@@ -1860,12 +1928,21 @@
   gap: 1rem;
   padding: 1.35rem 1.45rem 1.15rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.085);
-  background: radial-gradient(circle at 15% 0, rgba(86, 130, 255, 0.12), transparent 45%), #101114;
+  background: rgba(255, 255, 255, 0.018);
 }
 .detailHeader > div {
   min-width: 0;
 }
+.detailHeaderIdentity {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+.detailHeaderIdentity > div:last-child {
+  min-width: 0;
+}
 .detailHeader > div > span,
+.detailHeaderIdentity > div:last-child > span,
 .detailSectionHeading > span,
 .secretPanelHeading > div > span {
   color: rgba(255, 255, 255, 0.4);
@@ -1914,7 +1991,7 @@
   gap: 0.65rem;
   padding: 0.75rem 1.45rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #0a0b0d;
+  background: rgba(6, 7, 9, 0.48);
 }
 .detailConfirm {
   display: flex;
@@ -2041,6 +2118,67 @@
   border: 1px solid rgba(255, 255, 255, 0.085);
   border-radius: 11px;
   background: #101114;
+}
+.teamMemberList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0.8rem;
+}
+.teamMemberList article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.teamMemberAvatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.64rem;
+  font-weight: 760;
+}
+.teamMemberList article > div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+.teamMemberList strong,
+.teamMemberList span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teamMemberList strong {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.72rem;
+}
+.teamMemberList span {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.62rem;
+}
+.teamMemberList small {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.6rem;
+  text-transform: capitalize;
+}
+.teamMemberEmpty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 1.2rem;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.7rem;
+  text-align: center;
 }
 .detailSectionHeading {
   padding: 0.9rem 1rem 0.8rem;
@@ -2240,6 +2378,12 @@
     opacity: 0.8;
   }
 }
+@keyframes detailLift {
+  from {
+    transform: translateY(18px) scale(0.985);
+    opacity: 0.7;
+  }
+}
 
 @media (max-width: 1120px) {
   .page {
@@ -2381,11 +2525,11 @@
   }
   .modalBackdrop {
     padding: 0.6rem;
-    align-items: flex-end;
+    align-items: center;
   }
   .modal {
     max-height: calc(100vh - 1.2rem);
-    border-radius: 12px 12px 0 0;
+    border-radius: 14px;
   }
   .pagination {
     align-items: flex-start;
@@ -2401,6 +2545,14 @@
     width: 100%;
     max-width: none;
   }
+  .entityDetailBackdrop {
+    padding: 0.6rem;
+  }
+  .entityDetailDialog {
+    width: 100%;
+    max-height: calc(100vh - 1.2rem);
+    border-radius: 14px;
+  }
   .detailBody,
   .detailHeader {
     padding-inline: 0.9rem;
@@ -2413,6 +2565,9 @@
   }
   .detailMetrics article:nth-child(n + 3) {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .teamMemberList {
+    grid-template-columns: 1fr;
   }
   .detailGrid {
     grid-template-columns: 1fr;

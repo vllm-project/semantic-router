@@ -1,5 +1,5 @@
 import React from 'react'
-import { Navigate, Route } from 'react-router-dom'
+import { Navigate, Route, useLocation } from 'react-router-dom'
 import type { ConfigSection } from '../components/ConfigNav'
 import AppShellLayout from './AppShellLayout'
 import {
@@ -102,6 +102,27 @@ const renderShellElement = (
   setConfigSection: (section: ConfigSection) => void,
 ) => renderShellContent(route, shellPageElements[route.page], configSection, setConfigSection)
 
+interface AuthorizedShellRouteProps {
+  route: ShellRouteDefinition
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+  user: PermissionUser | null
+}
+
+const AuthorizedShellRoute: React.FC<AuthorizedShellRouteProps> = ({
+  route,
+  configSection,
+  setConfigSection,
+  user,
+}) => {
+  const { pathname } = useLocation()
+  return canAccessDashboardPath(user, pathname) ? (
+    renderShellElement(route, configSection, setConfigSection)
+  ) : (
+    <Navigate to="/dashboard" replace />
+  )
+}
+
 export const renderAuthenticatedAppRoutes = ({
   configSection,
   setConfigSection,
@@ -119,11 +140,12 @@ export const renderAuthenticatedAppRoutes = ({
         key={route.path}
         path={route.path}
         element={
-          canAccessDashboardPath(user, route.path) ? (
-            renderShellElement(route, configSection, setConfigSection)
-          ) : (
-            <Navigate to="/dashboard" replace />
-          )
+          <AuthorizedShellRoute
+            route={route}
+            configSection={configSection}
+            setConfigSection={setConfigSection}
+            user={user}
+          />
         }
       />
     ))}

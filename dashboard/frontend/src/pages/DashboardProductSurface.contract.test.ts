@@ -27,16 +27,16 @@ describe('dashboard product surfaces', () => {
     expect(invite).toContain('markFirstAPIKeyOnboardingPending')
   })
 
-  it('opens API key creation directly from the invitation welcome', () => {
+  it('provisions the invitation key from the Dashboard welcome', () => {
     const invite = readSource('./InviteAcceptPage.tsx')
     const shell = readSource('../app/AuthenticatedShell.tsx')
-    const access = readSource('./AccessControlPage.tsx')
 
     expect(invite).toContain('markFirstAPIKeyOnboardingPending')
+    expect(invite).toContain("navigate('/dashboard'")
     expect(shell).toContain('<InviteCompletionDialog')
-    expect(shell).toContain('/access/api-keys?create=key&from=invitation')
-    expect(access).toContain("detailParams.get('create')")
-    expect(access).toContain("openCreate('key')")
+    expect(shell).toContain('ensureFirstAPIKey(user.name')
+    expect(shell).toContain('inferenceAccessApi.createSelfKey')
+    expect(shell).toContain('handoffFirstAPIKey({ ...key, secret })')
   })
 
   it('uses invitation as the only dashboard user creation path', () => {

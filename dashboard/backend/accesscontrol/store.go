@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,6 +16,11 @@ type Store struct {
 
 type rowScanner interface {
 	Scan(dest ...any) error
+}
+
+func lockTeamPolicy(ctx context.Context, tx pgx.Tx) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('access-team-policy',0))`)
+	return err
 }
 
 func OpenStore(ctx context.Context, databaseURL string) (*Store, error) {
@@ -71,15 +77,66 @@ func uniqueStrings(values []string) []string {
 	return result
 }
 
-// effectiveModelPatterns makes direct key grants authoritative. A key with no
-// direct binding inherits its user/team grants; once a direct binding is
-// present it becomes that key's explicit model visibility. This lets two keys
-// owned by the same user intentionally expose different model catalogs.
-func effectiveModelPatterns(keyPatterns, inheritedPatterns []string) []string {
+// effectiveModelPatterns selects the most specific grant tier. A key inherits
+// from its user only when it has no direct grants, and from its Team only when
+// neither the key nor user has grants.
+func effectiveModelPatterns(keyPatterns, userPatterns, teamPatterns []string) []string {
 	if patterns := uniqueStrings(keyPatterns); len(patterns) > 0 {
 		return patterns
 	}
-	return uniqueStrings(inheritedPatterns)
+	if patterns := uniqueStrings(userPatterns); len(patterns) > 0 {
+		return patterns
+	}
+	return uniqueStrings(teamPatterns)
+}
+
+// effectiveBudgets keeps global limits as the workspace ceiling and selects
+// exactly one identity tier beneath it: Key, User, then Team. An explicitly
+// linked budget belongs to the Key tier, alongside an inline Key limit.
+func effectiveBudgets(linkedBudgetID string, candidates []Budget) []Budget {
+	global := make([]Budget, 0, len(candidates))
+	key := make([]Budget, 0, len(candidates))
+	user := make([]Budget, 0, len(candidates))
+	team := make([]Budget, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+
+	appendUnique := func(target *[]Budget, budget Budget) {
+		if _, exists := seen[budget.ID]; exists {
+			return
+		}
+		seen[budget.ID] = struct{}{}
+		*target = append(*target, budget)
+	}
+
+	for _, budget := range candidates {
+		if budget.ScopeType == "global" {
+			appendUnique(&global, budget)
+		}
+	}
+	for _, budget := range candidates {
+		if budget.ScopeType == "key" || (linkedBudgetID != "" && budget.ID == linkedBudgetID) {
+			appendUnique(&key, budget)
+		}
+	}
+	for _, budget := range candidates {
+		if budget.ScopeType == "user" {
+			appendUnique(&user, budget)
+		}
+	}
+	for _, budget := range candidates {
+		if budget.ScopeType == "team" {
+			appendUnique(&team, budget)
+		}
+	}
+
+	selected := key
+	if len(selected) == 0 {
+		selected = user
+	}
+	if len(selected) == 0 {
+		selected = team
+	}
+	return append(global, selected...)
 }
 
 func uniqueBindings(values []Binding) []Binding {

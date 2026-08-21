@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS access_audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_access_keys_owner ON access_api_keys(user_id, team_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_access_team_members_user ON access_team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_access_keys_status ON access_api_keys(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_access_keys_budget ON access_api_keys(budget_id);
 CREATE INDEX IF NOT EXISTS idx_access_group_bindings_subject ON access_group_bindings(subject_type, subject_id);

@@ -35,7 +35,7 @@ FROM access_api_keys WHERE digest=$1`, digest).
 SELECT t.id,t.name,t.description,t.status,t.created_at,t.updated_at
 FROM access_teams t JOIN access_team_members m ON m.team_id=t.id
 WHERE m.user_id=$1 AND t.status='active'
-ORDER BY t.created_at ASC LIMIT 1`, principal.Key.UserID).
+LIMIT 1`, principal.Key.UserID).
 				Scan(&team.ID, &team.Name, &team.Description, &team.Status, &team.CreatedAt, &team.UpdatedAt)
 			if teamErr == nil {
 				principal.Team = &team
@@ -67,19 +67,21 @@ FROM access_budgets WHERE enabled=TRUE AND (
 	if err != nil {
 		return nil, err
 	}
+	var budgetCandidates []Budget
 	for budgetRows.Next() {
 		var budget Budget
 		if err := budgetRows.Scan(&budget.ID, &budget.Name, &budget.ScopeType, &budget.ScopeID, &budget.RPM, &budget.TPM, &budget.DailyTokens, &budget.Enabled, &budget.CreatedAt, &budget.UpdatedAt); err != nil {
 			budgetRows.Close()
 			return nil, err
 		}
-		principal.Budgets = append(principal.Budgets, budget)
+		budgetCandidates = append(budgetCandidates, budget)
 	}
 	if err := budgetRows.Err(); err != nil {
 		budgetRows.Close()
 		return nil, err
 	}
 	budgetRows.Close()
+	principal.Budgets = effectiveBudgets(principal.Key.BudgetID, budgetCandidates)
 	_, _ = s.pool.Exec(ctx, `UPDATE access_api_keys SET last_used_at=NOW() WHERE id=$1`, principal.Key.ID)
 	return &principal, nil
 }
@@ -106,16 +108,20 @@ ORDER BY created_at ASC LIMIT 1`, userID).Scan(&digest)
 // ModelPatternsForKey resolves the model catalog visible to one key without
 // exposing the access-group definitions themselves to a self-service user.
 func (s *Store) ModelPatternsForKey(ctx context.Context, key APIKey) ([]string, error) {
+	teamID := key.TeamID
+	if teamID == "" {
+		teamID = key.EffectiveTeamID
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT DISTINCT b.subject_type,g.model_patterns FROM access_groups g
 JOIN access_group_bindings b ON b.group_id=g.id
 WHERE (b.subject_type='key' AND b.subject_id=$1)
    OR (b.subject_type='user' AND b.subject_id=$2)
-   OR (b.subject_type='team' AND b.subject_id=$3)`, key.ID, key.UserID, key.TeamID)
+   OR (b.subject_type='team' AND b.subject_id=$3)`, key.ID, key.UserID, teamID)
 	if err != nil {
 		return nil, err
 	}
-	var keyPatterns, inheritedPatterns []string
+	var keyPatterns, userPatterns, teamPatterns []string
 	for rows.Next() {
 		var subjectType string
 		var raw []byte
@@ -128,15 +134,18 @@ WHERE (b.subject_type='key' AND b.subject_id=$1)
 			rows.Close()
 			return nil, decodeErr
 		}
-		if subjectType == "key" {
+		switch subjectType {
+		case "key":
 			keyPatterns = append(keyPatterns, patterns...)
-		} else {
-			inheritedPatterns = append(inheritedPatterns, patterns...)
+		case "user":
+			userPatterns = append(userPatterns, patterns...)
+		case "team":
+			teamPatterns = append(teamPatterns, patterns...)
 		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return effectiveModelPatterns(keyPatterns, inheritedPatterns), nil
+	return effectiveModelPatterns(keyPatterns, userPatterns, teamPatterns), nil
 }

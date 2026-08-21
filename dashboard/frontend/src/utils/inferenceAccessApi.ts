@@ -15,6 +15,8 @@ export interface AccessTeam {
   description: string
   status: AccessStatus
   userIds: string[]
+  accessGroupIds: string[]
+  budget?: { rpm: number; tpm: number; dailyTokens: number }
   createdAt?: string
   updatedAt?: string
 }
@@ -25,6 +27,7 @@ export interface AccessAPIKey {
   prefix: string
   userId?: string
   teamId?: string
+  effectiveTeamId?: string
   budgetId?: string
   status: AccessStatus
   expiresAt?: string

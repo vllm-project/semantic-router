@@ -21,6 +21,7 @@ import {
   type CreatedAccessAPIKey,
   type UsageFilter,
 } from '../utils/inferenceAccessApi'
+import { takeFirstAPIKeyHandoff } from '../utils/firstAPIKeyOnboarding'
 import {
   dashboardMemberInvitationApi,
   type DashboardMemberInvitation,
@@ -48,6 +49,7 @@ import styles from './AccessControlPage.module.css'
 
 type PageState = { page: number; pageSize: number; query: string }
 type EntityTotals = Record<'users' | 'teams' | 'api-keys' | 'access-groups' | 'budgets', number>
+type EntityEditorReturn = { kind: Exclude<AccessEditor['kind'], 'key'>; id: string }
 
 const AccessControlPage: React.FC = () => {
   const location = useLocation()
@@ -74,6 +76,8 @@ const AccessControlPage: React.FC = () => {
     ),
   )
   const detailParams = new URLSearchParams(location.search)
+  const invitationOnboarding = detailParams.get('onboarding') || ''
+  const createdAPIKeyID = detailParams.get('created') || ''
   const detailKeyId = activeView === 'api-keys' ? detailParams.get('key') || '' : ''
   const detailLogId = activeView === 'request-logs' ? detailParams.get('log') || '' : ''
   const requestedCreateKind = detailParams.get('create') || ''
@@ -113,9 +117,12 @@ const AccessControlPage: React.FC = () => {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [editor, setEditor] = useState<AccessEditor | null>(null)
+  const [entityEditorReturn, setEntityEditorReturn] = useState<EntityEditorReturn | null>(null)
   const [editorError, setEditorError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [createdKey, setCreatedKey] = useState<CreatedAccessAPIKey | null>(null)
+  const [createdKey, setCreatedKey] = useState<CreatedAccessAPIKey | null>(() =>
+    takeFirstAPIKeyHandoff(),
+  )
   const [inviteOpen, setInviteOpen] = useState(false)
   const [identityTab, setIdentityTab] = useState<IdentityTab>('users')
   const [pageState, setPageState] = useState<PageState>({ page: 1, pageSize: 10, query: '' })
@@ -130,6 +137,7 @@ const AccessControlPage: React.FC = () => {
   })
   const [liveState, setLiveState] = useState<'checking' | 'live' | 'error'>('checking')
   const createRequestHandledRef = useRef(false)
+  const onboardingHandledRef = useRef('')
 
   useEffect(() => {
     if (!toast) return
@@ -216,6 +224,39 @@ const AccessControlPage: React.FC = () => {
   useEffect(() => {
     void loadCatalog()
   }, [loadCatalog])
+
+  useEffect(() => {
+    if (!invitationOnboarding || invitationOnboarding === 'provisioning') return
+    const marker = `${invitationOnboarding}:${createdAPIKeyID}`
+    if (onboardingHandledRef.current === marker) return
+    onboardingHandledRef.current = marker
+
+    if (invitationOnboarding === 'error') {
+      setError('We couldn’t finish your API key. Refresh to try again.')
+      return
+    }
+
+    if (invitationOnboarding === 'ready') {
+      void loadCatalog(false).then(() => {
+        setToast('Your API key is ready')
+        const nextParams = new URLSearchParams(location.search)
+        nextParams.delete('onboarding')
+        nextParams.delete('created')
+        const nextSearch = nextParams.toString()
+        navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`, {
+          replace: true,
+          state: null,
+        })
+      })
+    }
+  }, [
+    createdAPIKeyID,
+    invitationOnboarding,
+    loadCatalog,
+    location.pathname,
+    location.search,
+    navigate,
+  ])
 
   const usageFilter = useMemo<UsageFilter>(() => {
     const bounds = usageRangeBounds(usageScope)
@@ -314,6 +355,7 @@ const AccessControlPage: React.FC = () => {
   const openCreate = useCallback(
     (kind?: Exclude<AccessEditor['kind'], 'user'>) => {
       setEditorError('')
+      setEntityEditorReturn(null)
       const target =
         kind ||
         (activeView === 'api-keys'
@@ -323,7 +365,16 @@ const AccessControlPage: React.FC = () => {
             : activeView === 'access-groups'
               ? 'group'
               : 'budget')
-      if (target === 'team') setEditor({ kind: 'team', value: { status: 'active', userIds: [] } })
+      if (target === 'team')
+        setEditor({
+          kind: 'team',
+          value: {
+            status: 'active',
+            userIds: [],
+            accessGroupIds: [],
+            budget: { rpm: 60, tpm: 100000, dailyTokens: 1000000 },
+          },
+        })
       if (target === 'key')
         setEditor({
           kind: 'key',
@@ -354,6 +405,7 @@ const AccessControlPage: React.FC = () => {
 
   const saveEditor = async () => {
     if (!editor) return
+    const returnTarget = entityEditorReturn
     setSaving(true)
     setEditorError('')
     try {
@@ -376,8 +428,14 @@ const AccessControlPage: React.FC = () => {
         }
       }
       setEditor(null)
+      setEntityEditorReturn(null)
       setToast('Saved')
       await loadCatalog(false)
+      if (returnTarget) {
+        navigate(`${location.pathname}?item=${encodeURIComponent(returnTarget.id)}`, {
+          replace: true,
+        })
+      }
     } catch (nextError) {
       setEditorError(nextError instanceof Error ? nextError.message : 'Could not save changes')
     } finally {
@@ -385,8 +443,7 @@ const AccessControlPage: React.FC = () => {
     }
   }
 
-  const remove = async (kind: 'user' | 'team' | 'group' | 'budget', id: string, label: string) => {
-    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return false
+  const remove = async (kind: 'user' | 'team' | 'group' | 'budget', id: string) => {
     try {
       if (kind === 'user') await inferenceAccessApi.deleteUser(id)
       if (kind === 'team') await inferenceAccessApi.deleteTeam(id)
@@ -598,14 +655,29 @@ const AccessControlPage: React.FC = () => {
           saving={saving}
           onChange={setEditor}
           onClose={() => {
+            const returnTarget = entityEditorReturn
             setEditor(null)
+            setEntityEditorReturn(null)
             setEditorError('')
+            if (returnTarget) {
+              navigate(`${location.pathname}?item=${encodeURIComponent(returnTarget.id)}`, {
+                replace: true,
+              })
+            }
           }}
           onSave={() => void saveEditor()}
         />
       ) : null}
       {createdKey ? (
-        <AccessControlDialog secret={createdKey} onClose={() => setCreatedKey(null)} />
+        <AccessControlDialog
+          secret={createdKey}
+          onClose={() => setCreatedKey(null)}
+          onViewDetails={() => {
+            const keyID = createdKey.id
+            setCreatedKey(null)
+            openDetail('key', keyID)
+          }}
+        />
       ) : null}
       <DashboardMemberInviteDialog
         isOpen={inviteOpen}
@@ -630,6 +702,7 @@ const AccessControlPage: React.FC = () => {
           canEditPolicy={canManage}
           selfService={selfService}
           onEdit={(key) => {
+            setEntityEditorReturn(null)
             setEditor({
               kind: 'key',
               value: key,
@@ -660,14 +733,15 @@ const AccessControlPage: React.FC = () => {
           keys={keys}
           canManage={canManage}
           onEdit={(kind, item) => {
+            setEntityEditorReturn({ kind, id: item.id })
             if (kind === 'user') setEditor({ kind, value: item as AccessUser })
             if (kind === 'team') setEditor({ kind, value: item as AccessTeam })
             if (kind === 'group') setEditor({ kind, value: item as AccessGroup })
             if (kind === 'budget') setEditor({ kind, value: item as AccessBudget })
             closeDetail()
           }}
-          onDelete={(kind, id, label) => {
-            void remove(kind, id, label).then((deleted) => {
+          onDelete={(kind, id) => {
+            void remove(kind, id).then((deleted) => {
               if (deleted) closeDetail()
             })
           }}

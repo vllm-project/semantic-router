@@ -39,14 +39,19 @@ export function effectivePatterns(key: AccessAPIKey, groups: AccessGroup[]) {
   const direct = groups.filter((group) =>
     group.bindings.some((binding) => binding.subjectType === 'key' && binding.subjectId === key.id),
   )
-  const inherited = groups.filter((group) =>
+  const user = groups.filter((group) =>
     group.bindings.some(
-      (binding) =>
-        (binding.subjectType === 'user' && binding.subjectId === key.userId) ||
-        (binding.subjectType === 'team' && binding.subjectId === key.teamId),
+      (binding) => binding.subjectType === 'user' && binding.subjectId === key.userId,
     ),
   )
-  return [...new Set((direct.length ? direct : inherited).flatMap((group) => group.modelPatterns))]
+  const team = groups.filter((group) =>
+    group.bindings.some(
+      (binding) =>
+        binding.subjectType === 'team' && binding.subjectId === (key.effectiveTeamId || key.teamId),
+    ),
+  )
+  const effective = direct.length ? direct : user.length ? user : team
+  return [...new Set(effective.flatMap((group) => group.modelPatterns))]
 }
 
 export function ownerLabel(key: AccessAPIKey, users: AccessUser[], teams: AccessTeam[]) {

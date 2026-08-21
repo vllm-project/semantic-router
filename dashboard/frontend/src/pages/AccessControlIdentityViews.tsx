@@ -347,7 +347,8 @@ export function TeamsView(props: Props) {
       <div className={`${styles.dataRow} ${styles.teamColumns} ${styles.dataHeader}`}>
         <span>Team</span>
         <span>Members</span>
-        <span>API keys</span>
+        <span>Model access</span>
+        <span>Budget</span>
         <span>Status</span>
         <span />
       </div>
@@ -377,7 +378,14 @@ export function TeamsView(props: Props) {
             ))}
             <small>{team.userIds.length} users</small>
           </div>
-          <span>{props.keys.filter((key) => key.teamId === team.id).length}</span>
+          <div className={styles.stackCell}>
+            <span>{team.accessGroupIds.length} groups</span>
+            <small>Team default</small>
+          </div>
+          <div className={styles.stackCell}>
+            <span>{team.budget ? `${team.budget.rpm || '∞'} RPM` : 'Not set'}</span>
+            <small>{team.budget ? `${team.budget.tpm || '∞'} TPM` : 'Required'}</small>
+          </div>
           <Status value={team.status} />
           <span className={styles.rowChevron} aria-hidden="true">
             ›

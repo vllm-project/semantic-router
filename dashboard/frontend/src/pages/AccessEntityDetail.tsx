@@ -33,12 +33,14 @@ export function AccessEntityDetail({
   keys: AccessAPIKey[]
   canManage: boolean
   onEdit: (kind: EntityDetailKind, item: EntityDetailValue) => void
-  onDelete: (kind: EntityDetailKind, id: string, label: string) => void
+  onDelete: (kind: EntityDetailKind, id: string) => void
   onClose: () => void
 }) {
   const [item, setItem] = useState<EntityDetailValue | null>(null)
   const [usage, setUsage] = useState<UsageSummary | null>(null)
+  const [teamMembers, setTeamMembers] = useState<AccessUser[]>([])
   const [error, setError] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
   useEffect(() => {
     setError('')
@@ -57,15 +59,33 @@ export function AccessEntityDetail({
         : kind === 'team'
           ? inferenceAccessApi.usage({ teamId: id, from })
           : Promise.resolve(null)
+    setTeamMembers([])
     void Promise.all([entityRequest, usageRequest])
-      .then(([next, nextUsage]) => {
+      .then(async ([next, nextUsage]) => {
         setItem(next)
         setUsage(nextUsage)
+        if (kind === 'team') {
+          const nextTeam = next as AccessTeam
+          const knownMembers = new Map(users.map((user) => [user.id, user]))
+          const missingMembers = await Promise.all(
+            nextTeam.userIds
+              .filter((userID) => !knownMembers.has(userID))
+              .map((userID) => inferenceAccessApi.user(userID).catch(() => null)),
+          )
+          missingMembers.forEach((member) => {
+            if (member) knownMembers.set(member.id, member)
+          })
+          setTeamMembers(
+            nextTeam.userIds
+              .map((userID) => knownMembers.get(userID))
+              .filter((member): member is AccessUser => Boolean(member)),
+          )
+        }
       })
       .catch((nextError) =>
         setError(nextError instanceof Error ? nextError.message : 'Could not load details'),
       )
-  }, [id, kind])
+  }, [id, kind, users])
 
   const title = item?.name || `${kind.charAt(0).toUpperCase()}${kind.slice(1)} details`
   const user = kind === 'user' ? (item as AccessUser | null) : null
@@ -78,29 +98,34 @@ export function AccessEntityDetail({
 
   return (
     <div
-      className={styles.detailBackdrop}
+      className={`${styles.detailBackdrop} ${styles.entityDetailBackdrop}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <aside
+      <section
         ref={dialogRef}
-        className={styles.detailDrawer}
+        className={styles.entityDetailDialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="entity-detail-title"
         tabIndex={-1}
       >
         <header className={styles.detailHeader}>
-          <div>
-            <span>{kind}</span>
-            <h2 id="entity-detail-title">{title}</h2>
-            <p>
-              {user?.email ||
-                team?.description ||
-                group?.description ||
-                (budget ? `${budget.scopeType} quota` : 'Loading…')}
-            </p>
+          <div className={styles.detailHeaderIdentity}>
+            <div className={styles.modalLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span>{kind}</span>
+              <h2 id="entity-detail-title">{title}</h2>
+              <p>
+                {user?.email ||
+                  team?.description ||
+                  group?.description ||
+                  (budget ? `${budget.scopeType} quota` : 'Loading…')}
+              </p>
+            </div>
           </div>
           <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
             ×
@@ -182,14 +207,16 @@ export function AccessEntityDetail({
                       <dt>API keys</dt>
                       <dd>{ownedKeys.length}</dd>
                     </div>
-                    <div className={styles.detailGridWide}>
-                      <dt>People</dt>
+                    <div>
+                      <dt>Access groups</dt>
+                      <dd>{team.accessGroupIds.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Team budget</dt>
                       <dd>
-                        {team.userIds
-                          .map(
-                            (userID) => users.find((value) => value.id === userID)?.name || userID,
-                          )
-                          .join(', ') || 'None'}
+                        {team.budget
+                          ? `${formatNumber(team.budget.rpm)} RPM · ${formatNumber(team.budget.tpm)} TPM`
+                          : 'Not configured'}
                       </dd>
                     </div>
                   </>
@@ -243,14 +270,54 @@ export function AccessEntityDetail({
               </dl>
             </section>
           ) : null}
+          {team ? (
+            <section className={styles.detailSection}>
+              <div className={styles.detailSectionHeading}>
+                <span>Members</span>
+                <h3>{teamMembers.length ? `${teamMembers.length} people` : 'No members yet'}</h3>
+              </div>
+              <div className={styles.teamMemberList}>
+                {teamMembers.map((member) => (
+                  <article key={member.id}>
+                    <div className={styles.teamMemberAvatar} aria-hidden="true">
+                      {member.name
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase())
+                        .join('') || 'U'}
+                    </div>
+                    <div>
+                      <strong>{member.name}</strong>
+                      <span>{member.email}</span>
+                    </div>
+                    <small>{member.status}</small>
+                  </article>
+                ))}
+                {!teamMembers.length ? (
+                  <p className={styles.teamMemberEmpty}>Add members from Edit team.</p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </div>
         <footer className={styles.detailFooter}>
-          {item && canManage ? (
+          {item && canManage && confirmingDelete ? (
+            <div className={styles.detailConfirm} role="alert">
+              <span>Delete {item.name}?</span>
+              <button type="button" onClick={() => setConfirmingDelete(false)}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => onDelete(kind, item.id)}>
+                Delete
+              </button>
+            </div>
+          ) : item && canManage ? (
             <>
               <button
                 type="button"
                 className={styles.dangerButton}
-                onClick={() => onDelete(kind, item.id, item.name)}
+                onClick={() => setConfirmingDelete(true)}
               >
                 Delete
               </button>
@@ -267,7 +334,7 @@ export function AccessEntityDetail({
             Done
           </button>
         </footer>
-      </aside>
+      </section>
     </div>
   )
 }
