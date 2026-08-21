@@ -44,6 +44,7 @@ import {
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 import { useModelLiveVerification } from './useModelLiveVerification'
+import modelStyles from './ConfigPageModelsSection.module.css'
 
 interface ConfigPageModelsSectionProps {
   config: ConfigData | null
@@ -798,12 +799,13 @@ export default function ConfigPageModelsSection({
     }
   }
 
-  type ReasoningFamilyRow = { name: string; type: string; parameter: string }
+  type ReasoningFamilyRow = { name: string; type: string; parameter: string; modelCount: number }
   const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(
     ([name, config]) => ({
       name,
       type: config.type,
       parameter: config.parameter,
+      modelCount: models.filter((model) => model.reasoning_family === name).length,
     }),
   )
   const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
@@ -819,32 +821,59 @@ export default function ConfigPageModelsSection({
   const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
     {
       key: 'name',
-      header: 'Family Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'type',
-      header: 'Type',
-      width: '200px',
+      header: 'Reasoning Family',
+      width: '360px',
       sortable: true,
       render: (row) => (
-        <span
-          className={styles.badge}
-          style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}
-        >
-          {row.type}
-        </span>
+        <div className={modelStyles.reasoningFamilyIdentity}>
+          <span className={modelStyles.reasoningFamilyGlyph} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="7" cy="7" r="2.25" />
+              <circle cx="17" cy="7" r="2.25" />
+              <circle cx="12" cy="17" r="2.25" />
+              <path d="M8.8 8.4 11 14.7M15.2 8.4 13 14.7M9.3 7h5.4" />
+            </svg>
+          </span>
+          <span className={modelStyles.reasoningFamilyCopy}>
+            <strong title={row.name}>{row.name}</strong>
+            <small>
+              {row.modelCount
+                ? `${row.modelCount} ${row.modelCount === 1 ? 'model' : 'models'}`
+                : 'Not assigned'}
+            </small>
+          </span>
+        </div>
       ),
     },
     {
+      key: 'type',
+      header: 'Control Type',
+      width: '250px',
+      sortable: true,
+      render: (row) => {
+        const label =
+          row.type === 'reasoning_effort'
+            ? 'Reasoning effort'
+            : row.type === 'chat_template_kwargs'
+              ? 'Template argument'
+              : 'Custom control'
+        return (
+          <span className={modelStyles.reasoningFamilyType}>
+            <i aria-hidden="true" />
+            <span>
+              <strong>{label}</strong>
+              <small>{row.type}</small>
+            </span>
+          </span>
+        )
+      },
+    },
+    {
       key: 'parameter',
-      header: 'Parameter',
+      header: 'Request Parameter',
       sortable: true,
       render: (row) => (
-        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          {row.parameter}
-        </code>
+        <code className={modelStyles.reasoningFamilyParameter}>{row.parameter}</code>
       ),
     },
   ]
@@ -917,7 +946,7 @@ export default function ConfigPageModelsSection({
               onEdit={(row) => handleEditReasoningFamily(row.name)}
               onDelete={(row) => handleDeleteReasoningFamily(row.name)}
               emptyMessage="No reasoning families configured"
-              className={styles.managerTable}
+              className={`${styles.managerTable} ${modelStyles.reasoningFamilyTable}`}
               readonly={isReadonly}
               pagination={{
                 pageSize: 25,

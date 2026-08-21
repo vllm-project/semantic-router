@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'access' | 'build' | 'operate'
+export type LayoutDropdownKey = 'build' | 'operate'
 
 export type LayoutConfigSection =
   | 'models'
@@ -44,71 +44,16 @@ export interface LayoutNavLink {
   label: string
   to: string
   matchMode?: 'exact' | 'prefix'
+  activePathPattern?: RegExp
 }
 
 export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Playground', to: '/playground' },
-]
-
-export const ACCESS_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
-    key: 'credentials',
-    label: 'Credentials',
-    description: 'Issue and manage credentials for model access.',
-    sections: [
-      {
-        title: 'Credentials',
-        description: 'Keys and live access posture.',
-        items: [{ kind: 'route', label: 'API Keys', to: '/access/api-keys' }],
-      },
-    ],
-  },
-  {
-    key: 'identity',
-    label: 'Identity',
-    description: 'People, invitations, teams, and ownership.',
-    sections: [
-      {
-        title: 'Identity',
-        description: 'Connect Dashboard members to model identities.',
-        items: [
-          { kind: 'route', label: 'Users', to: '/access/users' },
-          { kind: 'route', label: 'Teams', to: '/access/teams' },
-        ],
-      },
-    ],
-  },
-  {
-    key: 'policy',
-    label: 'Policy',
-    description: 'Model grants and globally enforced quota.',
-    sections: [
-      {
-        title: 'Policy',
-        description: 'Compose reusable access and capacity rules.',
-        items: [
-          { kind: 'route', label: 'Access Groups', to: '/access/access-groups' },
-          { kind: 'route', label: 'Budgets', to: '/access/budgets' },
-        ],
-      },
-    ],
-  },
-  {
-    key: 'observe',
-    label: 'Observe',
-    description: 'Usage, requests, and administrative activity.',
-    sections: [
-      {
-        title: 'Observe',
-        description: 'Follow every managed request and policy change.',
-        items: [
-          { kind: 'route', label: 'Usage', to: '/access/usage' },
-          { kind: 'route', label: 'Request Logs', to: '/logs' },
-          { kind: 'route', label: 'Audit Logs', to: '/access/audit-logs' },
-        ],
-      },
-    ],
+    label: 'Access',
+    to: '/access/usage',
+    activePathPattern: /^\/(?:access(?:\/|$)|logs(?:\/|$))/,
   },
 ]
 

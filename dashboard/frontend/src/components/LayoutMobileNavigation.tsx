@@ -135,7 +135,7 @@ export default function LayoutMobileNavigation({
           to={link.to}
           data-mobile-nav-control
           className={({ isActive }) =>
-            isActive
+            isActive || Boolean(link.activePathPattern?.test(pathname))
               ? `${styles.mobileNavLink} ${styles.mobileNavLinkActive}`
               : styles.mobileNavLink
           }

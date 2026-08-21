@@ -498,7 +498,6 @@ function UsageFilters(props: Props) {
           ))}
         </select>
       </label>
-      {props.loading ? <span className={styles.filterLoading}>Updating…</span> : null}
     </div>
   )
 }

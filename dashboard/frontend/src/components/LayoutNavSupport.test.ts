@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  ACCESS_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
   findActiveLayoutMenuCategory,
   isLayoutMenuItemActive,
+  PRIMARY_NAV_LINKS,
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
@@ -40,35 +40,12 @@ describe('layout navigation route matching', () => {
     })
   })
 
-  it('gives Credentials, Identity, Policy, and Observe independent Access tabs', () => {
-    expect(ACCESS_MENU_CATEGORIES.map((category) => category.label)).toEqual([
-      'Credentials',
-      'Identity',
-      'Policy',
-      'Observe',
-    ])
-    const identity = ACCESS_MENU_CATEGORIES.find((category) => category.key === 'identity')
+  it('opens Access directly on Usage and keeps the link active across Access views', () => {
+    const access = PRIMARY_NAV_LINKS.find((link) => link.label === 'Access')
 
-    expect(identity?.sections.flatMap((section) => section.items)).toContainEqual(
-      expect.objectContaining({ label: 'Users', to: '/access/users' }),
-    )
-    expect(identity?.sections.flatMap((section) => section.items)).toContainEqual(
-      expect.objectContaining({ label: 'Teams', to: '/access/teams' }),
-    )
-
-    const credentials = ACCESS_MENU_CATEGORIES.find((category) => category.key === 'credentials')
-    const observe = ACCESS_MENU_CATEGORIES.find((category) => category.key === 'observe')
-
-    expect(credentials?.sections.flatMap((section) => section.items)).toEqual([
-      expect.objectContaining({ label: 'API Keys', to: '/access/api-keys' }),
-    ])
-    expect(observe?.sections.flatMap((section) => section.items)).toContainEqual(
-      expect.objectContaining({ label: 'Usage', to: '/access/usage' }),
-    )
-    expect(
-      ACCESS_MENU_CATEGORIES.flatMap((category) => category.sections)
-        .flatMap((section) => section.items)
-        .some((item) => item.kind === 'route' && item.to === '/access/statistics'),
-    ).toBe(false)
+    expect(access).toMatchObject({ to: '/access/usage' })
+    expect(access?.activePathPattern?.test('/access/api-keys')).toBe(true)
+    expect(access?.activePathPattern?.test('/logs')).toBe(true)
+    expect(access?.activePathPattern?.test('/config/models')).toBe(false)
   })
 })

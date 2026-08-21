@@ -64,6 +64,11 @@ const formatCompactTokenCount = (value: number) =>
     maximumFractionDigits: 1,
   }).format(value)
 
+const formatSavingsRate = (saved: number, baseline: number, pricedRequests: number) => {
+  if (pricedRequests <= 0 || baseline <= 0) return 'No priced requests'
+  return `${((saved / baseline) * 100).toFixed(1)}% saved`
+}
+
 const formatAxisLabel = (value: string) => (value.length > 20 ? `${value.slice(0, 17)}...` : value)
 
 interface TokenBreakdownChartProps {
@@ -149,8 +154,17 @@ const summaryCards = (aggregate: InsightsAggregateResponse) => [
   {
     label: 'Total Saved',
     value: formatCurrency(aggregate.summary.total_saved, aggregate.summary.currency),
+    indicator: formatSavingsRate(
+      aggregate.summary.total_saved,
+      aggregate.summary.baseline_spend,
+      aggregate.summary.cost_record_count,
+    ),
+    detail:
+      aggregate.summary.cost_record_count > 0
+        ? `${formatCurrency(aggregate.summary.actual_spend, aggregate.summary.currency)} actual · ${formatCurrency(aggregate.summary.baseline_spend, aggregate.summary.currency)} baseline`
+        : undefined,
     accentClassName: styles.summaryValuePositive,
-    cardClassName: '',
+    cardClassName: styles.summaryCardSavings,
   },
 ]
 
@@ -177,9 +191,17 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
             className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
           >
             <span className={styles.summaryLabel}>{card.label}</span>
-            <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
-              {card.value}
-            </strong>
+            <div className={styles.summaryValueRow}>
+              <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
+                {card.value}
+              </strong>
+              {'indicator' in card && card.indicator ? (
+                <span className={styles.summaryIndicator}>{card.indicator}</span>
+              ) : null}
+            </div>
+            {'detail' in card && card.detail ? (
+              <small className={styles.summaryDetail}>{card.detail}</small>
+            ) : null}
           </article>
         ))}
       </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import { copyText } from '../utils/clipboard'
 import type {
   AccessAPIKey,
   AccessBinding,
@@ -83,7 +84,7 @@ const TITLES: Record<
 }
 
 export default function AccessControlDialog(props: Props) {
-  const [copied, setCopied] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: true,
     onClose: props.onClose,
@@ -122,12 +123,15 @@ export default function AccessControlDialog(props: Props) {
             <code>{props.secret.secret}</code>
             <button
               type="button"
+              aria-live="polite"
               onClick={() => {
-                void navigator.clipboard.writeText(props.secret.secret)
-                setCopied(true)
+                void copyText(props.secret.secret).then((success) => {
+                  setCopyStatus(success ? 'copied' : 'failed')
+                  window.setTimeout(() => setCopyStatus('idle'), 2200)
+                })
               }}
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Try again' : 'Copy'}
             </button>
           </div>
           <div className={styles.secretMeta}>

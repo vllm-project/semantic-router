@@ -33,6 +33,12 @@ export const ACCESS_NAV_ITEMS: Array<{
   description: string
 }> = [
   {
+    id: 'usage',
+    label: 'Usage',
+    section: 'Observe',
+    description: 'Traffic, performance, and access posture',
+  },
+  {
     id: 'api-keys',
     label: 'API Keys',
     section: 'Control',
@@ -52,12 +58,6 @@ export const ACCESS_NAV_ITEMS: Array<{
     description: 'Reusable model grants',
   },
   { id: 'budgets', label: 'Budgets', section: 'Policy', description: 'RPM, TPM, and daily quota' },
-  {
-    id: 'usage',
-    label: 'Usage',
-    section: 'Observe',
-    description: 'Traffic, performance, and access posture',
-  },
   {
     id: 'request-logs',
     label: 'Request Logs',
