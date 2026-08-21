@@ -327,6 +327,35 @@ func (s *redisRouterSessionStore) Load(sessionID string) (RouterSessionSnapshot,
 	return snapshot, true, nil
 }
 
+func checkRouterSessionVersion(
+	ctx context.Context,
+	tx *redis.Tx,
+	key string,
+	expectedVersion uint64,
+) error {
+	payload, err := tx.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		if expectedVersion != 0 {
+			return errStaleRouterSessionVersion
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var current RouterSessionSnapshot
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return err
+	}
+
+	if current.Version != expectedVersion {
+		return errStaleRouterSessionVersion
+	}
+
+	return nil
+}
+
 func (s *redisRouterSessionStore) SaveIfVersion(
 	snapshot RouterSessionSnapshot,
 	expectedVersion uint64,
@@ -342,24 +371,13 @@ func (s *redisRouterSessionStore) SaveIfVersion(
 	key := s.keyPrefix + snapshot.SessionID
 
 	err := s.client.Watch(ctx, func(tx *redis.Tx) error {
-		payload, err := tx.Get(ctx, key).Bytes()
-
-		if errors.Is(err, redis.Nil) {
-			// A missing key represents version 0.
-			if expectedVersion != 0 {
-				return errStaleRouterSessionVersion
-			}
-		} else if err != nil {
+		if err := checkRouterSessionVersion(
+			ctx,
+			tx,
+			key,
+			expectedVersion,
+		); err != nil {
 			return err
-		} else {
-			var current RouterSessionSnapshot
-			if err := json.Unmarshal(payload, &current); err != nil {
-				return err
-			}
-
-			if current.Version != expectedVersion {
-				return errStaleRouterSessionVersion
-			}
 		}
 
 		snapshot.Version = expectedVersion + 1

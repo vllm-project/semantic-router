@@ -31,10 +31,12 @@ func (f *fakeRouterSessionStateStore) SaveIfVersion(
 		return false, nil
 	}
 
-	snapshot.Version = expectedVersion + 1
-	f.snapshot = snapshot
 	f.found = true
 	f.saved++
+	next := snapshot
+	next.Version = expectedVersion + 1
+
+	f.snapshot = next
 	return true, nil
 }
 
@@ -67,7 +69,6 @@ func (s *blockingRouterSessionStateStore) SaveIfVersion(
 
 	<-s.allowSave
 
-	snapshot.Version = expectedVersion + 1
 	return true, nil
 }
 
@@ -188,6 +189,58 @@ func waitForSignal(t *testing.T, signal <-chan struct{}, failure string) {
 	}
 }
 
+func requireSnapshot(
+	t *testing.T,
+	store RouterSessionStateStore,
+	sessionID string,
+) RouterSessionSnapshot {
+	t.Helper()
+
+	snapshot, found, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatalf("loading snapshot: %v", err)
+	}
+	if !found {
+		t.Fatal("snapshot was not stored")
+	}
+
+	return snapshot
+}
+
+func requireCASSuccess(
+	t *testing.T,
+	store RouterSessionStateStore,
+	snapshot RouterSessionSnapshot,
+	expectedVersion uint64,
+) {
+	t.Helper()
+
+	ok, err := store.SaveIfVersion(snapshot, expectedVersion, time.Minute)
+	if err != nil {
+		t.Fatalf("CAS failed: %v", err)
+	}
+	if !ok {
+		t.Fatal("CAS was rejected")
+	}
+}
+
+func requireCASRejected(
+	t *testing.T,
+	store RouterSessionStateStore,
+	snapshot RouterSessionSnapshot,
+	expectedVersion uint64,
+) {
+	t.Helper()
+
+	ok, err := store.SaveIfVersion(snapshot, expectedVersion, time.Minute)
+	if err != nil {
+		t.Fatalf("CAS returned error: %v", err)
+	}
+	if ok {
+		t.Fatal("stale CAS was accepted")
+	}
+}
+
 func TestRouterSessionStateStoreRejectsStaleVersion(t *testing.T) {
 	store := &fakeRouterSessionStateStore{}
 
@@ -198,21 +251,9 @@ func TestRouterSessionStateStoreRejectsStaleVersion(t *testing.T) {
 		TurnCount:    1,
 	}
 
-	ok, err := store.SaveIfVersion(initial, 0, time.Hour)
-	if err != nil {
-		t.Fatalf("initial save failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("initial save was rejected")
-	}
+	requireCASSuccess(t, store, initial, 0)
 
-	first, found, err := store.Load("session-a")
-	if err != nil {
-		t.Fatalf("load failed: %v", err)
-	}
-	if !found {
-		t.Fatal("initial snapshot was not stored")
-	}
+	first := requireSnapshot(t, store, "session-a")
 	if first.Version != 1 {
 		t.Fatalf("version = %d, want 1", first.Version)
 	}
@@ -222,34 +263,16 @@ func TestRouterSessionStateStoreRejectsStaleVersion(t *testing.T) {
 	second.CurrentModel = "model-b"
 	second.TurnCount = 2
 
-	ok, err = store.SaveIfVersion(second, 1, time.Hour)
-	if err != nil {
-		t.Fatalf("second save failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("second save was unexpectedly rejected")
-	}
+	requireCASSuccess(t, store, second, 1)
 
 	// This writer is stale: it still believes Redis is at version 1.
 	stale := first
 	stale.CurrentModel = "model-stale"
 	stale.TurnCount = 99
 
-	ok, err = store.SaveIfVersion(stale, 1, time.Hour)
-	if err != nil {
-		t.Fatalf("stale save returned error: %v", err)
-	}
-	if ok {
-		t.Fatal("stale save was accepted")
-	}
+	requireCASRejected(t, store, stale, 1)
 
-	final, found, err := store.Load("session-a")
-	if err != nil {
-		t.Fatalf("final load failed: %v", err)
-	}
-	if !found {
-		t.Fatal("final snapshot disappeared")
-	}
+	final := requireSnapshot(t, store, "session-a")
 
 	if final.Version != 2 {
 		t.Fatalf("final version = %d, want 2", final.Version)
@@ -266,7 +289,14 @@ func TestRouterSessionStateStoreRejectsStaleVersion(t *testing.T) {
 	}
 }
 
-func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
+func newRedisRouterSessionTestStore(t *testing.T) (
+	RouterSessionStateStore,
+	*redis.Client,
+	context.Context,
+	RouterSessionSnapshot,
+) {
+	t.Helper()
+
 	address := os.Getenv("REDIS_ROUTER_SESSION_TEST_ADDR")
 	if address == "" {
 		t.Skip("REDIS_ROUTER_SESSION_TEST_ADDR is not set")
@@ -275,10 +305,12 @@ func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: address,
 	})
-	defer client.Close()
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	if err := client.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis is not available at %s: %v", address, err)
@@ -299,7 +331,9 @@ func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating Redis store: %v", err)
 	}
-	defer store.Close()
+	t.Cleanup(func() {
+		_ = store.Close()
+	})
 
 	sessionID := "concurrent-session"
 	ctxKey := prefix + sessionID
@@ -315,21 +349,15 @@ func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
 		TurnCount:    1,
 	}
 
-	ok, err := store.SaveIfVersion(initial, 0, time.Minute)
-	if err != nil {
-		t.Fatalf("initial CAS failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("initial CAS was rejected")
-	}
+	return store, client, ctx, initial
+}
 
-	first, found, err := store.Load(sessionID)
-	if err != nil {
-		t.Fatalf("loading initial snapshot: %v", err)
-	}
-	if !found {
-		t.Fatal("initial snapshot was not stored")
-	}
+func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
+	store, _, _, initial := newRedisRouterSessionTestStore(t)
+
+	requireCASSuccess(t, store, initial, 0)
+
+	first := requireSnapshot(t, store, initial.SessionID)
 	if first.Version != 1 {
 		t.Fatalf("initial version = %d, want 1", first.Version)
 	}
@@ -350,8 +378,8 @@ func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
 		snapshot.CurrentModel = model
 		snapshot.TurnCount++
 
-		ok, err := store.SaveIfVersion(snapshot, 1, time.Minute)
-		results <- result{ok: ok, err: err}
+		saveOK, saveErr := store.SaveIfVersion(snapshot, 1, time.Minute)
+		results <- result{ok: saveOK, err: saveErr}
 	}
 
 	wg.Add(2)
@@ -371,19 +399,10 @@ func TestRedisRouterSessionStateStoreConcurrentCAS(t *testing.T) {
 	}
 
 	if successes != 1 {
-		t.Fatalf(
-			"successful CAS operations = %d, want exactly 1",
-			successes,
-		)
+		t.Fatalf("successful CAS operations = %d, want exactly 1", successes)
 	}
 
-	final, found, err := store.Load(sessionID)
-	if err != nil {
-		t.Fatalf("loading final snapshot: %v", err)
-	}
-	if !found {
-		t.Fatal("final snapshot disappeared")
-	}
+	final := requireSnapshot(t, store, first.SessionID)
 
 	if final.Version != 2 {
 		t.Fatalf("final version = %d, want 2", final.Version)
@@ -410,21 +429,9 @@ func TestRouterSessionStateStoreReconcileStaleWriter(t *testing.T) {
 		TurnCount:    1,
 	}
 
-	ok, err := store.SaveIfVersion(initial, 0, time.Minute)
-	if err != nil {
-		t.Fatalf("initial CAS failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("initial CAS was rejected")
-	}
+	requireCASSuccess(t, store, initial, 0)
 
-	base, found, err := store.Load("reconcile-session")
-	if err != nil {
-		t.Fatalf("loading initial snapshot: %v", err)
-	}
-	if !found {
-		t.Fatal("initial snapshot was not stored")
-	}
+	base := requireSnapshot(t, store, initial.SessionID)
 	if base.Version != 1 {
 		t.Fatalf("initial version = %d, want 1", base.Version)
 	}
@@ -441,33 +448,15 @@ func TestRouterSessionStateStoreReconcileStaleWriter(t *testing.T) {
 	replicaB.CurrentModel = "model-b"
 
 	// Replica A wins the race and advances Redis to version 2.
-	ok, err = store.SaveIfVersion(replicaA, 1, time.Minute)
-	if err != nil {
-		t.Fatalf("replica A CAS failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("replica A CAS was unexpectedly rejected")
-	}
+	requireCASSuccess(t, store, replicaA, 1)
 
 	// Replica B is stale because it still expects version 1.
-	ok, err = store.SaveIfVersion(replicaB, 1, time.Minute)
-	if err != nil {
-		t.Fatalf("replica B stale CAS returned error: %v", err)
-	}
-	if ok {
-		t.Fatal("replica B stale CAS was unexpectedly accepted")
-	}
+	requireCASRejected(t, store, replicaB, 1)
 
 	// Reconcile:
 	// reload the latest shared snapshot and reapply only Replica B's
 	// local event rather than overwriting the newer shared state.
-	latest, found, err := store.Load("reconcile-session")
-	if err != nil {
-		t.Fatalf("loading latest snapshot for reconciliation: %v", err)
-	}
-	if !found {
-		t.Fatal("latest snapshot disappeared during reconciliation")
-	}
+	latest := requireSnapshot(t, store, "reconcile-session")
 
 	if latest.Version != 2 {
 		t.Fatalf("latest version = %d, want 2", latest.Version)
@@ -480,21 +469,9 @@ func TestRouterSessionStateStoreReconcileStaleWriter(t *testing.T) {
 	reconciled.TurnCount++
 	reconciled.CurrentModel = replicaB.CurrentModel
 
-	ok, err = store.SaveIfVersion(reconciled, latest.Version, time.Minute)
-	if err != nil {
-		t.Fatalf("reconciled CAS failed: %v", err)
-	}
-	if !ok {
-		t.Fatal("reconciled CAS was unexpectedly rejected")
-	}
+	requireCASSuccess(t, store, reconciled, latest.Version)
 
-	final, found, err := store.Load("reconcile-session")
-	if err != nil {
-		t.Fatalf("loading final snapshot: %v", err)
-	}
-	if !found {
-		t.Fatal("final snapshot disappeared")
-	}
+	final := requireSnapshot(t, store, "reconcile-session")
 
 	if final.Version != 3 {
 		t.Fatalf("final version = %d, want 3", final.Version)

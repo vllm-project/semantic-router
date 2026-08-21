@@ -412,6 +412,7 @@ func applySessionDecisionSnapshot(
 	snapshot.LastDecisionReason = st.lastDecisionReason
 	snapshot.LastPolicy = clonePolicyMap(st.lastPolicy)
 }
+
 func updateRouterSessionVersion(sessionID string, version uint64) {
 	s := globalRouterSessionMemory
 	s.mu.Lock()
@@ -423,6 +424,7 @@ func updateRouterSessionVersion(sessionID string, version uint64) {
 		}
 	}
 }
+
 func applySessionUsage(
 	st *routerSessionState,
 	p SessionUsageParams,
