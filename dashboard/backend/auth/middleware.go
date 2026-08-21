@@ -442,9 +442,14 @@ const (
 	tokenSourceNone accessTokenSource = iota
 	tokenSourceHeader
 	tokenSourceCookie
-	tokenSourceQuery // removed in the follow-up PR
 )
 
+// The query-string transport is deliberately absent. A credential in a URL is written
+// down by everything that touches the request: reverse-proxy access logs, browser
+// history, the Referer header, and anyone who copies the link. The dashboard's
+// same-origin transports (fetch, EventSource, WebSocket, iframe) all authenticate with
+// the HttpOnly vsr_session cookie the browser attaches for them, and non-browser
+// clients use Authorization: Bearer. See #2465.
 func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
 		return token, tokenSourceHeader
@@ -456,14 +461,6 @@ func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 		}
 	}
 
-	if token := normalizeAccessToken(r.URL.Query().Get("authToken")); token != "" {
-		// Log that it happened so an operator can find the stale bookmark, never the value.
-		// %q because this runs before ParseToken, so the path is still attacker-controlled
-		// and arrives percent-decoded, newlines included.
-		log.Printf("WARNING: request to %q authenticated with the deprecated ?authToken= "+
-			"query parameter; use the session cookie or an Authorization: Bearer header", r.URL.Path)
-		return token, tokenSourceQuery
-	}
 	return "", tokenSourceNone
 }
 
