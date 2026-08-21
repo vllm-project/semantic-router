@@ -44,7 +44,12 @@ def http_json(
         except json.JSONDecodeError:
             parsed = raw
         return exc.code, parsed
-    except (error.URLError, TimeoutError) as exc:
+    # http.client.RemoteDisconnected and connection resets can escape urllib's
+    # URLError wrapper after a server accepts the request but closes before a
+    # response status is available. Normalize all transport-level OS errors so
+    # calibration records the failed probe and continues with the remaining
+    # manifest instead of losing the entire report.
+    except (error.URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"request to {url} failed: {exc}") from exc
 
     try:

@@ -608,11 +608,11 @@ fixtures:
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(len(probes), 222)
+        self.assertEqual(len(probes), 223)
         self.assertEqual(receipt["message_probes"], 82)
         self.assertEqual(receipt["generated_probes"], 50)
         self.assertEqual(receipt["image_parts"], 54)
-        self.assertEqual(receipt["text_bytes"], 26_229_486)
+        self.assertEqual(receipt["text_bytes"], 26_229_513)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -632,11 +632,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5",
+            "875a7fd68bf9a58ac2a6ea3ad099cdb71ab70c9ab3a1392b1c7234e495022db3",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "775a18c7987097efb4b53539747eeb7ee408ede125be7444ebe3e765b840137e",
+            "a42d6fa0ef2c132cccee91ca4d8621aaf1cef3282569a17727cc042f9e47f5a8",
         )
 
 

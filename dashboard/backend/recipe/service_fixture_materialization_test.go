@@ -471,11 +471,11 @@ func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
 	receipt := materializeMoMFixtureReceipt(t, manifest)
-	if receipt.probeCount != 222 || receipt.messageProbes != 82 || receipt.generatedProbes != 50 ||
-		receipt.imageParts != 54 || receipt.textBytes != 26_229_486 {
+	if receipt.probeCount != 223 || receipt.messageProbes != 82 || receipt.generatedProbes != 50 ||
+		receipt.imageParts != 54 || receipt.textBytes != 26_229_513 {
 		t.Fatalf("receipt counts = %#v", receipt)
 	}
-	if receipt.textDigest != "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5" {
+	if receipt.textDigest != "875a7fd68bf9a58ac2a6ea3ad099cdb71ab70c9ab3a1392b1c7234e495022db3" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)
