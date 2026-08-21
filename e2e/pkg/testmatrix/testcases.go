@@ -65,6 +65,7 @@ var DashboardContract = []string{
 var AnthropicShimContract = []string{
 	"anthropic-messages-cache-cycle",
 	"anthropic-messages-stop-sequence",
+	"anthropic-error-passthrough",
 }
 
 // Combine preserves order while removing duplicate testcase names.

@@ -222,6 +222,19 @@ async def _handle_messages(request: Request, app: FastAPI) -> Response:
             content={"error": "invalid_json", "detail": "body is not JSON"},
         )
 
+    if _requests_forced_error(body):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "type": "error",
+                "error": {
+                    "type": "rate_limit_error",
+                    "message": "synthetic rate limit for e2e error passthrough",
+                },
+                "request_id": "req_e2e_error_passthrough",
+            },
+        )
+
     request_had_cache_control = has_cache_control(body)
     prefix_hash = cache_prefix_hash(body) if request_had_cache_control else ""
 
@@ -320,3 +333,22 @@ async def _proxy_raw(request: Request, path: str, app: FastAPI) -> Response:
 
 
 app = create_app()
+
+
+def _requests_forced_error(body: dict[str, Any]) -> bool:
+    """Return True when any user message contains the e2e error sentinel.
+
+    Lets the anthropic-error-passthrough testcase deterministically make the
+    backend answer with a proper Anthropic error envelope (non-2xx), without
+    depending on model behaviour or invalid-request heuristics.
+    """
+    sentinel = "__VSR_E2E_FORCE_ERROR__"
+    for message in body.get("messages") or []:
+        content = message.get("content")
+        if isinstance(content, str) and sentinel in content:
+            return True
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and sentinel in str(block.get("text", "")):
+                    return True
+    return False
