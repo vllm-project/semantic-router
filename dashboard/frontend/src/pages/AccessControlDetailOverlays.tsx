@@ -89,6 +89,10 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
           onEdit={onEditKey}
           onClose={onClose}
           onChanged={onCatalogChanged}
+          onDeleted={() => {
+            onClose()
+            onCatalogChanged()
+          }}
         />
       ) : null}
       {detailLogId ? (

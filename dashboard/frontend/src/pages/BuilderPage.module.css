@@ -3243,3 +3243,13 @@
   border-color: var(--color-border-hover);
   color: var(--color-text);
 }
+.entityEditorFields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.entityEditorFields:disabled {
+  opacity: 0.82;
+}

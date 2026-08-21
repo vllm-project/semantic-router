@@ -54,25 +54,42 @@ type Team struct {
 }
 
 type APIKey struct {
-	ID                 string     `json:"id"`
-	Name               string     `json:"name"`
-	Prefix             string     `json:"prefix"`
-	UserID             string     `json:"-"`
-	TeamID             string     `json:"-"`
-	ContextTeamID      string     `json:"contextTeamId,omitempty"`
-	OwnerType          string     `json:"ownerType"`
-	OwnerID            string     `json:"ownerId"`
-	BudgetID           string     `json:"budgetId,omitempty"`
-	Status             string     `json:"status"`
-	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
-	LastUsed           *time.Time `json:"lastUsedAt,omitempty"`
-	AccessGroupIDs     []string   `json:"accessGroupIds"`
-	ModelPatterns      []string   `json:"modelPatterns,omitempty"`
-	ModelPolicySource  string     `json:"modelPolicySource,omitempty"`
-	EffectiveBudgetID  string     `json:"effectiveBudgetId,omitempty"`
-	BudgetPolicySource string     `json:"budgetPolicySource,omitempty"`
-	CreatedAt          time.Time  `json:"createdAt"`
-	UpdatedAt          time.Time  `json:"updatedAt"`
+	ID                 string               `json:"id"`
+	Name               string               `json:"name"`
+	Prefix             string               `json:"prefix"`
+	UserID             string               `json:"-"`
+	TeamID             string               `json:"-"`
+	ContextTeamID      string               `json:"contextTeamId,omitempty"`
+	OwnerType          string               `json:"ownerType"`
+	OwnerID            string               `json:"ownerId"`
+	BudgetID           string               `json:"budgetId,omitempty"`
+	Status             string               `json:"status"`
+	ExpiresAt          *time.Time           `json:"expiresAt,omitempty"`
+	LastUsed           *time.Time           `json:"lastUsedAt,omitempty"`
+	AccessGroupIDs     []string             `json:"accessGroupIds"`
+	ModelPatterns      []string             `json:"modelPatterns,omitempty"`
+	ModelPolicySource  string               `json:"modelPolicySource,omitempty"`
+	EffectiveBudgetID  string               `json:"effectiveBudgetId,omitempty"`
+	BudgetPolicySource string               `json:"budgetPolicySource,omitempty"`
+	Quota              *APIKeyQuotaSnapshot `json:"quota,omitempty"`
+	CreatedAt          time.Time            `json:"createdAt"`
+	UpdatedAt          time.Time            `json:"updatedAt"`
+}
+
+type QuotaMeter struct {
+	Limit     int64     `json:"limit"`
+	Used      int64     `json:"used"`
+	Remaining int64     `json:"remaining"`
+	ResetsAt  time.Time `json:"resetsAt"`
+}
+
+type APIKeyQuotaSnapshot struct {
+	BudgetID    string     `json:"budgetId"`
+	BudgetName  string     `json:"budgetName"`
+	Source      string     `json:"source"`
+	RPM         QuotaMeter `json:"rpm"`
+	TPM         QuotaMeter `json:"tpm"`
+	DailyTokens QuotaMeter `json:"dailyTokens"`
 }
 
 type CreatedAPIKey struct {

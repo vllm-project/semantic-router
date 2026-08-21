@@ -279,7 +279,7 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 	}
 }
 
-func TestAuthenticateRequestAllowsStatusReadersToVerifyLiveModels(t *testing.T) {
+func TestAuthenticateRequestRestrictsLiveModelVerificationToOperators(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)
@@ -296,7 +296,7 @@ func TestAuthenticateRequestAllowsStatusReadersToVerifyLiveModels(t *testing.T) 
 		readerResponse,
 		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/models/verify", `{}`),
 	)
-	if readerResponse.Code != http.StatusNoContent || calls != 1 {
+	if readerResponse.Code != http.StatusForbidden || calls != 0 {
 		t.Fatalf("reader status = %d, calls = %d", readerResponse.Code, calls)
 	}
 
@@ -305,7 +305,7 @@ func TestAuthenticateRequestAllowsStatusReadersToVerifyLiveModels(t *testing.T) 
 		writerResponse,
 		newAuthenticatedRequest(t, svc, writer, http.MethodPost, "/api/models/verify", `{}`),
 	)
-	if writerResponse.Code != http.StatusNoContent || calls != 2 {
+	if writerResponse.Code != http.StatusNoContent || calls != 1 {
 		t.Fatalf("writer status = %d, calls = %d", writerResponse.Code, calls)
 	}
 }

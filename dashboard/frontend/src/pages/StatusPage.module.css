@@ -360,15 +360,30 @@
   gap: 0.55rem;
 }
 
-.headerTimestamp {
+.liveRefreshButton {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 38px;
-  padding: 0 0.55rem;
+  min-height: 40px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
   color: var(--color-text-muted);
   font-size: 0.76rem;
+  font-weight: 650;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.liveRefreshButton:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+  background: rgba(255, 255, 255, 0.065);
 }
 
 .liveDot {
@@ -376,41 +391,6 @@
   height: 6px;
   border-radius: 50%;
   background: #72d995;
-}
-
-.autoRefreshToggle,
-.refreshButton {
-  min-height: 42px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: #18181b;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-}
-
-.autoRefreshToggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.7rem;
-  cursor: pointer;
-}
-
-.autoRefreshToggle input {
-  cursor: pointer;
-  accent-color: var(--brand-amd);
-}
-
-.refreshButton {
-  padding: 0.55rem 0.85rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.refreshButton:hover {
-  border-color: var(--color-border-hover);
-  color: var(--color-text);
 }
 
 .error {
@@ -426,7 +406,14 @@
 }
 
 .errorIcon {
-  font-size: 1.1rem;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .servicesSection {

@@ -163,6 +163,25 @@ func (s *Store) SetAPIKeyStatus(ctx context.Context, id, status string) (APIKey,
 	return s.GetAPIKey(ctx, id)
 }
 
+func (s *Store) DeleteAPIKey(ctx context.Context, id string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `DELETE FROM access_group_bindings WHERE subject_type='key' AND subject_id=$1`, id); err != nil {
+		return err
+	}
+	result, err := tx.Exec(ctx, `DELETE FROM access_api_keys WHERE id=$1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) UpdateAPIKey(ctx context.Context, item APIKey) (APIKey, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

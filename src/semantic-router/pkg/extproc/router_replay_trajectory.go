@@ -61,7 +61,16 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 		return r.createErrorResponse(400, "session_id is required")
 	}
 
-	records := filterTrajectoryRecordsBySession(r.collectRouterReplayRecords(), sessionID)
+	filters, err := parseRouterReplayFilters(values)
+	if err != nil {
+		return r.createErrorResponse(400, err.Error())
+	}
+	// Trajectory session_id intentionally targets RequestID until the replay
+	// schema has a dedicated session index. Keep principal and presentation
+	// filters, but do not also require RoutingRecord.SessionID to match.
+	filters.sessionID = ""
+	records := filterRouterReplayRecords(r.collectRouterReplayRecords(), filters)
+	records = filterTrajectoryRecordsBySession(records, sessionID)
 	// collectRouterReplayRecords returns newest-first; trajectory needs chronological order.
 	reverseRoutingRecords(records)
 

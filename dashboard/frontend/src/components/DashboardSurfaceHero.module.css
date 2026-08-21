@@ -250,12 +250,16 @@
 }
 
 .heroCompact {
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 340px);
+  min-height: 148px;
   gap: 1rem;
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.15rem;
 }
 
 .heroCompact .brandBadge {
-  display: none;
+  min-height: 28px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
 }
 
 .heroCompact .title {
@@ -275,7 +279,7 @@
 }
 
 .heroCompact .metaCard {
-  padding: 0.5rem 0.7rem;
+  padding: 0.45rem 0.65rem;
 }
 
 .heroCompact .metaValue {

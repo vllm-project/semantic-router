@@ -52,6 +52,8 @@ type EvaluationConfig struct {
 // EvaluationTask represents an evaluation task stored in the database.
 type EvaluationTask struct {
 	ID              string           `json:"id"`
+	OwnerUserID     string           `json:"owner_user_id,omitempty"`
+	OwnerTeamID     string           `json:"owner_team_id,omitempty"`
 	Name            string           `json:"name"`
 	Description     string           `json:"description"`
 	Status          EvaluationStatus `json:"status"`
@@ -169,6 +171,7 @@ type DatasetInfo struct {
 type CreateTaskRequest struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
+	TeamID      string           `json:"team_id,omitempty"`
 	Config      EvaluationConfig `json:"config"`
 }
 

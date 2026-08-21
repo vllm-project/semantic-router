@@ -42,7 +42,7 @@ func containsPermission(permissions []string, target string) bool {
 	return false
 }
 
-func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
+func TestReadOnlyUsersReceiveScopedAnalysisWithoutOperatorPermissions(t *testing.T) {
 	t.Parallel()
 
 	for _, role := range SupportedRoles {
@@ -61,7 +61,15 @@ func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
 			t.Fatalf("role %q feedback permission = %v", role, hasFeedback)
 		}
 		if !hasReplay {
-			t.Fatalf("role %q should have %q permission", role, PermReplayRead)
+			t.Fatalf("role %q replay permission = %v", role, hasReplay)
+		}
+	}
+	if !containsPermission(DefaultRolePermissions[RoleRead], PermEvalRead) {
+		t.Fatalf("read role should have scoped evaluation access")
+	}
+	for _, permission := range []string{PermOpenClawRead, PermMcpRead, PermStatusRead} {
+		if containsPermission(DefaultRolePermissions[RoleRead], permission) {
+			t.Fatalf("read role should not have operate permission %q", permission)
 		}
 	}
 }

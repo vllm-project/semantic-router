@@ -71,7 +71,7 @@
 
 .liveStatus {
   display: inline-flex;
-  min-height: 25px;
+  min-height: 36px;
   align-items: center;
   gap: 0.38rem;
   padding: 0 0.55rem;
@@ -80,6 +80,21 @@
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.61rem;
   text-transform: capitalize;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.liveStatus:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.liveStatus:disabled {
+  cursor: wait;
 }
 
 .liveStatus i {
@@ -114,8 +129,7 @@
   gap: 0.55rem;
 }
 
-.primaryAction,
-.refreshAction {
+.primaryAction {
   min-height: 44px;
   padding: 0 1rem;
   border-radius: 9px;
@@ -133,39 +147,13 @@
   margin-left: 0.35rem;
 }
 
-.refreshAction {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.68);
-}
-
-.refreshAction:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.07);
-  color: #ffffff;
-}
-
-.spinning {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .metricStrip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(100px, 0.72fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
-.metricStrip > button,
-.updated {
+.metricStrip > button {
   display: flex;
   min-width: 0;
   min-height: 66px;
@@ -202,16 +190,6 @@
   font-size: 0.67rem;
 }
 
-.updated {
-  align-items: flex-start;
-  gap: 0.18rem;
-}
-
-.updated strong {
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-}
-
 @media (max-width: 760px) {
   .banner {
     align-items: flex-start;
@@ -222,8 +200,7 @@
     width: 100%;
   }
 
-  .primaryAction,
-  .refreshAction {
+  .primaryAction {
     flex: 1 1 0;
     justify-content: center;
   }
@@ -236,13 +213,4 @@
     border-right: 1px solid rgba(255, 255, 255, 0.085);
   }
 
-  .updated {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spinning {
-    animation: none;
-  }
 }

@@ -44,9 +44,9 @@ const (
 var DefaultRolePermissions = map[string][]string{
 	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermAccessRead, PermAccessManage, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead, PermStatusRead},
 	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermAccessRead, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead, PermStatusRead},
-	// Read is the invited-user surface: product configuration is read-only while
+	// Read is the model-consumer surface: routing is inspectable while model
 	// credentials, request logs, and usage remain scoped to the signed-in user.
-	RoleRead: {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead, PermAccessSelf, PermUsageSelf, PermStatusRead},
+	RoleRead: {PermConfigRead, PermEvalRead, PermTopologyRead, PermToolsUse, PermReplayRead, PermAccessSelf, PermUsageSelf},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}

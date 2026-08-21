@@ -27,7 +27,20 @@ export default function ConfigPageModelLiveVerification({
 
   return (
     <div className={styles.liveVerification} aria-live="polite">
-      <div className={styles.liveVerificationHeading}>
+      <button
+        type="button"
+        className={styles.liveVerificationButton}
+        disabled={!hasBackend || !allowed || pending}
+        onClick={onVerify}
+        aria-label={`${buttonLabel} ${model} with a live inference query`}
+        title={
+          state.status === 'failed'
+            ? state.message
+            : state.status === 'verified'
+              ? `Live · ${state.evidence.latencyMs} ms`
+              : undefined
+        }
+      >
         <span
           className={`${styles.liveVerificationDot} ${
             state.status === 'verified'
@@ -43,23 +56,6 @@ export default function ConfigPageModelLiveVerification({
         <span className={styles.liveVerificationLabel}>
           {!hasBackend ? 'No backend' : !allowed ? 'Unavailable' : buttonLabel}
         </span>
-      </div>
-
-      <button
-        type="button"
-        className={styles.liveVerificationButton}
-        disabled={!hasBackend || !allowed || pending}
-        onClick={onVerify}
-        aria-label={`${buttonLabel} ${model} with a live inference query`}
-        title={
-          state.status === 'failed'
-            ? state.message
-            : state.status === 'verified'
-              ? `Live · ${state.evidence.latencyMs} ms`
-              : undefined
-        }
-      >
-        {state.status === 'verified' ? '↻' : buttonLabel}
       </button>
     </div>
   )

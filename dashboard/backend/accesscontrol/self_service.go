@@ -19,7 +19,7 @@ func (s *Service) ListSelfAPIKeys(ctx context.Context, userID string) ([]APIKey,
 	// A user can own one personal key and administer shared keys for their Teams.
 	// Resolve effective visibility without exposing policy definitions outside
 	// those explicit relationships.
-	return s.store.ResolveAPIKeyPolicies(ctx, items)
+	return s.resolveAPIKeyPoliciesAndQuotas(ctx, items)
 }
 
 func (s *Service) GetSelfAPIKey(ctx context.Context, userID, id string) (APIKey, error) {
@@ -113,15 +113,25 @@ func (s *Service) SetSelfAPIKeyStatus(ctx context.Context, actor Actor, id, stat
 	if status != StatusActive && status != StatusDisabled {
 		return APIKey{}, validationError("status must be active or disabled")
 	}
-	item, err := s.GetAPIKey(ctx, id)
-	if err != nil || item.UserID != actor.ID {
-		return APIKey{}, pgx.ErrNoRows
+	if _, err := s.GetSelfAPIKey(ctx, actor.ID, id); err != nil {
+		return APIKey{}, err
 	}
-	item, err = s.store.SetAPIKeyStatus(ctx, id, status)
+	item, err := s.store.SetAPIKeyStatus(ctx, id, status)
 	if err == nil {
 		s.audit(ctx, actor, "api_key.self_status_changed", "api_key", id, map[string]any{"status": status})
 	}
 	return item, err
+}
+
+func (s *Service) DeleteSelfAPIKey(ctx context.Context, actor Actor, id string) error {
+	if _, err := s.GetSelfAPIKey(ctx, actor.ID, id); err != nil {
+		return err
+	}
+	if err := s.store.DeleteAPIKey(ctx, id); err != nil {
+		return err
+	}
+	s.audit(ctx, actor, "api_key.self_deleted", "api_key", id, nil)
+	return nil
 }
 
 func (s *Service) SelfOverview(ctx context.Context, userID string) (Overview, error) {

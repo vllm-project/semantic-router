@@ -323,8 +323,19 @@ export default function ConfigPageProjectionsSection({
         ],
       },
     ]
-    openViewModal(`Projection Partition: ${partition.name}`, sections, () =>
-      handleEditPartition(partition),
+    openViewModal(
+      `Projection Partition: ${partition.name}`,
+      sections,
+      () => handleEditPartition(partition),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete partition',
+              tone: 'destructive',
+              onClick: () => handleDeletePartition(partition),
+            },
+          ],
     )
   }
 
@@ -401,7 +412,20 @@ export default function ConfigPageProjectionsSection({
         ],
       },
     ]
-    openViewModal(`Projection Score: ${score.name}`, sections, () => handleEditScore(score))
+    openViewModal(
+      `Projection Score: ${score.name}`,
+      sections,
+      () => handleEditScore(score),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete score',
+              tone: 'destructive',
+              onClick: () => handleDeleteScore(score),
+            },
+          ],
+    )
   }
 
   const handleAddMapping = () => {
@@ -535,7 +559,20 @@ export default function ConfigPageProjectionsSection({
         ],
       },
     ]
-    openViewModal(`Projection Mapping: ${mapping.name}`, sections, () => handleEditMapping(mapping))
+    openViewModal(
+      `Projection Mapping: ${mapping.name}`,
+      sections,
+      () => handleEditMapping(mapping),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete mapping',
+              tone: 'destructive',
+              onClick: () => handleDeleteMapping(mapping),
+            },
+          ],
+    )
   }
 
   const partitionColumns: Column<ProjectionPartition>[] = [
@@ -628,14 +665,8 @@ export default function ConfigPageProjectionsSection({
   return (
     <ConfigPageManagerLayout
       title="Projections"
-      description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
+      description="Turn signals into clear routing bands."
       scope={selectedScope?.label ?? 'Routing profile'}
-      pills={[
-        { label: 'Models', active: false },
-        { label: 'Signals', active: false },
-        { label: 'Projections', active: true },
-        { label: 'Decisions', active: false },
-      ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <RoutingScopeSelector
@@ -643,31 +674,16 @@ export default function ConfigPageProjectionsSection({
           value={selectedScopeId}
           onChange={setSelectedScopeId}
         />
-        <p
-          style={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            borderRadius: 8,
-            background: 'var(--color-surface-elevated, rgba(255, 255, 255, 0.04))',
-            border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router
-          replay is on, each Insights record can include a structured{' '}
-          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and
-          winners, score contributions, mapping confidence and boundary distance, per-output
-          threshold steps). See{' '}
+        <p className={styles.productHint}>
+          Trace projection outcomes in{' '}
           <a
             href="https://vllm-sr.ai/docs/tutorials/projection/traces"
             target="_blank"
             rel="noreferrer"
           >
-            Projection traces
-          </a>{' '}
-          in the docs.
+            Insights
+          </a>
+          .
         </p>
         <TableHeader
           title="Projection Surfaces"
@@ -692,8 +708,7 @@ export default function ConfigPageProjectionsSection({
             data={filteredPartitions}
             keyExtractor={(row) => row.name}
             onView={handleViewPartition}
-            onEdit={handleEditPartition}
-            onDelete={handleDeletePartition}
+            openOnRowClick
             emptyMessage="No projection partitions configured."
             readonly={isReadonly}
             pagination={{
@@ -719,8 +734,7 @@ export default function ConfigPageProjectionsSection({
             data={filteredScores}
             keyExtractor={(row) => row.name}
             onView={handleViewScore}
-            onEdit={handleEditScore}
-            onDelete={handleDeleteScore}
+            openOnRowClick
             emptyMessage="No projection scores configured."
             readonly={isReadonly}
             pagination={{
@@ -746,8 +760,7 @@ export default function ConfigPageProjectionsSection({
             data={filteredMappings}
             keyExtractor={(row) => row.name}
             onView={handleViewMapping}
-            onEdit={handleEditMapping}
-            onDelete={handleDeleteMapping}
+            openOnRowClick
             emptyMessage="No projection mappings configured."
             readonly={isReadonly}
             pagination={{

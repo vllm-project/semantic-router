@@ -16,7 +16,7 @@ export interface ViewSection {
 export interface ViewPanelAction {
   label: string
   onClick: () => void
-  tone?: 'secondary' | 'primary'
+  tone?: 'secondary' | 'primary' | 'destructive'
   disabled?: boolean
 }
 
@@ -96,7 +96,11 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
             <button
               key={action.label}
               className={
-                action.tone === 'primary' ? styles.primaryFooterButton : styles.closeFooterButton
+                action.tone === 'primary'
+                  ? styles.primaryFooterButton
+                  : action.tone === 'destructive'
+                    ? styles.destructiveFooterButton
+                    : styles.closeFooterButton
               }
               onClick={action.onClick}
               type="button"

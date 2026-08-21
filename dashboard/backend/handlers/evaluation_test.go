@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +12,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
 )
+
+type testEvaluationScopeResolver map[string][]string
+
+func (resolver testEvaluationScopeResolver) ListTeamIDsForUser(_ context.Context, userID string) ([]string, error) {
+	return resolver[userID], nil
+}
 
 type testEvaluationHarness struct {
 	handler *EvaluationHandler
@@ -45,6 +53,49 @@ func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
 	t.Helper()
 	return newTestEvaluationHarness(t).handler
+}
+
+func TestEvaluationReadScopeIncludesOwnAndTeamTasksOnly(t *testing.T) {
+	t.Parallel()
+	harness := newTestEvaluationHarness(t)
+	harness.handler.scopeResolver = testEvaluationScopeResolver{"user-a": {"team-a"}}
+	for _, task := range []*models.EvaluationTask{
+		{ID: "own", Name: "Own", OwnerUserID: "user-a", Config: models.EvaluationConfig{}},
+		{ID: "team", Name: "Team", OwnerUserID: "user-b", OwnerTeamID: "team-a", Config: models.EvaluationConfig{}},
+		{ID: "other", Name: "Other", OwnerUserID: "user-b", OwnerTeamID: "team-b", Config: models.EvaluationConfig{}},
+		{ID: "global", Name: "Global", Config: models.EvaluationConfig{}},
+	} {
+		if err := harness.db.CreateTask(task); err != nil {
+			t.Fatalf("CreateTask(%s): %v", task.ID, err)
+		}
+	}
+	principal := auth.AuthContext{
+		UserID: "user-a",
+		Role:   auth.RoleRead,
+		Perms:  map[string]bool{auth.PermEvalRead: true},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/evaluation/tasks", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), principal))
+	response := httptest.NewRecorder()
+	harness.handler.ListTasksHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", response.Code, response.Body.String())
+	}
+	var tasks []*models.EvaluationTask
+	if err := json.NewDecoder(response.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("visible tasks=%v, want own and team", tasks)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/evaluation/tasks/other", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), principal))
+	response = httptest.NewRecorder()
+	harness.handler.GetTaskHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("cross-team detail status=%d, want 404", response.Code)
+	}
 }
 
 func TestEvaluationMutationsHonorServerReadonly(t *testing.T) {

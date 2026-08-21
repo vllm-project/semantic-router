@@ -9,7 +9,7 @@ describe('OnboardingGuide contract', () => {
     expect(source).toContain('useAccessibleDialog<HTMLDivElement>')
     expect(source).toContain('setOnboardingStep(stepIndex)')
     expect(source).toContain("setOnboardingStatus('dismissed')")
-    expect(source).toContain('Resume guide')
+    expect(source).toContain('Resume product guide')
     expect(source).toContain('role="progressbar"')
     expect(source).toContain('aria-modal="true"')
     expect(source).toContain('data-testid="onboarding-guide-body"')

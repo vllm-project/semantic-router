@@ -30,6 +30,7 @@ interface KeyDetailProps {
   onEdit: (key: AccessAPIKey) => void
   onClose: () => void
   onChanged: () => void
+  onDeleted: () => void
 }
 
 export function APIKeyDetail({
@@ -44,6 +45,7 @@ export function APIKeyDetail({
   onEdit,
   onClose,
   onChanged,
+  onDeleted,
 }: KeyDetailProps) {
   const [key, setKey] = useState<AccessAPIKey | null>(null)
   const [usage, setUsage] = useState(EMPTY_USAGE)
@@ -54,7 +56,8 @@ export function APIKeyDetail({
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
   const [snippet, setSnippet] = useState<'python' | 'javascript' | 'curl'>('python')
-  const [rotateArmed, setRotateArmed] = useState(false)
+  const [renewArmed, setRenewArmed] = useState(false)
+  const [deleteArmed, setDeleteArmed] = useState(false)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: true,
     onClose,
@@ -119,7 +122,7 @@ export function APIKeyDetail({
     }
   }
 
-  const rotate = async () => {
+  const renew = async () => {
     setPending(true)
     setError('')
     try {
@@ -129,11 +132,25 @@ export function APIKeyDetail({
       setKey(next)
       setSecret(next.secret)
       setSecretVisible(true)
-      setRotateArmed(false)
+      setRenewArmed(false)
       onChanged()
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Could not rotate API key')
+      setError(nextError instanceof Error ? nextError.message : 'Could not renew API key')
     } finally {
+      setPending(false)
+    }
+  }
+
+  const remove = async () => {
+    setPending(true)
+    setError('')
+    try {
+      if (selfService) await inferenceAccessApi.deleteSelfKey(keyId)
+      else await inferenceAccessApi.deleteKey(keyId)
+      onDeleted()
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Could not delete API key')
+      setDeleteArmed(false)
       setPending(false)
     }
   }
@@ -284,9 +301,11 @@ export function APIKeyDetail({
                   <div>
                     <dt>Budget</dt>
                     <dd>
-                      {effectiveBudget
-                        ? `${effectiveBudget.name} · ${key.budgetPolicySource || 'key'} policy`
-                        : 'No quota policy'}
+                      {key.quota
+                        ? `${key.quota.budgetName} · ${key.quota.source} policy`
+                        : effectiveBudget
+                          ? `${effectiveBudget.name} · ${key.budgetPolicySource || 'key'} policy`
+                          : 'No quota policy'}
                     </dd>
                   </div>
                   <div>
@@ -321,24 +340,43 @@ export function APIKeyDetail({
                     </dd>
                   </div>
                   <div>
-                    <dt>RPM</dt>
-                    <dd>{effectiveBudget ? formatNumber(effectiveBudget.rpm) : 'Unlimited'}</dd>
-                  </div>
-                  <div>
-                    <dt>TPM</dt>
-                    <dd>{effectiveBudget ? formatNumber(effectiveBudget.tpm) : 'Unlimited'}</dd>
-                  </div>
-                  <div>
-                    <dt>Daily tokens</dt>
-                    <dd>
-                      {effectiveBudget ? formatNumber(effectiveBudget.dailyTokens) : 'Unlimited'}
-                    </dd>
-                  </div>
-                  <div>
                     <dt>Expires</dt>
                     <dd>{formatDate(key.expiresAt)}</dd>
                   </div>
                 </dl>
+                {key.quota ? (
+                  <div className={styles.quotaGrid}>
+                    {(
+                      [
+                        ['Requests / minute', key.quota.rpm],
+                        ['Tokens / minute', key.quota.tpm],
+                        ['Tokens / day', key.quota.dailyTokens],
+                      ] as const
+                    ).map(([label, meter]) => {
+                      const percent = meter.limit
+                        ? Math.min(100, Math.round((meter.used / meter.limit) * 100))
+                        : 0
+                      return (
+                        <article key={label}>
+                          <div>
+                            <span>{label}</span>
+                            <small>
+                              {meter.limit
+                                ? `${formatNumber(meter.used)} of ${formatNumber(meter.limit)}`
+                                : 'Unlimited'}
+                            </small>
+                          </div>
+                          <strong>
+                            {meter.limit ? `${formatNumber(meter.remaining)} left` : 'Unlimited'}
+                          </strong>
+                          <div className={styles.quotaTrack} aria-hidden="true">
+                            <i style={{ width: `${percent}%` }} />
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </section>
 
               <section className={styles.detailSection}>
@@ -380,14 +418,25 @@ export function APIKeyDetail({
         </div>
         {key && canManage ? (
           <footer className={styles.detailFooter}>
-            {rotateArmed ? (
+            {renewArmed ? (
               <div className={styles.detailConfirm} role="alert">
-                <span>The current secret will stop working.</span>
-                <button type="button" onClick={() => setRotateArmed(false)} disabled={pending}>
+                <span>Renewing replaces the current secret.</span>
+                <button type="button" onClick={() => setRenewArmed(false)} disabled={pending}>
                   Cancel
                 </button>
-                <button type="button" onClick={() => void rotate()} disabled={pending}>
-                  {pending ? 'Rotating…' : 'Confirm rotation'}
+                <button type="button" onClick={() => void renew()} disabled={pending}>
+                  {pending ? 'Renewing…' : 'Renew key'}
+                </button>
+              </div>
+            ) : null}
+            {deleteArmed ? (
+              <div className={styles.detailConfirm} role="alert">
+                <span>Delete this key permanently?</span>
+                <button type="button" onClick={() => setDeleteArmed(false)} disabled={pending}>
+                  Cancel
+                </button>
+                <button type="button" onClick={() => void remove()} disabled={pending}>
+                  {pending ? 'Deleting…' : 'Delete key'}
                 </button>
               </div>
             ) : null}
@@ -402,15 +451,29 @@ export function APIKeyDetail({
               onClick={() => void toggle()}
               disabled={pending}
             >
-              {key.status === 'active' ? 'Revoke' : 'Activate'}
+              {key.status === 'active' ? 'Disable' : 'Enable'}
             </button>
             <button
               type="button"
               className={styles.secondaryButton}
-              onClick={() => setRotateArmed(true)}
+              onClick={() => {
+                setDeleteArmed(false)
+                setRenewArmed(true)
+              }}
               disabled={pending}
             >
-              Rotate key
+              Renew key
+            </button>
+            <button
+              type="button"
+              className={styles.dangerButton}
+              onClick={() => {
+                setRenewArmed(false)
+                setDeleteArmed(true)
+              }}
+              disabled={pending}
+            >
+              Delete
             </button>
             <button type="button" className={styles.primaryButton} onClick={onClose}>
               Done

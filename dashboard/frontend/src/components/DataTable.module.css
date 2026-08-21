@@ -90,6 +90,16 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
+.trInteractive {
+  cursor: pointer;
+}
+
+.trInteractive:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.75);
+}
+
 .trSelected {
   background: rgba(255, 255, 255, 0.055);
   box-shadow: inset 2px 0 0 #f5f5f7;
@@ -297,8 +307,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);

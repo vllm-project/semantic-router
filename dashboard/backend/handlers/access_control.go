@@ -206,6 +206,12 @@ func (h *AccessControlHandler) handleAPIKeys(w http.ResponseWriter, r *http.Requ
 		item.ID = id
 		result, err := h.service.UpdateAPIKey(r.Context(), accessActor(r), item)
 		writeAccessResult(w, result, err)
+	case http.MethodDelete:
+		if id == "" || action != "" {
+			writeAccessError(w, http.StatusBadRequest, "API key id is required")
+			return
+		}
+		writeAccessResult(w, map[string]bool{"deleted": true}, h.service.DeleteAPIKey(r.Context(), accessActor(r), id))
 	default:
 		methodNotAllowed(w)
 	}

@@ -574,7 +574,7 @@ const AccessControlPage: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      <header className={styles.hero}>
+      <header className={`${styles.hero} ${styles.heroCompact}`}>
         <div className={styles.heroCopy}>
           <div className={styles.heroTopline}>
             <span className={styles.eyebrow}>Access Control</span>

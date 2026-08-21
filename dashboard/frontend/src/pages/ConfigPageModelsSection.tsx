@@ -398,7 +398,20 @@ export default function ConfigPageModelsSection({
       })
     }
 
-    openViewModal(`Model: ${model.name}`, sections, () => handleEditModel(model))
+    openViewModal(
+      `Model: ${model.name}`,
+      sections,
+      () => handleEditModel(model),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete model',
+              tone: 'destructive',
+              onClick: () => handleDeleteModel(model),
+            },
+          ],
+    )
   }
 
   const handleBatchImport = async (input: ModelBatchImportInput) => {
@@ -663,6 +676,15 @@ export default function ConfigPageModelsSection({
         },
       ],
       () => handleEditReasoningFamily(familyName),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete family',
+              tone: 'destructive',
+              onClick: () => handleDeleteReasoningFamily(familyName),
+            },
+          ],
     )
   }
 
@@ -914,8 +936,6 @@ export default function ConfigPageModelsSection({
               onDismissOperationError={() => setOperationError(null)}
               onAddModel={() => setAddModelsOpen(true)}
               onViewModel={handleViewModel}
-              onEditModel={handleEditModel}
-              onDeleteModel={handleDeleteModel}
               expandedModels={expandedModels}
               onToggleExpand={handleToggleExpand}
               renderExpandedRow={renderModelEndpoints}
@@ -943,8 +963,7 @@ export default function ConfigPageModelsSection({
               data={filteredReasoningFamilyData}
               keyExtractor={(row) => row.name}
               onView={(row) => handleViewReasoningFamily(row.name)}
-              onEdit={(row) => handleEditReasoningFamily(row.name)}
-              onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+              openOnRowClick
               emptyMessage="No reasoning families configured"
               className={`${styles.managerTable} ${modelStyles.reasoningFamilyTable}`}
               readonly={isReadonly}

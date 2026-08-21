@@ -25,7 +25,6 @@ const StatusPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [autoRefresh, setAutoRefresh] = useState(true)
   const [history, setHistory] = useState<StatusHistorySample[]>([])
   const scrolledHashRef = useRef<string | null>(null)
 
@@ -57,10 +56,6 @@ const StatusPage: React.FC = () => {
     }
     document.addEventListener('visibilitychange', refreshWhenVisible)
 
-    if (!autoRefresh) {
-      return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
-    }
-
     const interval = window.setInterval(() => {
       void statusRequest.run()
     }, 10000)
@@ -69,7 +64,7 @@ const StatusPage: React.FC = () => {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [autoRefresh, statusRequest])
+  }, [statusRequest])
 
   const modelStatus = useMemo(() => (status ? getModelStatusSummary(status) : null), [status])
   const runtime = useMemo(() => (status ? getActiveRouterRuntime(status) : null), [status])
@@ -141,6 +136,21 @@ const StatusPage: React.FC = () => {
   const healthLabel = status
     ? status.overall.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
     : 'Unavailable'
+  const servicesReady = Boolean(
+    status && status.overall === 'healthy' && healthyServices === status.services.length,
+  )
+  const modelsReady = knownModels === 0 || loadedModels >= knownModels
+  const fullyOperational = servicesReady && modelsReady
+  const bannerTitle = fullyOperational
+    ? 'All systems operational'
+    : servicesReady && !modelsReady
+      ? 'Models are warming up'
+      : healthLabel
+  const bannerCopy = fullyOperational
+    ? 'Models and services are ready.'
+    : servicesReady && !modelsReady
+      ? 'Core services are live while the remaining models start.'
+      : 'One or more components need attention.'
 
   return (
     <div className={styles.container} data-testid="status-page">
@@ -157,39 +167,26 @@ const StatusPage: React.FC = () => {
           <p>Models and services, live at a glance.</p>
         </div>
         <div className={styles.headerRight}>
-          <span className={styles.headerTimestamp}>
-            <i className={styles.liveDot} />
-            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Checking now'}
-          </span>
-          <label className={styles.autoRefreshToggle}>
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(event) => setAutoRefresh(event.target.checked)}
-            />
-            <span>Auto-refresh</span>
-          </label>
           <button
+            type="button"
+            className={styles.liveRefreshButton}
             onClick={() => void statusRequest.run({ allowHidden: true })}
-            className={styles.refreshButton}
             aria-label="Refresh system status"
+            title={lastUpdated ? `Last checked ${lastUpdated.toLocaleTimeString()}` : 'Check now'}
           >
-            Refresh
+            <i className={styles.liveDot} />
+            {lastUpdated ? 'Live' : 'Checking'}
           </button>
         </div>
       </header>
 
       <section
-        className={`${styles.overallBanner} ${status?.overall === 'healthy' ? styles.overallHealthy : styles.overallDegraded}`}
+        className={`${styles.overallBanner} ${fullyOperational ? styles.overallHealthy : styles.overallDegraded}`}
       >
-        <span className={styles.overallIcon}>{status?.overall === 'healthy' ? '✓' : '!'}</span>
+        <span className={styles.overallIcon}>{fullyOperational ? '✓' : '!'}</span>
         <div>
-          <h2>{status?.overall === 'healthy' ? 'All systems operational' : `${healthLabel}`}</h2>
-          <p>
-            {status?.overall === 'healthy'
-              ? 'Every monitored component is responding normally.'
-              : 'One or more components need attention.'}
-          </p>
+          <h2>{bannerTitle}</h2>
+          <p>{bannerCopy}</p>
         </div>
         <dl>
           <div>
@@ -304,7 +301,9 @@ const StatusPage: React.FC = () => {
 
       {error && (
         <div className={styles.error} role="alert">
-          <span className={styles.errorIcon}>⚠️</span>
+          <span className={styles.errorIcon} aria-hidden="true">
+            !
+          </span>
           <span>{error}</span>
         </div>
       )}

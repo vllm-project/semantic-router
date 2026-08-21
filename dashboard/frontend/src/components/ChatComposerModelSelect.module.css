@@ -6,7 +6,7 @@
 .trigger {
   display: inline-flex;
   max-width: min(320px, 42vw);
-  height: 32px;
+  height: 40px;
   align-items: center;
   gap: 6px;
   padding: 0 10px;

@@ -13,6 +13,8 @@ import {
   canViewUsers,
   canWriteConfig,
   canWriteEvaluation,
+  canVerifyModels,
+  isModelConsumer,
 } from './accessControl'
 
 describe('config write access', () => {
@@ -70,7 +72,7 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['mcp.read'] }, '/config/mcp')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
-    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
+    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['access.read'] }, '/access/api-keys')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/access/api-keys')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/usage')).toBe(true)
@@ -78,6 +80,40 @@ describe('config write access', () => {
       false,
     )
     expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/users')).toBe(false)
+  })
+
+  it('keeps model consumers inside routing and their own access surfaces', () => {
+    const consumer = {
+      role: 'read',
+      permissions: ['config.read', 'topology.read', 'access.self', 'usage.self'],
+    }
+    expect(isModelConsumer(consumer)).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/config/models')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/builder')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/knowledge-bases/bases')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/fleet-sim')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/global-config')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/status')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/insights')).toBe(false)
+  })
+
+  it('keeps live verification operator-only while allowing scoped read-only analysis', () => {
+    const reader = {
+      role: 'read',
+      permissions: [
+        'config.read',
+        'topology.read',
+        'replay.read',
+        'evaluation.read',
+        'access.self',
+        'usage.self',
+      ],
+    }
+    expect(isModelConsumer(reader)).toBe(true)
+    expect(canAccessDashboardPath(reader, '/insights')).toBe(true)
+    expect(canAccessDashboardPath(reader, '/evaluation')).toBe(true)
+    expect(canVerifyModels(reader)).toBe(false)
+    expect(canVerifyModels({ permissions: ['status.read'] })).toBe(true)
   })
 
   it('separates read, write, run, and manage actions', () => {

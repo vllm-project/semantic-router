@@ -20,14 +20,11 @@ export default function ConfigPageManagerLayout({
   eyebrow = 'Build',
   title,
   description,
-  configArea,
-  scope,
-  panelEyebrow = 'Workspace',
-  panelTitle,
-  panelDescription,
   pills = [],
   children,
 }: ConfigPageManagerLayoutProps) {
+  const hasPanelNavigation = pills.length > 0
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -43,13 +40,8 @@ export default function ConfigPageManagerLayout({
           <h1>{title}</h1>
           <p>{description}</p>
         </div>
-        <aside className={styles.surfacePulse}>
-          <div className={styles.pulseCopy}>
-            <span>{panelEyebrow}</span>
-            <strong>{panelTitle || configArea || title}</strong>
-            <small>{panelDescription || scope || 'Ready to configure'}</small>
-          </div>
-          {pills.length > 0 ? (
+        {hasPanelNavigation ? (
+          <aside className={styles.surfacePulse}>
             <div className={styles.pills} aria-label={`${title} views`}>
               {pills.map((pill) =>
                 pill.onClick ? (
@@ -69,8 +61,8 @@ export default function ConfigPageManagerLayout({
                 ),
               )}
             </div>
-          ) : null}
-        </aside>
+          </aside>
+        ) : null}
       </header>
       <div className={styles.body}>{children}</div>
     </section>

@@ -1223,7 +1223,7 @@ body.playground-fullscreen .container {
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  height: 32px;
+  height: 40px;
   min-width: 84px;
   padding: 0 0.62rem;
   border-radius: 999px;
@@ -1281,8 +1281,8 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -1416,8 +1416,8 @@ body.playground-fullscreen .container {
 }
 
 .sendButton {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background-color: var(--color-text);
   color: var(--color-bg);
@@ -1571,7 +1571,7 @@ body.playground-fullscreen .container {
 
   .clawModeToggleButton,
   .teamToggleButton {
-    height: 32px;
+    height: 40px;
   }
 
   .teamModeControlsContainer {
@@ -1694,8 +1694,8 @@ body.playground-fullscreen .container {
   }
 
   .sendButton {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     flex-shrink: 0;
     margin-right: 0;
   }

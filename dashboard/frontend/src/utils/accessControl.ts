@@ -59,6 +59,10 @@ export function canDeployConfig(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, CONFIG_DEPLOY_PERMISSION)
 }
 
+export function canVerifyModels(user?: PermissionUser | null): boolean {
+  return canAccessWithPermission(user, STATUS_READ_PERMISSION)
+}
+
 export function canAccessMLSetup(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, ML_PIPELINE_MANAGE_PERMISSION)
 }
@@ -84,6 +88,34 @@ export function canAccessDashboardPath(
   pathname: string,
 ): boolean {
   const normalizedPath = pathname.trim().toLowerCase()
+
+  if (isModelConsumer(user)) {
+    if (
+      normalizedPath.startsWith('/knowledge-bases') ||
+      normalizedPath.startsWith('/taxonomy') ||
+      normalizedPath.startsWith('/fleet-sim') ||
+      normalizedPath.startsWith('/ml-setup') ||
+      normalizedPath.startsWith('/status') ||
+      normalizedPath.startsWith('/clawos') ||
+      normalizedPath.startsWith('/openclaw') ||
+      normalizedPath.startsWith('/plugins') ||
+      normalizedPath.startsWith('/response-cache') ||
+      normalizedPath.startsWith('/context-compression') ||
+      normalizedPath.startsWith('/monitoring') ||
+      normalizedPath.startsWith('/tracing')
+    ) {
+      return false
+    }
+    if (normalizedPath.startsWith('/config/')) {
+      return [
+        '/config/models',
+        '/config/signals',
+        '/config/projections',
+        '/config/decisions',
+        '/config/entrypoints-recipes',
+      ].some((path) => normalizedPath === path || normalizedPath.startsWith(`${path}/`))
+    }
+  }
 
   if (normalizedPath.startsWith('/access')) {
     if (canAccessWithPermission(user, ACCESS_READ_PERMISSION, READ_CAPABLE_ROLES)) return true
@@ -172,6 +204,21 @@ export function canReadInferenceAccess(user?: PermissionUser | null): boolean {
 
 export function canSelfManageInferenceAccess(user?: PermissionUser | null): boolean {
   return canManageInferenceAccess(user) || hasPermission(user, ACCESS_SELF_PERMISSION)
+}
+
+export function isModelConsumer(user?: PermissionUser | null): boolean {
+  if (!user) return false
+  if (Array.isArray(user.permissions)) {
+    return (
+      hasPermission(user, ACCESS_SELF_PERMISSION) &&
+      hasPermission(user, USAGE_SELF_PERMISSION) &&
+      !hasPermission(user, CONFIG_WRITE_PERMISSION) &&
+      !hasPermission(user, ACCESS_READ_PERMISSION) &&
+      !hasPermission(user, LOGS_READ_PERMISSION) &&
+      !hasPermission(user, STATUS_READ_PERMISSION)
+    )
+  }
+  return user.role?.trim().toLowerCase() === 'read'
 }
 
 export function canViewOwnUsage(user?: PermissionUser | null): boolean {

@@ -101,7 +101,6 @@ export default function InsightsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [replayUnavailable, setReplayUnavailable] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
   const [searchTerm, setSearchTerm] = useState(initialSearch)
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(initialSearch)
   const [filter, setFilter] = useState<InsightsFilterType>('all')
@@ -213,17 +212,7 @@ export default function InsightsPage() {
 
   useEffect(() => {
     void fetchRecords()
-
-    if (!autoRefresh) {
-      return undefined
-    }
-
-    const interval = window.setInterval(() => {
-      void fetchRecords()
-    }, 5000)
-
-    return () => window.clearInterval(interval)
-  }, [autoRefresh, fetchRecords])
+  }, [fetchRecords])
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -278,15 +267,6 @@ export default function InsightsPage() {
         eyebrow="Insights"
         title="Insights"
         description="See every routing decision, model pick, and saving."
-        configArea="Analysis"
-        scope="Live request intelligence"
-        panelTitle="Routing intelligence"
-        panelDescription="Decisions, usage, and savings at a glance."
-        pills={[
-          { label: 'Cost Savings', active: true },
-          { label: 'Selections' },
-          { label: 'Signals' },
-        ]}
       >
         {error ? (
           <div className={styles.error}>
@@ -315,20 +295,13 @@ export default function InsightsPage() {
                 <p className={styles.sectionSubtitle}>One row for every routed request.</p>
               </div>
               <div className={styles.toolbarActions}>
-                <label className={styles.toggle}>
-                  <input
-                    type="checkbox"
-                    checked={autoRefresh}
-                    onChange={(event) => setAutoRefresh(event.target.checked)}
-                  />
-                  <span>Auto-refresh</span>
-                </label>
                 <button
                   type="button"
                   onClick={() => void fetchRecords()}
                   className={styles.refreshButton}
+                  disabled={loading}
                 >
-                  Refresh
+                  {loading ? 'Refreshing' : 'Refresh'}
                 </button>
               </div>
             </div>
@@ -434,6 +407,7 @@ export default function InsightsPage() {
                 data={records}
                 keyExtractor={(row) => row.id}
                 onView={handleViewRecord}
+                openOnRowClick
                 emptyMessage="No requests match these filters"
                 className={styles.insightsTable}
               />

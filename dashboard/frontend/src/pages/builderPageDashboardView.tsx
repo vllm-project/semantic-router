@@ -9,6 +9,7 @@ import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from './builderPageFormP
 import type { EntityKind, Selection } from './builderPageTypes'
 
 interface DashboardViewProps {
+  readOnly: boolean
   ast: ReturnType<typeof useDSLStore.getState>['ast']
   modelCount: number
   signalCount: number
@@ -85,6 +86,7 @@ const boolExprToText = (node: BoolExprNode | null, maxLength = 60): string => {
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
+  readOnly,
   ast,
   modelCount,
   signalCount,
@@ -241,29 +243,31 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         </section>
 
         <aside className={styles.dashboardRail}>
-          <section className={styles.dashSection}>
-            <div className={styles.dashSectionHeading}>
-              <div>
-                <span className={styles.dashSectionTitle}>Add to workspace</span>
-                <p>Extend this configuration.</p>
+          {!readOnly ? (
+            <section className={styles.dashSection}>
+              <div className={styles.dashSectionHeading}>
+                <div>
+                  <span className={styles.dashSectionTitle}>Add to workspace</span>
+                  <p>Extend this configuration.</p>
+                </div>
               </div>
-            </div>
-            <div className={styles.quickActions}>
-              {(['model', 'signal', 'route', 'plugin'] as EntityKind[]).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={styles.quickActionBtn}
-                  onClick={() => onAddEntity(kind)}
-                >
-                  <span className={styles.quickActionIcon} aria-hidden="true">
-                    +
-                  </span>
-                  <span>Add {kind}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+              <div className={styles.quickActions}>
+                {(['model', 'signal', 'route', 'plugin'] as EntityKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={styles.quickActionBtn}
+                    onClick={() => onAddEntity(kind)}
+                  >
+                    <span className={styles.quickActionIcon} aria-hidden="true">
+                      +
+                    </span>
+                    <span>Add {kind}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className={styles.dashSection}>
             <div className={styles.dashSectionHeading}>
@@ -273,7 +277,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <div className={styles.dashModes}>
-              {EDITOR_MODES.map((mode) => (
+              {EDITOR_MODES.filter((option) => !readOnly || option.mode !== 'nl').map((mode) => (
                 <button
                   key={mode.mode}
                   type="button"

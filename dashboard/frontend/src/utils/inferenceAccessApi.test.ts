@@ -31,15 +31,18 @@ describe('inference access API contract', () => {
     await inferenceAccessApi.key('key/a')
     await inferenceAccessApi.keySecret('key/a')
     await inferenceAccessApi.rotateKey('key/a')
+    await inferenceAccessApi.deleteKey('key/a')
     await inferenceAccessApi.requestLog('log/a')
 
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       '/api/v1/access-control/api-keys/key%2Fa',
       '/api/v1/access-control/api-keys/key%2Fa/secret',
       '/api/v1/access-control/api-keys/key%2Fa/rotate',
+      '/api/v1/access-control/api-keys/key%2Fa',
       '/api/v1/access-control/request-logs/log%2Fa',
     ])
     expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' })
+    expect(fetchMock.mock.calls[3][1]).toMatchObject({ method: 'DELETE' })
   })
 
   it('sends linked budgets and direct key limits through create and edit', async () => {

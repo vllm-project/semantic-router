@@ -202,6 +202,28 @@ export default function ConfigPageMoMRoutingPanel({
         },
       ],
       isReadonly ? undefined : () => setMixtureEditor({ entrypoint, index }),
+      [
+        ...(recipe
+          ? [
+              {
+                label: 'View topology',
+                onClick: () => setTopologyTarget({ entrypoint, recipe }),
+              },
+            ]
+          : []),
+        ...(!isReadonly
+          ? [
+              {
+                label: 'Delete model',
+                tone: 'destructive' as const,
+                onClick: () => {
+                  setDeleteError(null)
+                  setEntrypointPendingDelete({ entrypoint, index })
+                },
+              },
+            ]
+          : []),
+      ],
     )
   }
 
@@ -251,6 +273,25 @@ export default function ConfigPageMoMRoutingPanel({
             setRecipeEditor(recipe)
             setRecipeEditorOpen(true)
           },
+      [
+        ...(!isReadonly && recipe.name !== DEFAULT_RECIPE_NAME
+          ? [
+              {
+                label: 'Build recipe',
+                tone: 'primary' as const,
+                onClick: () => navigate(`/config/signals?recipe=${encodeURIComponent(recipe.name)}`),
+              },
+              {
+                label: 'Delete recipe',
+                tone: 'destructive' as const,
+                onClick: () => {
+                  setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
+                  setRecipePendingDelete(recipe)
+                },
+              },
+            ]
+          : []),
+      ],
     )
   }
 
@@ -311,12 +352,6 @@ export default function ConfigPageMoMRoutingPanel({
             isReadonly={isReadonly}
             onAdd={() => setMixtureEditor({ index: null })}
             onView={viewEntrypoint}
-            onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
-            onDelete={(entrypoint, index) => {
-              setDeleteError(null)
-              setEntrypointPendingDelete({ entrypoint, index })
-            }}
-            onTopology={(entrypoint, recipe) => setTopologyTarget({ entrypoint, recipe })}
           />
         ) : null}
         {activeView === 'recipes' ? (
@@ -330,17 +365,6 @@ export default function ConfigPageMoMRoutingPanel({
               setRecipeEditorOpen(true)
             }}
             onView={viewRecipe}
-            onEdit={(recipe) => {
-              setRecipeEditor(recipe)
-              setRecipeEditorOpen(true)
-            }}
-            onBuild={(recipe) =>
-              navigate(`/config/signals?recipe=${encodeURIComponent(recipe.name)}`)
-            }
-            onDelete={(recipe) => {
-              setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
-              setRecipePendingDelete(recipe)
-            }}
           />
         ) : null}
       </div>

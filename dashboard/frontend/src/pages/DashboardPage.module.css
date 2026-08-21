@@ -169,12 +169,15 @@
   color: rgba(255, 255, 255, 0.62);
   font-size: var(--text-xs);
   cursor: pointer;
-  padding: 0;
+  min-height: 36px;
+  padding: 0 0.6rem;
+  border-radius: 6px;
   transition: var(--transition-fast);
 }
 
 .cardAction:hover {
   color: #ffffff;
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .emptyState {

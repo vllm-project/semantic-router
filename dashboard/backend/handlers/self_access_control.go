@@ -167,6 +167,12 @@ func (h *SelfAccessControlHandler) handleAPIKeys(
 		}
 		result, err := h.service.SetSelfAPIKeyStatus(r.Context(), actor, id, input.Status)
 		writeAccessResult(w, result, err)
+	case http.MethodDelete:
+		if id == "" || action != "" {
+			writeAccessError(w, http.StatusBadRequest, "API key id is required")
+			return
+		}
+		writeAccessResult(w, map[string]bool{"deleted": true}, h.service.DeleteSelfAPIKey(r.Context(), actor, id))
 	default:
 		methodNotAllowed(w)
 	}

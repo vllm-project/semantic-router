@@ -11,12 +11,12 @@
 .header {
   position: relative;
   display: flex;
-  min-height: 190px;
-  align-items: flex-end;
+  min-height: 142px;
+  align-items: center;
   justify-content: space-between;
   gap: 2rem;
   overflow: hidden;
-  padding: 2rem 2.1rem;
+  padding: 1.45rem 1.65rem;
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 14px;
   background:
@@ -51,8 +51,7 @@
   gap: 0.75rem;
 }
 
-.topline > span,
-.pulseCopy > span {
+.topline > span {
   color: rgba(255, 255, 255, 0.45);
   font-size: 0.67rem;
   font-weight: 750;
@@ -78,7 +77,7 @@
   max-width: 720px;
   margin: 0.55rem 0 0;
   color: #f7f7f8;
-  font-size: clamp(2.15rem, 4vw, 3.65rem);
+  font-size: clamp(2rem, 3vw, 2.7rem);
   font-weight: 620;
   line-height: 0.98;
   letter-spacing: -0.055em;
@@ -86,54 +85,34 @@
 
 .copy p {
   max-width: 60ch;
-  margin: 0.9rem 0 0;
+  margin: 0.6rem 0 0;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1.5;
 }
 
 .surfacePulse {
-  min-width: min(360px, 34%);
-  display: grid;
-  gap: 0.8rem;
-  padding: 0.85rem 0.9rem;
+  min-width: min(320px, 34%);
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   background: rgba(5, 6, 8, 0.76);
   backdrop-filter: blur(16px);
 }
 
-.pulseCopy {
-  display: grid;
-  gap: 0.2rem;
-}
-.pulseCopy strong {
-  overflow: hidden;
-  color: #f8f8fa;
-  font-size: 0.9rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pulseCopy small {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 0.66rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .pills {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 5px;
-  padding-top: 0.7rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .pills span,
 .pills button {
-  min-height: 30px;
-  padding: 0 9px;
+  min-height: 38px;
+  padding: 0 11px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.025);
@@ -171,10 +150,14 @@
     min-height: 0;
     align-items: flex-start;
     flex-direction: column;
-    padding: 1.4rem;
+    padding: 1.25rem;
   }
   .surfacePulse {
     width: 100%;
     min-width: 0;
+  }
+
+  .pills {
+    justify-content: flex-start;
   }
 }

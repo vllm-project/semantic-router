@@ -180,7 +180,7 @@ func (h *AccessGatewayHandler) chatCompletions(w http.ResponseWriter, r *http.Re
 		if errors.As(err, &quotaErr) {
 			h.recordGatewayUsage(principal, requestID, envelope.Model, http.StatusTooManyRequests, started, 0, 0, 0, 0, "quota_exceeded", gatewayUsageMetadata(body, nil, envelope.Stream, credentialType))
 			w.Header().Set("Retry-After", "60")
-			writeAccessError(w, http.StatusTooManyRequests, quotaErr.Error())
+			writeAccessError(w, http.StatusTooManyRequests, quotaErr.UserMessage())
 			return
 		}
 		h.recordGatewayUsage(principal, requestID, envelope.Model, http.StatusServiceUnavailable, started, 0, 0, 0, 0, "quota_unavailable", gatewayUsageMetadata(body, nil, envelope.Stream, credentialType))
@@ -220,8 +220,8 @@ func (h *AccessGatewayHandler) proxyChatCompletion(
 	if principal.Key.UserID != "" {
 		upstreamRequest.Header.Set("X-VLLM-SR-User-ID", principal.Key.UserID)
 	}
-	if principal.Key.TeamID != "" {
-		upstreamRequest.Header.Set("X-VLLM-SR-Team-ID", principal.Key.TeamID)
+	if principal.Team != nil && principal.Team.ID != "" {
+		upstreamRequest.Header.Set("X-VLLM-SR-Team-ID", principal.Team.ID)
 	}
 	response, upstreamErr := h.client.Do(upstreamRequest)
 	if upstreamErr != nil {
@@ -339,8 +339,12 @@ func (h *AccessGatewayHandler) reconcileQuota(reservation *accesscontrol.Reserva
 func (h *AccessGatewayHandler) recordGatewayUsage(principal *accesscontrol.Principal, requestID, model string, status int, started time.Time, ttft, prompt, completion, total int64, errorCode string, metadata map[string]any) {
 	ctx, cancel := context.WithTimeout(context.Background(), gatewayAccountingTTL)
 	defer cancel()
+	teamID := principal.Key.TeamID
+	if principal.Team != nil {
+		teamID = principal.Team.ID
+	}
 	if err := h.service.RecordUsage(ctx, accesscontrol.UsageEvent{
-		RequestID: requestID, KeyID: principal.Key.ID, UserID: principal.Key.UserID, TeamID: principal.Key.TeamID,
+		RequestID: requestID, KeyID: principal.Key.ID, UserID: principal.Key.UserID, TeamID: teamID,
 		Model: model, StatusCode: status, PromptTokens: prompt, CompletionTokens: completion,
 		TotalTokens: total, LatencyMS: time.Since(started).Milliseconds(), TTFTMS: ttft, ErrorCode: errorCode, Metadata: metadata,
 	}); err != nil {

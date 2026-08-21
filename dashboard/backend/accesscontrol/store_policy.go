@@ -112,6 +112,26 @@ func (s *Store) GetBudget(ctx context.Context, id string) (Budget, error) {
 	return scanBudget(s.pool.QueryRow(ctx, budgetSelect+` WHERE q.id=$1`, id))
 }
 
+func (s *Store) BudgetsByIDs(ctx context.Context, ids []string) ([]Budget, error) {
+	if len(ids) == 0 {
+		return []Budget{}, nil
+	}
+	rows, err := s.pool.Query(ctx, budgetSelect+` WHERE q.id=ANY($1) ORDER BY q.id`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]Budget, 0, len(ids))
+	for rows.Next() {
+		item, scanErr := scanBudget(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func scanBudget(row rowScanner) (Budget, error) {
 	var item Budget
 	err := row.Scan(&item.ID, &item.Name, &item.Description, &item.RPM, &item.TPM, &item.DailyTokens, &item.Enabled, &item.CreatedAt, &item.UpdatedAt, &item.AssignmentCount)

@@ -21,9 +21,6 @@ interface EntrypointsListProps {
   isReadonly: boolean
   onAdd: () => void
   onView: (entrypoint: EntrypointConfig, index: number) => void
-  onEdit: (entrypoint: EntrypointConfig, index: number) => void
-  onDelete: (entrypoint: EntrypointConfig, index: number) => void
-  onTopology: (entrypoint: EntrypointConfig, recipe: RecipeConfig) => void
 }
 
 interface RecipesListProps {
@@ -33,9 +30,6 @@ interface RecipesListProps {
   isReadonly: boolean
   onAdd: () => void
   onView: (recipe: RecipeConfig) => void
-  onEdit: (recipe: RecipeConfig) => void
-  onDelete: (recipe: RecipeConfig) => void
-  onBuild: (recipe: RecipeConfig) => void
 }
 
 function Pager({
@@ -76,9 +70,6 @@ export function ConfigPageMoMEntrypointsList({
   isReadonly,
   onAdd,
   onView,
-  onEdit,
-  onDelete,
-  onTopology,
 }: EntrypointsListProps) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -132,7 +123,16 @@ export function ConfigPageMoMEntrypointsList({
           return (
             <article key={key} className={pageStyles.portfolioItem}>
               <div
-                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain}`}
+                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain} ${pageStyles.portfolioItemOpenable}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${entrypoint.model_names[0]}`}
+                onClick={() => onView(entrypoint, originalIndex)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  onView(entrypoint, originalIndex)
+                }}
               >
                 <div className={pageStyles.portfolioIdentity}>
                   <strong>{entrypoint.model_names[0]}</strong>
@@ -149,30 +149,9 @@ export function ConfigPageMoMEntrypointsList({
                     {boundModelCount} model{boundModelCount === 1 ? '' : 's'}
                   </span>
                 </div>
-                <div className={pageStyles.rowActions}>
-                  {recipe ? (
-                    <button type="button" onClick={() => onTopology(entrypoint, recipe)}>
-                      Topology
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => onView(entrypoint, originalIndex)}>
-                    View
-                  </button>
-                  {!isReadonly ? (
-                    <>
-                      <button type="button" onClick={() => onEdit(entrypoint, originalIndex)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={pageStyles.deleteAction}
-                        onClick={() => onDelete(entrypoint, originalIndex)}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : null}
-                </div>
+                <span className={pageStyles.portfolioOpenCue} aria-hidden="true">
+                  →
+                </span>
               </div>
               {entrypoint.model_bindings && Object.keys(entrypoint.model_bindings).length > 0 ? (
                 <div className={pageStyles.bindingStrip}>
@@ -205,9 +184,6 @@ export function ConfigPageMoMRecipesList({
   isReadonly,
   onAdd,
   onView,
-  onEdit,
-  onDelete,
-  onBuild,
 }: RecipesListProps) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -263,7 +239,16 @@ export function ConfigPageMoMRecipesList({
           return (
             <article key={recipe.name} className={pageStyles.portfolioItem}>
               <div
-                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain}`}
+                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain} ${pageStyles.portfolioItemOpenable}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open recipe ${recipe.name}`}
+                onClick={() => onView(recipe)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  onView(recipe)
+                }}
               >
                 <div className={pageStyles.portfolioIdentity}>
                   <div className={pageStyles.recipeTitle}>
@@ -288,32 +273,9 @@ export function ConfigPageMoMRecipesList({
                   <span>{signalCount} signals</span>
                   <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
                 </div>
-                <div className={pageStyles.rowActions}>
-                  <button type="button" onClick={() => onView(recipe)}>
-                    View
-                  </button>
-                  {!isReadonly ? (
-                    <>
-                      {recipe.name !== DEFAULT_RECIPE_NAME ? (
-                        <button type="button" onClick={() => onBuild(recipe)}>
-                          Build
-                        </button>
-                      ) : null}
-                      <button type="button" onClick={() => onEdit(recipe)}>
-                        Details
-                      </button>
-                      {recipe.name !== DEFAULT_RECIPE_NAME ? (
-                        <button
-                          type="button"
-                          className={pageStyles.deleteAction}
-                          onClick={() => onDelete(recipe)}
-                        >
-                          Delete
-                        </button>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
+                <span className={pageStyles.portfolioOpenCue} aria-hidden="true">
+                  →
+                </span>
               </div>
             </article>
           )

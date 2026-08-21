@@ -339,6 +339,7 @@ const BuilderNaturalLanguagePanel: React.FC<
     <div className={styles.container}>
       <div className={styles.heroShell}>
         <DashboardSurfaceHero
+          compact
           eyebrow="Builder"
           title="Natural language"
           description="Describe the routing change. Builder stages the draft only after the shared generation call and repository checks finish."

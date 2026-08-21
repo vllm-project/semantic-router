@@ -62,6 +62,10 @@ func (s *Service) GetTeam(ctx context.Context, id string) (Team, error) {
 	return s.store.GetTeam(ctx, id)
 }
 
+func (s *Service) ListTeamIDsForUser(ctx context.Context, userID string) ([]string, error) {
+	return s.store.ListTeamIDsForUser(ctx, userID)
+}
+
 // EnsureModelUser keeps the model-serving identity aligned with its Dashboard
 // account. Dashboard roles never participate in inference authorization.
 func (s *Service) EnsureModelUser(ctx context.Context, id, email, name string) error {
@@ -99,7 +103,7 @@ func (s *Service) ListAPIKeys(ctx context.Context, filter ListFilter) ([]APIKey,
 	if err != nil {
 		return nil, 0, err
 	}
-	items, err = s.store.ResolveAPIKeyPolicies(ctx, items)
+	items, err = s.resolveAPIKeyPoliciesAndQuotas(ctx, items)
 	return items, total, err
 }
 
@@ -115,12 +119,51 @@ func (s *Service) GetAPIKey(ctx context.Context, id string) (APIKey, error) {
 }
 
 func (s *Service) resolveAPIKeyPolicy(ctx context.Context, item *APIKey) error {
-	items, err := s.store.ResolveAPIKeyPolicies(ctx, []APIKey{*item})
+	items, err := s.resolveAPIKeyPoliciesAndQuotas(ctx, []APIKey{*item})
 	if err != nil {
 		return err
 	}
 	*item = items[0]
 	return nil
+}
+
+func (s *Service) resolveAPIKeyPoliciesAndQuotas(ctx context.Context, items []APIKey) ([]APIKey, error) {
+	items, err := s.store.ResolveAPIKeyPolicies(ctx, items)
+	if err != nil || len(items) == 0 {
+		return items, err
+	}
+	budgetIDs := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		if item.EffectiveBudgetID == "" {
+			continue
+		}
+		if _, found := seen[item.EffectiveBudgetID]; found {
+			continue
+		}
+		seen[item.EffectiveBudgetID] = struct{}{}
+		budgetIDs = append(budgetIDs, item.EffectiveBudgetID)
+	}
+	budgets, err := s.store.BudgetsByIDs(ctx, budgetIDs)
+	if err != nil {
+		return nil, err
+	}
+	if s.quota == nil {
+		return items, nil
+	}
+	snapshots, err := s.quota.Snapshots(ctx, budgets)
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		snapshot, found := snapshots[items[index].EffectiveBudgetID]
+		if !found {
+			continue
+		}
+		snapshot.Source = items[index].BudgetPolicySource
+		items[index].Quota = &snapshot
+	}
+	return items, nil
 }
 
 func (s *Service) UpdateUser(ctx context.Context, actor Actor, item User) (User, error) {
@@ -330,6 +373,17 @@ func (s *Service) SetAPIKeyStatus(ctx context.Context, actor Actor, id, status s
 		s.audit(ctx, actor, "api_key.status_changed", "api_key", id, map[string]any{"status": status})
 	}
 	return item, err
+}
+
+func (s *Service) DeleteAPIKey(ctx context.Context, actor Actor, id string) error {
+	if _, err := s.store.GetAPIKey(ctx, id); err != nil {
+		return err
+	}
+	if err := s.store.DeleteAPIKey(ctx, id); err != nil {
+		return err
+	}
+	s.audit(ctx, actor, "api_key.deleted", "api_key", id, nil)
+	return nil
 }
 
 func (s *Service) UpdateAPIKey(ctx context.Context, actor Actor, item APIKey) (APIKey, error) {

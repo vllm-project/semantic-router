@@ -187,7 +187,7 @@ func registerTopologyRoutes(mux *http.ServeMux, cfg *config.Config, credentialPr
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
 }
 
-func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config, scopeResolvers ...handlers.EvaluationScopeResolver) {
 	if !cfg.EvaluationEnabled {
 		log.Printf("Evaluation feature disabled")
 		return
@@ -217,7 +217,16 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 		ResultsDir:    cfg.EvaluationResultsDir,
 		MaxConcurrent: 10,
 	})
-	evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
+	var scopeResolver handlers.EvaluationScopeResolver
+	if len(scopeResolvers) > 0 {
+		scopeResolver = scopeResolvers[0]
+	}
+	var evalHandler *handlers.EvaluationHandler
+	if scopeResolver != nil {
+		evalHandler = handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL, scopeResolver)
+	} else {
+		evalHandler = handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
+	}
 
 	mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {

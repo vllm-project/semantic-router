@@ -1,11 +1,14 @@
 package router
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
@@ -19,15 +22,24 @@ type dashboardProxySet struct {
 	jaegerStatic  *httputil.ReverseProxy
 }
 
-func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvider ...routerauth.CredentialProvider) {
-	var provider routerauth.CredentialProvider
-	if len(credentialProvider) > 0 {
-		provider = credentialProvider[0]
+type replayScopeResolver interface {
+	ListTeamIDsForUser(ctx context.Context, userID string) ([]string, error)
+}
+
+func registerProxyRoutes(
+	mux *http.ServeMux,
+	cfg *config.Config,
+	credentialProvider routerauth.CredentialProvider,
+	replayScopeResolvers ...replayScopeResolver,
+) {
+	var replayScopes replayScopeResolver
+	if len(replayScopeResolvers) > 0 {
+		replayScopes = replayScopeResolvers[0]
 	}
 	proxies := dashboardProxySet{
 		envoy: configureEnvoyProxy(cfg),
 	}
-	registerRouterAPIProxy(mux, cfg, proxies.envoy, provider)
+	registerRouterAPIProxy(mux, cfg, proxies.envoy, credentialProvider, replayScopes)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
 	registerFleetSimRoutes(mux, cfg)
@@ -70,7 +82,12 @@ func registerRouterAPIProxy(
 	cfg *config.Config,
 	envoyProxy *httputil.ReverseProxy,
 	credentialProvider routerauth.CredentialProvider,
+	replayScopeResolvers ...replayScopeResolver,
 ) *httputil.ReverseProxy {
+	var replayScopes replayScopeResolver
+	if len(replayScopeResolvers) > 0 {
+		replayScopes = replayScopeResolvers[0]
+	}
 	if cfg.RouterAPIURL == "" {
 		return nil
 	}
@@ -84,7 +101,7 @@ func registerRouterAPIProxy(
 	attachRouterReplayResponseRedaction(routerAPIProxy)
 
 	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
-		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, credentialProvider)
+		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, credentialProvider, replayScopes)
 	})
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	return routerAPIProxy
@@ -96,6 +113,7 @@ func serveRouterAPIProxy(
 	cfg *config.Config,
 	envoyProxy, routerAPIProxy *httputil.ReverseProxy,
 	credentialProvider routerauth.CredentialProvider,
+	replayScopes replayScopeResolver,
 ) {
 	if cfg.ReadonlyMode && isReadonlyRouterMutation(r) {
 		http.Error(w, "dashboard is read-only", http.StatusForbidden)
@@ -116,12 +134,43 @@ func serveRouterAPIProxy(
 		// Let the proxy transport negotiate decompression so replay JSON can
 		// be redacted safely for read-only Dashboard principals.
 		r.Header.Del("Accept-Encoding")
+		if err := applyReplayPrincipalScope(r, replayScopes); err != nil {
+			http.Error(w, "Replay scope is unavailable", http.StatusServiceUnavailable)
+			return
+		}
 	}
 	if err := routerauth.RewriteAuthorization(r, credentialProvider); err != nil {
 		http.Error(w, "Router management credential is unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	routerAPIProxy.ServeHTTP(w, r)
+}
+
+func applyReplayPrincipalScope(r *http.Request, resolver replayScopeResolver) error {
+	principal, ok := auth.AuthFromContext(r)
+	if !ok {
+		return nil
+	}
+	query := r.URL.Query()
+	query.Del("scope_user_id")
+	query.Del("scope_team_id")
+	if principal.Perms[auth.PermConfigWrite] {
+		r.URL.RawQuery = query.Encode()
+		return nil
+	}
+	if resolver == nil {
+		return fmt.Errorf("replay scope resolver is not configured")
+	}
+	teamIDs, err := resolver.ListTeamIDsForUser(r.Context(), principal.UserID)
+	if err != nil {
+		return err
+	}
+	query.Add("scope_user_id", principal.UserID)
+	for _, teamID := range teamIDs {
+		query.Add("scope_team_id", teamID)
+	}
+	r.URL.RawQuery = query.Encode()
+	return nil
 }
 
 func isReadonlyRouterMutation(r *http.Request) bool {

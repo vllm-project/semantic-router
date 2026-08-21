@@ -86,10 +86,11 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
       },
       {
         title: 'Design',
-        description: 'Inspect the routing graph or author its DSL.',
+        description: 'Inspect the routing graph, request outcomes, or author its DSL.',
         items: [
           { kind: 'route', label: 'Brain Topology', to: '/topology' },
           { kind: 'route', label: 'DSL Builder', to: '/builder' },
+          { kind: 'route', label: 'Insights', to: '/insights', matchMode: 'prefix' },
         ],
       },
     ],
@@ -133,28 +134,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
 ]
 
 export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
-  {
-    key: 'outcomes',
-    label: 'Outcomes',
-    description: 'Inspect routing choices, measure quality, and tune model behavior.',
-    sections: [
-      {
-        title: 'Inspect',
-        description: 'Understand what the router selected and why.',
-        items: [{ kind: 'route', label: 'Insights', to: '/insights', matchMode: 'prefix' }],
-      },
-      {
-        title: 'Evaluate',
-        description: 'Benchmark signal and system-level behavior.',
-        items: [{ kind: 'route', label: 'Evaluation', to: '/evaluation' }],
-      },
-      {
-        title: 'Tune',
-        description: 'Prepare and validate the router model stack.',
-        items: [{ kind: 'route', label: 'ML Setup', to: '/ml-setup' }],
-      },
-    ],
-  },
   {
     key: 'fleet-simulation',
     label: 'Fleet Simulation',
@@ -237,7 +216,11 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Platform',
         description: 'Configure router-wide defaults and infrastructure bindings.',
-        items: [{ kind: 'config', label: 'Global Config', configSection: 'global-config' }],
+        items: [
+          { kind: 'route', label: 'Evaluation', to: '/evaluation' },
+          { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
+          { kind: 'config', label: 'Global Config', configSection: 'global-config' },
+        ],
       },
     ],
   },

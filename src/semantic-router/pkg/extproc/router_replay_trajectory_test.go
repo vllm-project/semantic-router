@@ -217,6 +217,44 @@ func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *te
 	}
 }
 
+func TestHandleRouterReplayTrajectoryAppliesPrincipalScopeWithinSession(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	sessionID := "shared-session"
+	for _, record := range []routerreplay.RoutingRecord{
+		{
+			ID: "team-a-record", RequestID: sessionID, UserID: "user-a", TeamID: "team-a",
+			Timestamp: time.Unix(1, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{{
+				Type: replayToolStepUserInput, Role: "user", Text: "team a",
+			}}},
+		},
+		{
+			ID: "team-b-record", RequestID: sessionID, UserID: "user-b", TeamID: "team-b",
+			Timestamp: time.Unix(2, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{{
+				Type: replayToolStepUserInput, Role: "user", Text: "team b",
+			}}},
+		},
+	} {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatalf("failed to add record: %v", err)
+		}
+	}
+	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder}}
+
+	response := router.handleRouterReplayAPI(
+		"GET",
+		"/v1/router_replay/trajectory?session_id="+sessionID+"&scope_user_id=user-a&scope_team_id=team-a",
+	)
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	assertIntField(t, body, "record_count", 1)
+	messages := mustTrajectoryMessages(t, body)
+	if len(messages) != 1 {
+		t.Fatalf("expected one scoped message, got %d", len(messages))
+	}
+	assertStringField(t, messages[0], "content", "team a")
+}
+
 func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {
 	router, sessionID := newTrajectoryTestRouter(t)
 

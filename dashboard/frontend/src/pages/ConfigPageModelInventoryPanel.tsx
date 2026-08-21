@@ -38,8 +38,6 @@ interface ConfigPageModelInventoryPanelProps {
   onDismissOperationError: () => void
   onAddModel: () => void
   onViewModel: (model: NormalizedModel) => void
-  onEditModel: (model: NormalizedModel) => void
-  onDeleteModel: (model: NormalizedModel) => void
   expandedModels: ReadonlySet<string>
   onToggleExpand: (model: NormalizedModel) => void
   renderExpandedRow: (model: NormalizedModel) => ReactNode
@@ -74,8 +72,6 @@ export default function ConfigPageModelInventoryPanel({
   onDismissOperationError,
   onAddModel,
   onViewModel,
-  onEditModel,
-  onDeleteModel,
   expandedModels,
   onToggleExpand,
   renderExpandedRow,
@@ -154,20 +150,24 @@ export default function ConfigPageModelInventoryPanel({
         )
       },
     },
-    {
-      key: 'live_verification',
-      header: 'Live',
-      width: '112px',
-      render: (row) => (
-        <ConfigPageModelLiveVerification
-          model={row.name}
-          hasBackend={Boolean(row.endpoints?.some((endpoint) => endpoint.endpoint.trim()))}
-          allowed={canVerifyModels}
-          state={modelLiveVerificationState(liveVerificationStates, row.name)}
-          onVerify={() => onVerifyModel(row.name)}
-        />
-      ),
-    },
+    ...(canVerifyModels
+      ? [
+          {
+            key: 'live_verification',
+            header: 'Live',
+            width: '112px',
+            render: (row: NormalizedModel) => (
+              <ConfigPageModelLiveVerification
+                model={row.name}
+                hasBackend={Boolean(row.endpoints?.some((endpoint) => endpoint.endpoint.trim()))}
+                allowed
+                state={modelLiveVerificationState(liveVerificationStates, row.name)}
+                onVerify={() => onVerifyModel(row.name)}
+              />
+            ),
+          } satisfies Column<NormalizedModel>,
+        ]
+      : []),
     {
       key: 'pricing',
       header: 'Pricing',
@@ -293,8 +293,7 @@ export default function ConfigPageModelInventoryPanel({
         data={filteredModels}
         keyExtractor={(row) => row.name}
         onView={onViewModel}
-        onEdit={onEditModel}
-        onDelete={onDeleteModel}
+        openOnRowClick
         expandable
         renderExpandedRow={renderExpandedRow}
         isRowExpanded={(row) => expandedModels.has(row.name)}

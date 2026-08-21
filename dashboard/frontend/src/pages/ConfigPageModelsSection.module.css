@@ -73,15 +73,7 @@
 .liveVerification {
   display: flex;
   align-items: center;
-  min-width: 108px;
-  gap: 0.5rem;
-}
-
-.liveVerificationHeading {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 0.42rem;
+  min-width: 90px;
 }
 
 .liveVerificationDot {
@@ -155,10 +147,14 @@
 }
 
 .liveVerificationButton {
+  display: inline-flex;
   width: fit-content;
-  min-width: 28px;
-  min-height: 26px;
-  padding: 0.22rem 0.46rem;
+  min-width: 72px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.045);

@@ -178,6 +178,9 @@ type Record struct {
 	ID                    string                 `json:"id"`
 	Timestamp             time.Time              `json:"timestamp"`
 	RequestID             string                 `json:"request_id,omitempty"`
+	UserID                string                 `json:"user_id,omitempty"`
+	TeamID                string                 `json:"team_id,omitempty"`
+	APIKeyID              string                 `json:"api_key_id,omitempty"`
 	SessionID             string                 `json:"session_id,omitempty"`
 	TurnIndex             int                    `json:"turn_index"`
 	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`

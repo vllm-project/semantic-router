@@ -44,4 +44,17 @@ describe('access-control modal experience', () => {
     expect(page).toContain('setEntityEditorReturn({ kind, id: item.id })')
     expect(page).toContain('?item=${encodeURIComponent(returnTarget.id)}')
   })
+
+  it('uses plain-language key lifecycle actions and shows live quota capacity', () => {
+    const detail = readSource('./APIKeyDetail.tsx')
+
+    expect(detail).toContain("'Disable'")
+    expect(detail).toContain("'Enable'")
+    expect(detail).toContain('Renew key')
+    expect(detail).toContain('Delete key')
+    expect(detail).toContain('key.quota.rpm')
+    expect(detail).toContain('key.quota.tpm')
+    expect(detail).toContain('key.quota.dailyTokens')
+    expect(detail).not.toContain('Rotate key')
+  })
 })

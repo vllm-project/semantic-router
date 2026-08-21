@@ -30,7 +30,7 @@ describe('layout navigation route matching', () => {
     ).toEqual([
       { title: 'Models', items: ['Models', 'Mixture-of-Models'] },
       { title: 'Routing Logic', items: ['Signals', 'Projections', 'Decisions'] },
-      { title: 'Design', items: ['Brain Topology', 'DSL Builder'] },
+      { title: 'Design', items: ['Brain Topology', 'DSL Builder', 'Insights'] },
     ])
 
     expect(sections?.[2].items[1]).toMatchObject({

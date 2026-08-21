@@ -36,6 +36,7 @@ import type {
 } from './builderPageTypes'
 
 interface EntityDetailViewProps {
+  readOnly: boolean
   selection: Selection
   entity: BuilderSelectedEntity
   onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void
@@ -53,6 +54,7 @@ interface EntityDetailViewProps {
 }
 
 const EntityDetailView: React.FC<EntityDetailViewProps> = ({
+  readOnly,
   selection,
   entity,
   onDeleteEntity,
@@ -137,91 +139,97 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           )}
         </div>
         <div className={styles.editorActions}>
-          <button
-            className={styles.toolbarBtnDanger}
-            onClick={() => onDeleteEntity(selection.kind, selection.name, subType)}
-            title="Delete this entity"
-          >
-            Delete
-          </button>
+          {readOnly ? (
+            <span className={styles.editorBadge}>Read only</span>
+          ) : (
+            <button
+              className={styles.toolbarBtnDanger}
+              onClick={() => onDeleteEntity(selection.kind, selection.name, subType)}
+              title="Delete this entity"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Editable Model form */}
-      {selection.kind === 'model' && 'fields' in entity && (
-        <GenericFieldsEditor
-          fields={(entity as ASTModelDecl).fields}
-          onUpdate={(fields) => onUpdateModelFields((entity as ASTModelDecl).name, fields)}
-        />
-      )}
+      <fieldset className={styles.entityEditorFields} disabled={readOnly}>
+        {/* Editable Model form */}
+        {selection.kind === 'model' && 'fields' in entity && (
+          <GenericFieldsEditor
+            fields={(entity as ASTModelDecl).fields}
+            onUpdate={(fields) => onUpdateModelFields((entity as ASTModelDecl).name, fields)}
+          />
+        )}
 
-      {/* Editable Signal form */}
-      {selection.kind === 'signal' && 'signalType' in entity && (
-        <SignalEditorForm
-          signal={entity as ASTSignalDecl}
-          onUpdate={(fields) =>
-            onUpdateSignalFields(
-              (entity as ASTSignalDecl).signalType,
-              (entity as ASTSignalDecl).name,
-              fields,
-            )
-          }
-        />
-      )}
+        {/* Editable Signal form */}
+        {selection.kind === 'signal' && 'signalType' in entity && (
+          <SignalEditorForm
+            signal={entity as ASTSignalDecl}
+            onUpdate={(fields) =>
+              onUpdateSignalFields(
+                (entity as ASTSignalDecl).signalType,
+                (entity as ASTSignalDecl).name,
+                fields,
+              )
+            }
+          />
+        )}
 
-      {selection.kind === 'projection-partition' && 'members' in entity && (
-        <ProjectionPartitionEditorForm
-          partition={entity as ASTProjectionPartitionDecl}
-          onUpdate={(fields) =>
-            onUpdateProjectionPartitionFields((entity as ASTProjectionPartitionDecl).name, fields)
-          }
-        />
-      )}
+        {selection.kind === 'projection-partition' && 'members' in entity && (
+          <ProjectionPartitionEditorForm
+            partition={entity as ASTProjectionPartitionDecl}
+            onUpdate={(fields) =>
+              onUpdateProjectionPartitionFields((entity as ASTProjectionPartitionDecl).name, fields)
+            }
+          />
+        )}
 
-      {selection.kind === 'projection-score' && (
-        <ProjectionScoreEditorForm
-          score={entity as ASTProjectionScoreDecl}
-          onUpdate={(fields) =>
-            onUpdateProjectionScoreFields((entity as ASTProjectionScoreDecl).name, fields)
-          }
-        />
-      )}
+        {selection.kind === 'projection-score' && (
+          <ProjectionScoreEditorForm
+            score={entity as ASTProjectionScoreDecl}
+            onUpdate={(fields) =>
+              onUpdateProjectionScoreFields((entity as ASTProjectionScoreDecl).name, fields)
+            }
+          />
+        )}
 
-      {selection.kind === 'projection-mapping' && (
-        <ProjectionMappingEditorForm
-          mapping={entity as ASTProjectionMappingDecl}
-          onUpdate={(fields) =>
-            onUpdateProjectionMappingFields((entity as ASTProjectionMappingDecl).name, fields)
-          }
-        />
-      )}
+        {selection.kind === 'projection-mapping' && (
+          <ProjectionMappingEditorForm
+            mapping={entity as ASTProjectionMappingDecl}
+            onUpdate={(fields) =>
+              onUpdateProjectionMappingFields((entity as ASTProjectionMappingDecl).name, fields)
+            }
+          />
+        )}
 
-      {/* Editable Plugin form */}
-      {selection.kind === 'plugin' && 'pluginType' in entity && (
-        <PluginSchemaEditor
-          pluginType={(entity as ASTPluginDecl).pluginType}
-          fields={'fields' in entity ? entity.fields : {}}
-          onUpdate={(fields) =>
-            onUpdatePluginFields(
-              (entity as ASTPluginDecl).name,
-              (entity as ASTPluginDecl).pluginType,
-              fields,
-            )
-          }
-          buffered
-        />
-      )}
+        {/* Editable Plugin form */}
+        {selection.kind === 'plugin' && 'pluginType' in entity && (
+          <PluginSchemaEditor
+            pluginType={(entity as ASTPluginDecl).pluginType}
+            fields={'fields' in entity ? entity.fields : {}}
+            onUpdate={(fields) =>
+              onUpdatePluginFields(
+                (entity as ASTPluginDecl).name,
+                (entity as ASTPluginDecl).pluginType,
+                fields,
+              )
+            }
+            buffered
+          />
+        )}
 
-      {/* Editable Route form */}
-      {selection.kind === 'route' && 'priority' in entity && (
-        <RouteEditorForm
-          route={entity as ASTRouteDecl}
-          onUpdate={(input) => onUpdateRoute((entity as ASTRouteDecl).name, input)}
-          availableSignals={availableSignals}
-          availablePlugins={availablePlugins}
-          availableModels={availableModels}
-        />
-      )}
+        {/* Editable Route form */}
+        {selection.kind === 'route' && 'priority' in entity && (
+          <RouteEditorForm
+            route={entity as ASTRouteDecl}
+            onUpdate={(input) => onUpdateRoute((entity as ASTRouteDecl).name, input)}
+            availableSignals={availableSignals}
+            availablePlugins={availablePlugins}
+            availableModels={availableModels}
+          />
+        )}
+      </fieldset>
     </div>
   )
 }

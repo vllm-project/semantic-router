@@ -236,7 +236,8 @@
 
 .closeFooterButton,
 .editFooterButton,
-.primaryFooterButton {
+.primaryFooterButton,
+.destructiveFooterButton {
   min-height: 40px;
   padding: 0.625rem 1rem;
   color: var(--text-secondary);
@@ -274,6 +275,19 @@
 .primaryFooterButton:hover {
   background: #ffffff;
   border-color: #ffffff;
+}
+
+.destructiveFooterButton {
+  margin-right: auto;
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(239, 68, 68, 0.055);
+}
+
+.destructiveFooterButton:hover {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(239, 68, 68, 0.11);
 }
 
 .primaryFooterButton:disabled,

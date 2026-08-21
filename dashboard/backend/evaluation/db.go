@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,7 +66,9 @@ func (d *DB) initSchema() error {
 		config_json TEXT NOT NULL,
 		error_message TEXT,
 		progress_percent INTEGER DEFAULT 0,
-		current_step TEXT
+		current_step TEXT,
+		owner_user_id TEXT NOT NULL DEFAULT '',
+		owner_team_id TEXT NOT NULL DEFAULT ''
 	);
 
 	-- Create index on status for filtering
@@ -99,7 +102,43 @@ func (d *DB) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_history_recorded_at ON evaluation_history(recorded_at DESC);
 	`
 
-	_, err := d.db.Exec(schema)
+	if _, err := d.db.Exec(schema); err != nil {
+		return err
+	}
+	return d.ensureTaskScopeColumns()
+}
+
+func (d *DB) ensureTaskScopeColumns() error {
+	rows, err := d.db.Query(`PRAGMA table_info(evaluation_tasks)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue interface{}
+		if err = rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return err
+		}
+		columns[name] = true
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, column := range []string{"owner_user_id", "owner_team_id"} {
+		if columns[column] {
+			continue
+		}
+		if _, err = d.db.Exec(fmt.Sprintf(`ALTER TABLE evaluation_tasks ADD COLUMN %s TEXT NOT NULL DEFAULT ''`, column)); err != nil {
+			return err
+		}
+	}
+	_, err = d.db.Exec(`
+CREATE INDEX IF NOT EXISTS idx_tasks_owner_user ON evaluation_tasks(owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_owner_team ON evaluation_tasks(owner_team_id, created_at DESC);
+`)
 	return err
 }
 
@@ -137,11 +176,11 @@ func (d *DB) CreateTask(task *models.EvaluationTask) error {
 	}
 
 	query := `
-		INSERT INTO evaluation_tasks (id, name, description, status, created_at, config_json, progress_percent, current_step)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO evaluation_tasks (id, name, description, status, created_at, config_json, progress_percent, current_step, owner_user_id, owner_team_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err = d.db.Exec(query, task.ID, task.Name, task.Description, task.Status, task.CreatedAt, string(configJSON), 0, "")
+	_, err = d.db.Exec(query, task.ID, task.Name, task.Description, task.Status, task.CreatedAt, string(configJSON), 0, "", task.OwnerUserID, task.OwnerTeamID)
 	if err != nil {
 		return fmt.Errorf("failed to insert task: %w", err)
 	}
@@ -155,7 +194,7 @@ func (d *DB) GetTask(id string) (*models.EvaluationTask, error) {
 	defer d.mu.RUnlock()
 
 	query := `
-		SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step
+		SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step, owner_user_id, owner_team_id
 		FROM evaluation_tasks
 		WHERE id = ?
 	`
@@ -167,7 +206,7 @@ func (d *DB) GetTask(id string) (*models.EvaluationTask, error) {
 
 	err := d.db.QueryRow(query, id).Scan(
 		&task.ID, &task.Name, &task.Description, &task.Status, &task.CreatedAt,
-		&startedAt, &completedAt, &configJSON, &errorMessage, &task.ProgressPercent, &currentStep,
+		&startedAt, &completedAt, &configJSON, &errorMessage, &task.ProgressPercent, &currentStep, &task.OwnerUserID, &task.OwnerTeamID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -206,7 +245,7 @@ func (d *DB) ListTasks(status string) ([]*models.EvaluationTask, error) {
 
 	if status != "" {
 		query = `
-			SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step
+			SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step, owner_user_id, owner_team_id
 			FROM evaluation_tasks
 			WHERE status = ?
 			ORDER BY created_at DESC
@@ -214,7 +253,7 @@ func (d *DB) ListTasks(status string) ([]*models.EvaluationTask, error) {
 		args = append(args, status)
 	} else {
 		query = `
-			SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step
+			SELECT id, name, description, status, created_at, started_at, completed_at, config_json, error_message, progress_percent, current_step, owner_user_id, owner_team_id
 			FROM evaluation_tasks
 			ORDER BY created_at DESC
 		`
@@ -235,7 +274,7 @@ func (d *DB) ListTasks(status string) ([]*models.EvaluationTask, error) {
 
 		err := rows.Scan(
 			&task.ID, &task.Name, &task.Description, &task.Status, &task.CreatedAt,
-			&startedAt, &completedAt, &configJSON, &errorMessage, &task.ProgressPercent, &currentStep,
+			&startedAt, &completedAt, &configJSON, &errorMessage, &task.ProgressPercent, &currentStep, &task.OwnerUserID, &task.OwnerTeamID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
@@ -484,6 +523,44 @@ func (d *DB) GetHistoryForMetric(metricName string, limit int) ([]*models.Evalua
 	}
 
 	return entries, nil
+}
+
+func (d *DB) GetHistoryForMetricTasks(metricName string, limit int, taskIDs []string) ([]*models.EvaluationHistoryEntry, error) {
+	if len(taskIDs) == 0 {
+		return []*models.EvaluationHistoryEntry{}, nil
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(taskIDs)), ",")
+	// #nosec G201 -- only the placeholder count is formatted; every task ID remains a bound argument.
+	query := fmt.Sprintf(`
+		SELECT h.id, h.result_id, h.metric_name, h.metric_value, h.recorded_at
+		FROM evaluation_history h
+		JOIN evaluation_results r ON r.id=h.result_id
+		WHERE h.metric_name = ? AND r.task_id IN (%s)
+		ORDER BY h.recorded_at DESC
+		LIMIT ?
+	`, placeholders)
+	args := make([]interface{}, 0, len(taskIDs)+2)
+	args = append(args, metricName)
+	for _, taskID := range taskIDs {
+		args = append(args, taskID)
+	}
+	args = append(args, limit)
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query scoped history: %w", err)
+	}
+	defer rows.Close()
+	entries := make([]*models.EvaluationHistoryEntry, 0)
+	for rows.Next() {
+		var entry models.EvaluationHistoryEntry
+		if err = rows.Scan(&entry.ID, &entry.ResultID, &entry.MetricName, &entry.MetricValue, &entry.RecordedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan history entry: %w", err)
+		}
+		entries = append(entries, &entry)
+	}
+	return entries, rows.Err()
 }
 
 // GetHistoryForResult retrieves all historical entries for a specific result.

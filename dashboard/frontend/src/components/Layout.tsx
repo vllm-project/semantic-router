@@ -22,7 +22,7 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessDashboardPath, canAccessMLSetup } from '../utils/accessControl'
+import { canAccessDashboardPath, canAccessMLSetup, isModelConsumer } from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
@@ -63,11 +63,19 @@ const Layout: React.FC<LayoutProps> = ({
   const location = useLocation()
   const navigate = useNavigate()
   const canUseMLSetup = canAccessMLSetup(user)
+  const modelConsumer = isModelConsumer(user)
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
-  const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
+  const buildMenuCategories = filterLayoutMenuCategories(
+    modelConsumer
+      ? BUILD_MENU_CATEGORIES.filter((category) => category.key === 'routing')
+      : BUILD_MENU_CATEGORIES,
+    canAccessMenuItem,
+  )
   const operateMenuCategories = filterLayoutMenuCategories(
-    [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
+    modelConsumer
+      ? OPERATE_MENU_CATEGORIES.filter((category) => category.key === 'platform')
+      : [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
     (item, category) =>
       canAccessMenuItem(item) &&
       (fleetSimEnabled || category.key !== 'fleet-simulation') &&

@@ -7,7 +7,6 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessReplayFlowDetails } from '../utils/accessControl'
 import { copyText } from '../utils/clipboard'
 
-import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import { fetchInsightsRecord } from './insightsPageApi'
@@ -103,16 +102,7 @@ export default function InsightsRecordPage() {
     <ConfigPageManagerLayout
       eyebrow="Insights"
       title="Insight Record"
-      description="Open, review, and share a single replay-backed request record."
-      configArea="Analysis"
-      scope="Shareable request detail"
-      panelTitle="Semantic Router Record"
-      panelDescription="A standalone deep-link view of one replay event, with the same detail body used in the in-page modal."
-      pills={[
-        { label: 'Record Detail', active: true },
-        { label: 'Shareable Link' },
-        { label: 'Replay Event' },
-      ]}
+      description="Everything behind one routed request."
     >
       {error ? (
         <div className={styles.error}>
@@ -120,48 +110,39 @@ export default function InsightsRecordPage() {
         </div>
       ) : null}
 
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Record Detail</h2>
-              <p className={styles.sectionSubtitle}>
-                Share this page directly when you need a stable URL for a single request replay.
-              </p>
-            </div>
-            <div className={styles.toolbarActions}>
-              <button
-                type="button"
-                onClick={() => void loadRecord()}
-                className={styles.refreshButton}
-              >
-                Refresh
-              </button>
-            </div>
+      <section className={styles.recordStage} aria-label="Insight record">
+        <div className={styles.recordStageHeader}>
+          <button type="button" className={styles.backButton} onClick={() => navigate('/insights')}>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="m12.5 4.5-5.5 5.5 5.5 5.5M7 10h8" />
+            </svg>
+            All requests
+          </button>
+          <button type="button" onClick={() => void loadRecord()} className={styles.refreshButton}>
+            Refresh
+          </button>
+        </div>
+        {loading ? (
+          <div className={styles.loading}>
+            <div className={styles.spinner} />
+            <p>Loading insight record...</p>
           </div>
+        ) : null}
 
-          {loading ? (
-            <div className={styles.loading}>
-              <div className={styles.spinner} />
-              <p>Loading insight record...</p>
-            </div>
-          ) : null}
-
-          {!loading && !error && record ? (
-            <ViewPanel
-              title={buildInsightsRecordTitle(record)}
-              sections={buildInsightsRecordSections(record, {
-                isReadonly,
-                canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
-              })}
-              onClose={() => navigate('/insights')}
-              closeLabel="Back to Insights"
-              actions={panelActions}
-              variant="page"
-            />
-          ) : null}
-        </section>
-      </div>
+        {!loading && !error && record ? (
+          <ViewPanel
+            title={buildInsightsRecordTitle(record)}
+            sections={buildInsightsRecordSections(record, {
+              isReadonly,
+              canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
+            })}
+            onClose={() => navigate('/insights')}
+            closeLabel="Back to Insights"
+            actions={panelActions}
+            variant="page"
+          />
+        ) : null}
+      </section>
     </ConfigPageManagerLayout>
   )
 }

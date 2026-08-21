@@ -141,6 +141,24 @@ WHERE mine.user_id=$1 ORDER BY t.created_at DESC`, userID)
 	return items, rows.Err()
 }
 
+func (s *Store) ListTeamIDsForUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT team_id FROM access_team_members WHERE user_id=$1 ORDER BY team_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	teamIDs := make([]string, 0)
+	for rows.Next() {
+		var teamID string
+		if err = rows.Scan(&teamID); err != nil {
+			return nil, err
+		}
+		teamIDs = append(teamIDs, teamID)
+	}
+	return teamIDs, rows.Err()
+}
+
 func (s *Store) IsTeamAdmin(ctx context.Context, userID, teamID string) (bool, error) {
 	var allowed bool
 	err := s.pool.QueryRow(ctx, `

@@ -54,14 +54,23 @@ func Setup(cfg *config.Config) *Server {
 		recipeStore:              recipeStore,
 		modelVerificationAuditor: authSvc,
 	})
-	registerEvaluationRoutes(mux, cfg)
+	if accessControlSvc != nil {
+		registerEvaluationRoutes(mux, cfg, accessControlSvc)
+	} else {
+		registerEvaluationRoutes(mux, cfg)
+	}
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg, runtimeManagementCredential{
+	managementCredential := runtimeManagementCredential{
 		configPath: cfg.AbsConfigPath,
 		provider:   recipeStore,
-	})
+	}
+	if accessControlSvc != nil {
+		registerProxyRoutes(mux, cfg, managementCredential, accessControlSvc)
+	} else {
+		registerProxyRoutes(mux, cfg, managementCredential)
+	}
 
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))

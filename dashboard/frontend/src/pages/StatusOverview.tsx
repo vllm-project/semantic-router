@@ -125,6 +125,7 @@ const StatusOverview: React.FC<StatusOverviewProps> = ({
   const overallLabel = hasServices ? getOverallLabel(status.overall) : 'Not reported'
   const overallTone = hasServices ? getOverallTone(status.overall) : 'warn'
   const allServicesHealthy = hasServices && healthyServices === status.services.length
+  const serviceStateLabel = allServicesHealthy ? 'Operational' : overallLabel
   const runtimeModelCount =
     typeof runtime?.total_models === 'number' && runtime.total_models > 0
       ? `${runtime.ready_models ?? 0}/${runtime.total_models}`
@@ -146,15 +147,15 @@ const StatusOverview: React.FC<StatusOverviewProps> = ({
           aria-atomic="true"
         >
           <span className={styles.stateDot} aria-hidden="true" />
-          {overallLabel}
+          {serviceStateLabel}
         </span>
       </div>
 
       <div className={styles.overviewBody}>
         <div className={styles.healthSummary}>
-          <span className={styles.healthLabel}>Current health</span>
+          <span className={styles.healthLabel}>Core services</span>
           <strong className={`${styles.healthValue} ${getToneClass(overallTone)}`}>
-            {overallLabel}
+            {serviceStateLabel}
           </strong>
           <p className={styles.healthNarrative}>
             {!hasServices

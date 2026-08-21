@@ -312,12 +312,6 @@ export function buildInsightsRecordSections(
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
-        label: 'Category',
-        value: record.signals?.domain?.length
-          ? record.signals.domain.join(', ')
-          : record.category || '-',
-      },
-      {
         label: 'Confidence score',
         value:
           record.confidence_score !== undefined
@@ -648,7 +642,10 @@ function renderBodyField(id: string, title: string, body: string, truncated: boo
 function renderReadonlyLock() {
   return (
     <div className={styles.readonlyLock}>
-      <span>🔒</span>
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" />
+        <path d="M7 8.5V6.7a3 3 0 0 1 6 0v1.8" />
+      </svg>
       <span>Not available in read-only mode</span>
     </div>
   )

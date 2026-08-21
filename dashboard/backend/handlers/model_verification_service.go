@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	modelVerificationTimeout          = 10 * time.Second
+	modelVerificationTimeout          = 30 * time.Second
 	modelVerificationMaxResponseBytes = 64 << 10
 	modelVerificationMaxSummaryRunes  = 240
 	modelVerificationMaxTokens        = 32

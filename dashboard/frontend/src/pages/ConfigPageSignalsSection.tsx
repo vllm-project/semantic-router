@@ -769,7 +769,20 @@ export default function ConfigPageSignalsSection({
       })
     }
 
-    openViewModal(`Signal: ${signal.name}`, sections, () => handleEditSignal(signal))
+    openViewModal(
+      `Signal: ${signal.name}`,
+      sections,
+      () => handleEditSignal(signal),
+      isReadonly || !isPythonCLI
+        ? []
+        : [
+            {
+              label: 'Delete signal',
+              tone: 'destructive',
+              onClick: () => handleDeleteSignal(signal),
+            },
+          ],
+    )
   }
 
   const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
@@ -1330,9 +1343,9 @@ export default function ConfigPageSignalsSection({
   }
 
   return (
-    <ConfigPageManagerLayout
-      title="Signals"
-      description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
+      <ConfigPageManagerLayout
+        title="Signals"
+        description="Define what the router understands about every request."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
@@ -1392,8 +1405,7 @@ export default function ConfigPageSignalsSection({
             data={filteredSignals}
             keyExtractor={signalKey}
             onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
+            openOnRowClick
             emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
             className={styles.managerTable}
             readonly={isReadonly || !isPythonCLI}

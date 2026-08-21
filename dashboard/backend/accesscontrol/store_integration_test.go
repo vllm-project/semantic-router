@@ -160,6 +160,37 @@ func TestTeamAdminSelfServiceScopeIntegration(t *testing.T) {
 	}
 }
 
+func TestDeleteAPIKeyPreservesUsageAndUnblocksIdentityDeletion(t *testing.T) {
+	ctx, store := openIntegrationStore(t)
+	fixture := seedTeamPolicyFixture(t, ctx, store)
+	requestID := "request-" + uuid.NewString()
+	t.Cleanup(func() {
+		_, _ = store.pool.Exec(ctx, `DELETE FROM access_usage_events WHERE request_id=$1`, requestID)
+	})
+	if err := store.InsertUsage(ctx, UsageEvent{
+		ID: uuid.NewString(), RequestID: requestID, KeyID: fixture.keyID,
+		UserID: fixture.userID, TeamID: fixture.teamID, Model: "team/model",
+		StatusCode: 200, TotalTokens: 42,
+	}); err != nil {
+		t.Fatalf("InsertUsage() error = %v", err)
+	}
+	if err := store.DeleteAPIKey(ctx, fixture.keyID); err != nil {
+		t.Fatalf("DeleteAPIKey() error = %v", err)
+	}
+	if _, err := store.GetAPIKey(ctx, fixture.keyID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("GetAPIKey(deleted) error = %v, want pgx.ErrNoRows", err)
+	}
+	if total, err := store.CountUsage(ctx, ListFilter{KeyID: fixture.keyID}); err != nil || total != 1 {
+		t.Fatalf("CountUsage(deleted key) = %d, %v; want preserved ledger", total, err)
+	}
+	if err := store.DeleteTeam(ctx, fixture.teamID); err != nil {
+		t.Fatalf("DeleteTeam() after key deletion error = %v", err)
+	}
+	if err := store.DeleteUser(ctx, fixture.userID); err != nil {
+		t.Fatalf("DeleteUser() after key deletion error = %v", err)
+	}
+}
+
 func TestDeletingIdentityRemovesItsPolicyAssignments(t *testing.T) {
 	ctx, store := openIntegrationStore(t)
 	suffix := uuid.NewString()

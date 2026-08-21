@@ -170,8 +170,14 @@ const OnboardingGuide: React.FC = () => {
     }
 
     return (
-      <button type="button" className={styles.replayButton} onClick={handleOpenGuide}>
-        {status === 'dismissed' ? 'Resume guide' : 'Guide'}
+      <button
+        type="button"
+        className={styles.replayButton}
+        onClick={handleOpenGuide}
+        aria-label={status === 'dismissed' ? 'Resume product guide' : 'Open product guide'}
+        title={status === 'dismissed' ? 'Resume guide' : 'Product guide'}
+      >
+        <span aria-hidden="true">?</span>
       </button>
     )
   }

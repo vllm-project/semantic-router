@@ -1553,3 +1553,14 @@
 
   /* coreSettingsInline is already hidden on mobile, no need for additional styles */
 }
+.productHint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.productHint a {
+  color: var(--color-text);
+  font-weight: 650;
+}

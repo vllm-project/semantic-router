@@ -53,7 +53,24 @@ export interface AccessAPIKey {
   modelPolicySource?: 'key' | 'user' | 'team'
   effectiveBudgetId?: string
   budgetPolicySource?: 'key' | 'user' | 'team'
+  quota?: APIKeyQuotaSnapshot
   createdAt?: string
+}
+
+export interface QuotaMeter {
+  limit: number
+  used: number
+  remaining: number
+  resetsAt: string
+}
+
+export interface APIKeyQuotaSnapshot {
+  budgetId: string
+  budgetName: string
+  source: 'key' | 'user' | 'team'
+  rpm: QuotaMeter
+  tpm: QuotaMeter
+  dailyTokens: QuotaMeter
 }
 
 export interface CreatedAccessAPIKey extends AccessAPIKey {
@@ -259,6 +276,8 @@ export const inferenceAccessApi = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  deleteKey: (id: string) =>
+    request<{ deleted: boolean }>(`/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   groups: (params: AccessListParams = {}) =>
     request<AccessPage<AccessGroup>>(`/access-groups${query(params)}`),
   group: (id: string) => request<AccessGroup>(`/access-groups/${encodeURIComponent(id)}`),
@@ -313,6 +332,10 @@ export const inferenceAccessApi = {
     selfRequest<AccessAPIKey>(`/api-keys/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    }),
+  deleteSelfKey: (id: string) =>
+    selfRequest<{ deleted: boolean }>(`/api-keys/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
   selfUsage: (filter: UsageFilter = {}) => selfRequest<UsageSummary>(`/usage${query(filter)}`),
   selfRequestLogs: (filter: UsageFilter = {}) =>

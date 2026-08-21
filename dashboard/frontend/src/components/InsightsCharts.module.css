@@ -124,9 +124,13 @@
 
 .chartsRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
   min-width: 0;
+}
+
+.chartFeatured {
+  grid-column: 1 / -1;
 }
 
 .tokenBreakdownRow {
@@ -142,17 +146,29 @@
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .chartTitle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
-  font-weight: 600;
+  margin: 0 0 0.65rem;
+  font-size: 0.86rem;
+  font-weight: 650;
   color: var(--color-text);
   white-space: nowrap;
+}
+
+.chartEmpty {
+  display: grid;
+  min-height: 190px;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
 }
 
 .chartIcon {

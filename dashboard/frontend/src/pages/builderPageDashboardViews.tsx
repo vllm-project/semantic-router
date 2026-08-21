@@ -61,6 +61,7 @@ const SidebarSection: React.FC<SidebarSectionProps> = ({
 )
 
 interface EntityListViewProps {
+  readOnly: boolean
   kind: EntityKind
   ast: ReturnType<typeof useDSLStore.getState>['ast']
   onSelect: (selection: Selection) => void
@@ -78,6 +79,7 @@ const ENTITY_METADATA: Partial<
 }
 
 const EntityListView: React.FC<EntityListViewProps> = ({
+  readOnly,
   kind,
   ast,
   onSelect,
@@ -151,22 +153,24 @@ const EntityListView: React.FC<EntityListViewProps> = ({
         <Icon className={styles.statIcon} />
         <span className={styles.entityListTitle}>{meta.title}</span>
         <span className={styles.entityListCount}>{items.length}</span>
-        <div style={{ marginLeft: 'auto' }}>
-          <button
-            className={styles.quickActionBtn}
-            onClick={() => onAddEntity(kind)}
-            style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}
-          >
-            <span
-              className={styles.quickActionIcon}
-              style={{ width: 24, height: 24, fontSize: '0.875rem' }}
-              aria-hidden="true"
+        {!readOnly ? (
+          <div style={{ marginLeft: 'auto' }}>
+            <button
+              className={styles.quickActionBtn}
+              onClick={() => onAddEntity(kind)}
+              style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}
             >
-              +
-            </span>
-            New {meta.title.replace(/s$/, '')}
-          </button>
-        </div>
+              <span
+                className={styles.quickActionIcon}
+                style={{ width: 24, height: 24, fontSize: '0.875rem' }}
+                aria-hidden="true"
+              >
+                +
+              </span>
+              New {meta.title.replace(/s$/, '')}
+            </button>
+          </div>
+        ) : null}
       </div>
       <div className={styles.entityListGrid}>
         {items.map((item) => (
@@ -221,7 +225,9 @@ const EntityListView: React.FC<EntityListViewProps> = ({
               color: 'var(--color-text-muted)',
             }}
           >
-            Click the button above to create one
+            {readOnly
+              ? 'Nothing is configured in this section'
+              : 'Click the button above to create one'}
           </div>
         </div>
       ) : null}

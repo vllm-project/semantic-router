@@ -74,6 +74,19 @@ func (e *QuotaError) Error() string {
 	return fmt.Sprintf("%s quota exceeded for budget %s", e.Dimension, e.BudgetID)
 }
 
+func (e *QuotaError) UserMessage() string {
+	switch e.Dimension {
+	case "rpm":
+		return "Request limit reached for this minute. Try again shortly."
+	case "tpm":
+		return "Token limit reached for this minute. Try again shortly."
+	case "daily_tokens":
+		return "Daily token limit reached."
+	default:
+		return "Usage limit reached. Try again shortly."
+	}
+}
+
 func OpenQuotaManager(ctx context.Context, redisURL string) (*QuotaManager, error) {
 	if redisURL == "" {
 		return nil, errors.New("ACCESS_CONTROL_REDIS_URL is required")
@@ -152,6 +165,50 @@ func (q *QuotaManager) Reconcile(ctx context.Context, reservation *Reservation, 
 		return nil
 	}
 	return reconcileScript.Run(ctx, q.client, keys, delta).Err()
+}
+
+// Snapshots reads the shared counters used by every replica. The values shown
+// in the Dashboard therefore match the counters that make admission decisions.
+func (q *QuotaManager) Snapshots(ctx context.Context, budgets []Budget) (map[string]APIKeyQuotaSnapshot, error) {
+	result := make(map[string]APIKeyQuotaSnapshot, len(budgets))
+	if len(budgets) == 0 {
+		return result, nil
+	}
+	now := time.Now().UTC()
+	minute := now.Format("200601021504")
+	day := now.Format("20060102")
+	minuteReset := now.Truncate(time.Minute).Add(time.Minute)
+	dayReset := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
+	keys := make([]string, 0, len(budgets)*3)
+	for _, budget := range budgets {
+		base := quotaHashTag + ":" + budget.ID
+		keys = append(keys, base+":rpm:"+minute, base+":tpm:"+minute, base+":daily:"+day)
+	}
+	values, err := q.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("read global quota usage: %w", err)
+	}
+	for index, budget := range budgets {
+		rpmUsed := toInt64(values[index*3])
+		tpmUsed := toInt64(values[index*3+1])
+		dailyUsed := toInt64(values[index*3+2])
+		result[budget.ID] = APIKeyQuotaSnapshot{
+			BudgetID:    budget.ID,
+			BudgetName:  budget.Name,
+			RPM:         quotaMeter(budget.RPM, rpmUsed, minuteReset),
+			TPM:         quotaMeter(budget.TPM, tpmUsed, minuteReset),
+			DailyTokens: quotaMeter(budget.DailyTokens, dailyUsed, dayReset),
+		}
+	}
+	return result, nil
+}
+
+func quotaMeter(limit, used int64, resetsAt time.Time) QuotaMeter {
+	remaining := int64(0)
+	if limit > used {
+		remaining = limit - used
+	}
+	return QuotaMeter{Limit: limit, Used: used, Remaining: remaining, ResetsAt: resetsAt}
 }
 
 func toInt64(value any) int64 {
