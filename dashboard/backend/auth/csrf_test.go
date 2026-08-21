@@ -112,16 +112,43 @@ func TestOriginAllowed_NoHeadersIsDenied(t *testing.T) {
 	}
 }
 
+type originCase struct {
+	name    string
+	origin  string
+	referer string
+	headers map[string]string
+	host    string
+	allowed []string
+	want    bool
+}
+
+func runOriginCases(t *testing.T, cases []originCase) {
+	t.Helper()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "http://dash.example/api/x", nil)
+			if tc.host != "" {
+				r.Host = strings.TrimSpace(tc.host)
+			}
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			for name, value := range tc.headers {
+				r.Header.Set(name, value)
+			}
+			if got := originAllowed(r, tc.allowed); got != tc.want {
+				t.Fatalf("originAllowed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOriginAllowed(t *testing.T) {
-	cases := []struct {
-		name    string
-		origin  string
-		referer string
-		headers map[string]string
-		host    string
-		allowed []string
-		want    bool
-	}{
+	runOriginCases(t, []originCase{
 		{name: "same origin", origin: "http://dash.example", want: true},
 		{name: "cross origin", origin: "https://evil.example"},
 		{name: "same host wrong scheme", origin: "https://dash.example"},
@@ -165,8 +192,12 @@ func TestOriginAllowed(t *testing.T) {
 		{name: "empty host", origin: "http://dash.example", host: " "},
 		{name: "case insensitive", origin: "HTTP://DASH.EXAMPLE", want: true},
 		{name: "whitespace padded origin", origin: "  http://dash.example  ", want: true},
+	})
+}
 
-		// Allowlist mode (DASHBOARD_ALLOWED_ORIGINS set).
+// DASHBOARD_ALLOWED_ORIGINS set.
+func TestOriginAllowedWithAllowlist(t *testing.T) {
+	runOriginCases(t, []originCase{
 		{
 			name:    "allowlisted vite dev origin",
 			origin:  "http://localhost:3001",
@@ -205,28 +236,7 @@ func TestOriginAllowed(t *testing.T) {
 			origin:  "https://evil.example",
 			allowed: []string{"", "   "},
 		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "http://dash.example/api/x", nil)
-			if tc.host != "" {
-				r.Host = strings.TrimSpace(tc.host)
-			}
-			if tc.origin != "" {
-				r.Header.Set("Origin", tc.origin)
-			}
-			if tc.referer != "" {
-				r.Header.Set("Referer", tc.referer)
-			}
-			for name, value := range tc.headers {
-				r.Header.Set(name, value)
-			}
-			if got := originAllowed(r, tc.allowed); got != tc.want {
-				t.Fatalf("originAllowed = %v, want %v", got, tc.want)
-			}
-		})
-	}
+	})
 }
 
 func TestRequiresCSRFCheck(t *testing.T) {
@@ -516,7 +526,9 @@ func TestCSRFCookieIssuance(t *testing.T) {
 			t.Fatalf("failed login issued a CSRF cookie: %q", cookie.Value)
 		}
 	})
+}
 
+func TestCSRFCookieIssuanceOnBootstrapAndLogout(t *testing.T) {
 	t.Run("bootstrap register sets both cookies", func(t *testing.T) {
 		svc := newBootstrapService(t, true)
 		recorder := postRegister(svc, "csrf-bootstrap@example.com")
