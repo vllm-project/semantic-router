@@ -112,16 +112,43 @@ func TestOriginAllowed_NoHeadersIsDenied(t *testing.T) {
 	}
 }
 
+type originCase struct {
+	name    string
+	origin  string
+	referer string
+	headers map[string]string
+	host    string
+	allowed []string
+	want    bool
+}
+
+func runOriginCases(t *testing.T, cases []originCase) {
+	t.Helper()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "http://dash.example/api/x", nil)
+			if tc.host != "" {
+				r.Host = strings.TrimSpace(tc.host)
+			}
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			for name, value := range tc.headers {
+				r.Header.Set(name, value)
+			}
+			if got := originAllowed(r, tc.allowed); got != tc.want {
+				t.Fatalf("originAllowed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOriginAllowed(t *testing.T) {
-	cases := []struct {
-		name    string
-		origin  string
-		referer string
-		headers map[string]string
-		host    string
-		allowed []string
-		want    bool
-	}{
+	runOriginCases(t, []originCase{
 		{name: "same origin", origin: "http://dash.example", want: true},
 		{name: "cross origin", origin: "https://evil.example"},
 		{name: "same host wrong scheme", origin: "https://dash.example"},
@@ -165,8 +192,12 @@ func TestOriginAllowed(t *testing.T) {
 		{name: "empty host", origin: "http://dash.example", host: " "},
 		{name: "case insensitive", origin: "HTTP://DASH.EXAMPLE", want: true},
 		{name: "whitespace padded origin", origin: "  http://dash.example  ", want: true},
+	})
+}
 
-		// Allowlist mode (DASHBOARD_ALLOWED_ORIGINS set).
+// DASHBOARD_ALLOWED_ORIGINS set.
+func TestOriginAllowedWithAllowlist(t *testing.T) {
+	runOriginCases(t, []originCase{
 		{
 			name:    "allowlisted vite dev origin",
 			origin:  "http://localhost:3001",
@@ -205,28 +236,7 @@ func TestOriginAllowed(t *testing.T) {
 			origin:  "https://evil.example",
 			allowed: []string{"", "   "},
 		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "http://dash.example/api/x", nil)
-			if tc.host != "" {
-				r.Host = strings.TrimSpace(tc.host)
-			}
-			if tc.origin != "" {
-				r.Header.Set("Origin", tc.origin)
-			}
-			if tc.referer != "" {
-				r.Header.Set("Referer", tc.referer)
-			}
-			for name, value := range tc.headers {
-				r.Header.Set(name, value)
-			}
-			if got := originAllowed(r, tc.allowed); got != tc.want {
-				t.Fatalf("originAllowed = %v, want %v", got, tc.want)
-			}
-		})
-	}
+	})
 }
 
 func TestRequiresCSRFCheck(t *testing.T) {
@@ -305,10 +315,13 @@ func TestCSRFEnforcement(t *testing.T) {
 	const sameOrigin = "http://example.com"
 
 	cases := []struct {
-		name        string
-		method      string
-		path        string
-		authVia     string
+		name    string
+		method  string
+		path    string
+		authVia string
+		// A valid token in ?authToken=. Orthogonal to authVia because since #2465 it is
+		// not a way to authenticate — only something that may be present on the URL.
+		queryToken  bool
 		origin      string
 		referer     string
 		csrfHeader  string
@@ -331,8 +344,20 @@ func TestCSRFEnforcement(t *testing.T) {
 		{name: "DELETE happy path", method: http.MethodDelete, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 		{name: "referer fallback", method: http.MethodPost, authVia: "cookie", referer: sameOrigin + "/dashboard", csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 
-		{name: "query transport is not exempt", method: http.MethodPost, authVia: "query", origin: "https://evil.example", wantStatus: http.StatusForbidden},
-		{name: "query transport needs the token too", method: http.MethodPost, authVia: "query", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		// Inverted for #2465: these two used to authenticate through ?authToken= and be
+		// subject to the CSRF check. They now fail earlier, at authentication.
+		{name: "query token no longer authenticates", method: http.MethodPost, authVia: "none", queryToken: true, origin: "https://evil.example", wantStatus: http.StatusUnauthorized},
+		{name: "query token fails even with a valid CSRF token", method: http.MethodPost, authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
+
+		{name: "query token does not authenticate a safe read", method: http.MethodGet, authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
+		{name: "query token does not authenticate an embedded route", method: http.MethodGet, path: "/embedded/wizmap/", authVia: "none", queryToken: true, wantStatus: http.StatusUnauthorized},
+		{name: "query token does not authenticate an admin write", method: http.MethodPost, path: "/api/admin/users", authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
+
+		// A stale bookmark still carries the parameter; the cookie is what authenticates.
+		{name: "cookie wins while a query token rides along", method: http.MethodGet, authVia: "cookie", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "cookie write with a query token still needs CSRF", method: http.MethodPost, authVia: "cookie", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "bearer wins while a query token rides along", method: http.MethodGet, authVia: "header", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
+		{name: "public route with a query token is still reachable", method: http.MethodPost, path: "/api/auth/login", authVia: "none", queryToken: true, wantStatus: http.StatusNoContent, wantHandler: true},
 
 		{name: "unauthenticated fails before CSRF", method: http.MethodPost, authVia: "none", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
 		{name: "public route is untouched", method: http.MethodPost, path: "/api/auth/login", authVia: "none", origin: "https://evil.example", wantStatus: http.StatusNoContent, wantHandler: true},
@@ -344,7 +369,7 @@ func TestCSRFEnforcement(t *testing.T) {
 			if path == "" {
 				path = "/api/status"
 			}
-			if tc.authVia == "query" {
+			if tc.queryToken {
 				path += "?authToken=" + f.token
 			}
 
@@ -549,9 +574,11 @@ func TestCSRFCookieIssuance(t *testing.T) {
 	})
 }
 
-// The warning fires before the token is verified, so an unauthenticated caller controls
-// the path it prints, and it arrives percent-decoded.
-func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
+// Inverted for #2465. This covered the deprecation warning that the query transport used
+// to emit, and the log injection an attacker-controlled path made possible. The transport
+// is gone, so the strongest assertion is that the request reaches no token and writes no
+// log line at all — the injection surface no longer exists.
+func TestQueryTokenIsNeitherAcceptedNorLogged(t *testing.T) {
 	var logged bytes.Buffer
 	log.SetOutput(&logged)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
@@ -562,14 +589,12 @@ func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
 	q.Set("authToken", "not-a-real-token")
 	r.URL.RawQuery = q.Encode()
 
-	if _, source := extractAccessTokenWithSource(r); source != tokenSourceQuery {
-		t.Fatalf("source = %v, want tokenSourceQuery", source)
+	token, source := extractAccessTokenWithSource(r)
+	if token != "" || source != tokenSourceNone {
+		t.Fatalf("got (%q, %v), want (\"\", tokenSourceNone)", token, source)
 	}
-	if strings.Contains(logged.String(), "\nWARNING: forged line") {
-		t.Fatalf("the path forged a log line: %q", logged.String())
-	}
-	if !strings.Contains(logged.String(), `\nWARNING: forged line`) {
-		t.Fatalf("the path was not logged in escaped form: %q", logged.String())
+	if logged.Len() != 0 {
+		t.Fatalf("the query transport wrote a log line: %q", logged.String())
 	}
 }
 
