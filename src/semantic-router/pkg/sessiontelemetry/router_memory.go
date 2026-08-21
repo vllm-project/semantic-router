@@ -25,6 +25,7 @@ type RouterSessionSnapshot struct {
 	SessionID string
 	UserID    string
 
+	Version      uint64
 	CurrentModel string
 	LastSeen     time.Time
 	IdleFor      time.Duration
@@ -82,6 +83,7 @@ type routerSessionState struct {
 	sessionID string
 	userID    string
 
+	version      uint64
 	currentModel string
 	lastSeen     time.Time
 
@@ -115,28 +117,15 @@ var globalRouterSessionMemory = &routerSessionMemoryStore{
 	nowFn:    time.Now,
 }
 
-// RecordSessionDecision updates router-owned session memory from the policy
-// decision made before dispatching the request upstream.
-func RecordSessionDecision(p SessionDecisionParams) {
-	if p.SessionID == "" || p.SelectedModel == "" {
-		return
-	}
-	RecordLastModel(p.SessionID, p.SelectedModel)
-
-	s := globalRouterSessionMemory
-	defer persistRouterSessionState(p.SessionID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := p.Timestamp
-	if now.IsZero() {
-		now = s.nowFn()
-	}
-	s.evictExpiredLocked(now)
-	st := s.sessionLocked(p.SessionID)
+func applySessionDecision(
+	st *routerSessionState,
+	p SessionDecisionParams,
+	now time.Time,
+) {
 	if p.UserID != "" {
 		st.userID = p.UserID
 	}
+
 	previous := st.currentModel
 	if previous == "" {
 		previous = p.PreviousModel
@@ -144,20 +133,51 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	if previous != "" && previous != p.SelectedModel {
 		st.switchCount++
 	}
+
 	st.currentModel = p.SelectedModel
 	st.lastSeen = now
+
 	if p.TurnIndex+1 > st.turnCount {
 		st.turnCount = p.TurnIndex + 1
 	} else {
 		st.turnCount++
 	}
+
 	st.modelTurns[p.SelectedModel]++
 	st.activeToolLoop = p.ActiveToolLoop
 	st.lastDecisionName = p.DecisionName
+
 	if p.Policy != nil {
 		st.lastPolicy = clonePolicyMap(p.Policy)
 		st.lastDecisionReason = policyDecisionReason(p.Policy)
 	}
+}
+
+// RecordSessionDecision updates router-owned session memory from the policy
+// decision made before dispatching the request upstream.
+
+func RecordSessionDecision(p SessionDecisionParams) {
+	if p.SessionID == "" || p.SelectedModel == "" {
+		return
+	}
+
+	RecordLastModel(p.SessionID, p.SelectedModel)
+
+	s := globalRouterSessionMemory
+	defer persistRouterSessionDecision(p)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := p.Timestamp
+	if now.IsZero() {
+		now = s.nowFn()
+	}
+
+	s.evictExpiredLocked(now)
+
+	st := s.sessionLocked(p.SessionID)
+	applySessionDecision(st, p, now)
 }
 
 // RecordSessionUsage attaches response usage and cost to router-owned session
@@ -166,8 +186,10 @@ func RecordSessionUsage(p SessionUsageParams) {
 	if p.SessionID == "" || p.Model == "" {
 		return
 	}
+
 	s := globalRouterSessionMemory
-	defer persistRouterSessionState(p.SessionID)
+	defer persistRouterSessionUsage(p)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -175,28 +197,11 @@ func RecordSessionUsage(p SessionUsageParams) {
 	if now.IsZero() {
 		now = s.nowFn()
 	}
+
 	s.evictExpiredLocked(now)
+
 	st := s.sessionLocked(p.SessionID)
-	st.currentModel = p.Model
-	st.lastSeen = now
-	usage := modelpricing.Normalize(modelpricing.Usage{
-		PromptTokens:      p.PromptTokens,
-		CachedInputTokens: p.CachedPromptTokens,
-		CacheWriteTokens:  p.CacheWriteTokens,
-		CompletionTokens:  p.CompletionTokens,
-	})
-	st.cumulativePrompt += int64(usage.PromptTokens)
-	st.cumulativeCached += int64(usage.CachedInputTokens)
-	st.cumulativeCacheWrite += int64(usage.CacheWriteTokens)
-	st.cumulativeEstimatedCached += int64(clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens))
-	st.cumulativeCompletion += int64(usage.CompletionTokens)
-	st.cumulativeCost += p.Cost
-	if p.EstimatedCacheSavings > 0 {
-		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
-	}
-	if p.CacheAccountingSource != "" {
-		st.lastCacheAccountingSource = p.CacheAccountingSource
-	}
+	applySessionUsage(st, p, now)
 }
 
 // GetRouterSessionSnapshot returns a clone of the router-owned session memory.
@@ -226,6 +231,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	snapshot := RouterSessionSnapshot{
 		SessionID:                       st.sessionID,
 		UserID:                          st.userID,
+		Version:                         st.version,
 		CurrentModel:                    st.currentModel,
 		LastSeen:                        st.lastSeen,
 		IdleFor:                         idleFor,
@@ -355,4 +361,150 @@ func setRouterSessionMemoryNowForTesting(fn func() time.Time) {
 		fn = time.Now
 	}
 	s.nowFn = fn
+}
+
+func applySessionDecisionSnapshot(
+	snapshot *RouterSessionSnapshot,
+	p SessionDecisionParams,
+) {
+	st := &routerSessionState{
+		sessionID:                       snapshot.SessionID,
+		userID:                          snapshot.UserID,
+		version:                         snapshot.Version,
+		currentModel:                    snapshot.CurrentModel,
+		lastSeen:                        snapshot.LastSeen,
+		turnCount:                       snapshot.TurnCount,
+		switchCount:                     snapshot.SwitchCount,
+		modelTurns:                      cloneIntMap(snapshot.ModelTurns),
+		cumulativePrompt:                snapshot.CumulativePromptTokens,
+		cumulativeCached:                snapshot.CumulativeCachedTokens,
+		cumulativeCacheWrite:            snapshot.CumulativeCacheWriteTokens,
+		cumulativeEstimatedCached:       snapshot.CumulativeEstimatedCachedTokens,
+		cumulativeCompletion:            snapshot.CumulativeCompletionTokens,
+		cumulativeCost:                  snapshot.CumulativeCost,
+		cumulativeEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
+		activeToolLoop:                  snapshot.ActiveToolLoop,
+		lastDecisionName:                snapshot.LastDecisionName,
+		lastDecisionReason:              snapshot.LastDecisionReason,
+		lastCacheAccountingSource:       snapshot.LastCacheAccountingSource,
+		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
+	}
+
+	if st.modelTurns == nil {
+		st.modelTurns = make(map[string]int)
+	}
+
+	now := p.Timestamp
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	applySessionDecision(st, p, now)
+
+	snapshot.UserID = st.userID
+	snapshot.CurrentModel = st.currentModel
+	snapshot.LastSeen = st.lastSeen
+	snapshot.TurnCount = st.turnCount
+	snapshot.SwitchCount = st.switchCount
+	snapshot.ModelTurns = cloneIntMap(st.modelTurns)
+	snapshot.ActiveToolLoop = st.activeToolLoop
+	snapshot.LastDecisionName = st.lastDecisionName
+	snapshot.LastDecisionReason = st.lastDecisionReason
+	snapshot.LastPolicy = clonePolicyMap(st.lastPolicy)
+}
+func updateRouterSessionVersion(sessionID string, version uint64) {
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if st := s.sessions[sessionID]; st != nil {
+		if version > st.version {
+			st.version = version
+		}
+	}
+}
+func applySessionUsage(
+	st *routerSessionState,
+	p SessionUsageParams,
+	now time.Time,
+) {
+	st.currentModel = p.Model
+	st.lastSeen = now
+
+	usage := modelpricing.Normalize(modelpricing.Usage{
+		PromptTokens:      p.PromptTokens,
+		CachedInputTokens: p.CachedPromptTokens,
+		CacheWriteTokens:  p.CacheWriteTokens,
+		CompletionTokens:  p.CompletionTokens,
+	})
+
+	st.cumulativePrompt += int64(usage.PromptTokens)
+	st.cumulativeCached += int64(usage.CachedInputTokens)
+	st.cumulativeCacheWrite += int64(usage.CacheWriteTokens)
+	st.cumulativeEstimatedCached += int64(
+		clampCachedPromptTokens(
+			p.PromptTokens,
+			p.EstimatedCachedPromptTokens,
+		),
+	)
+	st.cumulativeCompletion += int64(usage.CompletionTokens)
+	st.cumulativeCost += p.Cost
+
+	if p.EstimatedCacheSavings > 0 {
+		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
+	}
+
+	if p.CacheAccountingSource != "" {
+		st.lastCacheAccountingSource = p.CacheAccountingSource
+	}
+}
+
+func applySessionUsageSnapshot(
+	snapshot *RouterSessionSnapshot,
+	p SessionUsageParams,
+) {
+	st := &routerSessionState{
+		sessionID:                       snapshot.SessionID,
+		userID:                          snapshot.UserID,
+		version:                         snapshot.Version,
+		currentModel:                    snapshot.CurrentModel,
+		lastSeen:                        snapshot.LastSeen,
+		turnCount:                       snapshot.TurnCount,
+		switchCount:                     snapshot.SwitchCount,
+		modelTurns:                      cloneIntMap(snapshot.ModelTurns),
+		cumulativePrompt:                snapshot.CumulativePromptTokens,
+		cumulativeCached:                snapshot.CumulativeCachedTokens,
+		cumulativeCacheWrite:            snapshot.CumulativeCacheWriteTokens,
+		cumulativeEstimatedCached:       snapshot.CumulativeEstimatedCachedTokens,
+		cumulativeCompletion:            snapshot.CumulativeCompletionTokens,
+		cumulativeCost:                  snapshot.CumulativeCost,
+		cumulativeEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
+		activeToolLoop:                  snapshot.ActiveToolLoop,
+		lastDecisionName:                snapshot.LastDecisionName,
+		lastDecisionReason:              snapshot.LastDecisionReason,
+		lastCacheAccountingSource:       snapshot.LastCacheAccountingSource,
+		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
+	}
+
+	if st.modelTurns == nil {
+		st.modelTurns = make(map[string]int)
+	}
+
+	now := p.Timestamp
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	applySessionUsage(st, p, now)
+
+	snapshot.CurrentModel = st.currentModel
+	snapshot.LastSeen = st.lastSeen
+	snapshot.CumulativePromptTokens = st.cumulativePrompt
+	snapshot.CumulativeCachedTokens = st.cumulativeCached
+	snapshot.CumulativeCacheWriteTokens = st.cumulativeCacheWrite
+	snapshot.CumulativeEstimatedCachedTokens = st.cumulativeEstimatedCached
+	snapshot.CumulativeCompletionTokens = st.cumulativeCompletion
+	snapshot.CumulativeCost = st.cumulativeCost
+	snapshot.CumulativeEstimatedCacheSavings = st.cumulativeEstimatedCacheSavings
+	snapshot.LastCacheAccountingSource = st.lastCacheAccountingSource
 }
