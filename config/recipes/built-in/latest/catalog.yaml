@@ -21,7 +21,7 @@ defaults:
 assets:
   - id: mom-v1
     bundle: mom-v1
-    sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+    sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
 models:
   - id: vllm-sr/mom-v1-blend
     display_name: MoM V1 Blend
@@ -56,7 +56,7 @@ models:
         recommended_pool: [remote/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
   - id: vllm-sr/mom-v1-lite
     display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
@@ -91,7 +91,7 @@ models:
         recommended_pool: [remote/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
   - id: vllm-sr/mom-v1-flash
     display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
@@ -126,7 +126,7 @@ models:
         recommended_pool: [remote/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
   - id: vllm-sr/mom-v1-ultra
     display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
@@ -165,7 +165,7 @@ models:
           - remote/glm-5.2
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
   - id: vllm-sr/mom-v1-vault
     display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
@@ -202,4 +202,4 @@ models:
         recommended_pool: [local/qwen3.5-122b-frontier]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:99a2d80c9da9270709b34596feaa4c02de9cdd9aab6c117ce644e4a29fea33b9
+      asset_sha256: sha256:b4dc2e35b43eae50097b82a16353e748758b6c11b4dc2a9231e8dfcbaa24e78b
