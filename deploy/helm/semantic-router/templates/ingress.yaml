@@ -34,7 +34,13 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "semantic-router.fullname" $ }}
+                # Always route to the dedicated management ClusterIP Service
+                # (deploy/helm/semantic-router/templates/service.yaml), which
+                # exposes classify-api regardless of managementApi.expose.
+                # The primary Service only carries that port when
+                # managementApi.expose=true (#2463 Phase 4), so pointing
+                # ingress at it would 503 by default after upgrade.
+                name: {{ include "semantic-router.fullname" $ }}-management
                 port:
                   number: {{ .servicePort }}
           {{- end }}

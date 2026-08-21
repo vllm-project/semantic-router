@@ -278,6 +278,41 @@ class TestConfigTranslator:
         assert "env" not in values
         assert "envFromSecrets" not in values
 
+    def test_publish_management_api_env_sets_management_api_expose(self, tmp_path):
+        """--publish-management-api / VLLM_SR_PUBLISH_MANAGEMENT_API must reach
+        the k8s target too, not just the docker container path (#2463 follow-up:
+        the flag was previously accepted and logged but silently discarded for
+        --target k8s, since exposure there is controlled by the Helm value)."""
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(config), env_vars={"VLLM_SR_PUBLISH_MANAGEMENT_API": "true"}
+        )
+        assert values["managementApi"]["expose"] is True
+
+    def test_publish_management_api_env_absent_leaves_management_api_unset(
+        self, tmp_path
+    ):
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(config), env_vars={"HF_ENDPOINT": "https://hf.co"}
+        )
+        assert "managementApi" not in values
+
+    def test_publish_management_api_env_false_leaves_management_api_unset(
+        self, tmp_path
+    ):
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(config), env_vars={"VLLM_SR_PUBLISH_MANAGEMENT_API": "false"}
+        )
+        assert "managementApi" not in values
+
     def test_deep_merge(self):
         base = {"a": {"b": 1, "c": 2}, "d": 3}
         overrides = {"a": {"b": 99}, "e": 4}

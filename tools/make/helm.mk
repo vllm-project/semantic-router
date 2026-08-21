@@ -185,6 +185,15 @@ helm-safety-validate: helm-ci-setup
 		exit 1; \
 	fi; \
 	grep -Eq "replicaCount.*(Invalid type|want integer)" "$$tmp_dir/invalid-replica.out"; \
+	echo "Validating schema rejection for non-boolean managementApi.expose (#2463 Phase 4)..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-string managementApi.expose=false \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-mgmt-expose.out" 2>&1; then \
+		echo "Expected string managementApi.expose=\"false\" to fail schema validation"; \
+		cat "$$tmp_dir/invalid-mgmt-expose.out"; \
+		exit 1; \
+	fi; \
+	grep -Eq "managementApi.expose.*(Invalid type|want boolean)" "$$tmp_dir/invalid-mgmt-expose.out"; \
 	echo "Validating Router Learning local-state multi-replica rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=false \
@@ -368,7 +377,7 @@ helm-port-forward-api:
 	@echo "$(YELLOW)[INFO]$(NC) Access API at: http://localhost:8080"
 	@echo "$(YELLOW)[INFO]$(NC) Health check: curl http://localhost:8080/health"
 	@echo "$(YELLOW)[INFO]$(NC) Press Ctrl+C to stop port forwarding"
-	@kubectl port-forward -n $(HELM_NAMESPACE) svc/$(HELM_RELEASE_NAME) 8080:8080
+	@kubectl port-forward -n $(HELM_NAMESPACE) svc/$(HELM_RELEASE_NAME)-management 8080:8080
 
 helm-port-forward-grpc: ## Port forward gRPC API (50051)
 helm-port-forward-grpc:

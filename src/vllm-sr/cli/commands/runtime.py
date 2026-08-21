@@ -253,10 +253,12 @@ def _execute_serve(
     is_flag=True,
     default=False,
     help=(
-        "Publish the router management API (:8080) to the host. "
+        "Publish the router management API (:8080). "
         "Default is off: the listener stays reachable only on the docker "
-        "network (dashboard/envoy). Needed for host curl/eval/rag against "
-        "localhost:8080 (#2463)."
+        "network (dashboard/envoy), or in-cluster via the dedicated "
+        "*-management Service for --target k8s. Needed for host curl/eval/rag "
+        "against localhost:8080 for the local docker target, or to also "
+        "expose classify-api on the primary Service for --target k8s (#2463)."
     ),
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")

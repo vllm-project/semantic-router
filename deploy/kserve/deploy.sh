@@ -606,6 +606,27 @@ else
 fi
 oc apply -f "$TEMP_DIR/deployment.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/service.yaml" -n "$NAMESPACE"
+
+# Migration cleanup (#2463 Phase 4): pre-upgrade releases applied route.yaml
+# when it still bundled a second Route object (semantic-router-kserve-api)
+# targeting the gateway Service's classify-api port. That port has since
+# moved off the gateway Service onto the opt-in management Service, so a
+# leftover Route from an older release now points at a nonexistent port and
+# `oc apply -f route.yaml` alone will never remove it (apply only reconciles
+# objects still present in the file; it does not prune ones that were
+# dropped from it). Delete the stale Route only when it still targets the
+# gateway Service - if an operator has already re-created it explicitly via
+# route-management.yaml (which targets semantic-router-kserve-management),
+# leave their opt-in Route alone.
+STALE_API_ROUTE_TARGET=$(oc get route semantic-router-kserve-api -n "$NAMESPACE" \
+    -o jsonpath='{.spec.to.name}' 2>/dev/null || echo "")
+if [ "$STALE_API_ROUTE_TARGET" = "semantic-router-kserve" ]; then
+    echo -e "${YELLOW}⚠${NC} Removing stale semantic-router-kserve-api Route left over from a pre-#2463 release"
+    echo "  (it targeted the gateway Service's classify-api port, which no longer exists there)."
+    echo "  Re-apply service-management.yaml + route-management.yaml if you want it back, opt-in."
+    oc delete route semantic-router-kserve-api -n "$NAMESPACE" --ignore-not-found
+fi
+
 oc apply -f "$TEMP_DIR/route.yaml" -n "$NAMESPACE"
 
 echo -e "${GREEN}✓${NC} Resources deployed successfully"

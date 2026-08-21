@@ -13,7 +13,7 @@ spec:
     protocol: {{ .Values.service.grpc.protocol }}
     name: grpc
   {{- $mgmt := .Values.managementApi | default dict }}
-  {{- if $mgmt.expose }}
+  {{- if eq $mgmt.expose true }}
   - port: {{ .Values.service.api.port }}
     targetPort: {{ .Values.service.api.targetPort }}
     protocol: {{ .Values.service.api.protocol }}

@@ -58,6 +58,16 @@
         }
       }
     },
+    "managementApi": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "expose": {
+          "type": "boolean",
+          "description": "When true, also advertise classify-api (:8080) on the primary Service. Must be a real boolean: a non-empty string such as \"false\" is truthy to Helm/Go templates and would unintentionally expose the management API (#2463 Phase 4)."
+        }
+      }
+    },
     "observability": {
       "type": "object",
       "additionalProperties": true,
