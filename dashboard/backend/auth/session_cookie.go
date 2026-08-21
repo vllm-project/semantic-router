@@ -59,9 +59,8 @@ func clearAuthSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// setSessionCookies issues the session cookie plus the CSRF cookie derived from the
-// session id inside the token we just minted. The token is parsed back rather than
-// threading the id out of issueTokenForContext, which would ripple through every caller.
+// Parses the token back for its session id, rather than threading that id out through
+// every caller of issueTokenForContext.
 func setSessionCookies(w http.ResponseWriter, r *http.Request, svc *Service, token string) {
 	setAuthSessionCookie(w, r, token, svc.ttlDuration)
 	if claims, err := svc.ParseToken(token); err == nil {
@@ -74,10 +73,8 @@ func clearSessionCookies(w http.ResponseWriter, r *http.Request) {
 	clearCSRFCookie(w, r)
 }
 
-// setCSRFCookie delivers the CSRF token so the frontend can echo it back in the
-// X-CSRF-Token header. Not HttpOnly, deliberately: the page must read it, and the value
-// authenticates nothing without the HttpOnly session cookie. Every other attribute matches
-// the session cookie so the two expire together.
+// Not HttpOnly: the page has to read it, and the value authenticates nothing without the
+// session cookie. Every other attribute matches it so the two expire together.
 func setCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string, secret []byte, ttl time.Duration) {
 	value := csrfTokenFor(secret, sessionID)
 	if value == "" {

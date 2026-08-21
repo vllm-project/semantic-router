@@ -40,12 +40,7 @@ func TestParseAllowedOrigins(t *testing.T) {
 			raw:  " HTTP://Dash.Example ,, https://Other.Example:8443 ",
 			want: []string{"http://dash.example", "https://other.example:8443"},
 		},
-		{
-			// An Origin header never has one, so keeping it would match nothing.
-			name: "drops a trailing slash",
-			raw:  "http://localhost:3001/",
-			want: []string{"http://localhost:3001"},
-		},
+		{name: "drops a trailing slash", raw: "http://localhost:3001/", want: []string{"http://localhost:3001"}},
 	}
 
 	for _, tc := range cases {

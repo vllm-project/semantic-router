@@ -72,9 +72,8 @@ type WSClient struct {
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// A handshake is exempt from CORS, so this is the only place a cross-origin
-	// connection can be refused. Same-origin only: every dashboard WebSocket client
-	// builds its URL from window.location.host. See #2465.
+	// CORS does not cover handshakes, so this is the only cross-origin control. Every
+	// dashboard client builds its URL from window.location.host. See #2465.
 	CheckOrigin: auth.OriginChecker(nil),
 }
 

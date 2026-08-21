@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// Not HttpOnly on purpose: the frontend must read it to echo csrfHeaderName back.
+	// Not HttpOnly: the frontend has to read it to echo csrfHeaderName back.
 	csrfCookieName = "vsr_csrf"
 	csrfHeaderName = "X-CSRF-Token"
 
@@ -18,8 +18,7 @@ const (
 	csrfDerivationLabel = "csrf:"
 )
 
-// csrfTokenFor derives the CSRF token for a session, so nothing has to be stored and a
-// planted cookie proves nothing. Returns "" so callers fail closed.
+// Derived, never stored, so a planted cookie proves nothing.
 func csrfTokenFor(secret []byte, sessionID string) string {
 	sessionID = strings.TrimSpace(sessionID)
 	if len(secret) == 0 || sessionID == "" {
@@ -30,7 +29,7 @@ func csrfTokenFor(secret []byte, sessionID string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// csrfTokenValid must stay constant time; "==" would leak the expected value.
+// Constant time: "==" would leak the expected value.
 func csrfTokenValid(secret []byte, sessionID, presented string) bool {
 	expected := csrfTokenFor(secret, sessionID)
 	if expected == "" || presented == "" {
@@ -39,11 +38,9 @@ func csrfTokenValid(secret []byte, sessionID, presented string) bool {
 	return hmac.Equal([]byte(expected), []byte(presented))
 }
 
-// requestOrigin returns the origin this request was addressed to.
-//
-// SECURITY: X-Forwarded-Host is attacker-settable on a directly-reachable deployment, so
-// it counts only when no allowlist is configured — in that mode this check is advisory and
-// csrfTokenValid is the guarantee. Set DASHBOARD_ALLOWED_ORIGINS to make it load-bearing.
+// requestOrigin returns the origin this request was addressed to. X-Forwarded-Host is
+// attacker-settable on a directly reachable deployment, so it counts only when no allowlist
+// is set; that mode is advisory and csrfTokenValid is the guarantee.
 func requestOrigin(r *http.Request, trustForwardedHost bool) string {
 	if r == nil {
 		return ""
@@ -67,9 +64,8 @@ func requestOrigin(r *http.Request, trustForwardedHost bool) string {
 	return strings.ToLower(scheme + "://" + host)
 }
 
-// originAllowed reports whether a state-changing request came from our own origin or one
-// in allowed, which exists because the browser's origin and our Host legitimately differ
-// behind a proxy and under the Vite dev proxy. Fails closed when neither header is present.
+// allowed covers the origins that legitimately differ from our Host: a reverse proxy, and
+// the Vite dev proxy. Fails closed when neither header is present.
 func originAllowed(r *http.Request, allowed []string) bool {
 	if r == nil {
 		return false
@@ -114,15 +110,11 @@ func originAllowed(r *http.Request, allowed []string) bool {
 	return false
 }
 
-// OriginChecker returns a CheckOrigin function for the WebSocket upgrader, which cannot
-// rely on CORS: a handshake is exempt from it, so this is the only origin control a
-// WebSocket server has. Takes the allowlist as a closure so the caller needs no *Service;
-// with a nil list it accepts our own origin and rejects genuinely cross-origin handshakes.
+// OriginChecker builds CheckOrigin for the WebSocket upgrader, the only origin control a
+// handshake has: CORS does not apply to it.
 //
-// A handshake carrying no Origin is accepted, because RFC 6455 requires browser clients to
-// send one: its absence means a non-browser client (a Go dialer, curl, CI), which no
-// hostile page can drive cross-site. Same reasoning as the Authorization: Bearer exemption,
-// and such a client still has to authenticate.
+// No Origin means a non-browser client, since RFC 6455 requires browsers to send one, and
+// no hostile page can drive one cross-site. Same reasoning as the Bearer exemption.
 func OriginChecker(allowedOrigins []string) func(*http.Request) bool {
 	return func(r *http.Request) bool {
 		if r == nil {
@@ -135,8 +127,7 @@ func OriginChecker(allowedOrigins []string) func(*http.Request) bool {
 	}
 }
 
-// requiresCSRFCheck exempts the RFC 9110 safe methods, which holds only while no GET route
-// mutates state.
+// Safe methods per RFC 9110. Holds only while no GET route mutates state.
 func requiresCSRFCheck(method string) bool {
 	switch strings.ToUpper(strings.TrimSpace(method)) {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:

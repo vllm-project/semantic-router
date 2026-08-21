@@ -13,10 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
-// redactCredentialParams strips credential-bearing query parameters before a URL is
-// logged. The Referer of a request made from a page whose own URL carried ?authToken=
-// contains a live session token, so logging it verbatim put a working credential into the
-// dashboard's stdout. See #2465.
+// The Referer of a request made from a page whose URL carried ?authToken= holds a live
+// session token, so logging it verbatim put a working credential in stdout. See #2465.
 func redactCredentialParams(raw string) string {
 	if raw == "" {
 		return ""
@@ -24,7 +22,7 @@ func redactCredentialParams(raw string) string {
 
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		// Unparsable: say so rather than risk logging a credential.
+		// Say so rather than risk logging a credential.
 		return "[unparsable]"
 	}
 
@@ -37,7 +35,7 @@ func redactCredentialParams(raw string) string {
 		}
 	}
 	if !changed {
-		// Returned byte for byte: this line is how proxy routing gets debugged.
+		// Byte for byte: this log line is how proxy routing gets debugged.
 		return raw
 	}
 

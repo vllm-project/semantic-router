@@ -98,7 +98,7 @@ func TestCSRFTokenValid(t *testing.T) {
 	}
 }
 
-// TestOriginAllowed_NoHeadersIsDenied is the case that proves the check fails closed.
+// Proves the check fails closed.
 func TestOriginAllowed_NoHeadersIsDenied(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "http://dash.example/api/x", nil)
 	if originAllowed(r, nil) {
@@ -191,7 +191,7 @@ func TestOriginAllowed(t *testing.T) {
 			allowed: []string{"http://localhost:3001"},
 		},
 		{
-			// D10: with an allowlist configured, X-Forwarded-Host must not be trusted.
+			// With an allowlist set, X-Forwarded-Host must not be trusted.
 			name:   "forwarded host ignored when allowlist is set",
 			origin: "https://public.example",
 			headers: map[string]string{
@@ -254,8 +254,7 @@ func TestRequiresCSRFCheck(t *testing.T) {
 	}
 }
 
-// csrfFixture is a real user with a real minted token, plus the CSRF value derived from
-// that token's session id.
+// A real user with a real minted token, plus the CSRF value for that token's session.
 type csrfFixture struct {
 	svc       *Service
 	token     string
@@ -377,8 +376,7 @@ func TestCSRFEnforcement(t *testing.T) {
 	}
 }
 
-// TestCSRF_BearerAuthenticatedRequestsAreExempt documents why the exemption exists: a
-// browser never attaches Authorization on its own, so curl and CI clients need no token.
+// A browser never attaches Authorization on its own, so curl and CI need no token.
 func TestCSRF_BearerAuthenticatedRequestsAreExempt(t *testing.T) {
 	f := newCSRFFixture(t)
 
@@ -551,9 +549,8 @@ func TestCSRFCookieIssuance(t *testing.T) {
 	})
 }
 
-// The deprecation warning fires before the token is verified, so an unauthenticated caller
-// controls the path it prints. net/http percent-decodes the path, so a raw %0a would forge
-// a second log line if it were printed with %s.
+// The warning fires before the token is verified, so an unauthenticated caller controls
+// the path it prints, and it arrives percent-decoded.
 func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
 	var logged bytes.Buffer
 	log.SetOutput(&logged)

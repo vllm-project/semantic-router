@@ -40,9 +40,8 @@ type Service struct {
 	// need a transactional guard in the store instead.
 	bootstrapMu sync.Mutex
 
-	// allowedOrigins lists extra origins accepted for state-changing requests, beyond
-	// our own. Written once during route setup, before the server serves, so like
-	// allowOpenBootstrap it needs no lock.
+	// Extra origins accepted for state-changing requests. Written once during route
+	// setup, before the server serves, so it needs no lock.
 	allowedOrigins []string
 }
 
@@ -88,8 +87,7 @@ func (s *Service) SetSetupModeFunc(fn func() bool) { s.setupModeFn = fn }
 // callers with no resolver. Production wiring uses SetSetupModeFunc.
 func (s *Service) SetSetupMode(v bool) { s.setupModeFn = func() bool { return v } }
 
-// SetAllowedOrigins configures the origins accepted for state-changing requests. A
-// non-empty list also stops X-Forwarded-Host being trusted (see requestOrigin).
+// A non-empty list also stops X-Forwarded-Host being trusted (see requestOrigin).
 func (s *Service) SetAllowedOrigins(origins []string) { s.allowedOrigins = origins }
 
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.

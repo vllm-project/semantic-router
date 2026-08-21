@@ -117,11 +117,8 @@ function patchProtectedResourceUrl(value: string): string {
   }
 }
 
-/**
- * Reads the CSRF token the server issued at login. This cookie is deliberately not
- * HttpOnly, unlike vsr_session: the value is not a credential on its own, and the page has
- * to read it. Read fresh on every request, because it changes at each login. See #2465.
- */
+// Not HttpOnly, unlike vsr_session: the page has to read it, and it is not a credential on
+// its own. Read fresh every time, because it changes at each login. See #2465.
 function readCSRFToken(): string | null {
   if (typeof document === 'undefined') {
     return null
@@ -137,8 +134,7 @@ function readCSRFToken(): string | null {
   return null
 }
 
-// init.method wins when both are given, matching fetch(request, {method}) semantics; a
-// Request object carries its own method and may arrive with no init at all.
+// init.method wins over a Request's own, matching fetch(request, {method}) semantics.
 function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
   const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
   return method.toUpperCase()
@@ -270,9 +266,7 @@ export function installAuthenticatedFetch(): void {
       headers.set('Authorization', `Bearer ${token}`)
     }
 
-    // The browser attaches the session cookie by itself, so a state-changing request must
-    // also prove it came from this page. With no cookie, send the request anyway and let
-    // the server answer 403 rather than inventing a value.
+    // With no cookie, send anyway and let the server answer 403.
     if (
       UNSAFE_METHODS.has(requestMethod(input, init)) &&
       isProtectedPath(url) &&

@@ -52,9 +52,8 @@ type Config struct {
 	// SetupMode is a separate trusted bootstrap path for dashboard-first local install.
 	AllowOpenBootstrap bool
 
-	// AllowedOrigins lists browser-facing origins permitted to make state-changing
-	// requests, as "scheme://host[:port]". Empty means our own computed origin only,
-	// which rejects the Vite dev proxy and any proxy presenting a different hostname.
+	// Browser origins permitted to make state-changing requests, "scheme://host[:port]".
+	// Empty means our own origin only, which rejects the Vite dev proxy.
 	AllowedOrigins []string
 
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
@@ -195,8 +194,8 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 func parseAllowedOrigins(raw string) []string {
 	var origins []string
 	for _, entry := range strings.Split(raw, ",") {
-		// An Origin header never carries a trailing slash, so an entry written with one
-		// would silently match nothing and 403 every write.
+		// An Origin header never has a trailing slash, so an entry with one would
+		// silently match nothing.
 		entry = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(entry)), "/")
 		if entry != "" {
 			origins = append(origins, entry)
