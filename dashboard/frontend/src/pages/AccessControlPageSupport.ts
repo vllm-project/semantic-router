@@ -10,7 +10,6 @@ import type {
 } from '../utils/inferenceAccessApi'
 
 export type AccessView =
-  | 'statistics'
   | 'api-keys'
   | 'users'
   | 'teams'
@@ -33,12 +32,6 @@ export const ACCESS_NAV_ITEMS: Array<{
   section: 'Control' | 'Identity' | 'Policy' | 'Observe'
   description: string
 }> = [
-  {
-    id: 'statistics',
-    label: 'Statistics',
-    section: 'Control',
-    description: 'Traffic and access posture',
-  },
   {
     id: 'api-keys',
     label: 'API Keys',
@@ -63,7 +56,7 @@ export const ACCESS_NAV_ITEMS: Array<{
     id: 'usage',
     label: 'Usage',
     section: 'Observe',
-    description: 'Consumption across every dimension',
+    description: 'Traffic, performance, and access posture',
   },
   {
     id: 'request-logs',

@@ -82,8 +82,7 @@
 
 .eyebrow,
 .surfaceHeader > div:first-child > span,
-.modalEyebrow,
-.panelHeading > div > span {
+.modalEyebrow {
   color: rgba(255, 255, 255, 0.45);
   font-size: 0.67rem;
   font-weight: 750;
@@ -284,37 +283,6 @@
   gap: 1rem;
 }
 
-.metricStrip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 11px;
-  background: #0d0e10;
-}
-
-.metric {
-  position: relative;
-  min-width: 0;
-  display: grid;
-  gap: 0.25rem;
-  padding: 1.05rem 1.15rem 1rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.075);
-}
-
-.metric:last-child {
-  border-right: 0;
-}
-.metric::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--metric-accent, rgba(255, 255, 255, 0.2));
-  opacity: 0.75;
-}
 .metricblue {
   --metric-accent: #6ea8ff;
 }
@@ -330,69 +298,12 @@
 .metricneutral {
   --metric-accent: #a3a7af;
 }
-.metric > span {
-  color: rgba(255, 255, 255, 0.47);
-  font-size: 0.69rem;
-}
-.metric > strong {
-  overflow: hidden;
-  font-size: clamp(1.3rem, 2vw, 1.8rem);
-  font-weight: 640;
-  letter-spacing: -0.035em;
-  text-overflow: ellipsis;
-}
-.metric > small {
-  color: rgba(255, 255, 255, 0.37);
-  font-size: 0.67rem;
-}
-
-.overviewGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(310px, 0.9fr);
-  gap: 1rem;
-}
-.breakdownGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
 .panel {
   min-width: 0;
   padding: 1.1rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 11px;
   background: #0d0e10;
-}
-.chartPanel {
-  min-height: 380px;
-}
-.panelHeading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
-}
-.panelHeading h3 {
-  margin: 0.22rem 0 0;
-  font-size: 1rem;
-  font-weight: 650;
-}
-.panelHeading > strong {
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.chartWrap {
-  min-height: 290px;
-  display: flex;
-  flex-direction: column;
-}
-.chartWrap svg {
-  width: 100%;
-  height: 250px;
-  overflow: visible;
 }
 .gridLine {
   stroke: rgba(255, 255, 255, 0.065);
@@ -417,69 +328,6 @@
   color: rgba(255, 255, 255, 0.32);
   font-size: 0.62rem;
 }
-.chartLegend {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.9rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.66rem;
-}
-.chartLegend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.38rem;
-}
-.chartLegend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #74a9ff;
-}
-
-.breakdownList {
-  display: grid;
-  gap: 0.83rem;
-}
-.breakdownItem {
-  display: grid;
-  gap: 0.4rem;
-}
-.breakdownItem > div:first-child {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.breakdownItem strong {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 0.72rem;
-  font-weight: 590;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.breakdownItem span {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 0.61rem;
-}
-.breakdownItem > div:last-child {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.055);
-}
-.breakdownItem i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #557dcc, #91b9ff);
-}
-
 .tabBar {
   display: flex;
   gap: 0.3rem;
@@ -923,6 +771,51 @@
   align-self: center;
   color: rgba(255, 255, 255, 0.35);
   font-size: 0.68rem;
+}
+
+.usagePosturePanel {
+  overflow: hidden;
+  padding: 0;
+}
+.usagePosturePanel > .usagePanelHeader {
+  align-items: center;
+  margin: 0;
+  padding: 1rem 1.05rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.usagePostureGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.usagePostureItem {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.95rem 1.05rem 1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+.usagePostureItem:last-child {
+  border-right: 0;
+}
+.usagePostureItem > span {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.62rem;
+}
+.usagePostureItem > strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.18rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usagePostureItem > small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.61rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .usageMetricGrid {
@@ -2237,20 +2130,14 @@
   .page {
     padding-inline: 1.2rem;
   }
-  .metricStrip {
+  .usagePostureGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .metric:nth-child(3) {
+  .usagePostureItem:nth-child(3) {
     border-right: 0;
   }
-  .metric:nth-child(n + 4) {
-    border-top: 1px solid rgba(255, 255, 255, 0.075);
-  }
-  .overviewGrid {
-    grid-template-columns: 1fr;
-  }
-  .breakdownGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .usagePostureItem:nth-child(n + 4) {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
   }
   .usageMetricGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2313,26 +2200,18 @@
   .headerActions button {
     flex: 1;
   }
-  .metricStrip {
+  .usagePostureGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .metric,
-  .metric:nth-child(3) {
-    border-right: 1px solid rgba(255, 255, 255, 0.075);
-    border-top: 1px solid rgba(255, 255, 255, 0.075);
+  .usagePostureItem,
+  .usagePostureItem:nth-child(3) {
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
   }
-  .metric:nth-child(odd) {
-    border-right: 1px solid rgba(255, 255, 255, 0.075);
-  }
-  .metric:nth-child(even) {
+  .usagePostureItem:nth-child(even) {
     border-right: 0;
   }
-  .metric:first-child,
-  .metric:nth-child(2) {
-    border-top: 0;
-  }
-  .breakdownGrid {
-    grid-template-columns: 1fr;
+  .usagePostureItem:nth-child(n + 3) {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
   }
   .usageMetricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

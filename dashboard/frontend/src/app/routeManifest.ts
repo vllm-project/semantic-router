@@ -58,8 +58,9 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
 ]
 
 export const redirectRouteDefinitions: readonly RedirectRouteDefinition[] = [
-  { path: '/access', to: '/access/statistics' },
-  { path: '/access/overview', to: '/access/statistics' },
+  { path: '/access', to: '/access/usage' },
+  { path: '/access/overview', to: '/access/usage' },
+  { path: '/access/statistics', to: '/access/usage' },
   { path: '/access/request-logs', to: '/logs' },
   { path: '/knowledge-bases', to: '/knowledge-bases/bases' },
   { path: '/taxonomy', to: '/knowledge-bases/bases' },

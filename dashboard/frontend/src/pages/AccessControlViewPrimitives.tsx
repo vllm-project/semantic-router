@@ -3,46 +3,6 @@ import type { AccessControlPageState as PageState } from './AccessControlViewTyp
 import { initials, number } from './AccessControlViewSupport'
 import styles from './AccessControlPage.module.css'
 
-export function Metric({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string
-  value: string
-  detail: string
-  tone: string
-}) {
-  return (
-    <article className={`${styles.metric} ${styles[`metric${tone}`]}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
-  )
-}
-
-export function PanelHeading({
-  eyebrow,
-  title,
-  aside,
-}: {
-  eyebrow: string
-  title: string
-  aside?: string
-}) {
-  return (
-    <div className={styles.panelHeading}>
-      <div>
-        <span>{eyebrow}</span>
-        <h3>{title}</h3>
-      </div>
-      {aside ? <strong>{aside}</strong> : null}
-    </div>
-  )
-}
-
 export function Avatar({ name, square = false }: { name: string; square?: boolean }) {
   return (
     <span className={`${styles.avatar} ${square ? styles.avatarSquare : ''}`}>

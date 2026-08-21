@@ -55,7 +55,7 @@ const DashboardPage: React.FC = () => {
   }, [])
 
   const canReadConfig = canAccessDashboardPath(user, '/config/models')
-  const canReadAccess = canAccessDashboardPath(user, '/access/statistics')
+  const canReadAccess = canAccessDashboardPath(user, '/access/usage')
   const canReadGlobalAccess = canReadInferenceAccess(user)
   const fetchAccess = useCallback(async () => {
     if (!canReadAccess) return
@@ -284,7 +284,7 @@ const DashboardPage: React.FC = () => {
               <button
                 type="button"
                 className={styles.cardAction}
-                onClick={() => navigate('/access/statistics')}
+                onClick={() => navigate('/access/usage')}
               >
                 Details &rsaquo;
               </button>

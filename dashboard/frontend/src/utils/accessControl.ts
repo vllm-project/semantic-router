@@ -88,7 +88,8 @@ export function canAccessDashboardPath(
   if (normalizedPath.startsWith('/access')) {
     if (canAccessWithPermission(user, ACCESS_READ_PERMISSION, READ_CAPABLE_ROLES)) return true
     if (!hasPermission(user, ACCESS_SELF_PERMISSION)) return false
-    return ['/access', '/access/statistics', '/access/api-keys', '/access/usage'].some(
+    if (normalizedPath === '/access') return true
+    return ['/access/api-keys', '/access/usage'].some(
       (path) => normalizedPath === path || normalizedPath.startsWith(`${path}/`),
     )
   }

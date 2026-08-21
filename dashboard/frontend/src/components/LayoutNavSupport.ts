@@ -60,10 +60,7 @@ export const ACCESS_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Credentials',
         description: 'Keys and live access posture.',
-        items: [
-          { kind: 'route', label: 'Statistics', to: '/access/statistics' },
-          { kind: 'route', label: 'API Keys', to: '/access/api-keys' },
-        ],
+        items: [{ kind: 'route', label: 'API Keys', to: '/access/api-keys' }],
       },
     ],
   },

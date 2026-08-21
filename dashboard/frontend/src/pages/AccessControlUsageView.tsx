@@ -3,6 +3,7 @@ import { type CSSProperties, useState } from 'react'
 import type {
   AccessAPIKey,
   AccessGroup,
+  AccessOverview,
   AccessTeam,
   AccessUser,
   UsagePoint,
@@ -19,6 +20,7 @@ export interface UsageScope {
 }
 
 interface Props {
+  overview: AccessOverview
   usage: UsageSummary
   users: AccessUser[]
   teams: AccessTeam[]
@@ -60,6 +62,8 @@ export default function AccessControlUsageView(props: Props) {
   return (
     <div className={styles.viewStack}>
       <UsageFilters {...props} />
+
+      <AccessPosture overview={props.overview} />
 
       <div className={styles.usageMetricGrid}>
         <UsageMetric
@@ -237,6 +241,67 @@ export default function AccessControlUsageView(props: Props) {
         <UsageRanking items={dimensionItems} label={label} />
       </section>
     </div>
+  )
+}
+
+function AccessPosture({ overview }: { overview: AccessOverview }) {
+  const identityCount = overview.users + overview.teams
+
+  return (
+    <section className={`${styles.panel} ${styles.usagePosturePanel}`}>
+      <div className={styles.usagePanelHeader}>
+        <div>
+          <span>Control plane</span>
+          <h3>Access at a glance</h3>
+        </div>
+        <strong>{number(overview.activeKeys)} active keys</strong>
+      </div>
+      <div className={styles.usagePostureGrid}>
+        <UsagePostureItem
+          label="Today"
+          value={number(overview.requestsToday)}
+          detail={`${number(overview.tokensToday)} tokens`}
+        />
+        <UsagePostureItem
+          label="API keys"
+          value={number(overview.activeKeys)}
+          detail={`${number(overview.expiringKeys)} expiring soon`}
+        />
+        <UsagePostureItem
+          label="Identities"
+          value={number(identityCount)}
+          detail={`${number(overview.users)} users · ${number(overview.teams)} teams`}
+        />
+        <UsagePostureItem
+          label="Access groups"
+          value={number(overview.accessGroups)}
+          detail="model grants"
+        />
+        <UsagePostureItem
+          label="Budgets"
+          value={number(overview.enabledBudgets)}
+          detail="active quota policies"
+        />
+      </div>
+    </section>
+  )
+}
+
+function UsagePostureItem({
+  label,
+  value,
+  detail,
+}: {
+  label: string
+  value: string
+  detail: string
+}) {
+  return (
+    <article className={styles.usagePostureItem}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
   )
 }
 

@@ -73,6 +73,11 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['access.read'] }, '/access/api-keys')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/access/api-keys')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/usage')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/statistics')).toBe(
+      false,
+    )
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/users')).toBe(false)
   })
 
   it('separates read, write, run, and manage actions', () => {

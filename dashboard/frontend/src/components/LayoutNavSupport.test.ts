@@ -55,5 +55,20 @@ describe('layout navigation route matching', () => {
     expect(identity?.sections.flatMap((section) => section.items)).toContainEqual(
       expect.objectContaining({ label: 'Teams', to: '/access/teams' }),
     )
+
+    const credentials = ACCESS_MENU_CATEGORIES.find((category) => category.key === 'credentials')
+    const observe = ACCESS_MENU_CATEGORIES.find((category) => category.key === 'observe')
+
+    expect(credentials?.sections.flatMap((section) => section.items)).toEqual([
+      expect.objectContaining({ label: 'API Keys', to: '/access/api-keys' }),
+    ])
+    expect(observe?.sections.flatMap((section) => section.items)).toContainEqual(
+      expect.objectContaining({ label: 'Usage', to: '/access/usage' }),
+    )
+    expect(
+      ACCESS_MENU_CATEGORIES.flatMap((category) => category.sections)
+        .flatMap((section) => section.items)
+        .some((item) => item.kind === 'route' && item.to === '/access/statistics'),
+    ).toBe(false)
   })
 })

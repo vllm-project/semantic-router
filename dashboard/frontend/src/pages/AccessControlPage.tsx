@@ -61,12 +61,12 @@ const AccessControlPage: React.FC = () => {
   const routeView = (
     location.pathname === '/logs'
       ? 'request-logs'
-      : location.pathname.split('/').filter(Boolean)[1] || 'statistics'
+      : location.pathname.split('/').filter(Boolean)[1] || 'usage'
   ) as AccessView
-  const activeView = ACCESS_NAV_ITEMS.some((item) => item.id === routeView)
-    ? routeView
-    : 'statistics'
-  const activeMeta = ACCESS_NAV_ITEMS.find((item) => item.id === activeView) || ACCESS_NAV_ITEMS[0]
+  const activeView = ACCESS_NAV_ITEMS.some((item) => item.id === routeView) ? routeView : 'usage'
+  const activeMeta =
+    ACCESS_NAV_ITEMS.find((item) => item.id === activeView) ||
+    ACCESS_NAV_ITEMS.find((item) => item.id === 'usage')!
   const visibleNavItems = ACCESS_NAV_ITEMS.filter((item) =>
     canAccessDashboardPath(
       currentUser,
@@ -127,14 +127,6 @@ const AccessControlPage: React.FC = () => {
   }>({ type: 'global', id: '', model: '', range: '24h' })
   const [liveState, setLiveState] = useState<'checking' | 'live' | 'error'>('checking')
   const createRequestHandledRef = useRef(false)
-
-  useEffect(() => {
-    if (location.pathname === '/access/overview') {
-      navigate('/access/statistics', { replace: true })
-    } else if (location.pathname === '/access/request-logs') {
-      navigate('/logs', { replace: true })
-    }
-  }, [location.pathname, navigate])
 
   useEffect(() => {
     if (!toast) return
@@ -237,10 +229,10 @@ const AccessControlPage: React.FC = () => {
     setViewLoading(true)
     setError('')
     try {
-      if (activeView === 'usage' || activeView === 'statistics') {
+      if (activeView === 'usage') {
         setUsage(
           await (selfService ? inferenceAccessApi.selfUsage : inferenceAccessApi.usage)(
-            activeView === 'statistics' ? { from: accessRangeStart('24h') } : usageFilter,
+            usageFilter,
           ),
         )
       }
