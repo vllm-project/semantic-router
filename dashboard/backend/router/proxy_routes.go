@@ -24,8 +24,8 @@ func redactCredentialParams(raw string) string {
 
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		// Unparseable: say so rather than risk logging a credential.
-		return "[unparseable]"
+		// Unparsable: say so rather than risk logging a credential.
+		return "[unparsable]"
 	}
 
 	query := parsed.Query()

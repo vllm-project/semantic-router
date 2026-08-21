@@ -226,7 +226,7 @@ func TestRedactCredentialParams(t *testing.T) {
 			want: "http://localhost:8711/embedded/grafana/x?orgId=1&b=2",
 		},
 		{name: "empty", raw: "", want: ""},
-		{name: "unparseable", raw: "::::", want: "[unparseable]"},
+		{name: "unparsable", raw: "::::", want: "[unparsable]"},
 	}
 
 	for _, tc := range cases {
@@ -242,9 +242,9 @@ func TestRedactCredentialParams(t *testing.T) {
 func TestRedactCredentialParamsRemovesTheTokenFromTheLoggedReferer(t *testing.T) {
 	t.Parallel()
 
-	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature"
-	logged := redactCredentialParams("http://localhost:8711/embedded/grafana/goto/x?orgId=1&authToken=" + token)
-	if strings.Contains(logged, token) {
+	fakeJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature"
+	logged := redactCredentialParams("http://localhost:8711/embedded/grafana/goto/x?orgId=1&authToken=" + fakeJWT)
+	if strings.Contains(logged, fakeJWT) {
 		t.Fatalf("the token survived redaction: %q", logged)
 	}
 }

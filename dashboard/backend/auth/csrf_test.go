@@ -1,10 +1,13 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -127,7 +130,7 @@ func TestOriginAllowed(t *testing.T) {
 		{name: "null origin even when allowlisted", origin: "null", allowed: []string{"null"}},
 		{name: "referer fallback same", referer: "http://dash.example/page?x=1", want: true},
 		{name: "referer fallback cross", referer: "https://evil.example/a"},
-		{name: "unparseable referer", referer: "::::"},
+		{name: "unparsable referer", referer: "::::"},
 		{name: "relative referer", referer: "/dashboard"},
 		{name: "origin wins over referer", origin: "https://evil.example", referer: "http://dash.example/page"},
 		{
@@ -227,20 +230,24 @@ func TestOriginAllowed(t *testing.T) {
 }
 
 func TestRequiresCSRFCheck(t *testing.T) {
-	cases := map[string]bool{
-		http.MethodGet:     false,
-		http.MethodHead:    false,
-		http.MethodOptions: false,
-		"get":              false,
-		http.MethodPost:    true,
-		http.MethodPut:     true,
-		http.MethodPatch:   true,
-		http.MethodDelete:  true,
-		"post":             true,
-		" POST ":           true,
-		"":                 true,
+	cases := []struct {
+		method string
+		want   bool
+	}{
+		{method: http.MethodGet},
+		{method: http.MethodHead},
+		{method: http.MethodOptions},
+		{method: "get"},
+		{method: http.MethodPost, want: true},
+		{method: http.MethodPut, want: true},
+		{method: http.MethodPatch, want: true},
+		{method: http.MethodDelete, want: true},
+		{method: "post", want: true},
+		{method: " POST ", want: true},
+		{method: "", want: true},
 	}
-	for method, want := range cases {
+	for _, tc := range cases {
+		method, want := tc.method, tc.want
 		if got := requiresCSRFCheck(method); got != want {
 			t.Errorf("requiresCSRFCheck(%q) = %v, want %v", method, got, want)
 		}
@@ -542,6 +549,31 @@ func TestCSRFCookieIssuance(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The deprecation warning fires before the token is verified, so an unauthenticated caller
+// controls the path it prints. net/http percent-decodes the path, so a raw %0a would forge
+// a second log line if it were printed with %s.
+func TestDeprecatedQueryWarningCannotForgeALogLine(t *testing.T) {
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	r := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	r.URL.Path = "/api/\nWARNING: forged line"
+	q := r.URL.Query()
+	q.Set("authToken", "not-a-real-token")
+	r.URL.RawQuery = q.Encode()
+
+	if _, source := extractAccessTokenWithSource(r); source != tokenSourceQuery {
+		t.Fatalf("source = %v, want tokenSourceQuery", source)
+	}
+	if strings.Contains(logged.String(), "\nWARNING: forged line") {
+		t.Fatalf("the path forged a log line: %q", logged.String())
+	}
+	if !strings.Contains(logged.String(), `\nWARNING: forged line`) {
+		t.Fatalf("the path was not logged in escaped form: %q", logged.String())
+	}
 }
 
 func TestCSRFCookieAndHeaderNames(t *testing.T) {

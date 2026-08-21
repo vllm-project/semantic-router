@@ -195,7 +195,10 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 func parseAllowedOrigins(raw string) []string {
 	var origins []string
 	for _, entry := range strings.Split(raw, ",") {
-		if entry = strings.ToLower(strings.TrimSpace(entry)); entry != "" {
+		// An Origin header never carries a trailing slash, so an entry written with one
+		// would silently match nothing and 403 every write.
+		entry = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(entry)), "/")
+		if entry != "" {
 			origins = append(origins, entry)
 		}
 	}

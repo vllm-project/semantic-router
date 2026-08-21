@@ -136,6 +136,17 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
 
+State-changing requests authenticated by the session cookie must carry an
+`X-CSRF-Token` header and an `Origin` (or `Referer`) matching the origin they
+were addressed to. The frontend does this on its own. Set
+`DASHBOARD_ALLOWED_ORIGINS` to a comma-separated list when the browser's origin
+differs from the backend's `Host`, which is the case behind a reverse proxy and
+under the Vite dev proxy (`http://localhost:3001`). Leaving it unset keeps the
+origin check advisory, because `X-Forwarded-Host` is then trusted; the CSRF
+token is the guarantee in either mode. Requests authenticated with
+`Authorization: Bearer` are exempt, since a browser never attaches that header
+by itself.
+
 Read-only mode and the two writable-surface flags are independent. A read-only
 ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
 the matching flag so the UI does not offer operations the runtime cannot
