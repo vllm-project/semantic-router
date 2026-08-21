@@ -132,6 +132,7 @@ export interface UsageSlice {
 }
 
 export interface UsageSummary {
+  granularity: 'minute' | 'hour' | 'day'
   requests: number
   successful: number
   failed: number
@@ -171,6 +172,8 @@ export interface UsageFilter extends AccessListParams {
   model?: string
   from?: string
   to?: string
+  granularity?: 'auto' | 'minute' | 'hour' | 'day'
+  timezoneOffset?: number
 }
 
 const base = '/api/v1/access-control'

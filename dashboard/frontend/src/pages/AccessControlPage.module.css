@@ -322,11 +322,28 @@
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+.chartCrosshair {
+  stroke: rgba(202, 220, 255, 0.34);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+  vector-effect: non-scaling-stroke;
+}
+.chartPointActive {
+  fill: #dbe8ff;
+  stroke: #315d9d;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
 .chartLabels {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
+  padding-left: 64px;
   color: rgba(255, 255, 255, 0.32);
   font-size: 0.62rem;
+}
+.chartLabels span {
+  white-space: nowrap;
 }
 .tabBar {
   display: flex;
@@ -716,6 +733,7 @@
 }
 
 .filterRail {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 0.65rem;
@@ -737,7 +755,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.filterRail select {
+.filterRail select,
+.filterRail input {
   min-height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
@@ -745,6 +764,49 @@
   color: rgba(255, 255, 255, 0.8);
   padding: 0 0.65rem;
   font-size: 0.72rem;
+}
+.customRangePopover {
+  position: absolute;
+  z-index: 15;
+  top: calc(100% + 0.45rem);
+  left: 0.7rem;
+  width: min(390px, calc(100vw - 3rem));
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  background: #151619;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.46);
+}
+.customRangePopover > div {
+  display: flex;
+  gap: 0.65rem;
+}
+.customRangePopover > div:last-child {
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+.customRangePopover label {
+  min-width: 0;
+  flex: 1;
+}
+.customRangePopover p {
+  margin: 0.55rem 0 0;
+  color: #f5a4a4;
+  font-size: 0.66rem;
+}
+.customRangePopover button {
+  min-height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.68rem;
+}
+.customRangePopover button:last-child {
+  border-color: rgba(112, 165, 255, 0.25);
+  background: rgba(112, 165, 255, 0.12);
+  color: #c8dcff;
 }
 .segmented {
   display: flex;
@@ -897,10 +959,63 @@
 .usageChartWrap {
   min-height: 295px;
 }
-.usageChartWrap svg {
+.usageChartBody {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 0.65rem;
+  min-height: 260px;
+}
+.usageYAxis {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 0 1px;
+  color: rgba(255, 255, 255, 0.34);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.61rem;
+}
+.usageChartCanvas {
+  position: relative;
+  min-width: 0;
+  min-height: 250px;
+  outline: none;
+}
+.usageChartCanvas:focus-visible {
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px rgba(112, 165, 255, 0.38);
+}
+.usageChartCanvas svg {
   width: 100%;
-  height: 260px;
+  height: 250px;
   overflow: visible;
+}
+.usageChartTooltip {
+  position: absolute;
+  z-index: 2;
+  top: 0.45rem;
+  width: max-content;
+  max-width: 240px;
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.65rem 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(15, 16, 19, 0.96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.usageChartTooltip span,
+.usageChartTooltip small {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.62rem;
+}
+.usageChartTooltip strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.86rem;
+  font-weight: 680;
 }
 .usageInsightGrid {
   display: grid;

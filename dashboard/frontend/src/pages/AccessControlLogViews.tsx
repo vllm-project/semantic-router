@@ -1,6 +1,7 @@
 import type { AccessControlViewProps as Props } from './AccessControlViewTypes'
 import { Empty, ListToolbar, Pagination, Status } from './AccessControlViewPrimitives'
 import { date, friendlyAction, number } from './AccessControlViewSupport'
+import { rangeLabel } from './accessControlUsageRange'
 import styles from './AccessControlPage.module.css'
 
 function UsageFilters(props: Props) {
@@ -23,14 +24,14 @@ function UsageFilters(props: Props) {
   return (
     <div className={styles.filterRail}>
       <div className={styles.segmented}>
-        {(['24h', '7d', '30d'] as const).map((range) => (
+        {(['today', '7d', '30d'] as const).map((range) => (
           <button
             type="button"
             key={range}
             className={props.usageScope.range === range ? styles.segmentedActive : ''}
             onClick={() => props.onUsageScopeChange({ ...props.usageScope, range })}
           >
-            {range}
+            {rangeLabel(range)}
           </button>
         ))}
       </div>

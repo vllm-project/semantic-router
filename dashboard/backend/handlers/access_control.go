@@ -278,7 +278,7 @@ func (h *AccessControlHandler) handleUsageSummary(w http.ResponseWriter, r *http
 		methodNotAllowed(w)
 		return
 	}
-	filter := boundedUsageFilter(r)
+	filter := boundedUsageSummaryFilter(r)
 	item, err := h.service.Store().UsageSummary(r.Context(), filter)
 	writeAccessResult(w, item, err)
 }
@@ -356,10 +356,14 @@ func accessListFilter(r *http.Request) accesscontrol.ListFilter {
 	query := r.URL.Query()
 	filter := accesscontrol.ListFilter{
 		Query: query.Get("q"), UserID: query.Get("userId"), TeamID: query.Get("teamId"),
-		KeyID: query.Get("keyId"), Model: query.Get("model"),
+		KeyID: query.Get("keyId"), Model: query.Get("model"), Granularity: query.Get("granularity"),
 	}
 	filter.Limit, _ = strconv.Atoi(query.Get("limit"))
 	filter.Offset, _ = strconv.Atoi(query.Get("offset"))
+	filter.TimezoneOffsetMinutes, _ = strconv.Atoi(query.Get("timezoneOffset"))
+	if filter.TimezoneOffsetMinutes < -840 || filter.TimezoneOffsetMinutes > 840 {
+		filter.TimezoneOffsetMinutes = 0
+	}
 	if value, err := time.Parse(time.RFC3339, query.Get("from")); err == nil {
 		filter.From = &value
 	}
@@ -380,6 +384,22 @@ func boundedUsageFilter(r *http.Request) accesscontrol.ListFilter {
 		filter.From = &earliest
 	}
 	if filter.To != nil && filter.To.After(now) {
+		filter.To = &now
+	}
+	return filter
+}
+
+func boundedUsageSummaryFilter(r *http.Request) accesscontrol.ListFilter {
+	filter := accessListFilter(r)
+	now := time.Now().UTC()
+	earliest := now.Add(-366 * 24 * time.Hour)
+	if filter.From == nil {
+		from := now.Add(-24 * time.Hour)
+		filter.From = &from
+	} else if filter.From.Before(earliest) {
+		filter.From = &earliest
+	}
+	if filter.To == nil || filter.To.After(now) {
 		filter.To = &now
 	}
 	return filter

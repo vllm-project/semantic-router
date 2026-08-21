@@ -22,6 +22,7 @@ const (
 
 type ModelDiscoveryRequest struct {
 	BaseURL      string            `json:"baseUrl"`
+	ModelsPath   string            `json:"modelsPath,omitempty"`
 	APIKey       string            `json:"apiKey,omitempty"`
 	AuthHeader   string            `json:"authHeader,omitempty"`
 	AuthPrefix   string            `json:"authPrefix,omitempty"`
@@ -101,6 +102,7 @@ func decodeModelDiscoveryRequest(w http.ResponseWriter, r *http.Request) (ModelD
 	}
 
 	request.BaseURL = strings.TrimSpace(request.BaseURL)
+	request.ModelsPath = strings.TrimSpace(request.ModelsPath)
 	request.APIKey = strings.TrimSpace(request.APIKey)
 	request.AuthHeader = strings.TrimSpace(request.AuthHeader)
 	request.AuthPrefix = strings.TrimSpace(request.AuthPrefix)
@@ -119,6 +121,9 @@ func decodeModelDiscoveryRequest(w http.ResponseWriter, r *http.Request) (ModelD
 	if request.BaseURL == "" {
 		return request, errors.New("base URL is required")
 	}
+	if request.ModelsPath != "" && (!strings.HasPrefix(request.ModelsPath, "/") || strings.ContainsAny(request.ModelsPath, "?#") || len(request.ModelsPath) > 256) {
+		return request, errors.New("models path must be a relative URL path")
+	}
 	if request.AuthHeader == "" {
 		request.AuthHeader = "Authorization"
 	}
@@ -132,7 +137,7 @@ func decodeModelDiscoveryRequest(w http.ResponseWriter, r *http.Request) (ModelD
 }
 
 func discoverProviderModels(ctx context.Context, client modelDiscoveryClient, input ModelDiscoveryRequest) ([]DiscoveredModel, error) {
-	candidates, err := modelDiscoveryURLs(input.BaseURL)
+	candidates, err := modelDiscoveryURLs(input.BaseURL, input.ModelsPath)
 	if err != nil {
 		return nil, &modelDiscoveryError{status: http.StatusBadRequest, code: "invalid_url", message: "Enter a valid HTTP or HTTPS base URL."}
 	}
@@ -148,7 +153,7 @@ func discoverProviderModels(ctx context.Context, client modelDiscoveryClient, in
 	return nil, &modelDiscoveryError{status: http.StatusBadGateway, code: "provider_unreachable", message: "This connection did not return a model list."}
 }
 
-func modelDiscoveryURLs(raw string) ([]string, error) {
+func modelDiscoveryURLs(raw, modelsPath string) ([]string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, errors.New("invalid base URL")
@@ -158,6 +163,10 @@ func modelDiscoveryURLs(raw string) ([]string, error) {
 		return []string{parsed.String()}, nil
 	}
 	basePath := parsed.Path
+	if modelsPath != "" {
+		parsed.Path = basePath + "/" + strings.TrimLeft(modelsPath, "/")
+		return []string{parsed.String()}, nil
+	}
 	parsed.Path = basePath + "/models"
 	candidates := []string{parsed.String()}
 	if basePath == "" {

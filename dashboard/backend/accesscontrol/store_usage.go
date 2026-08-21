@@ -71,11 +71,17 @@ WHERE ($1='' OR user_id=$1) AND ($2='' OR team_id=$2) AND ($3='' OR key_id=$3) A
 }
 
 func (s *Store) UsageSummary(ctx context.Context, filter ListFilter) (UsageSummary, error) {
+	now := time.Now().UTC()
 	if filter.From == nil {
-		from := time.Now().UTC().Add(-24 * time.Hour)
+		from := now.Add(-24 * time.Hour)
 		filter.From = &from
 	}
+	if filter.To == nil {
+		filter.To = &now
+	}
+	granularity := resolveUsageGranularity(filter.Granularity, *filter.From, *filter.To)
 	var summary UsageSummary
+	summary.Granularity = granularity.name
 	err := s.pool.QueryRow(ctx, `
 SELECT COUNT(*),COUNT(*) FILTER (WHERE status_code BETWEEN 200 AND 399),COUNT(*) FILTER (WHERE status_code >= 400),
  COALESCE(SUM(prompt_tokens),0),COALESCE(SUM(completion_tokens),0),COALESCE(SUM(total_tokens),0),COUNT(DISTINCT key_id),
@@ -92,19 +98,28 @@ WHERE ($1='' OR user_id=$1) AND ($2='' OR team_id=$2) AND ($3='' OR key_id=$3) A
 	if err != nil {
 		return summary, err
 	}
-	bucket := "hour"
-	if filter.From != nil && time.Since(*filter.From) > 48*time.Hour {
-		bucket = "day"
-	}
 	seriesQuery := fmt.Sprintf(`
-	SELECT date_trunc('%s',created_at),COUNT(*),COUNT(*) FILTER (WHERE status_code BETWEEN 200 AND 399),
-	 COUNT(*) FILTER (WHERE status_code >= 400),COALESCE(SUM(prompt_tokens),0),COALESCE(SUM(completion_tokens),0),
-	 COALESCE(SUM(total_tokens),0),COALESCE(AVG(latency_ms),0)::BIGINT
-FROM access_usage_events
-WHERE ($1='' OR user_id=$1) AND ($2='' OR team_id=$2) AND ($3='' OR key_id=$3) AND ($4='' OR model=$4)
- AND ($5::timestamptz IS NULL OR created_at >= $5) AND ($6::timestamptz IS NULL OR created_at <= $6)
-GROUP BY 1 ORDER BY 1`, bucket)
-	rows, err := s.pool.Query(ctx, seriesQuery, filter.UserID, filter.TeamID, filter.KeyID, filter.Model, filter.From, filter.To)
+	WITH buckets AS (
+	 SELECT generate_series(
+	  date_trunc('%[1]s',$5::timestamptz - ($7::int * interval '1 minute')) + ($7::int * interval '1 minute'),
+	  date_trunc('%[1]s',$6::timestamptz - ($7::int * interval '1 minute')) + ($7::int * interval '1 minute'),
+	  interval '%[2]s') AS bucket
+	), aggregated AS (
+	 SELECT date_trunc('%[1]s',created_at - ($7::int * interval '1 minute')) + ($7::int * interval '1 minute') AS bucket,
+	  COUNT(*) AS requests,COUNT(*) FILTER (WHERE status_code BETWEEN 200 AND 399) AS successful,
+	  COUNT(*) FILTER (WHERE status_code >= 400) AS failed,COALESCE(SUM(prompt_tokens),0) AS prompt_tokens,
+	  COALESCE(SUM(completion_tokens),0) AS completion_tokens,COALESCE(SUM(total_tokens),0) AS total_tokens,
+	  COALESCE(AVG(latency_ms),0)::BIGINT AS average_latency_ms
+	 FROM access_usage_events
+	 WHERE ($1='' OR user_id=$1) AND ($2='' OR team_id=$2) AND ($3='' OR key_id=$3) AND ($4='' OR model=$4)
+	  AND created_at >= $5 AND created_at <= $6
+	 GROUP BY 1
+	)
+	SELECT buckets.bucket,COALESCE(aggregated.requests,0),COALESCE(aggregated.successful,0),
+	 COALESCE(aggregated.failed,0),COALESCE(aggregated.prompt_tokens,0),COALESCE(aggregated.completion_tokens,0),
+	 COALESCE(aggregated.total_tokens,0),COALESCE(aggregated.average_latency_ms,0)
+	FROM buckets LEFT JOIN aggregated USING(bucket) ORDER BY buckets.bucket`, granularity.name, granularity.interval)
+	rows, err := s.pool.Query(ctx, seriesQuery, filter.UserID, filter.TeamID, filter.KeyID, filter.Model, filter.From, filter.To, filter.TimezoneOffsetMinutes)
 	if err != nil {
 		return summary, err
 	}
@@ -134,6 +149,40 @@ GROUP BY 1 ORDER BY 1`, bucket)
 		return summary, err
 	}
 	return summary, nil
+}
+
+type usageGranularity struct {
+	name     string
+	interval string
+}
+
+func resolveUsageGranularity(requested string, from, to time.Time) usageGranularity {
+	duration := to.Sub(from)
+	if duration < 0 {
+		duration = 0
+	}
+	minute := usageGranularity{name: "minute", interval: "1 minute"}
+	hour := usageGranularity{name: "hour", interval: "1 hour"}
+	day := usageGranularity{name: "day", interval: "1 day"}
+	switch requested {
+	case "minute":
+		if duration <= 48*time.Hour {
+			return minute
+		}
+	case "hour":
+		if duration <= 90*24*time.Hour {
+			return hour
+		}
+	case "day":
+		return day
+	}
+	if duration <= 6*time.Hour {
+		return minute
+	}
+	if duration <= 14*24*time.Hour {
+		return hour
+	}
+	return day
 }
 
 func (s *Store) usageSlices(ctx context.Context, filter ListFilter, dimension string) ([]UsageSlice, error) {

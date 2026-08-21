@@ -39,11 +39,11 @@ import {
   EMPTY_ACCESS_OVERVIEW,
   EMPTY_ACCESS_USAGE,
   accessPageQuery,
-  accessRangeStart,
   emptyAccessPage,
   type AccessEditor,
   type AccessView,
 } from './AccessControlPageSupport'
+import { usageRangeBounds, type UsageScope } from './accessControlUsageRange'
 import styles from './AccessControlPage.module.css'
 
 type PageState = { page: number; pageSize: number; query: string }
@@ -119,12 +119,15 @@ const AccessControlPage: React.FC = () => {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [identityTab, setIdentityTab] = useState<IdentityTab>('users')
   const [pageState, setPageState] = useState<PageState>({ page: 1, pageSize: 10, query: '' })
-  const [usageScope, setUsageScope] = useState<{
-    type: 'global' | 'user' | 'team' | 'key'
-    id: string
-    model: string
-    range: '24h' | '7d' | '30d'
-  }>({ type: 'global', id: '', model: '', range: '24h' })
+  const [usageScope, setUsageScope] = useState<UsageScope>({
+    type: 'global',
+    id: '',
+    model: '',
+    range: 'today',
+    granularity: 'auto',
+    customFrom: '',
+    customTo: '',
+  })
   const [liveState, setLiveState] = useState<'checking' | 'live' | 'error'>('checking')
   const createRequestHandledRef = useRef(false)
 
@@ -215,9 +218,13 @@ const AccessControlPage: React.FC = () => {
   }, [loadCatalog])
 
   const usageFilter = useMemo<UsageFilter>(() => {
+    const bounds = usageRangeBounds(usageScope)
     const filter: UsageFilter = {
       model: usageScope.model || undefined,
-      from: accessRangeStart(usageScope.range),
+      from: bounds.from,
+      to: bounds.to,
+      granularity: usageScope.granularity,
+      timezoneOffset: new Date().getTimezoneOffset(),
     }
     if (usageScope.type === 'user') filter.userId = usageScope.id || undefined
     if (usageScope.type === 'team') filter.teamId = usageScope.id || undefined

@@ -29,7 +29,7 @@ describe('provider-first model onboarding', () => {
       'Capabilities',
       'Tags',
       'LoRA adapters',
-      'Wire adapter',
+      'Wire protocol',
       'API version',
       'Chat path',
       'Extra headers',

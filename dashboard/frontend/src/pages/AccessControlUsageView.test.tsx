@@ -19,6 +19,7 @@ const overview: AccessOverview = {
 }
 
 const usage: UsageSummary = {
+  granularity: 'hour',
   requests: 147,
   successful: 146,
   failed: 1,
@@ -47,7 +48,15 @@ describe('access usage view', () => {
         teams: [],
         keys: [],
         groups: [],
-        usageScope: { type: 'global', id: '', model: '', range: '24h' },
+        usageScope: {
+          type: 'global',
+          id: '',
+          model: '',
+          range: 'today',
+          granularity: 'auto',
+          customFrom: '',
+          customTo: '',
+        },
         onUsageScopeChange: vi.fn(),
         loading: false,
       }),
@@ -60,6 +69,8 @@ describe('access usage view', () => {
     expect(markup).toContain('model grants')
     expect(markup).toContain('active quota policies')
     expect(markup).toContain('Traffic over time')
+    expect(markup).toContain('1 hour per point')
+    expect(markup).toContain('Granularity')
     expect(markup).toContain('Usage leaders')
   })
 })

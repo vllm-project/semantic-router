@@ -6,18 +6,20 @@ import type {
   AccessOverview,
   AccessTeam,
   AccessUser,
-  UsagePoint,
   UsageSlice,
   UsageSummary,
 } from '../utils/inferenceAccessApi'
+import AccessControlUsageTrend from './AccessControlUsageTrend'
+import {
+  dateInputValue,
+  rangeLabel,
+  usageRangeDays,
+  type UsageGranularity,
+  type UsageScope,
+} from './accessControlUsageRange'
 import styles from './AccessControlPage.module.css'
 
-export interface UsageScope {
-  type: 'global' | 'user' | 'team' | 'key'
-  id: string
-  model: string
-  range: '24h' | '7d' | '30d'
-}
+export type { UsageScope } from './accessControlUsageRange'
 
 interface Props {
   overview: AccessOverview
@@ -111,7 +113,7 @@ export default function AccessControlUsageView(props: Props) {
       <section className={`${styles.panel} ${styles.usageTrendPanel}`}>
         <div className={styles.usagePanelHeader}>
           <div>
-            <span>{props.usageScope.range === '24h' ? 'Hourly' : 'Daily'}</span>
+            <span>{`1 ${props.usage.granularity} per point`}</span>
             <h3>Traffic over time</h3>
           </div>
           <div className={styles.segmented}>
@@ -127,7 +129,11 @@ export default function AccessControlUsageView(props: Props) {
             ))}
           </div>
         </div>
-        <TrendChart points={props.usage.series} metric={metric} />
+        <AccessControlUsageTrend
+          points={props.usage.series}
+          metric={metric}
+          granularity={props.usage.granularity}
+        />
       </section>
 
       <div className={styles.usageInsightGrid}>
@@ -306,6 +312,15 @@ function UsagePostureItem({
 }
 
 function UsageFilters(props: Props) {
+  const [customOpen, setCustomOpen] = useState(false)
+  const today = dateInputValue(new Date())
+  const weekAgo = new Date()
+  weekAgo.setDate(weekAgo.getDate() - 6)
+  const [customFrom, setCustomFrom] = useState(
+    props.usageScope.customFrom || dateInputValue(weekAgo),
+  )
+  const [customTo, setCustomTo] = useState(props.usageScope.customTo || today)
+  const [customError, setCustomError] = useState('')
   const subjects =
     props.usageScope.type === 'user'
       ? props.users
@@ -322,20 +337,115 @@ function UsageFilters(props: Props) {
       ),
     ]),
   ]
+  const changeRange = (range: UsageScope['range']) => {
+    const next = { ...props.usageScope, range }
+    const days = usageRangeDays(next)
+    if ((next.granularity === 'minute' && days > 2) || (next.granularity === 'hour' && days > 90)) {
+      next.granularity = 'auto'
+    }
+    props.onUsageScopeChange(next)
+  }
+  const applyCustomRange = () => {
+    const from = Date.parse(`${customFrom}T00:00:00`)
+    const to = Date.parse(`${customTo}T23:59:59`)
+    if (!customFrom || !customTo || Number.isNaN(from) || Number.isNaN(to) || from > to) {
+      setCustomError('Choose a valid date range.')
+      return
+    }
+    if (to - from > 366 * 86_400_000) {
+      setCustomError('Choose up to 366 days.')
+      return
+    }
+    const next: UsageScope = {
+      ...props.usageScope,
+      range: 'custom',
+      customFrom,
+      customTo,
+    }
+    if (next.granularity === 'minute' && usageRangeDays(next) > 2) next.granularity = 'auto'
+    if (next.granularity === 'hour' && usageRangeDays(next) > 90) next.granularity = 'auto'
+    setCustomError('')
+    setCustomOpen(false)
+    props.onUsageScopeChange(next)
+  }
+  const rangeDays = usageRangeDays(props.usageScope)
   return (
     <div className={styles.filterRail}>
       <div className={styles.segmented}>
-        {(['24h', '7d', '30d'] as const).map((range) => (
+        {(['today', '7d', '30d', 'mtd', 'ytd'] as const).map((range) => (
           <button
             type="button"
             key={range}
             className={props.usageScope.range === range ? styles.segmentedActive : ''}
-            onClick={() => props.onUsageScopeChange({ ...props.usageScope, range })}
+            onClick={() => changeRange(range)}
           >
-            {range}
+            {rangeLabel(range)}
           </button>
         ))}
+        <button
+          type="button"
+          className={props.usageScope.range === 'custom' ? styles.segmentedActive : ''}
+          onClick={() => setCustomOpen((open) => !open)}
+          aria-expanded={customOpen}
+        >
+          Custom
+        </button>
       </div>
+      {customOpen ? (
+        <div className={styles.customRangePopover}>
+          <div>
+            <label>
+              <span>From</span>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || today}
+                onChange={(event) => setCustomFrom(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>To</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={today}
+                onChange={(event) => setCustomTo(event.target.value)}
+              />
+            </label>
+          </div>
+          {customError ? <p role="alert">{customError}</p> : null}
+          <div>
+            <button type="button" onClick={() => setCustomOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" onClick={applyCustomRange}>
+              Apply
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <label>
+        <span>Granularity</span>
+        <select
+          value={props.usageScope.granularity}
+          onChange={(event) =>
+            props.onUsageScopeChange({
+              ...props.usageScope,
+              granularity: event.target.value as UsageGranularity,
+            })
+          }
+        >
+          <option value="auto">Auto</option>
+          <option value="minute" disabled={rangeDays > 2}>
+            Minute
+          </option>
+          <option value="hour" disabled={rangeDays > 90}>
+            Hour
+          </option>
+          <option value="day">Day</option>
+        </select>
+      </label>
       <label>
         <span>Scope</span>
         <select
@@ -410,106 +520,6 @@ function UsageMetric({
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
-  )
-}
-
-function TrendChart({
-  points,
-  metric,
-}: {
-  points: UsagePoint[]
-  metric: 'tokens' | 'requests' | 'latency'
-}) {
-  if (!points.length)
-    return (
-      <div className={styles.usageEmpty}>
-        <strong>No usage yet</strong>
-        <span>Managed requests will appear here.</span>
-      </div>
-    )
-  const width = 1000
-  const height = 260
-  const xPad = 28
-  const yPad = 24
-  const value = (point: UsagePoint) =>
-    metric === 'tokens'
-      ? point.totalTokens
-      : metric === 'requests'
-        ? point.requests
-        : point.averageLatencyMs
-  const max = Math.max(...points.map(value), 1)
-  const step = (width - xPad * 2) / Math.max(points.length - 1, 1)
-  const chartPoints = points.map((point, index) => ({
-    point,
-    value: value(point),
-    x: xPad + index * step,
-    y: height - yPad - (value(point) / max) * (height - yPad * 2),
-  }))
-  const line = chartPoints
-    .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-    .join(' ')
-  const area = `${line} L${chartPoints[chartPoints.length - 1].x},${height - yPad} L${chartPoints[0].x},${height - yPad} Z`
-  const labelIndexes = new Set([
-    0,
-    points.length - 1,
-    ...points
-      .map((_, index) => index)
-      .filter((index) => index % Math.max(1, Math.floor(points.length / 5)) === 0),
-  ])
-  return (
-    <div className={styles.usageChartWrap}>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`${metric} over time`}
-      >
-        {[0.25, 0.5, 0.75, 1].map((ratio) => (
-          <line
-            key={ratio}
-            x1={xPad}
-            x2={width - xPad}
-            y1={height - yPad - ratio * (height - yPad * 2)}
-            y2={height - yPad - ratio * (height - yPad * 2)}
-            className={styles.gridLine}
-          />
-        ))}
-        <defs>
-          <linearGradient id={`usage-${metric}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#70a5ff" stopOpacity=".32" />
-            <stop offset="1" stopColor="#70a5ff" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#usage-${metric})`} />
-        <path d={line} className={styles.chartLine} />
-        {chartPoints.map((item) => (
-          <circle
-            key={item.point.bucket}
-            cx={item.x}
-            cy={item.y}
-            r="3"
-            className={styles.chartPoint}
-          >
-            <title>
-              {number(item.value)} {metric}
-            </title>
-          </circle>
-        ))}
-      </svg>
-      <div className={styles.chartLabels}>
-        {chartPoints
-          .filter((_, index) => labelIndexes.has(index))
-          .map(({ point }) => (
-            <span key={point.bucket}>
-              {new Intl.DateTimeFormat('en-US', {
-                month: points.length > 48 ? 'short' : undefined,
-                day: points.length > 48 ? 'numeric' : undefined,
-                hour: points.length <= 48 ? 'numeric' : undefined,
-              }).format(new Date(point.bucket))}
-            </span>
-          ))}
-      </div>
-    </div>
   )
 }
 

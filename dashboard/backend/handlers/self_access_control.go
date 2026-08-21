@@ -65,7 +65,7 @@ func (h *SelfAccessControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 			methodNotAllowed(w)
 			return
 		}
-		result, err := h.service.SelfUsage(r.Context(), ac.AccessUserID, boundedUsageFilter(r))
+		result, err := h.service.SelfUsage(r.Context(), ac.AccessUserID, boundedUsageSummaryFilter(r))
 		writeAccessResult(w, result, err)
 	case "request-logs":
 		if r.Method != http.MethodGet {

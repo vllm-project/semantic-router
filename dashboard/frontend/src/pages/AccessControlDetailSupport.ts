@@ -7,6 +7,7 @@ import type {
 } from '../utils/inferenceAccessApi'
 
 export const EMPTY_USAGE: UsageSummary = {
+  granularity: 'hour',
   requests: 0,
   successful: 0,
   failed: 0,

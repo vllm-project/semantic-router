@@ -78,13 +78,33 @@ func TestModelDiscoveryForwardsNativeProviderHeaders(t *testing.T) {
 		}, nil
 	})
 	handler := newModelDiscoveryHandler(client)
-	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(`{"baseUrl":"https://api.anthropic.com","apiKey":"anthropic-secret","authHeader":"x-api-key","authPrefix":"","extraHeaders":{"anthropic-version":"2023-06-01"}}`))
+	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(`{"baseUrl":"https://api.anthropic.com","modelsPath":"/v1/models","apiKey":"anthropic-secret","authHeader":"x-api-key","authPrefix":"","extraHeaders":{"anthropic-version":"2023-06-01"}}`))
 	response := httptest.NewRecorder()
 
 	handler(response, request)
 
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "claude-sonnet") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestModelDiscoveryUsesExplicitProviderPathWithoutProtocolGuessing(t *testing.T) {
+	requests := 0
+	client := modelDiscoveryRoundTripper(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.String() != "https://provider.test/api/v2/catalog/models" {
+			t.Fatalf("discovery URL = %q", request.URL.String())
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"data":[]}`)), Header: make(http.Header)}, nil
+	})
+	handler := newModelDiscoveryHandler(client)
+	request := httptest.NewRequest(http.MethodPost, modelDiscoveryPath, strings.NewReader(`{"baseUrl":"https://provider.test/api/v2","modelsPath":"/catalog/models"}`))
+	response := httptest.NewRecorder()
+
+	handler(response, request)
+
+	if response.Code != http.StatusOK || requests != 1 {
+		t.Fatalf("status=%d requests=%d body=%s", response.Code, requests, response.Body.String())
 	}
 }
 

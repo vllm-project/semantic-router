@@ -6,6 +6,7 @@ import {
   filterModelProviders,
   getModelProvider,
 } from './modelProviderCatalog'
+import { getModelProviderLogoSource } from './modelProviderLogoSupport'
 
 describe('modelProviderCatalog', () => {
   it('keeps the requested runtime providers first', () => {
@@ -21,7 +22,7 @@ describe('modelProviderCatalog', () => {
     expect(new Set(MODEL_PROVIDERS.map((provider) => provider.id)).size).toBe(
       MODEL_PROVIDERS.length,
     )
-    expect(MODEL_PROVIDERS.length).toBeGreaterThan(60)
+    expect(MODEL_PROVIDERS.length).toBeGreaterThan(30)
     for (const provider of MODEL_PROVIDERS) {
       expect(provider.name).toBeTruthy()
       expect(provider.shortName).toBeTruthy()
@@ -29,7 +30,19 @@ describe('modelProviderCatalog', () => {
       expect(
         provider.runtimeProvider === 'openai' || provider.runtimeProvider === 'anthropic',
       ).toBe(true)
+      expect(getModelProviderLogoSource(provider.id)).toBeTruthy()
     }
+  })
+
+  it('only offers one-key model APIs with complete discovery endpoints', () => {
+    const modelAPIs = MODEL_PROVIDERS.filter((provider) => provider.category === 'Model APIs')
+    expect(modelAPIs.length).toBeGreaterThan(20)
+    for (const provider of modelAPIs) {
+      expect(provider.baseUrl).toMatch(/^https:\/\//)
+      expect(provider.modelsPath).toMatch(/^\//)
+      expect(provider.apiKeyOptional).not.toBe(true)
+    }
+    expect(modelAPIs.map((provider) => provider.id)).toContain('sakana')
   })
 
   it('ships native Anthropic defaults and searchable external providers', () => {
@@ -39,6 +52,7 @@ describe('modelProviderCatalog', () => {
       authHeader: 'x-api-key',
       authPrefix: '',
       chatPath: '/v1/messages',
+      modelsPath: '/v1/models',
     })
     expect(filterModelProviders('openrouter').map((provider) => provider.id)).toContain(
       'openrouter',

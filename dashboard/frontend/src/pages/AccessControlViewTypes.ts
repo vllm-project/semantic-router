@@ -12,6 +12,7 @@ import type {
   UsageSummary,
 } from '../utils/inferenceAccessApi'
 import type { AccessView } from './AccessControlPageSupport'
+import type { UsageScope } from './accessControlUsageRange'
 
 export interface DashboardMember {
   id: string
@@ -51,12 +52,7 @@ export interface AccessControlViewProps {
   auditPage: AccessPage<AccessAuditEvent>
   pageState: AccessControlPageState
   onPageStateChange: (value: AccessControlPageState) => void
-  usageScope: {
-    type: 'global' | 'user' | 'team' | 'key'
-    id: string
-    model: string
-    range: '24h' | '7d' | '30d'
-  }
+  usageScope: UsageScope
   onUsageScopeChange: (value: AccessControlViewProps['usageScope']) => void
   loading: boolean
   canManage: boolean

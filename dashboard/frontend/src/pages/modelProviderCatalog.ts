@@ -14,6 +14,7 @@ export interface ModelProviderDefinition {
   authHeader: string
   authPrefix: string
   chatPath?: string
+  modelsPath?: string
   extraHeaders?: Record<string, string>
   apiKeyOptional?: boolean
 }
@@ -25,10 +26,7 @@ type ProviderOverrides = Partial<
   >
 >
 
-const HTTPS_SCHEME = 'https:'
-
-const hostedEndpoint = (host: string, path = ''): string =>
-  `${HTTPS_SCHEME}//${host}${path}`
+const hostedEndpoint = (host: string, path = ''): string => `https://${host}${path}`
 
 const local = (
   id: string,
@@ -62,7 +60,7 @@ const api = (
   shortName: string,
   description: string,
   accent: string,
-  baseUrl = '',
+  baseUrl: string,
   overrides: ProviderOverrides = {},
 ): ModelProviderDefinition => ({
   id,
@@ -73,6 +71,7 @@ const api = (
   category: 'Model APIs',
   accent,
   baseUrl,
+  modelsPath: '/models',
   apiFormat: 'openai',
   runtimeProvider: 'openai',
   authHeader: 'Authorization',
@@ -91,10 +90,9 @@ const gateway = (
 ): ModelProviderDefinition => ({
   ...api(id, providerCode, name, shortName, description, accent, '', overrides),
   category: 'Private gateways',
+  modelsPath: undefined,
 })
 
-// OpenAI-compatible providers use the generic OpenAI wire adapter. Anthropic
-// uses the native Messages adapter.
 export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
   local('vllm', 'VLLM', 'vLLM', 'V', 'Serve any OpenAI-compatible vLLM endpoint.', '#5ba8ff'),
   local(
@@ -103,7 +101,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'SGLang',
     'S',
     'Connect an SGLang OpenAI API server.',
-    '#a78bfa',
+    '#d55816',
   ),
   local(
     'amd-atom',
@@ -145,7 +143,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'Anthropic',
     'Anthropic',
     'AI',
-    'Claude models through the native Messages API.',
+    'Claude through the native Messages API.',
     '#d97757',
     hostedEndpoint('api.anthropic.com'),
     {
@@ -154,6 +152,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
       authHeader: 'x-api-key',
       authPrefix: '',
       chatPath: '/v1/messages',
+      modelsPath: '/v1/models',
       extraHeaders: { 'anthropic-version': '2023-06-01' },
     },
   ),
@@ -162,34 +161,9 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'Google_AI_Studio',
     'Google AI Studio',
     'G',
-    'Gemini through Google AI Studio.',
+    'Gemini through its OpenAI-compatible API.',
     '#4285f4',
     hostedEndpoint('generativelanguage.googleapis.com', '/v1beta/openai'),
-  ),
-  api('azure-openai', 'Azure', 'Azure OpenAI', 'AZ', 'Azure-hosted OpenAI deployments.', '#0089d6'),
-  api(
-    'azure-ai-foundry',
-    'Azure_AI_Studio',
-    'Azure AI Foundry',
-    'AF',
-    'Models deployed from Azure AI Foundry.',
-    '#31a8ff',
-  ),
-  api(
-    'amazon-bedrock',
-    'Bedrock',
-    'Amazon Bedrock',
-    'AWS',
-    'Foundation models served by Amazon Bedrock.',
-    '#ff9900',
-  ),
-  api(
-    'vertex-ai',
-    'Vertex_AI',
-    'Vertex AI',
-    'VX',
-    'Gemini and partner models on Vertex AI.',
-    '#4285f4',
   ),
   api(
     'deepseek',
@@ -198,7 +172,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'DS',
     'DeepSeek chat and reasoning models.',
     '#4d6bfe',
-    hostedEndpoint('api.deepseek.com'),
+    hostedEndpoint('api.deepseek.com', '/v1'),
   ),
   api(
     'mistral',
@@ -232,7 +206,7 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'FireworksAI',
     'Fireworks AI',
     'FW',
-    'Fast serverless and dedicated inference.',
+    'Serverless and dedicated inference.',
     '#f97316',
     hostedEndpoint('api.fireworks.ai', '/inference/v1'),
   ),
@@ -262,17 +236,17 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'Online models with search grounding.',
     '#20b8a6',
     hostedEndpoint('api.perplexity.ai'),
+    { modelsPath: '/v1/models' },
   ),
   api(
     'cohere',
     'COHERE_CHAT',
     'Cohere',
     'CO',
-    'Command models from Cohere.',
+    'Command models through OpenAI compatibility.',
     '#39594d',
     hostedEndpoint('api.cohere.ai', '/compatibility/v1'),
   ),
-  api('ai21', 'AI21_CHAT', 'AI21', '21', 'Jamba and Jurassic models from AI21.', '#6d5dfc'),
   api(
     'deepinfra',
     'DeepInfra',
@@ -287,32 +261,16 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'HUGGINGFACE',
     'Hugging Face',
     'HF',
-    'Inference endpoints and providers.',
+    'Inference Providers behind one API.',
     '#ffcc4d',
-  ),
-  api('replicate', 'REPLICATE', 'Replicate', 'R', 'Hosted open-source models.', '#f4f4f5'),
-  api(
-    'databricks',
-    'Databricks',
-    'Databricks',
-    'DB',
-    'Foundation Model APIs on Databricks.',
-    '#ff3621',
-  ),
-  api(
-    'cloudflare',
-    'CLOUDFLARE',
-    'Cloudflare Workers AI',
-    'CF',
-    'Models on the Cloudflare network.',
-    '#f38020',
+    hostedEndpoint('router.huggingface.co', '/v1'),
   ),
   api(
     'nvidia-nim',
     'NVIDIA_NIM',
     'NVIDIA NIM',
     'N',
-    'NVIDIA-hosted and private NIM endpoints.',
+    'Hosted NIM model endpoints.',
     '#8aae42',
     hostedEndpoint('integrate.api.nvidia.com', '/v1'),
   ),
@@ -326,49 +284,41 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     hostedEndpoint('api.sambanova.ai', '/v1'),
   ),
   api(
-    'snowflake',
-    'Snowflake',
-    'Snowflake Cortex',
-    '❄',
-    'Models available through Snowflake Cortex.',
-    '#29b5e8',
-  ),
-  api(
-    'watsonx',
-    'WATSONX',
-    'IBM watsonx',
-    'IBM',
-    'Enterprise foundation models on watsonx.',
-    '#0f62fe',
-  ),
-  api(
-    'oracle-oci',
-    'Oracle',
-    'Oracle OCI',
-    'OCI',
-    'Generative AI hosted on Oracle Cloud.',
-    '#c74634',
-  ),
-  api(
-    'sap',
-    'SAP',
-    'SAP Generative AI Hub',
-    'SAP',
-    'Enterprise models through SAP AI Core.',
-    '#0a6ed1',
-  ),
-  api('volcengine', 'VolcEngine', 'VolcEngine', 'VE', 'Model APIs from VolcEngine.', '#3370ff'),
-  api(
     'dashscope',
     'Dashscope',
     'DashScope',
     'Q',
-    'Qwen models through Alibaba DashScope.',
+    'Qwen models through Alibaba Cloud.',
     '#615ced',
+    hostedEndpoint('dashscope.aliyuncs.com', '/compatible-mode/v1'),
   ),
-  api('minimax', 'MINIMAX', 'MiniMax', 'MM', 'MiniMax text and reasoning models.', '#ff4d6d'),
-  api('moonshot', 'MOONSHOT', 'Moonshot', 'K', 'Kimi models through Moonshot AI.', '#f4f4f5'),
-  api('zai', 'ZAI', 'Z.AI', 'Z', 'GLM models from Z.AI.', '#2563eb'),
+  api(
+    'minimax',
+    'MINIMAX',
+    'MiniMax',
+    'MM',
+    'MiniMax text and reasoning models.',
+    '#ff4d6d',
+    hostedEndpoint('api.minimax.io', '/v1'),
+  ),
+  api(
+    'moonshot',
+    'MOONSHOT',
+    'Moonshot AI',
+    'K',
+    'Kimi models through Moonshot AI.',
+    '#f4f4f5',
+    hostedEndpoint('api.moonshot.ai', '/v1'),
+  ),
+  api(
+    'zai',
+    'ZAI',
+    'Z.AI',
+    'Z',
+    'GLM models from Z.AI.',
+    '#2563eb',
+    hostedEndpoint('api.z.ai', '/api/paas/v4'),
+  ),
   api(
     'novita',
     'NOVITA',
@@ -377,14 +327,6 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'Serverless open-model inference.',
     '#7c3aed',
     hostedEndpoint('api.novita.ai', '/v3/openai'),
-  ),
-  api(
-    'baseten',
-    'BASETEN',
-    'Baseten',
-    'B',
-    'Dedicated and serverless model deployments.',
-    '#ff6b35',
   ),
   api(
     'nebius',
@@ -396,31 +338,23 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     hostedEndpoint('api.studio.nebius.com', '/v1'),
   ),
   api(
-    'hyperbolic',
-    'HYPERBOLIC',
-    'Hyperbolic',
-    'HY',
-    'Open-model inference on Hyperbolic.',
-    '#7c3aed',
-    hostedEndpoint('api.hyperbolic.xyz', '/v1'),
-  ),
-  api(
     'featherless',
     'FEATHERLESS_AI',
     'Featherless AI',
     'FL',
     'On-demand open-model inference.',
     '#d946ef',
+    hostedEndpoint('api.featherless.ai', '/v1'),
   ),
   api(
     'friendli',
     'FRIENDLIAI',
     'FriendliAI',
     'FR',
-    'Optimized model endpoints from FriendliAI.',
+    'Optimized serverless model endpoints.',
     '#ff4f64',
+    hostedEndpoint('api.friendli.ai', '/serverless/v1'),
   ),
-  api('lambda', 'LAMBDA_AI', 'Lambda', 'λ', 'Model inference on Lambda Cloud.', '#6bff81'),
   api(
     'vercel-ai-gateway',
     'VERCEL_AI_GATEWAY',
@@ -428,36 +362,26 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     '▲',
     'Models through Vercel AI Gateway.',
     '#f4f4f5',
-  ),
-  api('cometapi', 'COMETAPI', 'CometAPI', 'CA', 'Unified model API from CometAPI.', '#38bdf8'),
-  api('aiml-api', 'AIML', 'AI/ML API', 'ML', 'Unified API for hosted AI models.', '#22c55e'),
-  api('bytez', 'BYTEZ', 'Bytez', 'BY', 'Hosted model APIs from Bytez.', '#06b6d4'),
-  api('nscale', 'NSCALE', 'Nscale', 'NS', 'Inference services from Nscale.', '#10b981'),
-  api('ovhcloud', 'OVHCLOUD', 'OVHcloud', 'OVH', 'AI endpoints on OVHcloud.', '#0050d7'),
-  api('heroku', 'HEROKU', 'Heroku AI', 'H', 'Managed model inference on Heroku.', '#79589f'),
-  api('galadriel', 'GALADRIEL', 'Galadriel', 'GA', 'Open model APIs from Galadriel.', '#a855f7'),
-  api('empower', 'EMPOWER', 'Empower', 'E', 'Enterprise model endpoints.', '#3b82f6'),
-  api('predibase', 'PREDIBASE', 'Predibase', 'PB', 'Fine-tuned and open model serving.', '#7c3aed'),
-  api('maritalk', 'MARITALK', 'Maritalk', 'MA', 'Portuguese-first model APIs.', '#16a34a'),
-  api('nlp-cloud', 'NLP_CLOUD', 'NLP Cloud', 'NC', 'Production NLP and LLM APIs.', '#0ea5e9'),
-  api('clarifai', 'CLARIFAI', 'Clarifai', 'CL', 'Models and workflows on Clarifai.', '#8b5cf6'),
-  api(
-    'github-models',
-    'GITHUB',
-    'GitHub Models',
-    'GH',
-    'Model APIs provided by GitHub.',
-    '#f4f4f5',
+    hostedEndpoint('ai-gateway.vercel.sh', '/v1'),
   ),
   api(
-    'github-copilot',
-    'GITHUB_COPILOT',
-    'GitHub Copilot',
-    'GC',
-    'Copilot model access through GitHub.',
-    '#f4f4f5',
+    'cometapi',
+    'COMETAPI',
+    'CometAPI',
+    'CA',
+    'Unified access to hosted models.',
+    '#38bdf8',
+    hostedEndpoint('api.cometapi.com', '/v1'),
   ),
-  api('cursor', 'CURSOR', 'Cursor', 'CU', 'Cursor model gateway connections.', '#f4f4f5'),
+  api(
+    'sakana',
+    'CUSTOM_OPENAI',
+    'Sakana AI',
+    'SA',
+    'Models from Sakana AI.',
+    '#e10600',
+    hostedEndpoint('api.sakana.ai', '/v1'),
+  ),
 
   gateway(
     'ollama',
@@ -484,24 +408,6 @@ export const MODEL_PROVIDERS: readonly ModelProviderDefinition[] = [
     'XI',
     'Connect a Xinference deployment.',
     '#5b8cff',
-    { apiKeyOptional: true },
-  ),
-  gateway(
-    'llamafile',
-    'LLAMAFILE',
-    'Llamafile',
-    'LF',
-    'Connect a llamafile OpenAI endpoint.',
-    '#f59e0b',
-    { apiKeyOptional: true },
-  ),
-  gateway(
-    'oobabooga',
-    'OOBABOOGA',
-    'Oobabooga',
-    'OO',
-    'Connect a text-generation-webui API.',
-    '#f97316',
     { apiKeyOptional: true },
   ),
   gateway(

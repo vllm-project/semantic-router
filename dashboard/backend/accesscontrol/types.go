@@ -109,6 +109,7 @@ type UsageEvent struct {
 }
 
 type UsageSummary struct {
+	Granularity      string       `json:"granularity"`
 	Requests         int64        `json:"requests"`
 	Successful       int64        `json:"successful"`
 	Failed           int64        `json:"failed"`
@@ -175,13 +176,15 @@ type Overview struct {
 }
 
 type ListFilter struct {
-	Limit  int
-	Offset int
-	Query  string
-	UserID string
-	TeamID string
-	KeyID  string
-	Model  string
-	From   *time.Time
-	To     *time.Time
+	Limit                 int
+	Offset                int
+	Query                 string
+	UserID                string
+	TeamID                string
+	KeyID                 string
+	Model                 string
+	Granularity           string
+	TimezoneOffsetMinutes int
+	From                  *time.Time
+	To                    *time.Time
 }

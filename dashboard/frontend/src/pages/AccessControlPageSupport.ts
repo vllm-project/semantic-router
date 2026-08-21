@@ -81,6 +81,7 @@ export const EMPTY_ACCESS_OVERVIEW: AccessOverview = {
 }
 
 export const EMPTY_ACCESS_USAGE: UsageSummary = {
+  granularity: 'hour',
   requests: 0,
   successful: 0,
   failed: 0,
@@ -112,8 +113,3 @@ export const accessPageQuery = (state: { page: number; pageSize: number; query: 
   limit: state.pageSize,
   offset: (state.page - 1) * state.pageSize,
 })
-
-export const accessRangeStart = (preset: '24h' | '7d' | '30d') => {
-  const hours = preset === '24h' ? 24 : preset === '7d' ? 24 * 7 : 24 * 30
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
-}

@@ -17,6 +17,7 @@ describe('model discovery API', () => {
     await expect(
       discoverProviderModels({
         baseUrl: 'http://provider.test/v1',
+        modelsPath: '/models',
         apiKey: 'secret',
         extraHeaders: { 'anthropic-version': '2023-06-01' },
       }),
@@ -26,6 +27,7 @@ describe('model discovery API', () => {
       expect.objectContaining({ method: 'POST', body: expect.stringContaining('secret') }),
     )
     expect(fetchMock.mock.calls[0][1].body).toContain('anthropic-version')
+    expect(fetchMock.mock.calls[0][1].body).toContain('modelsPath')
   })
 
   it('surfaces the product-safe server message', async () => {

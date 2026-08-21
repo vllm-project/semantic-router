@@ -5,6 +5,7 @@ export interface DiscoveredProviderModel {
 
 export interface ModelDiscoveryInput {
   baseUrl: string
+  modelsPath?: string
   apiKey?: string
   authHeader?: string
   authPrefix?: string

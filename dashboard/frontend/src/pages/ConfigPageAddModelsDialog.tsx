@@ -78,7 +78,6 @@ export default function ConfigPageAddModelsDialog({
   const [authHeader, setAuthHeader] = useState('Authorization')
   const [authPrefix, setAuthPrefix] = useState('Bearer')
   const [runtimeProvider, setRuntimeProvider] = useState('openai')
-  const [apiFormat, setApiFormat] = useState('openai')
   const [apiVersion, setApiVersion] = useState('')
   const [chatPath, setChatPath] = useState('')
   const [apiKeyEnv, setApiKeyEnv] = useState('')
@@ -155,7 +154,6 @@ export default function ConfigPageAddModelsDialog({
     setAuthHeader(provider.authHeader)
     setAuthPrefix(provider.authPrefix)
     setRuntimeProvider(provider.runtimeProvider)
-    setApiFormat(provider.apiFormat)
     setChatPath(provider.chatPath || '')
     setExtraHeadersText(provider.extraHeaders ? JSON.stringify(provider.extraHeaders, null, 2) : '')
     setModels([])
@@ -167,6 +165,10 @@ export default function ConfigPageAddModelsDialog({
   const findModels = async () => {
     if (!baseUrl.trim()) {
       setError('Enter a base URL.')
+      return
+    }
+    if (!selectedProvider?.apiKeyOptional && !apiKey.trim()) {
+      setError('Enter your API key.')
       return
     }
     let extraHeaders: Record<string, string>
@@ -185,6 +187,7 @@ export default function ConfigPageAddModelsDialog({
       const discovered = await discoverProviderModels(
         {
           baseUrl: baseUrl.trim(),
+          modelsPath: selectedProvider?.modelsPath,
           apiKey: apiKey.trim(),
           authHeader,
           authPrefix,
@@ -263,7 +266,7 @@ export default function ConfigPageAddModelsDialog({
         authHeader: authHeader.trim(),
         authPrefix: authPrefix.trim(),
         runtimeProvider: runtimeProvider.trim() || 'openai',
-        apiFormat: apiFormat.trim() || 'openai',
+        apiFormat: runtimeProvider === 'anthropic' ? 'anthropic' : 'openai',
         apiVersion: apiVersion.trim(),
         chatPath: chatPath.trim(),
         apiKeyEnv: apiKeyEnv.trim(),
@@ -370,7 +373,9 @@ export default function ConfigPageAddModelsDialog({
                   value={baseUrl}
                   onChange={(event) => setBaseUrl(event.target.value)}
                   placeholder="http://localhost:8000/v1"
-                  autoFocus
+                  readOnly={selectedProvider?.category === 'Model APIs'}
+                  aria-readonly={selectedProvider?.category === 'Model APIs'}
+                  autoFocus={selectedProvider?.category !== 'Model APIs'}
                 />
               </label>
               <label className={styles.field}>
@@ -385,6 +390,7 @@ export default function ConfigPageAddModelsDialog({
                     selectedProvider?.apiKeyOptional ? 'If required' : 'Required by provider'
                   }
                   autoComplete="off"
+                  autoFocus={selectedProvider?.category === 'Model APIs'}
                 />
               </label>
               <button
@@ -529,23 +535,17 @@ export default function ConfigPageAddModelsDialog({
                   </div>
                   <div className={styles.advancedGrid}>
                     <label className={styles.field}>
-                      <span>Wire adapter</span>
+                      <span>Wire protocol</span>
                       <select
                         value={runtimeProvider}
-                        onChange={(event) => setRuntimeProvider(event.target.value)}
+                        disabled={selectedProvider?.category === 'Model APIs'}
+                        onChange={(event) => {
+                          const protocol = event.target.value
+                          setRuntimeProvider(protocol)
+                        }}
                       >
                         <option value="openai">OpenAI compatible</option>
                         <option value="anthropic">Anthropic Messages</option>
-                      </select>
-                    </label>
-                    <label className={styles.field}>
-                      <span>API format</span>
-                      <select
-                        value={apiFormat}
-                        onChange={(event) => setApiFormat(event.target.value)}
-                      >
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic</option>
                       </select>
                     </label>
                     <label className={styles.field}>
