@@ -13,6 +13,7 @@ import tempfile
 
 import yaml
 
+from cli.consts import PUBLISH_MANAGEMENT_API_ENV
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
@@ -61,6 +62,7 @@ def translate_config_to_helm_values(
         secret_name=env_secret_name,
         config_file=source_config_file or config_file,
     )
+    _translate_management_api(env_vars, values)
 
     if profile_values:
         values = _deep_merge(profile_values, values)
@@ -144,6 +146,25 @@ def _translate_env_vars(
         if secret_name not in secrets:
             secrets.append(secret_name)
         values["envFromSecrets"] = secrets
+
+
+def _translate_management_api(env_vars: dict[str, str] | None, values: dict) -> None:
+    """Map ``--publish-management-api`` / ``VLLM_SR_PUBLISH_MANAGEMENT_API`` onto
+    the chart's ``managementApi.expose`` value.
+
+    Without this, the flag/env var only ever reached the container runtime
+    (docker) path: for ``--target k8s`` it was accepted, logged, and then
+    silently discarded, because :8080 exposure on the primary Service is
+    controlled solely by the Helm value, not by a pod env var (#2463 Phase 4
+    follow-up). Passing the flag for a Kubernetes deploy now also exposes
+    classify-api on the primary Service, matching the docker-target behavior
+    of publishing the management API for host/CLI access.
+    """
+    if not env_vars:
+        return
+    raw = str(env_vars.get(PUBLISH_MANAGEMENT_API_ENV, "")).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        values.setdefault("managementApi", {})["expose"] = True
 
 
 def _translate_observability(enable: bool, values: dict) -> None:

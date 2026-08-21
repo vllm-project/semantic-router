@@ -14,7 +14,7 @@
            You can watch the status of by running 'kubectl get --namespace {{ include "semantic-router.namespace" . }} svc -w {{ include "semantic-router.fullname" . }}'
   export SERVICE_IP=$(kubectl get svc --namespace {{ include "semantic-router.namespace" . }} {{ include "semantic-router.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
 {{- $mgmt := .Values.managementApi | default dict }}
-{{- if $mgmt.expose }}
+{{- if eq $mgmt.expose true }}
   echo http://$SERVICE_IP:{{ .Values.service.api.port }}
 {{- else }}
   echo "Primary Service LoadBalancer IP: $SERVICE_IP (gRPC). Management API is on the ClusterIP {{ include "semantic-router.fullname" . }}-management service."
@@ -26,7 +26,7 @@
 
 2. Management API access (#2463):
 {{- $mgmt := .Values.managementApi | default dict }}
-{{- if $mgmt.expose }}
+{{- if eq $mgmt.expose true }}
   # classify-api is also on the primary Service
   kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }} 8080:{{ .Values.service.api.port }}
 {{- else }}
