@@ -100,26 +100,17 @@
   border-color: rgba(255, 255, 255, 0.22);
 }
 
-.groupLabel {
-  display: block;
-  padding: 7px 10px 5px;
-  color: var(--text-secondary, #a1a1aa);
-  font-size: 0.64rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .groupDivider {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 7px 10px 3px;
+  margin: 10px 10px 5px;
   color: var(--text-secondary, #a1a1aa);
   font-size: 0.64rem;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .groupDivider::before,

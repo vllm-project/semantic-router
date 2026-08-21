@@ -5,29 +5,24 @@
   inset-inline: calc((100vw - 100%) / -2);
   z-index: 1300;
   display: flex;
-  align-items: stretch;
-  justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem;
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
   animation: overlay-in 180ms ease-out;
 }
 
 .modal {
-  width: min(720px, 100vw);
-  height: 100vh;
-  height: 100dvh;
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 2.8rem);
   min-height: 0;
-  margin-left: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 12rem), var(--surface-panel);
-  border: 1px solid var(--border-strong);
-  border-right: 0;
-  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
-  box-shadow: -28px 0 72px rgba(0, 0, 0, 0.52);
-  animation: drawer-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .header {
@@ -43,14 +38,38 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.header::before {
-  position: absolute;
-  top: 0;
-  left: 1.5rem;
-  width: 2rem;
-  height: 2px;
-  background: var(--brand-amd);
-  content: '';
+.headerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.headerLogo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.headerLogo img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 0.24rem;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .title {
@@ -322,9 +341,9 @@
   }
 }
 
-@keyframes drawer-in {
+@keyframes dialog-in {
   from {
-    transform: translate3d(32px, 0, 0);
+    transform: translate3d(0, 12px, 0) scale(0.985);
     opacity: 0.86;
   }
   to {
@@ -339,19 +358,13 @@
   }
 
   .modal {
-    width: 100vw;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
   }
 
   .header {
     min-height: 68px;
     padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
-  }
-
-  .header::before {
-    left: 1rem;
   }
 
   .fields {

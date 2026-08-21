@@ -73,7 +73,7 @@ describe('ChatComposerModelSelect', () => {
     expect(source).not.toContain('styles.optionDescription')
   })
 
-  it('separates individual models from Mixture-of-Models', () => {
+  it('separates single models from Mixture-of-Models', () => {
     const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
     const styles = readFileSync(
       new URL('./ChatComposerModelSelect.module.css', import.meta.url),
@@ -81,7 +81,8 @@ describe('ChatComposerModelSelect', () => {
     )
 
     expect(source).toContain('Mixture-of-Models')
-    expect(source).toContain('Individual models')
+    expect(source).toContain('Single Model')
+    expect(source).not.toContain('Individual models')
     expect(source).toContain("model.kind === 'individual'")
     expect(styles).toContain('.groupDivider::before')
   })

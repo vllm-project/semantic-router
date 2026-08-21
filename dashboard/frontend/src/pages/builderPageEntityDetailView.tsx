@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react'
 
 import type {
   ASTModelDecl,
@@ -9,67 +9,47 @@ import type {
   ASTRouteDecl,
   ASTSignalDecl,
   DSLFieldObject,
-} from "@/types/dsl";
-import type { RouteInput } from "@/lib/dslMutations";
+} from '@/types/dsl'
+import type { RouteInput } from '@/lib/dslMutations'
 
-import styles from "./BuilderPage.module.css";
+import styles from './BuilderPage.module.css'
 import {
   GenericFieldsEditor,
   ModelIcon,
   PluginIcon,
   RouteIcon,
   SignalIcon,
-} from "./builderPageFormPrimitives";
-import {
-  PluginSchemaEditor,
-  SignalEditorForm,
-} from "./builderPageEntityForms";
+} from './builderPageFormPrimitives'
+import { PluginSchemaEditor, SignalEditorForm } from './builderPageEntityForms'
 import {
   ProjectionMappingEditorForm,
   ProjectionPartitionEditorForm,
   ProjectionScoreEditorForm,
-} from "./builderPageProjectionEditors";
-import { RouteEditorForm } from "./builderPageRouteForms";
+} from './builderPageProjectionEditors'
+import { RouteEditorForm } from './builderPageRouteForms'
 import type {
   AvailablePlugin,
   AvailableSignal,
   BuilderSelectedEntity,
   EntityKind,
   Selection,
-} from "./builderPageTypes";
+} from './builderPageTypes'
 
 interface EntityDetailViewProps {
-  selection: Selection;
-  entity: BuilderSelectedEntity;
-  onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
-  onUpdateSignalFields: (
-    signalType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdateProjectionPartitionFields: (
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdateProjectionScoreFields: (
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdateProjectionMappingFields: (
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdatePluginFields: (
-    name: string,
-    pluginType: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateRoute: (name: string, input: RouteInput) => void;
-  availableSignals: AvailableSignal[];
-  availablePlugins: AvailablePlugin[];
-  availableModels: string[];
-  onBack: () => void;
+  selection: Selection
+  entity: BuilderSelectedEntity
+  onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void
+  onUpdateSignalFields: (signalType: string, name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionScoreFields: (name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionMappingFields: (name: string, fields: DSLFieldObject) => void
+  onUpdatePluginFields: (name: string, pluginType: string, fields: DSLFieldObject) => void
+  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void
+  onUpdateRoute: (name: string, input: RouteInput) => void
+  availableSignals: AvailableSignal[]
+  availablePlugins: AvailablePlugin[]
+  availableModels: string[]
+  onBack: () => void
 }
 
 const EntityDetailView: React.FC<EntityDetailViewProps> = ({
@@ -91,35 +71,36 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
   if (!entity) {
     return (
       <div className={styles.emptyState}>
-        <div className={styles.emptyIcon}>🔍</div>
+        <div className={styles.emptyIcon} aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="m15.5 15.5 4 4" strokeLinecap="round" />
+          </svg>
+        </div>
         <div>Entity &quot;{selection.name}&quot; not found in current AST</div>
         <div
           style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-text-muted)",
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-text-muted)',
           }}
         >
           Try compiling or validating your DSL first
         </div>
       </div>
-    );
+    )
   }
 
   const subType =
-    "signalType" in entity
+    'signalType' in entity
       ? entity.signalType
-      : "pluginType" in entity
+      : 'pluginType' in entity
         ? entity.pluginType
-        : undefined;
+        : undefined
 
   return (
     <div className={styles.editorPanel}>
       <div className={styles.editorHeader}>
-        <button
-          className={styles.backBtn}
-          onClick={onBack}
-          title="Back to Dashboard"
-        >
+        <button className={styles.backBtn} onClick={onBack} title="Back to Dashboard">
           <svg
             width="16"
             height="16"
@@ -134,32 +115,24 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
           </svg>
         </button>
         <div className={styles.editorTitle}>
-          {selection.kind === "model" && (
-            <ModelIcon className={styles.statIcon} />
-          )}
-          {selection.kind === "signal" && (
-            <SignalIcon className={styles.statIcon} />
-          )}
-          {selection.kind === "route" && (
-            <RouteIcon className={styles.statIcon} />
-          )}
-          {selection.kind === "plugin" && (
-            <PluginIcon className={styles.statIcon} />
-          )}
-          {"name" in entity ? entity.name : "Entity"}
-          {"signalType" in entity && (
+          {selection.kind === 'model' && <ModelIcon className={styles.statIcon} />}
+          {selection.kind === 'signal' && <SignalIcon className={styles.statIcon} />}
+          {selection.kind === 'route' && <RouteIcon className={styles.statIcon} />}
+          {selection.kind === 'plugin' && <PluginIcon className={styles.statIcon} />}
+          {'name' in entity ? entity.name : 'Entity'}
+          {'signalType' in entity && (
             <span className={styles.editorBadge}>{entity.signalType}</span>
           )}
-          {"semantics" in entity && (
+          {'semantics' in entity && (
             <span className={styles.editorBadge}>projection partition</span>
           )}
-          {"source" in entity && !("signalType" in entity) && !("pluginType" in entity) && (
+          {'source' in entity && !('signalType' in entity) && !('pluginType' in entity) && (
             <span className={styles.editorBadge}>projection mapping</span>
           )}
-          {"inputs" in entity && !("signalType" in entity) && (
+          {'inputs' in entity && !('signalType' in entity) && (
             <span className={styles.editorBadge}>projection score</span>
           )}
-          {"pluginType" in entity && (
+          {'pluginType' in entity && (
             <span className={styles.editorBadge}>{entity.pluginType}</span>
           )}
         </div>
@@ -175,17 +148,15 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
       </div>
 
       {/* Editable Model form */}
-      {selection.kind === "model" && "fields" in entity && (
+      {selection.kind === 'model' && 'fields' in entity && (
         <GenericFieldsEditor
           fields={(entity as ASTModelDecl).fields}
-          onUpdate={(fields) =>
-            onUpdateModelFields((entity as ASTModelDecl).name, fields)
-          }
+          onUpdate={(fields) => onUpdateModelFields((entity as ASTModelDecl).name, fields)}
         />
       )}
 
       {/* Editable Signal form */}
-      {selection.kind === "signal" && "signalType" in entity && (
+      {selection.kind === 'signal' && 'signalType' in entity && (
         <SignalEditorForm
           signal={entity as ASTSignalDecl}
           onUpdate={(fields) =>
@@ -198,47 +169,38 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
         />
       )}
 
-      {selection.kind === "projection-partition" && "members" in entity && (
+      {selection.kind === 'projection-partition' && 'members' in entity && (
         <ProjectionPartitionEditorForm
           partition={entity as ASTProjectionPartitionDecl}
           onUpdate={(fields) =>
-            onUpdateProjectionPartitionFields(
-              (entity as ASTProjectionPartitionDecl).name,
-              fields,
-            )
+            onUpdateProjectionPartitionFields((entity as ASTProjectionPartitionDecl).name, fields)
           }
         />
       )}
 
-      {selection.kind === "projection-score" && (
+      {selection.kind === 'projection-score' && (
         <ProjectionScoreEditorForm
           score={entity as ASTProjectionScoreDecl}
           onUpdate={(fields) =>
-            onUpdateProjectionScoreFields(
-              (entity as ASTProjectionScoreDecl).name,
-              fields,
-            )
+            onUpdateProjectionScoreFields((entity as ASTProjectionScoreDecl).name, fields)
           }
         />
       )}
 
-      {selection.kind === "projection-mapping" && (
+      {selection.kind === 'projection-mapping' && (
         <ProjectionMappingEditorForm
           mapping={entity as ASTProjectionMappingDecl}
           onUpdate={(fields) =>
-            onUpdateProjectionMappingFields(
-              (entity as ASTProjectionMappingDecl).name,
-              fields,
-            )
+            onUpdateProjectionMappingFields((entity as ASTProjectionMappingDecl).name, fields)
           }
         />
       )}
 
       {/* Editable Plugin form */}
-      {selection.kind === "plugin" && "pluginType" in entity && (
+      {selection.kind === 'plugin' && 'pluginType' in entity && (
         <PluginSchemaEditor
           pluginType={(entity as ASTPluginDecl).pluginType}
-          fields={"fields" in entity ? entity.fields : {}}
+          fields={'fields' in entity ? entity.fields : {}}
           onUpdate={(fields) =>
             onUpdatePluginFields(
               (entity as ASTPluginDecl).name,
@@ -251,19 +213,17 @@ const EntityDetailView: React.FC<EntityDetailViewProps> = ({
       )}
 
       {/* Editable Route form */}
-      {selection.kind === "route" && "priority" in entity && (
+      {selection.kind === 'route' && 'priority' in entity && (
         <RouteEditorForm
           route={entity as ASTRouteDecl}
-          onUpdate={(input) =>
-            onUpdateRoute((entity as ASTRouteDecl).name, input)
-          }
+          onUpdate={(input) => onUpdateRoute((entity as ASTRouteDecl).name, input)}
           availableSignals={availableSignals}
           availablePlugins={availablePlugins}
           availableModels={availableModels}
         />
       )}
     </div>
-  );
-};
+  )
+}
 
-export { EntityDetailView };
+export { EntityDetailView }

@@ -134,8 +134,10 @@ export default function ChatComposerModelSelect({
             autoFocus
           />
           <div id={listboxId} role="listbox" aria-label="Select routing model">
-            {individualModels.length > 0 ? (
-              <span className={styles.groupLabel}>Mixture-of-Models</span>
+            {mixtureModels.length > 0 ? (
+              <div className={styles.groupDivider}>
+                <span>Mixture-of-Models</span>
+              </div>
             ) : null}
             {orderedModels.map((model, index) => {
               const active = model.id === value
@@ -145,7 +147,7 @@ export default function ChatComposerModelSelect({
                 <div key={model.id}>
                   {startsIndividualModels ? (
                     <div className={styles.groupDivider}>
-                      <span>Individual models</span>
+                      <span>Single Model</span>
                     </div>
                   ) : null}
                   <button
