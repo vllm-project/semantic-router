@@ -6,6 +6,9 @@ const AUTH_QUERY_PARAM = 'authToken'
 const UNAUTHORIZED_EVENT = 'vsr-auth-unauthorized'
 const MAX_AUTH_TOKEN_LENGTH = 8192
 const UNSAFE_AUTH_TOKEN_CHARS = /[\s;]/
+const CSRF_COOKIE_NAME = 'vsr_csrf'
+const CSRF_HEADER_NAME = 'X-CSRF-Token'
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 type WrappedFetch = typeof window.fetch & {
   __vsrAuthWrapped?: boolean
@@ -112,6 +115,33 @@ function patchProtectedResourceUrl(value: string): string {
   } catch {
     return value
   }
+}
+
+/**
+ * Reads the CSRF token the server issued at login. This cookie is deliberately not
+ * HttpOnly, unlike vsr_session: the value is not a credential on its own, and the page has
+ * to read it. Read fresh on every request, because it changes at each login. See #2465.
+ */
+function readCSRFToken(): string | null {
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  const prefix = `${CSRF_COOKIE_NAME}=`
+  for (const part of document.cookie.split(';')) {
+    const entry = part.trim()
+    if (entry.startsWith(prefix)) {
+      return entry.slice(prefix.length).trim() || null
+    }
+  }
+  return null
+}
+
+// init.method wins when both are given, matching fetch(request, {method}) semantics; a
+// Request object carries its own method and may arrive with no init at all.
+function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+  return method.toUpperCase()
 }
 
 export function normalizeAuthToken(token: string | null | undefined): string | null {
@@ -240,6 +270,20 @@ export function installAuthenticatedFetch(): void {
       headers.set('Authorization', `Bearer ${token}`)
     }
 
+    // The browser attaches the session cookie by itself, so a state-changing request must
+    // also prove it came from this page. With no cookie, send the request anyway and let
+    // the server answer 403 rather than inventing a value.
+    if (
+      UNSAFE_METHODS.has(requestMethod(input, init)) &&
+      isProtectedPath(url) &&
+      !headers.has(CSRF_HEADER_NAME)
+    ) {
+      const csrfToken = readCSRFToken()
+      if (csrfToken) {
+        headers.set(CSRF_HEADER_NAME, csrfToken)
+      }
+    }
+
     const response = await originalFetch(input, { ...init, headers })
     if (shouldAttachAuth && response.status === 401) {
       notifyUnauthorized()
@@ -362,4 +406,4 @@ function installAuthenticatedIframe(): void {
   }
 }
 
-export { AUTH_QUERY_PARAM, STORAGE_KEY, UNAUTHORIZED_EVENT }
+export { AUTH_QUERY_PARAM, CSRF_COOKIE_NAME, CSRF_HEADER_NAME, STORAGE_KEY, UNAUTHORIZED_EVENT }
