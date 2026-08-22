@@ -6,13 +6,13 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
 import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
 import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
-import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
+import SponsorsSection from '@site/src/components/homepage/SponsorsSection'
 import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
@@ -527,11 +527,7 @@ export default function Home(): JSX.Element {
           </ScrollReveal>
         </div>
 
-        <div className={styles.bandBlack}>
-          <ScrollReveal delay={40}>
-            <AcknowledgementsSection />
-          </ScrollReveal>
-        </div>
+        <SponsorsSection />
 
         <div className={styles.bandGraphite}>
           <FinalCtaSection />
