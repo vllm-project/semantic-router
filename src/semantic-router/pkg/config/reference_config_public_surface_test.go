@@ -33,12 +33,28 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 }
 
 func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
+	entrypoints := mustSliceAt(t, root, "entrypoints")
+	assertSliceUnionCoversStructFields(t, entrypoints, reflect.TypeOf(CanonicalEntrypoint{}), "entrypoints")
+
+	rules := collectNestedSliceItems(t, entrypoints, "rules", "entrypoints")
+	assertSliceUnionCoversStructFields(t, rules, reflect.TypeOf(CanonicalEntrypointRule{}), "entrypoints[].rules")
+
+	matches := collectNestedSliceItems(t, rules, "matches", "entrypoints[].rules")
+	assertSliceUnionCoversStructFields(t, matches, reflect.TypeOf(CanonicalEntrypointMatch{}), "entrypoints[].rules[].matches")
+
 	assertSliceUnionCoversStructFields(
 		t,
-		mustSliceAt(t, root, "entrypoints"),
-		reflect.TypeOf(CanonicalEntrypoint{}),
-		"entrypoints",
+		collectChildMapsFromSlice(t, matches, "path", "entrypoints[].rules[].matches"),
+		reflect.TypeOf(CanonicalPathMatcher{}),
+		"entrypoints[].rules[].matches[].path",
 	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, matches, "headers", "entrypoints[].rules[].matches"),
+		reflect.TypeOf(CanonicalHeaderMatcher{}),
+		"entrypoints[].rules[].matches[].headers",
+	)
+
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "recipes"),

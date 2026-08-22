@@ -28,12 +28,27 @@ jobs:
           go-version: "1.25"
 
       - name: Install system dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            make \
-            build-essential \
-            pkg-config
+          # apt-get has no built-in timeout, and needrestart can prompt
+          # interactively on this runner image; either can hang the job for
+          # hours instead of failing fast. Force non-interactive mode and
+          # bound + retry each call so a stalled mirror clears in minutes.
+          apt_retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if timeout 120 sudo -E "$@"; then
+                return 0
+              fi
+              echo "::warning::'$*' timed out or failed (attempt ${attempt}/3); retrying..."
+              sleep 5
+            done
+            return 1
+          }
+          apt_retry apt-get update
+          apt_retry apt-get install -y make build-essential pkg-config
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
