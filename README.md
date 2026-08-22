@@ -42,10 +42,11 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
 <details>
-<summary>Online playground credentials</summary>
+<summary>Trying the hosted Playground</summary>
 
-- Username: `love@vllm-sr.ai`
-- Password: `vllm-sr`
+The hosted [Playground](https://app.vllm-sr.ai/playground) does not currently respond, so it is not usable for a public trial.
+
+To try vLLM Semantic Router now, install it with the command above and run `vllm-sr serve`—first-run setup mode prompts you to create your own dashboard admin account.
 
 </details>
 
