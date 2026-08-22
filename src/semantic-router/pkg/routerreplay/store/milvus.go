@@ -27,6 +27,7 @@ type MilvusStore struct {
 	client           client.Client
 	collectionName   string
 	consistencyLevel entity.ConsistencyLevel
+	wrote            atomic.Bool
 	ttl              time.Duration
 	asyncWrites      bool
 	asyncChan        chan asyncOp
