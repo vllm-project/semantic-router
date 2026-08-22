@@ -1,4 +1,4 @@
-# TD047: Access Control High-Volume Follow-Ups
+# TD047: Router-Native Access Control Cutover
 
 ## Status
 
@@ -10,56 +10,80 @@ Open.
 
 ## Release Relevance
 
-Not release-blocking for the initial PostgreSQL and Redis multi-replica control
-plane. It tracks the next scale boundary for multi-host and sustained
-high-volume installations.
+Not blocking for existing releases while access control remains explicitly
+experimental. It is an exit criterion before that product can graduate or be
+described as Router-native, Dashboard-optional, or globally enforced across replicas.
+Implementation must move to an active execution or release plan before graduation.
 
 ## Scope
 
-Dashboard member identity, API-key authorization reads, usage ingestion,
-request-log retention, and distributed quota reservations.
+Inference authentication and authorization, API-key lifecycle, model visibility,
+global quota admission and settlement, management identity, usage ingestion,
+request-log retention, Dashboard integration, and removal of the old enforcement
+paths.
 
 ## Summary
 
-The control plane now persists inference identities, teams, API keys, access
-groups, budgets, usage, and audit records in PostgreSQL and enforces shared
-quotas through Redis. Remaining scale work includes a networked Dashboard
-member store, partitioned or asynchronous usage ingestion, cursor pagination,
-request-id-keyed quota leases, and a revisioned authorization cache.
+The current implementation owns inference identities, keys, policies, quota, and
+public inference proxy behavior in the Dashboard backend, while the Router retains
+separate static authorization and rate-limit configuration paths. That boundary lets
+a client bypass Dashboard-owned enforcement and prevents one clean contract for
+Docker, Kubernetes, CLI automation, and independent consoles.
+
+The target and migration are now specified by
+[Router-Native Access Control and Quota Accounting](../../../../website/docs/proposals/router-native-access-control.md)
+and its normative appendices. The implementation must replace the current paths; it
+must not add a compatibility layer beside them.
 
 ## Evidence
 
-- Dashboard members, sessions, and one-time invitations still use SQLite, so
-  replicas on different hosts cannot share identity state without an external
-  store.
-- The gateway writes each usage event synchronously to PostgreSQL and reads
-  authorization state for every request.
-- Usage queries are bounded and indexed, but raw-event retention has no table
-  partition lifecycle or pre-aggregated long-range rollups.
-- Quota reservation and reconciliation are atomic across replicas, but a
-  retried client request is not yet represented by an idempotent lease.
+- The Dashboard backend owns authoritative access tables and inference gateway
+  handlers instead of consuming a Router Management API.
+- Direct public Router inference and Dashboard-proxied inference do not yet share one
+  mandatory credential, discovery, invocation, quota, and settlement evaluator.
+- Dynamic Users, Teams, API keys, access grants, and rate policies do not yet project
+  from Router-owned PostgreSQL state into one shared Valkey runtime contract.
+- Dashboard browser identity does not yet exchange into a scoped Router
+  ManagementPrincipal, and Playground does not yet use delegated inference
+  credentials against the public listener.
+- Existing Entrypoint model-binding state has not yet been replaced by rule-action
+  assignments across configuration, DSL, API, and UI.
 
 ## Why It Matters
 
-The current design favors immediate revocation and accurate accounting. At
-large request volumes or across independent hosts, synchronous raw writes,
-shared-file Dashboard auth, and uncached policy reads become operational
-limits.
+Dashboard is an optional control-plane client. Authentication, model visibility,
+quota correctness, and accounting must remain identical when the Dashboard is
+absent, when clients call inference directly, and when Router replicas scale
+independently. Ten thousand dynamic keys cannot be represented in static Router or
+Kubernetes configuration.
 
 ## Desired End State
 
-Move Dashboard member identity to a networked transactional store or external
-identity provider. Add partitioned ingestion and rollups, cursor-based scans,
-idempotent quota leases, and revisioned bounded caches without weakening
-immediate revocation or durable per-request accounting.
+The Router owns a versioned Management API, PostgreSQL desired state and ledger,
+Valkey credential/policy projections, exact global request counters, actual-token
+settlement, usage stream, and audit. Public inference always passes through the same
+AccessRuntime. Dashboard, CLI, and custom consoles use generated Management clients;
+Playground uses a short-lived delegated credential and the public inference path.
+
+Routing persists only Model, Recipe, and Entrypoint. Entrypoint rule actions own
+decision assignments. Old Dashboard proxy/enforcement packages, static provider
+paths, model bindings, process-local counters, and header-selected identity are
+removed after one verified migration.
 
 ## Exit Criteria
 
-- Dashboard member invite, session, role, and audit operations work across
-  independent hosts without a shared filesystem.
-- Usage ingestion and retention remain bounded at sustained high volume and
-  long-range views use verified rollups.
-- List and log APIs use stable cursors for high-cardinality scans.
-- Retried request IDs cannot reserve RPM, TPM, or daily quota twice.
-- Authorization caching has explicit revision invalidation and preserves
-  immediate key revocation across replicas.
+- Every public inference path enforces the same API-key authentication, model
+  discovery/invocation policy, admission, and actual-usage settlement.
+- PostgreSQL and Valkey contracts, publication barriers, recovery, Docker, and
+  Kubernetes behavior meet the normative proposal and its validation matrix.
+- Management identity exchange, permissions/scopes, User/Team/key ownership, Team
+  inheritance, self-service onboarding, and delegated inference pass API-level
+  tests.
+- Usage and quota remain correct for streaming, retries, disconnects, and internal
+  multi-dispatch execution across multiple Router replicas.
+- Dashboard contains no authoritative access store or public inference proxy and can
+  be removed without changing data-plane behavior.
+- Model-binding, legacy access API, static enforcement, compatibility, and duplicate
+  configuration paths are absent from code, generated schemas, tests, and docs.
+- The migration report proves resource counts, effective-policy equivalence,
+  credential verification, quota cutover, usage totals, and secret redaction.
