@@ -2,6 +2,16 @@ package config
 
 import "fmt"
 
+const (
+	ExternalAPIRequestFormatPinecone      = "pinecone"
+	ExternalAPIRequestFormatWeaviate      = "weaviate"
+	ExternalAPIRequestFormatElasticsearch = "elasticsearch"
+	ExternalAPIRequestFormatCustom        = "custom"
+
+	DefaultExternalAPIMaxResponseBodyBytes int64 = 16 << 20
+	MaximumExternalAPIResponseBodyBytes    int64 = 64 << 20
+)
+
 // MilvusRAGConfig represents configuration for Milvus-based RAG retrieval.
 type MilvusRAGConfig struct {
 	Collection           string `json:"collection" yaml:"collection"`
@@ -13,13 +23,14 @@ type MilvusRAGConfig struct {
 
 // ExternalAPIRAGConfig represents configuration for external API-based RAG retrieval.
 type ExternalAPIRAGConfig struct {
-	Endpoint        string            `json:"endpoint" yaml:"endpoint"`
-	APIKey          string            `json:"api_key,omitempty" yaml:"api_key,omitempty"`
-	AuthHeader      string            `json:"auth_header,omitempty" yaml:"auth_header,omitempty"`
-	RequestFormat   string            `json:"request_format" yaml:"request_format"`
-	RequestTemplate string            `json:"request_template,omitempty" yaml:"request_template,omitempty"`
-	TimeoutSeconds  *int              `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Endpoint             string            `json:"endpoint" yaml:"endpoint"`
+	APIKey               string            `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	AuthHeader           string            `json:"auth_header,omitempty" yaml:"auth_header,omitempty"`
+	RequestFormat        string            `json:"request_format" yaml:"request_format"`
+	RequestTemplate      string            `json:"request_template,omitempty" yaml:"request_template,omitempty"`
+	TimeoutSeconds       *int              `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+	MaxResponseBodyBytes *int64            `json:"max_response_body_bytes,omitempty" yaml:"max_response_body_bytes,omitempty"`
+	Headers              map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
 }
 
 // MCPRAGConfig represents configuration for MCP-based RAG retrieval.

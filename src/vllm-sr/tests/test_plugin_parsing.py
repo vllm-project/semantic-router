@@ -11,7 +11,7 @@ from cli.models import (
     PluginType,
     RouterReplayPluginConfig,
     RAGPluginConfig,
-    ToolsPluginConfig,
+    ToolSelectionPluginConfig,
 )
 from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
@@ -250,110 +250,6 @@ providers:
             os.unlink(temp_path)
 
 
-class TestToolsPluginConfig:
-    """Test tools plugin schema and privacy-policy round trips."""
-
-    def test_strip_history_and_dynamic_retrieval_round_trip(self):
-        privacy = ToolsPluginConfig.model_validate(
-            {
-                "enabled": True,
-                "mode": "none",
-                "strip_tool_history": True,
-            }
-        )
-        assert privacy.model_dump(exclude_none=True)["strip_tool_history"] is True
-
-        retrieval = ToolsPluginConfig.model_validate(
-            {
-                "enabled": True,
-                "mode": "passthrough",
-                "strategy": "default",
-                "dynamic_retrieval": {
-                    "enabled": True,
-                    "strategy": "hybrid_history",
-                    "history_window": 8,
-                    "weights": {
-                        "semantic": 1.0,
-                        "history": 0.7,
-                        "decision_prior": 0.2,
-                        "repetition_penalty": 0.1,
-                    },
-                    "min_history_confidence": 0.4,
-                    "fallback_on_low_confidence": True,
-                },
-            }
-        )
-        dumped = retrieval.model_dump(exclude_none=True)
-        assert dumped["strategy"] == "default"
-        assert dumped["dynamic_retrieval"]["history_window"] == 8
-        assert dumped["dynamic_retrieval"]["weights"]["history"] == 0.7
-
-    def test_strip_history_requires_mode_none(self):
-        with pytest.raises(
-            PydanticValidationError, match="strip_tool_history requires mode=none"
-        ):
-            ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "passthrough",
-                    "strip_tool_history": True,
-                }
-            )
-
-    def test_hybrid_history_requires_window(self):
-        with pytest.raises(
-            PydanticValidationError, match="history_window must be at least 1"
-        ):
-            ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "passthrough",
-                    "dynamic_retrieval": {
-                        "enabled": True,
-                        "strategy": "hybrid_history",
-                    },
-                }
-            )
-
-    def test_disabled_dynamic_retrieval_skips_inactive_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "none",
-                "strip_tool_history": True,
-                "dynamic_retrieval": {
-                    "enabled": False,
-                    "strategy": "future_strategy",
-                    "history_window": -1,
-                    "min_history_confidence": 2.0,
-                    "weights": {"history": -1.0},
-                },
-            }
-        )
-        assert config.dynamic_retrieval is not None
-        assert config.dynamic_retrieval.enabled is False
-
-    def test_disabled_tools_plugin_skips_inactive_mode_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "future_mode",
-                "allow_tools": ["future.tool"],
-                "strip_tool_history": True,
-            }
-        )
-        assert config.enabled is False
-
-    def test_enabled_tools_plugin_rejects_unknown_mode(self):
-        with pytest.raises(PydanticValidationError, match="mode must be"):
-            ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "future_mode",
-                }
-            )
-
-
 class TestPluginConfigurationValidation:
     """Test plugin configuration validation."""
 
@@ -505,19 +401,14 @@ providers:
             errors = validate_user_config(config)
             # SemanticCachePluginConfig requires 'enabled' field, so validation should fail
             assert isinstance(errors, list)
-            missing_field_message = (
-                "Expected validation errors for missing required field"
-            )
-            assert len(errors) > 0, missing_field_message
+            assert (
+                len(errors) > 0
+            ), "Expected validation errors for missing required field"
             # Check that the error mentions the missing field
             error_messages = [str(e) for e in errors]
-            enabled_field_message = (
-                f"Expected error about missing 'enabled' field, got: {error_messages}"
-            )
-            enabled_field_reported = any(
+            assert any(
                 "enabled" in msg.lower() for msg in error_messages
-            )
-            assert enabled_field_reported, enabled_field_message
+            ), f"Expected error about missing 'enabled' field, got: {error_messages}"
         finally:
             os.unlink(temp_path)
 
@@ -536,7 +427,7 @@ class TestRAGPluginConfig:
             injection_mode="tool_role",
             backend_config={
                 "endpoint": "http://rag-service:8000/v1/search",
-                "request_format": "openai",
+                "request_format": "pinecone",
                 "timeout_seconds": 10,
             },
             on_failure="skip",
@@ -551,11 +442,64 @@ class TestRAGPluginConfig:
         assert config.max_context_length == 4096
         assert config.injection_mode == "tool_role"
         assert config.backend_config["endpoint"] == "http://rag-service:8000/v1/search"
-        assert config.backend_config["request_format"] == "openai"
+        assert config.backend_config["request_format"] == "pinecone"
         assert config.on_failure == "skip"
         assert config.cache_results is True
         assert config.cache_ttl_seconds == 300
         assert config.min_confidence_threshold == 0.5
+
+    @pytest.mark.parametrize(
+        "request_format",
+        ["pinecone", "weaviate", "elasticsearch", "custom"],
+    )
+    def test_external_api_accepts_router_supported_request_formats(
+        self, request_format
+    ):
+        """Python validation accepts every request format supported by the router."""
+        backend_config = {
+            "endpoint": "http://rag-service:8000/v1/search",
+            "request_format": request_format,
+            "provider_options": {"namespace": "docs", "preserve_me": True},
+        }
+
+        config = RAGPluginConfig(
+            enabled=True,
+            backend="external_api",
+            backend_config=backend_config,
+        )
+
+        assert config.backend_config == backend_config
+        assert config.model_dump()["backend_config"] == backend_config
+
+    @pytest.mark.parametrize(
+        "backend_config",
+        [
+            None,
+            {},
+            {"request_format": ""},
+            {"request_format": "openai"},
+            {"request_format": "elastic_search"},
+        ],
+    )
+    def test_external_api_rejects_missing_or_unsupported_request_format(
+        self, backend_config
+    ):
+        """Python validation rejects formats that the router loader rejects."""
+        with pytest.raises(PydanticValidationError, match="request_format"):
+            RAGPluginConfig(
+                enabled=True,
+                backend="external_api",
+                backend_config=backend_config,
+            )
+
+    def test_openai_file_search_backend_remains_distinct(self):
+        """The OpenAI file-search backend is not an external API format."""
+        config = RAGPluginConfig(
+            enabled=True,
+            backend="openai",
+            backend_config={"vector_store_id": "vs_test", "api_key": "test-key"},
+        )
+        assert config.backend_config["vector_store_id"] == "vs_test"
 
     def test_rag_config_required_fields_only(self):
         """Test RAGPluginConfig with only required fields; optional fields default to None."""
@@ -644,7 +588,7 @@ decisions:
           cache_ttl_seconds: 300
           backend_config:
             endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
+            request_format: "pinecone"
             timeout_seconds: 10
 providers:
   models:
@@ -677,7 +621,9 @@ providers:
                 plugin.configuration["backend_config"]["endpoint"]
                 == "http://rag-service:8000/v1/search"
             )
-            assert plugin.configuration["backend_config"]["request_format"] == "openai"
+            assert (
+                plugin.configuration["backend_config"]["request_format"] == "pinecone"
+            )
 
             errors = validate_user_config(config)
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
@@ -738,3 +684,121 @@ providers:
             assert any("rag" in msg.lower() for msg in error_messages)
         finally:
             os.unlink(temp_path)
+
+    def test_external_api_full_yaml_rejects_openai_and_missing_request_format(self):
+        """Full YAML validation rejects OpenAI format and an omitted format."""
+        valid_config_yaml = """
+version: v0.1
+listeners:
+  - {name: "http-8888", address: "0.0.0.0", port: 8888}
+signals:
+  keywords:
+    - {name: "test_keywords", operator: "OR", keywords: ["test"]}
+decisions:
+  - name: "test_decision"
+    description: "Test external API request format validation"
+    priority: 100
+    rules: {operator: "OR", conditions: [{type: "keyword", name: "test_keywords"}]}
+    modelRefs: [{model: "test_model"}]
+    plugins:
+      - type: "rag"
+        configuration:
+          enabled: true
+          backend: "external_api"
+          backend_config:
+            endpoint: "http://rag-service:8000/v1/search"
+            request_format: "pinecone"
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - {name: "ep1", weight: 1, endpoint: "localhost:8000"}
+  default_model: "test_model"
+"""
+        invalid_configs = {
+            "openai": valid_config_yaml.replace(
+                'request_format: "pinecone"', 'request_format: "openai"'
+            ),
+            "missing": valid_config_yaml.replace(
+                '            request_format: "pinecone"\n', ""
+            ),
+        }
+
+        for case, config_yaml in invalid_configs.items():
+            temp_path = _write_config(config_yaml)
+            try:
+                config = parse_user_config(temp_path)
+                errors = validate_user_config(config)
+                error_messages = [str(error) for error in errors]
+                assert any(
+                    "rag" in message.lower() and "request_format" in message
+                    for message in error_messages
+                ), f"{case} request_format unexpectedly passed: {error_messages}"
+            finally:
+                os.unlink(temp_path)
+
+
+class TestToolSelectionAdvancedFiltering:
+    """Test tool_selection plugin's advanced_filtering subtree.
+
+    Pins down the schema parity with the Go-side
+    `config.AdvancedToolFilteringConfig`. Before this surface was modeled,
+    `ToolSelectionPluginConfig` had no `advanced_filtering` field and Pydantic
+    silently dropped the subtree, so users opting into
+    `retrieval_strategy: hybrid_history` ended up with a config equivalent to
+    no advanced filtering at all.
+    """
+
+    def test_hybrid_history_round_trips_without_field_loss(self):
+        """advanced_filtering.hybrid_history survives model_validate -> model_dump."""
+        cfg = ToolSelectionPluginConfig.model_validate(
+            {
+                "enabled": True,
+                "mode": "add",
+                "tools_db_path": "config/tools_db.json",
+                "top_k": 5,
+                "advanced_filtering": {
+                    "enabled": True,
+                    "retrieval_strategy": "hybrid_history",
+                    "hybrid_history": {
+                        "history_horizon": 8,
+                        "weight_history_transition": 2.0,
+                    },
+                },
+            }
+        )
+
+        dump = cfg.model_dump(exclude_none=True)
+        assert "advanced_filtering" in dump
+        assert dump["advanced_filtering"]["retrieval_strategy"] == "hybrid_history"
+        assert dump["advanced_filtering"]["hybrid_history"]["history_horizon"] == 8
+        assert (
+            dump["advanced_filtering"]["hybrid_history"]["weight_history_transition"]
+            == 2.0
+        )
+
+    def test_invalid_retrieval_strategy_rejected(self):
+        """retrieval_strategy must be 'weighted' or 'hybrid_history'."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "advanced_filtering": {
+                        "enabled": True,
+                        "retrieval_strategy": "bogus",
+                    },
+                }
+            )
+
+    def test_invalid_threshold_rejected(self):
+        """category_confidence_threshold must be in [0.0, 1.0]."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "advanced_filtering": {
+                        "enabled": True,
+                        "category_confidence_threshold": 1.5,
+                    },
+                }
+            )

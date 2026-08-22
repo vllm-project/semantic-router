@@ -136,6 +136,7 @@ until the selected cases are known to be isolated.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
 - **dynamo**: manual NVIDIA Dynamo batching and GPU health coverage.
 - **vectorstore-registry**: manual metadata restart-recovery coverage.
+- **rag-external-api**: manual typed external RAG request construction and exact successful-response byte-limit coverage.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
