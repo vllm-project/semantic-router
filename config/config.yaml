@@ -1601,6 +1601,7 @@ global:
         threshold: 0.6
       ml:
         models_path: models/model-selection
+        model_type: mmbert
         embedding_dim: 384
         knn:
           k: 5

@@ -585,6 +585,38 @@ func TestMLSelectorAdapter_GetMLSelector(t *testing.T) {
 	}
 }
 
+func TestFactoryPassesSelectorEmbeddingConfigToRuntime(t *testing.T) {
+	cfg := DefaultModelSelectionConfig()
+	cfg.ML = DefaultMLSelectorConfig()
+	cfg.ML.ModelType = "qwen3"
+	cfg.ML.EmbeddingDim = 1024
+	embed := func(_ string, cfg EmbeddingConfig) ([]float32, error) {
+		return []float32{float32(cfg.TargetDimension)}, nil
+	}
+
+	registry := NewFactory(cfg).
+		WithEmbeddingFunc(embed, EmbeddingConfig{ModelType: "mmbert", TargetDimension: 768}).
+		CreateAll()
+
+	routerDCSelector, ok := registry.selectors[MethodRouterDC].(*RouterDCSelector)
+	if !ok {
+		t.Fatal("RouterDC selector was not registered")
+	}
+	routerDCResult, err := routerDCSelector.embeddingFunc("query")
+	if err != nil || len(routerDCResult) != 1 || routerDCResult[0] != 768 {
+		t.Fatalf("RouterDC embedding = %v, err = %v; want default embedding request", routerDCResult, err)
+	}
+
+	mlSelector, ok := registry.selectors[MethodKNN].(*MLSelectorAdapter)
+	if !ok {
+		t.Fatal("KNN ML selector was not registered")
+	}
+	mlResult, err := mlSelector.embeddingFunc("query")
+	if err != nil || len(mlResult) != 1 || mlResult[0] != 1024 {
+		t.Fatalf("ML selector embedding = %v, err = %v; want configured ML embedding request", mlResult, err)
+	}
+}
+
 func TestEloSelector_CategoryRatings(t *testing.T) {
 	ctx := context.Background()
 
