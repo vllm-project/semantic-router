@@ -26,21 +26,18 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const {
-    data,
-    loading,
-    error,
-    refresh,
-    routingScopes,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useTopologyData()
+  const { data, loading, error, refresh, routingScopes, selectedScopeId, setSelectedScopeId } =
+    useTopologyData()
   const [searchParams, setSearchParams] = useSearchParams()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
   const selectedScope =
     routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
   const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
+  const scopeTestDisabledReason =
+    selectedScope && !selectedScope.isDefault && selectedScope.entrypointModelNames.length === 0
+      ? `Recipe "${selectedScope.label}" has no entrypoint, so it cannot be tested without evaluating the default recipe instead.`
+      : undefined
   const {
     testQuery,
     setTestQuery,
@@ -48,7 +45,7 @@ const TopologyFlow: React.FC = () => {
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data, selectedRoutingModel)
+  } = useTestQuery(data, selectedRoutingModel, scopeTestDisabledReason)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -374,6 +371,7 @@ const TopologyFlow: React.FC = () => {
               onChange={setTestQuery}
               onTest={runTest}
               isLoading={isTestLoading}
+              disabledReason={scopeTestDisabledReason}
             />
           </div>
         </div>
