@@ -187,8 +187,8 @@ func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
 func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 	if deprecated := deprecatedUserConfigFields(raw); len(deprecated) > 0 {
 		return fmt.Errorf(
-			"deprecated config fields are no longer supported: %s; rewrite the file to canonical v0.3 providers/routing/global or run `vllm-sr config migrate --config old-config.yaml`",
-			strings.Join(deprecated, ", "),
+			"deprecated config fields are no longer supported: %s; rewrite the file to canonical %s providers/routing/global or run `vllm-sr config migrate --config old-config.yaml`",
+			strings.Join(deprecated, ", "), SupportedCanonicalVersion,
 		)
 	}
 	return nil
@@ -532,8 +532,8 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
-		detail,
+		"config file must use canonical %s version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical %s providers/routing/global",
+		SupportedCanonicalVersion, detail, SupportedCanonicalVersion,
 	)
 }
 

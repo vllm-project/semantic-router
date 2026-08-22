@@ -51,7 +51,7 @@ func (c *CRDConverter) Convert(
 	if err != nil {
 		return nil, err
 	}
-	canonical.Version = "v0.3"
+	canonical.Version = config.SupportedCanonicalVersion
 
 	canonical.Providers.Defaults.DefaultModel = pool.Spec.DefaultModel
 	canonical.Routing.ModelCards = convertRoutingModelCards(pool.Spec.Models)
@@ -355,7 +355,7 @@ func mergeCanonicalProviderMetadata(
 
 func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {
 	if base == nil {
-		return &config.CanonicalConfig{Version: "v0.3"}, nil
+		return &config.CanonicalConfig{Version: config.SupportedCanonicalVersion}, nil
 	}
 
 	data, err := yamlv3.Marshal(base)
