@@ -35,6 +35,7 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setu
 
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
+	authSvc.SetAllowedOrigins(cfg.AllowedOrigins)
 	// The bootstrap gate reads the resolver on every unauthenticated
 	// can-register / register call, so setup mode tracks the config file.
 	if setupResolver != nil {

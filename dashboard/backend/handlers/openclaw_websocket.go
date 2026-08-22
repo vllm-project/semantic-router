@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // WebSocket message types for ClawRoom.
@@ -70,9 +72,9 @@ type WSClient struct {
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
-	},
+	// CORS does not cover handshakes, so this is the only cross-origin control. Every
+	// dashboard client builds its URL from window.location.host. See #2465.
+	CheckOrigin: auth.OriginChecker(nil),
 }
 
 func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
