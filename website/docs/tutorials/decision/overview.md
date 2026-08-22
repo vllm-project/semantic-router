@@ -57,6 +57,30 @@ Decision matching stays separate from:
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 
+### Rule operators
+
+A rule node's `operator` combines its `conditions`:
+
+- `AND` — every condition must match.
+- `OR` — at least one condition must match.
+- `NOT` — negates a single nested condition.
+
+The operator is matched case-insensitively (`and`, `or`, `not` all work) but is not trimmed, so it must carry no surrounding whitespace. Always write it explicitly: an omitted operator is evaluated as `OR` by the router while the CLI and the DSL emit `AND`, so the tree does not mean the same thing on every surface.
+
+A decision matches unconditionally when its `rules` block is omitted entirely, or when the root is `AND` with no conditions.
+
+The config loader rejects a rule tree the evaluator cannot honour, naming both the decision and the offending node (for example `decision 'business_route': rules.conditions[0]: ...`):
+
+- an operator outside `AND`/`OR`/`NOT`, which would otherwise fall through to the evaluator's default branch and widen the rule to `OR`
+- a `NOT` with any number of children other than one, which would otherwise never match
+- a node that is both a leaf (`type`/`name`) and a combination (`operator`/`conditions`), which would otherwise drop its conditions
+- a node that carries leaf fields without a `type`, which would otherwise either never match or, worse, match every request
+- a leaf without a `name`, which references no signal at all
+- a leaf that declares `conditions`, which would otherwise be ignored
+- a combination with no conditions anywhere but the root, which would otherwise never match under `OR` and match everything under `AND`
+
+> **Note:** this operator set is intentionally distinct from keyword-signal operators (`routing.signals.keywords[].operator`, which also accepts `NOR`). A decision rule only accepts `AND`, `OR`, and `NOT`.
+
 Choose the smallest shape that expresses the policy clearly:
 
 | Decision shape | Best for | Guide |

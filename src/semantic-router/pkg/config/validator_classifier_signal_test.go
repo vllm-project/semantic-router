@@ -122,6 +122,7 @@ func TestLocalClassifierDecisionPredicateRequiresWinningConfidence(t *testing.T)
 			}}},
 		}},
 		"risk-route",
+		decisionRuleRootPath,
 		&RuleNode{
 			Type:      SignalTypeClassifier,
 			Name:      "risk",
@@ -138,6 +139,7 @@ func TestDecisionLeafRejectsOnErrorOutsideClassifier(t *testing.T) {
 	err := validateDecisionLeafNode(
 		&RouterConfig{},
 		"metadata-route",
+		decisionRuleRootPath,
 		&RuleNode{
 			Type:      SignalTypeMetadata,
 			Name:      "cohort",
@@ -272,6 +274,7 @@ func TestDecisionPredicateRejectsNonFiniteValues(t *testing.T) {
 	nan := math.NaN()
 	err := validateDecisionLeafPredicate(
 		"nan-route",
+		decisionRuleRootPath,
 		&RuleNode{
 			Type:      SignalTypeStructure,
 			Name:      "bytes",
