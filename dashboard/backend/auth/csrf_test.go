@@ -344,8 +344,8 @@ func TestCSRFEnforcement(t *testing.T) {
 		{name: "DELETE happy path", method: http.MethodDelete, authVia: "cookie", origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 		{name: "referer fallback", method: http.MethodPost, authVia: "cookie", referer: sameOrigin + "/dashboard", csrfHeader: f.csrf, wantStatus: http.StatusNoContent, wantHandler: true},
 
-		// Inverted for #2465: these two used to authenticate through ?authToken= and be
-		// subject to the CSRF check. They now fail earlier, at authentication.
+		// Inverted for #2465: these two authenticated through ?authToken= and were subject
+		// to the CSRF check. They now fail earlier, at authentication.
 		{name: "query token no longer authenticates", method: http.MethodPost, authVia: "none", queryToken: true, origin: "https://evil.example", wantStatus: http.StatusUnauthorized},
 		{name: "query token fails even with a valid CSRF token", method: http.MethodPost, authVia: "none", queryToken: true, origin: sameOrigin, csrfHeader: f.csrf, wantStatus: http.StatusUnauthorized},
 
@@ -576,10 +576,8 @@ func TestCSRFCookieIssuanceOnBootstrapAndLogout(t *testing.T) {
 	})
 }
 
-// Inverted for #2465. This covered the deprecation warning that the query transport used
-// to emit, and the log injection an attacker-controlled path made possible. The transport
-// is gone, so the strongest assertion is that the request reaches no token and writes no
-// log line at all — the injection surface no longer exists.
+// Inverted for #2465: this covered the deprecation warning the query transport emitted and
+// the log injection its attacker-controlled path allowed. Both surfaces are now gone.
 func TestQueryTokenIsNeitherAcceptedNorLogged(t *testing.T) {
 	var logged bytes.Buffer
 	log.SetOutput(&logged)

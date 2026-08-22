@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { withAuthQuery } from '../utils/authFetch'
 import styles from './KnowledgeMapPage.module.css'
 
 interface KnowledgeMapMetadata {
@@ -19,11 +18,13 @@ interface KnowledgeMapMetadata {
 function buildKnowledgeMapURL(name: string): string {
   const encodedName = encodeURIComponent(name)
   const params = new URLSearchParams({
-    metadataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/metadata`),
-    dataURL: withAuthQuery(`/api/router/config/kbs/${encodedName}/map/data.ndjson`),
+    // Plain same-origin paths: WizMap fetches these from inside the iframe and the browser
+    // attaches the session cookie. Before #2465 this one URL carried the token three times.
+    metadataURL: `/api/router/config/kbs/${encodedName}/map/metadata`,
+    dataURL: `/api/router/config/kbs/${encodedName}/map/data.ndjson`,
     title: name,
   })
-  return withAuthQuery(`/embedded/wizmap/?${params.toString()}`)
+  return `/embedded/wizmap/?${params.toString()}`
 }
 
 export default function KnowledgeMapPage() {
