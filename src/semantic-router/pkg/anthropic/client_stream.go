@@ -173,7 +173,7 @@ func transformStreamEvent(
 ) ([][]byte, bool, error) {
 	switch event.Type {
 	case "message_start":
-		return handleMessageStart(event, state, model)
+		return handleMessageStart(event, state, model, ext)
 	case "content_block_start":
 		return handleContentBlockStart(event, state, model)
 	case "content_block_delta":
@@ -199,6 +199,7 @@ func handleMessageStart(
 	event anthropic.MessageStreamEventUnion,
 	state *StreamState,
 	model string,
+	ext *ir.IRExtensions,
 ) ([][]byte, bool, error) {
 	start := event.AsMessageStart()
 	if start.Message.ID != "" {
@@ -212,6 +213,10 @@ func handleMessageStart(
 	// message_start event, preserving the per-request input token
 	// count clients use to seed their usage accumulators.
 	state.InitialUsage = start.Message.Usage
+
+	// Capture cache counters for the outbound message_delta
+	extractAnthropicUsageIntoExt(start.Message.Usage, ext)
+
 	if state.RoleSent {
 		return nil, false, nil
 	}
@@ -363,6 +368,18 @@ func handleMessageDelta(
 		ext.AnthropicStopReason = string(deltaEvent.Delta.StopReason)
 		if deltaEvent.Delta.StopSequence != "" {
 			ext.AnthropicStopSequence = deltaEvent.Delta.StopSequence
+		}
+	}
+
+	// Keep cache counters: prefer non-zero values from message_delta,
+	// otherwise leave whatever message_start already stored in ext.
+	if ext != nil {
+		u := deltaEvent.Usage
+		if u.CacheReadInputTokens > 0 {
+			ext.CacheReadInputTokens = u.CacheReadInputTokens
+		}
+		if u.CacheCreationInputTokens > 0 {
+			ext.CacheCreationInputTokens = u.CacheCreationInputTokens
 		}
 	}
 
