@@ -71,6 +71,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 	pipeline := vectorstore.NewIngestionPipeline(backend, fileStore, manager, embedder, vectorstore.PipelineConfig{
 		Workers:   cfg.VectorStore.IngestionWorkers,
 		QueueSize: 100,
+		BatchSize: cfg.VectorStore.IngestionBatchSize,
 	})
 	pipeline.Start()
 
