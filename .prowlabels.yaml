@@ -21,6 +21,8 @@ lifecycle:
   - milestone-candidate
   - release-blocker
   - stale
+  - assignment-inactive-warning
+  - assignment-inactive-unassigned
 
 track:
   - contracts
