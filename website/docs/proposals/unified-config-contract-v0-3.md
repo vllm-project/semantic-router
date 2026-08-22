@@ -47,6 +47,14 @@ silently translated at runtime.
 `providers.models[].backend_refs[]` owns physical backend bindings and reliability
 settings.
 
+A backend ref carries its own transport and auth fields, including
+`forward_authorization_header` (default `false`). Enabling it forwards the
+caller's inbound `Authorization` header verbatim to that backend instead of
+injecting a static service key: `api_key`/`api_key_env` are ignored for the
+backend, and a request without an inbound `Authorization` header is rejected with
+`401`. This preserves per-caller identity — per-user virtual keys, for example —
+through the router and through looper re-dispatch to gateways such as LiteLLM.
+
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with
 `lora_name`. Signals and decisions reference logical model names, not endpoints or

@@ -117,6 +117,11 @@ type Response struct {
 type Looper interface {
 	// Execute runs the looper algorithm and returns an aggregated response
 	Execute(ctx context.Context, req *Request) (*Response, error)
+
+	// SetInboundAuthorization records the caller's original Authorization header
+	// so internal looper requests forward it verbatim, preserving per-user
+	// identity for backends that opt into forward_authorization_header.
+	SetInboundAuthorization(authorization string)
 }
 
 // UnsupportedAlgorithmError reports an algorithm that cannot be constructed

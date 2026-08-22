@@ -95,6 +95,8 @@ on:
         value: ${{ jobs.classify.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac:
         value: ${{ jobs.classify.outputs.e2e_authz_rbac }}
+      e2e_forward_auth:
+        value: ${{ jobs.classify.outputs.e2e_forward_auth }}
       e2e_streaming:
         value: ${{ jobs.classify.outputs.e2e_streaming }}
       e2e_anthropic_shim:
@@ -156,6 +158,7 @@ jobs:
       e2e_ml_model_selection: ${{ steps.matrix.outputs.e2e_ml_model_selection }}
       e2e_multi_endpoint: ${{ steps.matrix.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac: ${{ steps.matrix.outputs.e2e_authz_rbac }}
+      e2e_forward_auth: ${{ steps.matrix.outputs.e2e_forward_auth }}
       e2e_streaming: ${{ steps.matrix.outputs.e2e_streaming }}
       e2e_anthropic_shim: ${{ steps.matrix.outputs.e2e_anthropic_shim }}
       e2e_common: ${{ steps.matrix.outputs.e2e_common }}

@@ -156,6 +156,9 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	ctx *RequestContext,
 ) ([]*core.HeaderValueOption, []string, *ext_proc.ProcessingResponse) {
 	setHeaders := []*core.HeaderValueOption{}
+	// looperInternalHeadersForRemoval covers the internal caller-identity carrier
+	// too, so it never reaches an upstream on either branch below (defense in
+	// depth; the routed branch also strips it via buildRouteHeaderState).
 	removeHeaders := append(
 		[]string{"content-length"},
 		looperInternalHeadersForRemoval()...,

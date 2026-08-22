@@ -9,14 +9,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 )
 
-var looperInternalContextHeaders = []string{
-	headers.VSRInternalAuth,
-	headers.VSRLooperRequest,
-	headers.VSRLooperIteration,
-	headers.VSRLooperDecision,
-	headers.VSRFusionDepth,
-	headers.VSRSelectedRecipe,
-}
+// looperInternalContextHeaders is the reserved set the router authenticates on
+// ingress and strips from every unauthenticated request. It is the shared
+// headers.ReservedInternalHeaders list, which config validation also rejects in
+// looper.headers and which the Envoy templates mirror as defense in depth.
+var looperInternalContextHeaders = headers.ReservedInternalHeaders
 
 func authenticateLooperRequestContext(ctx *RequestContext) {
 	if ctx == nil {

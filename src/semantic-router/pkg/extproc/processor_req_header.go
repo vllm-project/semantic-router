@@ -112,6 +112,11 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
+	// Enforce the internal-leg trust boundary before any router logic keys off
+	// the looper markers: a genuine looper re-dispatch authenticates with the
+	// process-local internal credential and has ctx.LooperRequest set here, while
+	// reserved internal headers on an untrusted (client) request are stripped so
+	// a caller cannot spoof the internal path or inject a caller-identity carrier.
 	authenticateLooperRequestContext(ctx)
 
 	method := ctx.Headers[":method"]
@@ -183,6 +188,8 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
+		// Strip the reserved internal headers from the wire so a spoofed marker
+		// or the internal-leg credential never reaches the upstream.
 		RemoveHeaders: looperInternalHeadersForRemoval(),
 	}
 }

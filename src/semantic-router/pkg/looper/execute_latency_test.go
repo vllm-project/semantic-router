@@ -99,6 +99,8 @@ func TestExecuteWithLatency_PropagatesError(t *testing.T) {
 // does this today.
 type nilResponseLooper struct{}
 
+func (nilResponseLooper) SetInboundAuthorization(string) {}
+
 func (nilResponseLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	return nil, nil
 }
