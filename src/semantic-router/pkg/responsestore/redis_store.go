@@ -36,6 +36,13 @@ const (
 	// ConversationKeyPrefix for conversation keys
 	// Combined with key_prefix (default "sr:"): sr:conversation:conv_xxxxx
 	ConversationKeyPrefix = "conversation:"
+
+	// ConversationIndexKeyPrefix for the sorted set of a conversation's response
+	// IDs, scored by created_at: sr:conversation-index:conv_xxxxx
+	//
+	// Must not start with ConversationKeyPrefix, or the sr:conversation:* scan in
+	// ListConversations would read these sorted sets as conversation JSON.
+	ConversationIndexKeyPrefix = "conversation-index:"
 )
 
 // The function validates configuration, establishes connection, and tests connectivity.
@@ -281,6 +288,11 @@ func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix
 }
 
+// conversationIndexKey returns the sorted set indexing a conversation's responses.
+func (s *RedisStore) conversationIndexKey(conversationID string) string {
+	return s.buildKey(ConversationIndexKeyPrefix + conversationID)
+}
+
 func (s *RedisStore) CheckConnection(ctx context.Context) error {
 	if !s.enabled {
 		return fmt.Errorf("redis store is disabled")
@@ -319,22 +331,22 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	exists, err := s.client.Exists(ctx, key).Result()
-	if err != nil {
-		return fmt.Errorf("failed to check response existence: %w", err)
-	}
-	if exists > 0 {
-		return ErrAlreadyExists
-	}
-
 	data, err := json.Marshal(response)
 	if err != nil {
 		return fmt.Errorf("failed to serialize response: %w", err)
 	}
 
-	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
+	// Atomic existence check, and it lands the payload before the index entry, so
+	// a member always postdates its payload — what makes prune-on-missing safe.
+	stored, err := s.client.SetNX(ctx, key, data, s.ttl).Result()
+	if err != nil {
 		return fmt.Errorf("failed to store response in Redis: %w", err)
 	}
+	if !stored {
+		return ErrAlreadyExists
+	}
+
+	s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt)
 
 	return nil
 }
@@ -375,12 +387,10 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	exists, err := s.client.Exists(ctx, key).Result()
+	// Doubles as the existence check, and detects a move between conversations.
+	previousConversationID, err := s.storedConversationID(ctx, response.ID)
 	if err != nil {
-		return fmt.Errorf("failed to check response existence: %w", err)
-	}
-	if exists == 0 {
-		return ErrNotFound
+		return err
 	}
 
 	data, err := json.Marshal(response)
@@ -391,6 +401,11 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	if err := s.client.Set(ctx, key, data, s.ttl).Err(); err != nil {
 		return fmt.Errorf("failed to update response in Redis: %w", err)
 	}
+
+	if previousConversationID != "" && previousConversationID != response.ConversationID {
+		s.unindexResponse(ctx, previousConversationID, response.ID)
+	}
+	s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt)
 
 	return nil
 }
@@ -405,6 +420,12 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 
 	key := s.buildKey(ResponseKeyPrefix + responseID)
 
+	// Needed to drop the index entry; also the existence check.
+	conversationID, err := s.storedConversationID(ctx, responseID)
+	if err != nil {
+		return err
+	}
+
 	deleted, err := s.client.Del(ctx, key).Result()
 	if err != nil {
 		return fmt.Errorf("failed to delete response from Redis: %w", err)
@@ -412,6 +433,8 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 	if deleted == 0 {
 		return ErrNotFound
 	}
+
+	s.unindexResponse(ctx, conversationID, responseID)
 
 	return nil
 }
@@ -437,7 +460,7 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	}
 
 	// Phase 2: Fetch all responses using pipelining
-	chain, err := s.fetchResponsesPipelined(ctx, responseIDs)
+	chain, _, err := s.fetchResponsesPipelined(ctx, responseIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -450,6 +473,11 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	return chain, nil
 }
 
+// ListResponsesByConversation lists a conversation's responses via the secondary
+// index, at a cost proportional to the conversation rather than the keyspace.
+//
+// Only indexed responses are listed. Anything written before the index existed
+// stays reachable by ID and via GetConversationChain, and ages out on its TTL.
 func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -458,37 +486,33 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 		return nil, ErrInvalidInput
 	}
 
-	// Use SCAN to find all response keys
-	pattern := s.buildKey(ResponseKeyPrefix + "*")
+	// Scored by created_at, so this reads back chronologically.
+	responseIDs, err := s.client.ZRange(ctx, s.conversationIndexKey(conversationID), 0, -1).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read conversation index: %w", err)
+	}
+	if len(responseIDs) == 0 {
+		return nil, nil
+	}
+
+	fetched, missingIDs, err := s.fetchResponsesPipelined(ctx, responseIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Payloads expire on their own TTL; their index entries do not. Pruning keeps
+	// a long-lived conversation's index from growing without bound.
+	s.unindexResponse(ctx, conversationID, missingIDs...)
+
+	// Guard against an entry left behind by a response that moved conversation.
 	var responses []*responseapi.StoredResponse
-
-	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
-	for iter.Next(ctx) {
-		key := iter.Val()
-
-		// Get response
-		data, err := s.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue // Skip errors (key might have expired)
-		}
-
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			continue
-		}
-
+	for _, response := range fetched {
 		if response.ConversationID == conversationID {
-			responses = append(responses, &response)
+			responses = append(responses, response)
 		}
 	}
 
-	if err := iter.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan responses: %w", err)
-	}
-
-	responses = ApplyListOptions(responses, opts)
-
-	return responses, nil
+	return ApplyListOptions(responses, opts), nil
 }
 
 // Conversation Store Methods
@@ -598,16 +622,35 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 
 	// Optionally delete all responses in the conversation
 	if deleteResponses {
-		responses, err := s.ListResponsesByConversation(ctx, conversationID, ListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list responses for deletion: %w", err)
+		if err := s.deleteConversationResponses(ctx, conversationID); err != nil {
+			return err
 		}
+	}
 
-		for _, resp := range responses {
-			if err := s.DeleteResponse(ctx, resp.ID); err != nil && !errors.Is(err, ErrNotFound) {
-				logging.Warnf("RedisStore: failed to delete response %s: %v", resp.ID, err)
-			}
-		}
+	return nil
+}
+
+// deleteConversationResponses removes a conversation's responses and its index.
+// Reads the index directly: going via ListResponsesByConversation would cap the
+// cascade at the pagination limit.
+func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
+	indexKey := s.conversationIndexKey(conversationID)
+
+	responseIDs, err := s.client.ZRange(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return fmt.Errorf("failed to list responses for deletion: %w", err)
+	}
+
+	pipe := s.client.Pipeline()
+	for _, responseID := range responseIDs {
+		pipe.Del(ctx, s.buildKey(ResponseKeyPrefix+responseID))
+	}
+	pipe.Del(ctx, indexKey)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		// Conversation is already gone; a returned error could not be usefully retried.
+		logging.Warnf("RedisStore: failed to delete %d response(s) of conversation %s: %v",
+			len(responseIDs), conversationID, err)
 	}
 
 	return nil
@@ -657,12 +700,76 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	// This is automatically handled by the conversation chain via previous_response_id
-	// This method can be used to update conversation metadata if needed
+	// Membership is recorded by StoreResponse via the conversation index, and
+	// traversal by previous_response_id. Kept for conversation metadata updates.
 	return nil
 }
 
 // Helper methods
+
+// indexResponse adds a response to its conversation index, scored by created_at.
+//
+// Best-effort: the payload is already durable, and returning an error would only
+// send the caller into a retry that fails with ErrAlreadyExists.
+func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt int64) {
+	if conversationID == "" {
+		return
+	}
+
+	indexKey := s.conversationIndexKey(conversationID)
+
+	pipe := s.client.Pipeline()
+	pipe.ZAdd(ctx, indexKey, redis.Z{Score: float64(createdAt), Member: responseID})
+	if s.ttl > 0 {
+		// Outlive the newest member. Guarded: EXPIRE with 0 deletes the key.
+		pipe.Expire(ctx, indexKey, s.ttl)
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		logging.Warnf("RedisStore: failed to index response %s in conversation %s: %v",
+			responseID, conversationID, err)
+	}
+}
+
+// unindexResponse drops response IDs from a conversation index. Best-effort: a
+// stale entry costs one extra GET on the next listing, which then prunes it.
+func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string, responseIDs ...string) {
+	if conversationID == "" || len(responseIDs) == 0 {
+		return
+	}
+
+	members := make([]interface{}, len(responseIDs))
+	for i, responseID := range responseIDs {
+		members[i] = responseID
+	}
+
+	if err := s.client.ZRem(ctx, s.conversationIndexKey(conversationID), members...).Err(); err != nil {
+		logging.Warnf("RedisStore: failed to remove %d response(s) from conversation %s index: %v",
+			len(responseIDs), conversationID, err)
+	}
+}
+
+// storedConversationID reports a response's current conversation so update and
+// delete can repair the index, and returns ErrNotFound when it is absent. An
+// unreadable payload is not fatal, it only costs the old index entry.
+func (s *RedisStore) storedConversationID(ctx context.Context, responseID string) (string, error) {
+	data, err := s.client.Get(ctx, s.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("failed to check response existence: %w", err)
+	}
+
+	var stored responseapi.StoredResponse
+	if err := json.Unmarshal(data, &stored); err != nil {
+		logging.Warnf("RedisStore: failed to parse stored response %s while updating its conversation index: %v",
+			responseID, err)
+		return "", nil
+	}
+
+	return stored.ConversationID, nil
+}
 
 func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
 	var responseIDs []string
@@ -702,9 +809,11 @@ func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]str
 	return responseIDs, nil
 }
 
-func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, error) {
+// fetchResponsesPipelined loads response IDs in one round trip, also returning
+// the IDs whose payload is gone so index-driven callers can prune them.
+func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, []string, error) {
 	if len(responseIDs) == 0 {
-		return []*responseapi.StoredResponse{}, nil
+		return []*responseapi.StoredResponse{}, nil, nil
 	}
 
 	pipe := s.client.Pipeline()
@@ -722,12 +831,16 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 	}
 
 	// Process results
-	var chain []*responseapi.StoredResponse
+	var (
+		found      []*responseapi.StoredResponse
+		missingIDs []string
+	)
 	for i, cmd := range cmds {
 		data, err := cmd.Bytes()
 		if err != nil {
 			if errors.Is(err, redis.Nil) {
 				logging.Warnf("RedisStore: response %s not found (may have expired)", responseIDs[i])
+				missingIDs = append(missingIDs, responseIDs[i])
 				continue
 			}
 			logging.Warnf("RedisStore: failed to get response %s: %v", responseIDs[i], err)
@@ -740,8 +853,8 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 			continue
 		}
 
-		chain = append(chain, &response)
+		found = append(found, &response)
 	}
 
-	return chain, nil
+	return found, missingIDs, nil
 }

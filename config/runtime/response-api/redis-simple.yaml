@@ -51,6 +51,7 @@ tls_enabled: false
 # Redis Key Schema:
 # sr:response:{response_id}      → JSON blob of StoredResponse
 # sr:conversation:{conv_id}      → JSON blob of StoredConversation
+# sr:conversation-index:{conv_id} → sorted set of response IDs, scored by created_at
 #
 # Both Response API and Semantic Cache share DB 0 but use different base prefixes:
 # - Response API: sr:*
