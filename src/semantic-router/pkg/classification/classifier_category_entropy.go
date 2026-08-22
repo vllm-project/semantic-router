@@ -43,12 +43,17 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 // tryKeywordBasedClassification attempts classification via keyword and embedding classifiers.
 // Returns matched=true if a classifier produced a result.
 func (c *Classifier) tryKeywordBasedClassification(text string) (string, float64, entropy.ReasoningDecision, bool, error) {
-	for _, clf := range []interface {
+	classifiers := make([]interface {
 		Classify(string) (string, float64, error)
-	}{c.keywordClassifier, c.keywordEmbeddingClassifier} {
-		if clf == nil {
-			continue
-		}
+	}, 0, 2)
+	if c.keywordClassifier != nil {
+		classifiers = append(classifiers, c.keywordClassifier)
+	}
+	if c.keywordEmbeddingClassifier != nil {
+		classifiers = append(classifiers, c.keywordEmbeddingClassifier)
+	}
+
+	for _, clf := range classifiers {
 		category, confidence, err := clf.Classify(text)
 		if err != nil {
 			return "", 0.0, entropy.ReasoningDecision{}, false, err
