@@ -179,6 +179,76 @@ type AutoMixSelectionConfig struct {
 	CostQualityTradeoff    float64 `yaml:"cost_quality_tradeoff,omitempty"`
 	DiscountFactor         float64 `yaml:"discount_factor,omitempty"`
 	UseLogprobVerification bool    `yaml:"use_logprob_verification,omitempty"`
+
+	// EnableSelfVerification enables LLM-based self-verification (paper method)
+	EnableSelfVerification bool `yaml:"enable_self_verification,omitempty"`
+
+	// VerificationSamples is the number of samples for confidence estimation (k in paper)
+	VerificationSamples int `yaml:"verification_samples,omitempty"`
+
+	// VerificationTemperature for sampling during self-verification
+	VerificationTemperature float64 `yaml:"verification_temperature,omitempty"`
+
+	// UsePOMDPRouter enables full POMDP-based routing with belief updates
+	UsePOMDPRouter bool `yaml:"use_pomdp_router,omitempty"`
+
+	// BeliefParticles is the number of particles for belief representation
+	BeliefParticles int `yaml:"belief_particles,omitempty"`
+
+	// CostLambda is the tradeoff parameter in R = Performance - λ × Cost
+	CostLambda float64 `yaml:"cost_lambda,omitempty"`
+
+	// VerifierServerURL is the URL of the AutoMix self-verification server
+	VerifierServerURL string `yaml:"verifier_server_url,omitempty"`
+
+	// EnableCascade enables the full cascade execution mode
+	EnableCascade bool `yaml:"enable_cascade,omitempty"`
+}
+
+// ApplyDefaults fills in default values for unset fields, mirroring
+// selection.DefaultAutoMixConfig(). Boolean fields whose documented default
+// is true (CostAwareRouting, UseLogprobVerification, UsePOMDPRouter) cannot
+// be distinguished from an explicit "false" using a zero-value check alone;
+// this is a known limitation shared with other zero-value-based
+// ApplyDefaults() implementations in this package (see
+// VectorStoreConfig.ApplyDefaults).
+func (c *AutoMixSelectionConfig) ApplyDefaults() {
+	if c.VerificationThreshold == 0 {
+		c.VerificationThreshold = 0.7
+	}
+	if c.MaxEscalations == 0 {
+		c.MaxEscalations = 2
+	}
+	if !c.CostAwareRouting {
+		c.CostAwareRouting = true
+	}
+	if c.CostQualityTradeoff == 0 {
+		c.CostQualityTradeoff = 0.3
+	}
+	if c.DiscountFactor == 0 {
+		c.DiscountFactor = 0.95
+	}
+	if !c.UseLogprobVerification {
+		c.UseLogprobVerification = true
+	}
+	if c.VerificationSamples == 0 {
+		c.VerificationSamples = 5
+	}
+	if c.VerificationTemperature == 0 {
+		c.VerificationTemperature = 0.7
+	}
+	if !c.UsePOMDPRouter {
+		c.UsePOMDPRouter = true
+	}
+	if c.BeliefParticles == 0 {
+		c.BeliefParticles = 100
+	}
+	if c.CostLambda == 0 {
+		c.CostLambda = 0.5
+	}
+	// EnableSelfVerification, VerifierServerURL, and EnableCascade have
+	// documented defaults of false/"" — the zero value — so no defaulting
+	// is needed for them.
 }
 
 type HybridSelectionConfig struct {
