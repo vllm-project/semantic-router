@@ -153,6 +153,37 @@ socket unless users with Dashboard access are allowed to control that runtime.
 See the [security hardening guide](../website/docs/installation/security-hardening.md)
 for the deployment boundary.
 
+## Session contract
+
+Browsers authenticate with the `vsr_session` cookie the backend sets at login,
+and with nothing else. It is `HttpOnly`, `SameSite=Lax`, and `Secure` behind
+HTTPS, so page script cannot read it and the browser attaches it to same-origin
+requests on its own — `fetch`, `EventSource`, `WebSocket`, and iframes alike.
+The frontend does not store, copy, or forward it.
+
+- **`?authToken=` is not accepted.** The backend used to read a session token
+  from the query string, which put a live credential into reverse-proxy access
+  logs, browser history, and the `Referer` header. Any saved link or automation
+  still using it now receives `401`; move it to `Authorization: Bearer`.
+  Token-shaped query parameters are redacted from the logs the dashboard writes,
+  because old links keep arriving for a while.
+- **Non-browser clients use `Authorization: Bearer`.** `POST /api/auth/login`
+  returns the token in its response body for exactly this case. Bearer requests
+  are exempt from the CSRF check described above, since a browser never attaches
+  that header by itself.
+- **`vsr_csrf` is readable by script on purpose.** The frontend reads it and
+  copies the value into `X-CSRF-Token` on every unsafe request
+  ([`frontend/src/utils/authFetch.ts`](frontend/src/utils/authFetch.ts)), which
+  is why it is not `HttpOnly`. It is not a credential: it authenticates nothing
+  on its own, and the server recomputes the expected value from the session id
+  inside the session token rather than reading the cookie back, so planting one
+  achieves nothing without the session cookie as well.
+- **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
+  top-level navigation into the dashboard, so following a link from chat or an
+  alert would land on the login page despite a valid session. `Lax` still
+  withholds it from cross-site subrequests and form posts, and the CSRF token
+  covers what is left.
+
 ## Setup mode contract
 
 Setup mode is the dashboard's first-run state. While it is active the UI forces the setup wizard and the **unauthenticated** first-admin bootstrap endpoint (`/api/auth/bootstrap/register`) is open, so what turns it on and off is a security boundary, not a cosmetic flag.
