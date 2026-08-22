@@ -65,7 +65,7 @@ func recordModelPath(fieldName string, field reflect.Value, paths *[]string, see
 	}
 
 	path := field.String()
-	if path == "" || !strings.HasPrefix(path, "models/") || seen[path] {
+	if path == "" || !strings.HasPrefix(path, modelPathPrefix) || seen[path] {
 		return
 	}
 
@@ -93,6 +93,9 @@ func isModelDirectory(path string) bool {
 	return true
 }
 
+// modelPathPrefix is the directory prefix every managed model path carries.
+const modelPathPrefix = "models/"
+
 // BuildModelSpecs builds ModelSpec list from config and registry
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	// Extract shared/default paths plus paths owned by request-reachable named
@@ -101,6 +104,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	paths := filterDisabledOptionalModelPaths(cfg, extractProvisioningModelPaths(cfg))
 	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
 	addEmbeddingModelRequiredFiles(cfg, requiredFilesByModel)
+	addClassifierModelRequiredFiles(cfg, requiredFilesByModel)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -186,7 +190,7 @@ func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByMod
 
 	// MmBertModelPath holds the configured semantic embedding model directory.
 	path := cfg.MmBertModelPath
-	if path == "" || !strings.HasPrefix(path, "models/") {
+	if path == "" || !strings.HasPrefix(path, modelPathPrefix) {
 		return
 	}
 
@@ -197,6 +201,49 @@ func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByMod
 		}
 	}
 	requiredFilesByModel[path] = existing
+}
+
+// classifierModelWeightFiles are the files TraditionalModernBertTokenClassifier reads from
+// the model root when a classifier runs on the mmBERT-32K backend. They are stricter than
+// the nested-weight heuristic in IsModelComplete: an interrupted download that left the
+// companion mapping plus any nested *.safetensors behind otherwise reads as complete, so
+// the snapshot is never re-fetched while the runtime keeps failing on the missing root
+// weights (#2669).
+var classifierModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
+
+// addClassifierModelRequiredFiles marks the category, PII, and jailbreak classifiers as
+// requiring their root weights and tokenizer.
+//
+// Only the mmBERT-32K backend is covered. It initialises straight through
+// InitMmBert32K*Classifier with no fallback, so the root weights are unconditional. The
+// other backend auto-detects LoRA models, whose directories legitimately carry adapter
+// weights instead, and demanding a root model.safetensors there would strand a valid model
+// in a permanent re-download loop.
+func addClassifierModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
+	if cfg == nil {
+		return
+	}
+
+	for _, classifier := range []struct {
+		path         string
+		useMmBERT32K bool
+	}{
+		{cfg.CategoryModel.ModelID, cfg.CategoryModel.UseMmBERT32K},
+		{cfg.PIIModel.ModelID, cfg.PIIModel.UseMmBERT32K},
+		{cfg.PromptGuard.ModelID, cfg.PromptGuard.UseMmBERT32K},
+	} {
+		if !classifier.useMmBERT32K || !strings.HasPrefix(classifier.path, modelPathPrefix) {
+			continue
+		}
+
+		existing := requiredFilesByModel[classifier.path]
+		for _, fileName := range classifierModelWeightFiles {
+			if !slices.Contains(existing, fileName) {
+				existing = append(existing, fileName)
+			}
+		}
+		requiredFilesByModel[classifier.path] = existing
+	}
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from
@@ -245,7 +292,7 @@ func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[strin
 }
 
 func recordRequiredMappingFile(requiredFilesByModel map[string][]string, mappingPath string) {
-	if !strings.HasPrefix(mappingPath, "models/") {
+	if !strings.HasPrefix(mappingPath, modelPathPrefix) {
 		return
 	}
 
