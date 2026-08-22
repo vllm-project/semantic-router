@@ -68,6 +68,8 @@ Choose the smallest shape that expresses the policy clearly:
 | Composite | Nested combinations of `AND`, `OR`, and `NOT` | [Composite Decisions](./composite) |
 | Retention directives | Cache or session side effects after a decision matches | [Retention Directives](./retention) |
 
+For a reusable workflow pattern that combines keyword signals with composite decisions, see [Multi-Step Pipeline Routing](./multi-step-pipeline).
+
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
 
 ## Operational Boundaries

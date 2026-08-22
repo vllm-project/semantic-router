@@ -1,0 +1,32 @@
+routing:
+  decisions:
+    - name: pipeline_summarize_step
+      description: Pin the summarization stage of a client-orchestrated pipeline.
+      priority: 190
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: pipeline_step_summarize
+          - operator: NOT
+            conditions:
+              - type: keyword
+                name: pipeline_step_extract
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+    - name: pipeline_extract_step
+      description: Pin the extraction stage of a client-orchestrated pipeline.
+      priority: 190
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: pipeline_step_extract
+          - operator: NOT
+            conditions:
+              - type: keyword
+                name: pipeline_step_summarize
+      modelRefs:
+        - model: qwen3-32b
+          use_reasoning: true
