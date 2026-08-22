@@ -133,9 +133,27 @@ type IRExtensions struct {
 	// matched, so this is populated only on Anthropic-backend cells.
 	AnthropicStopSequence string
 
+	// AnthropicErrorRequestID mirrors the top-level request_id of an
+	// upstream Anthropic error envelope so the outbound emitter can restore
+	// it on the re-emitted envelope. Kept out of the OpenAI-shaped
+	// intermediate body on purpose: OpenAI error bodies stay spec-pure, and
+	// OpenAI-protocol clients receive the identifier via the passed-through
+	// request-id response header instead.
+	AnthropicErrorRequestID string
+
 	// Warnings accumulates parse- and emit-time observations. Surfaced via
 	// response headers, structured logging, and metrics.
 	Warnings []Warning
+}
+
+// ErrorRequestID is the nil-safe accessor for AnthropicErrorRequestID,
+// following the package's nil-safe method convention so emit paths that
+// tolerate a nil sidecar need no inline guard.
+func (e *IRExtensions) ErrorRequestID() string {
+	if e == nil {
+		return ""
+	}
+	return e.AnthropicErrorRequestID
 }
 
 // AppendWarning is nil-safe: when e is nil the call is a no-op, so callers
