@@ -1,5 +1,18 @@
 import type { Page } from '@playwright/test'
 
+import playwrightConfig from '../../playwright.config'
+
+// Readable by design, unlike vsr_session — the app reads it to populate X-CSRF-Token.
+export const TEST_CSRF_TOKEN = 'test-csrf-token'
+
+const BASE_URL = playwrightConfig.use?.baseURL ?? 'http://localhost:3001'
+
+// addCookies needs an absolute URL, and at helper time the page is usually about:blank.
+function cookieUrl(page: Page): string {
+  const current = page.url()
+  return current && current !== 'about:blank' ? current : BASE_URL
+}
+
 type SessionUser = {
   id: string
   email: string
@@ -65,12 +78,22 @@ export async function mockAuthenticatedSession(
   page: Page,
   { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(
-    ({ storedToken }) => {
-      window.localStorage.setItem('vsr_auth_token', storedToken)
+  // The app authenticates with the HttpOnly vsr_session cookie the server sets at login,
+  // so tests seed a cookie rather than localStorage. httpOnly is what makes the suite
+  // exercise the real constraint: a cookie page script could read is not the shipped
+  // behaviour. Cookies go on the context so they apply before the first navigation. #2465
+  const url = cookieUrl(page)
+  await page.context().addCookies([
+    { name: 'vsr_session', value: token, url, path: '/', httpOnly: true, sameSite: 'Lax' },
+    {
+      name: 'vsr_csrf',
+      value: TEST_CSRF_TOKEN,
+      url,
+      path: '/',
+      httpOnly: false,
+      sameSite: 'Lax',
     },
-    { storedToken: token },
-  )
+  ])
 
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
