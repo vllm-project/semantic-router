@@ -124,8 +124,8 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	// The query parameter used to be a transport, so "empty" is not enough on its own:
-	// assert the reported source too, or a reinstated branch could pass this silently.
+	// "Empty" is not enough on its own: assert the source too, or a reinstated query
+	// branch could pass this silently.
 	t.Run("reports no source for any query token shape", func(t *testing.T) {
 		t.Parallel()
 

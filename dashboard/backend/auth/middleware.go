@@ -444,12 +444,10 @@ const (
 	tokenSourceCookie
 )
 
-// The query-string transport is deliberately absent. A credential in a URL is written
-// down by everything that touches the request: reverse-proxy access logs, browser
-// history, the Referer header, and anyone who copies the link. The dashboard's
-// same-origin transports (fetch, EventSource, WebSocket, iframe) all authenticate with
-// the HttpOnly vsr_session cookie the browser attaches for them, and non-browser
-// clients use Authorization: Bearer. See #2465.
+// The query-string transport is deliberately absent: a credential in a URL is written down
+// by proxy access logs, browser history and the Referer header. Browser transports use the
+// HttpOnly vsr_session cookie the browser attaches for them; non-browser clients use
+// Authorization: Bearer. See #2465.
 func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
 		return token, tokenSourceHeader
