@@ -1,3 +1,4 @@
+import http.client
 import importlib
 import sys
 import tempfile
@@ -48,6 +49,26 @@ class CalibrationHTTPTest(unittest.TestCase):
             sent_request.get_header("Authorization"), "Bearer private-token"
         )
         self.assertNotIn(b"private-token", sent_request.data)
+
+    def test_http_json_wraps_remote_disconnect_as_probe_transport_error(self) -> None:
+        with (
+            mock.patch.object(
+                router_calibration_http.request,
+                "urlopen",
+                side_effect=http.client.RemoteDisconnected(
+                    "peer closed before sending a response"
+                ),
+            ),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "request to http://router.example:8080/api/v1/eval failed",
+            ),
+        ):
+            router_calibration_http.http_json(
+                "POST",
+                "http://router.example:8080/api/v1/eval",
+                {"text": "safe fixture"},
+            )
 
 
 class DeployConfigTest(unittest.TestCase):

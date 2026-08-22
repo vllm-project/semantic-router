@@ -15,13 +15,25 @@ from recipe_conformance_coverage import (
     collect_coverage,
     configured_signal_names,
     evaluate_live_tag_policy,
-    summarize_catalog_coverage,
 )
 from recipe_conformance_report import (
     build_consolidated_report,
     render_consolidated_markdown,
     render_coverage_markdown,
     render_tag_acceptance_markdown,
+)
+from recipe_conformance_runtime import management_auth_bindings
+from recipe_conformance_sources import (
+    coverage_payload,
+    discover_recipe_sources,
+    matrix_payload,
+    render_source_rows,
+)
+from recipe_conformance_sources import (
+    discover_source_inventories as discover_source_inventories_from,
+)
+from recipe_conformance_sources import (
+    source_matrix_payload as build_source_matrix_payload,
 )
 from recipe_metadata_schema import (
     load_recipe_metadata_document,
@@ -534,69 +546,6 @@ def validate_catalog_readme(root: Path, inventory: list[RecipeInventory]) -> Non
         )
 
 
-def coverage_payload(inventory: list[RecipeInventory]) -> dict[str, Any]:
-    entrypoint_count = sum(len(recipe.entrypoints) for recipe in inventory)
-    auto_entrypoint_count = sum(len(recipe.auto_entrypoints) for recipe in inventory)
-    return {
-        "schema_version": "v1",
-        "receipt": {
-            "domain": "recipe-conformance",
-            "blocking_tiers": ["T0", "T1", "T2", "T3"],
-            "reporting_tiers": ["T4"],
-        },
-        "recipes": [asdict(recipe) for recipe in inventory],
-        "summary": {
-            "recipes": len(inventory),
-            "decisions": sum(len(recipe.decisions) for recipe in inventory),
-            "entrypoints": entrypoint_count,
-            "auto_entrypoints": auto_entrypoint_count,
-            "named_entrypoints": entrypoint_count - auto_entrypoint_count,
-            "variants": sum(recipe.variants for recipe in inventory),
-            "signal_families": sorted(
-                {signal for recipe in inventory for signal in recipe.signal_families}
-            ),
-            "algorithms": sorted(
-                {algorithm for recipe in inventory for algorithm in recipe.algorithms}
-            ),
-            "plugins": sorted(
-                {plugin for recipe in inventory for plugin in recipe.plugins}
-            ),
-            "coverage": summarize_catalog_coverage(
-                [recipe.coverage for recipe in inventory]
-            ),
-        },
-    }
-
-
-def shard_inventory(
-    inventory: list[RecipeInventory], shard_count: int
-) -> list[list[RecipeInventory]]:
-    if shard_count < 1:
-        raise ValueError("shard count must be positive")
-    shards: list[list[RecipeInventory]] = [[] for _ in range(shard_count)]
-    weights = [0] * shard_count
-    for recipe in sorted(inventory, key=lambda item: (-item.variants, item.name)):
-        index = min(range(shard_count), key=lambda item: (weights[item], item))
-        shards[index].append(recipe)
-        weights[index] += recipe.variants
-    return [shard for shard in shards if shard]
-
-
-def matrix_payload(
-    inventory: list[RecipeInventory], shard_count: int
-) -> dict[str, Any]:
-    return {
-        "include": [
-            {
-                "shard": index,
-                "recipes": ",".join(recipe.name for recipe in shard),
-                "variants": sum(recipe.variants for recipe in shard),
-            }
-            for index, shard in enumerate(shard_inventory(inventory, shard_count))
-        ]
-    }
-
-
 def write_github_output(path: Path, name: str, value: str) -> None:
     with path.open("a", encoding="utf-8") as output:
         output.write(f"{name}={value}\n")
@@ -631,6 +580,56 @@ def command_plan(args: argparse.Namespace) -> int:
         write_github_output(args.github_output, "matrix", encoded)
     else:
         print(json.dumps(matrix, indent=2))
+    return 0
+
+
+def command_static_all(args: argparse.Namespace) -> int:
+    summaries: dict[str, dict[str, Any]] = {}
+    for source_inventory in discover_source_inventories_from(
+        args.recipes_root, discover_inventory
+    ):
+        source = source_inventory.source
+        inventory = list(source_inventory.recipes)
+        if source.validate_readme:
+            validate_catalog_readme(source.recipes_root, inventory)
+        payload = coverage_payload(inventory)
+        output_dir = args.output_dir / source.report_subdir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_json(output_dir / "inventory.json", payload)
+        (output_dir / "coverage.md").write_text(
+            render_coverage_markdown(payload), encoding="utf-8"
+        )
+        summaries[source.name] = payload["summary"]
+    print(json.dumps(summaries, indent=2, ensure_ascii=False))
+    return 0
+
+
+def command_plan_all(args: argparse.Namespace) -> int:
+    matrix = build_source_matrix_payload(
+        discover_source_inventories_from(args.recipes_root, discover_inventory),
+        args.shards,
+        REPO_ROOT,
+    )
+    encoded = json.dumps(matrix, separators=(",", ":"))
+    if args.github_output:
+        write_github_output(args.github_output, "matrix", encoded)
+    else:
+        print(json.dumps(matrix, indent=2))
+    return 0
+
+
+def command_sources(args: argparse.Namespace) -> int:
+    inventories = discover_source_inventories_from(
+        args.recipes_root, discover_inventory
+    )
+    print(render_source_rows(inventories, REPO_ROOT, args.format))
+    return 0
+
+
+def command_runtime_auth(args: argparse.Namespace) -> int:
+    config = load_yaml_mapping(args.recipes_root / args.recipe / "config.yaml")
+    for env_name, can_read_ready in management_auth_bindings(config):
+        print(f"{env_name}|{'ready' if can_read_ready else 'token'}")
     return 0
 
 
@@ -684,6 +683,20 @@ def command_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_report_all(args: argparse.Namespace) -> int:
+    summaries: dict[str, dict[str, Any]] = {}
+    for source in discover_recipe_sources(args.recipes_root):
+        output_dir = args.output_dir / source.report_subdir
+        payload = build_consolidated_report(output_dir)
+        write_json(output_dir / "conformance-report.json", payload)
+        (output_dir / "conformance-report.md").write_text(
+            render_consolidated_markdown(payload), encoding="utf-8"
+        )
+        summaries[source.name] = payload["summary"]
+    print(json.dumps(summaries, indent=2, ensure_ascii=False))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -710,10 +723,26 @@ def build_parser() -> argparse.ArgumentParser:
     static = subparsers.add_parser("static")
     static.set_defaults(func=command_static)
 
+    static_all = subparsers.add_parser("static-all")
+    static_all.set_defaults(func=command_static_all)
+
     plan = subparsers.add_parser("plan")
     plan.add_argument("--shards", type=int, default=3)
     plan.add_argument("--github-output", type=Path)
     plan.set_defaults(func=command_plan)
+
+    plan_all = subparsers.add_parser("plan-all")
+    plan_all.add_argument("--shards", type=int, default=3)
+    plan_all.add_argument("--github-output", type=Path)
+    plan_all.set_defaults(func=command_plan_all)
+
+    sources = subparsers.add_parser("sources")
+    sources.add_argument("--format", choices=("json", "pipe"), default="json")
+    sources.set_defaults(func=command_sources)
+
+    runtime_auth = subparsers.add_parser("runtime-auth")
+    runtime_auth.add_argument("--recipe", required=True)
+    runtime_auth.set_defaults(func=command_runtime_auth)
 
     evaluate = subparsers.add_parser("eval")
     evaluate.add_argument("--recipe", required=True)
@@ -722,6 +751,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = subparsers.add_parser("report")
     report.set_defaults(func=command_report)
+
+    report_all = subparsers.add_parser("report-all")
+    report_all.set_defaults(func=command_report_all)
     return parser
 
 

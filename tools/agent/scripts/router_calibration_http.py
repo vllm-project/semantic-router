@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from http import client
 from typing import Any
 from urllib import error, request
 
@@ -44,7 +45,14 @@ def http_json(
         except json.JSONDecodeError:
             parsed = raw
         return exc.code, parsed
-    except (error.URLError, TimeoutError) as exc:
+    except (
+        client.RemoteDisconnected,
+        ConnectionAbortedError,
+        ConnectionResetError,
+        BrokenPipeError,
+        error.URLError,
+        TimeoutError,
+    ) as exc:
         raise RuntimeError(f"request to {url} failed: {exc}") from exc
 
     try:

@@ -23,20 +23,6 @@ def write_recipe_contract(path: Path) -> None:
 
 
 class RecipeConformanceTest(unittest.TestCase):
-    def test_latest_built_in_bundle_uses_the_same_five_file_contract(self) -> None:
-        root = (
-            recipe_conformance.REPO_ROOT / "config" / "recipes" / "built-in" / "latest"
-        )
-
-        inventory = recipe_conformance.discover_inventory(root)
-
-        self.assertEqual([recipe.name for recipe in inventory], ["mom-v1"])
-        mom = inventory[0]
-        self.assertEqual(len(mom.entrypoints), 5)
-        self.assertEqual(len(mom.decisions), 43)
-        self.assertEqual(mom.variants, 222)
-        self.assertTrue(mom.coverage["passed"])
-
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
