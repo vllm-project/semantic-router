@@ -190,7 +190,7 @@ func TestMilvusCacheFindExactHonorsConsistencyLevel(t *testing.T) {
 		collectionName: "test_cache",
 	}
 
-	result, err := cache.FindExact("model", "fingerprint")
+	result, err := cache.FindExact(context.Background(), "model", "fingerprint")
 	require.NoError(t, err)
 	assert.True(t, result.Found)
 	level, set := appliedConsistencyLevel(t, fake.queryOpts)

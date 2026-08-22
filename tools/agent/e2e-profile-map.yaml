@@ -240,6 +240,15 @@ manual_profile_rules:
       - e2e/testcases/hallucination_detection*.go
       - deploy/kubernetes/hallucination/**
       - e2e/testcases/testdata/hallucination_detection_cases.json
+  jailbreak-onerror:
+    owner: e2e
+    coverage_role: prompt-guard-on-error
+    selection_mode: manual-only
+    summary: PromptGuardConfig.OnError (#2918) coverage against a real, deliberately unreachable classifier endpoint - verifies on_error:block closes the request instead of silently allowing it through.
+    paths:
+      - e2e/profiles/jailbreak-onerror/**
+      - e2e/testcases/jailbreak_onerror_block.go
+      - deploy/kubernetes/jailbreak-onerror/**
 
 workflow_suite_rules:
   recipe-conformance-live:

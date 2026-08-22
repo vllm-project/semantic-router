@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -186,7 +187,7 @@ func (c *InMemoryCache) IsEnabled() bool {
 
 // CheckConnection verifies the cache connection is healthy
 // For in-memory cache, this is always healthy (no external connection)
-func (c *InMemoryCache) CheckConnection() error {
+func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 	// In-memory cache has no external connection to check
 	return nil
 }
@@ -194,7 +195,10 @@ func (c *InMemoryCache) CheckConnection() error {
 // generateEmbedding returns an embedding for text using the configured model,
 // served from the embedding memo when the same text was embedded recently
 // (e.g. the lookup + pending-write pair of a single cache-miss request).
-func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
+func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	if c.embMemo != nil {
 		return c.embMemo.getOrCompute(text, c.computeEmbedding)
 	}
@@ -271,7 +275,7 @@ func (c *InMemoryCache) AddPendingRequest(
 	}
 
 	// Generate semantic embedding using the configured model
-	embedding, err := c.generateEmbedding(query)
+	embedding, err := c.generateEmbedding(context.Background(), query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -394,6 +398,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 
 // AddEntry stores a complete request-response pair in the cache
 func (c *InMemoryCache) AddEntry(
+	ctx context.Context,
 	requestID string,
 	model string,
 	query string,
@@ -418,7 +423,7 @@ func (c *InMemoryCache) AddEntry(
 	}
 
 	// Generate semantic embedding using the configured model
-	embedding, err := c.generateEmbedding(query)
+	embedding, err := c.generateEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -426,6 +431,12 @@ func (c *InMemoryCache) AddEntry(
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Cancelled during the embed: publish nothing.
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "add_entry", "canceled", time.Since(start).Seconds())
+		return err
+	}
 
 	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
 	c.cleanupExpiredEntriesDeferred()

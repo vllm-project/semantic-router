@@ -546,7 +546,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_over_240k_text_guard
           description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
           priority: 850
@@ -570,7 +570,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_text_from_120k_to_240k
           description: Balance text and tool traffic in the 120K-240K band across the two declared native-262K backends.
           priority: 800
@@ -604,7 +604,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_text_from_60k_to_120k
           description: Balance text and tool traffic in the 60K-120K band across native-262K backends and compatible strong 128K backends.
           priority: 750
@@ -644,7 +644,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_text_from_30k_to_60k
           description: Balance text and tool traffic in the 30K-60K band across native-262K backends and compatible strong shorter-context backends.
           priority: 700
@@ -687,7 +687,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_image_tools
           description: Keep image-and-tool requests through 240K on the declared native-262K multimodal backend.
           priority: 500
@@ -712,7 +712,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_image
           description: Keep image requests through 240K on the declared native-262K multimodal backend.
           priority: 450
@@ -739,7 +739,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_tools
           description: Route short tool requests only to tool-capable standard candidates.
           priority: 400
@@ -773,7 +773,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_answer_recovery
           description: Rebuild an answer after explicit dissatisfaction or an immediate semantic re-ask, without bypassing capability guards.
           priority: 300
@@ -806,7 +806,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Correct the previous miss from first principles and state the improvement clearly.
         - name: balance_deliberate
           description: Balance semantically difficult, constrained, or verification-heavy work across strong reasoning candidates.
           priority: 200
@@ -842,7 +842,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
         - name: balance_standard
           description: Balance ordinary work across economical and capable candidates.
           priority: 10
@@ -867,7 +867,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Blend, built by AMD. Balance accuracy, speed, and cost. Give one clear answer.
+                system_prompt: You are mom-v1-blend, built by vLLM-SR Community. Balance quality, speed, and cost. Give one clear answer.
       strategy: priority
 
   - name: speed
@@ -1032,7 +1032,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_over_240k_text_guard
           description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
           priority: 850
@@ -1055,7 +1055,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_image_tools
           description: Keep image-and-tool requests through 240K on the declared native-262K low-latency backend.
           priority: 500
@@ -1080,7 +1080,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_image
           description: Keep image requests through 240K on the declared native-262K low-latency backend.
           priority: 450
@@ -1107,7 +1107,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_tools
           description: Route tool requests through 240K across the two declared native-262K low-latency candidates.
           priority: 400
@@ -1136,7 +1136,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_heavy_workload
           description: Use live TTFT and TPOT percentiles across native-262K candidates for semantically heavier low-latency work.
           priority: 200
@@ -1161,7 +1161,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
         - name: speed_interactive
           description: Choose the fastest healthy candidate for interactive text requests using latency and load.
           priority: 10
@@ -1183,7 +1183,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Flash, built by AMD. Answer immediately and concisely.
+                system_prompt: You are mom-v1-flash, built by vLLM-SR Community. Answer directly and concisely.
       strategy: priority
 
   - name: cost
@@ -1364,7 +1364,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+                system_prompt: You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail.
         - name: cost_over_240k_text_guard
           description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
           priority: 850
@@ -1387,7 +1387,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+                system_prompt: You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail.
         - name: cost_image
           description: Keep image and image-with-tool requests through 240K on the declared native-262K multimodal backend.
           priority: 500
@@ -1410,7 +1410,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+                system_prompt: You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail.
         - name: cost_bounded_reasoning
           description: Spend bounded reasoning compute on the economy model only when semantic workload warrants it.
           priority: 200
@@ -1434,7 +1434,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+                system_prompt: You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail.
         - name: cost_direct_economy
           description: Route ordinary text and tool traffic through 240K to the economy model without reasoning.
           priority: 10
@@ -1448,7 +1448,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Lite, built by AMD. Minimize compute and verbosity; give the shortest sufficient answer.
+                system_prompt: You are mom-v1-lite, built by vLLM-SR Community. Give the shortest sufficient answer; omit unnecessary detail.
       strategy: priority
 
   - name: accuracy
@@ -1800,7 +1800,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied image and tool result directly, verify key claims, and do not call another tool.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Use the provided image and tool result. Verify key claims; do not call another tool.
             - type: tools
               configuration:
                 enabled: true
@@ -1830,7 +1830,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Synthesize the supplied tool result directly, verify key claims, and do not call another tool.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Use the provided tool result. Verify key claims; do not call another tool.
             - type: tools
               configuration:
                 enabled: true
@@ -1860,7 +1860,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_over_240k_text_guard
           description: Route text and tool requests beyond 240K to GLM; its native context contract enforces terminal overflow.
           priority: 850
@@ -1884,7 +1884,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_image_from_120k_to_240k
           description: Route image requests in the 120K-240K band to the declared native-262K Qwen36 backend.
           priority: 800
@@ -1910,7 +1910,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_image_through_120k
           description: Route image requests through the conservative 120K boundary to the strongest 128K image-capable accuracy model.
           priority: 600
@@ -1942,7 +1942,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_long_context_or_direct_reference
           description: Keep long text/tool inputs and quoted orchestration references on one frontier backend.
           priority: 550
@@ -1964,7 +1964,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_dynamic_workflow
           description: Decompose semantically explicit investigate-plan-execute work into a bounded dynamic workflow.
           priority: 500
@@ -2023,7 +2023,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_expert_fusion
           description: Ask provider-diverse experts and synthesize with the largest frontier model.
           priority: 450
@@ -2071,7 +2071,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_confidence_escalation
           description: Start fast and escalate only when average token confidence is insufficient.
           priority: 400
@@ -2109,7 +2109,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_multi_round_exploration
           description: Run bounded multi-round exploration only for explicit search intent.
           priority: 350
@@ -2156,7 +2156,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
         - name: accuracy_direct
           description: Use the largest frontier model directly when fan-out has no explicit benefit.
           priority: 10
@@ -2171,7 +2171,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Ultra, built by AMD. Verify key claims and prioritize correctness.
+                system_prompt: You are mom-v1-ultra, built by vLLM-SR Community. Prioritize correctness and verify key claims.
       strategy: priority
 
   - name: vault
@@ -2346,7 +2346,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2378,7 +2378,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2405,7 +2405,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2440,7 +2440,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2469,7 +2469,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2496,7 +2496,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true
@@ -2523,7 +2523,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential. Minimize data use, do not reproduce secrets verbatim, and return only fields necessary to answer the request.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential. Do not repeat secrets; return only the fields needed to answer.
             - type: tools
               configuration:
                 enabled: true
@@ -2545,7 +2545,7 @@ recipes:
               configuration:
                 enabled: true
                 mode: insert
-                system_prompt: You are vLLM-SR MoM V1 Vault, built by AMD. Treat inputs as confidential and minimize disclosure.
+                system_prompt: You are mom-v1-vault, built by vLLM-SR Community. Treat all inputs as confidential and disclose only what is necessary.
             - type: tools
               configuration:
                 enabled: true

@@ -1023,7 +1023,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -1058,7 +1058,7 @@ config:
               mode: replace
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent
@@ -1854,7 +1854,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true
@@ -6442,7 +6442,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -6477,7 +6477,7 @@ config:
               mode: replace
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent
@@ -7273,7 +7273,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true

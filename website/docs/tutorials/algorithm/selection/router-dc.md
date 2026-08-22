@@ -27,9 +27,11 @@ requests and model descriptions:
 4. **Selection**: It chooses the highest score above `min_similarity`, then
    applies a second temperature-scaled softmax for the returned score map.
 
-$$s_i = \sigma(\cos(q,m_i)/\tau), \qquad
+$$
+s_i = \sigma(\cos(q,m_i)/\tau), \qquad
 P_i = \frac{\exp((s_i-\max_j s_j)/\tau)}{\sum_j
-\exp((s_j-\max_k s_k)/\tau)}$$
+\exp((s_j-\max_k s_k)/\tau)}
+$$
 
 Where $\tau$ is the temperature (`temperature`, default 0.07).
 

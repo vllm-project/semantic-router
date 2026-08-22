@@ -25,6 +25,7 @@ import (
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	client              *redis.Client
+	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
 	indexName           string
 	similarityThreshold float32
@@ -45,6 +46,9 @@ type RedisCacheOptions struct {
 	Config              *config.RedisConfig
 	ConfigPath          string
 	EmbeddingModel      string
+
+	// closeClient is a test seam for constructor cleanup.
+	closeClient func(*redis.Client)
 }
 
 // NewRedisCache initializes a new Redis-backed semantic cache instance
@@ -103,8 +107,16 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		embeddingModel:      embeddingModel,
 	}
 
+	releaseClient := func() { _ = redisClient.Close() }
+	if options.closeClient != nil {
+		releaseClient = func() { options.closeClient(redisClient) }
+	}
+
 	// Test connection using the new CheckConnection method
-	if err := cache.CheckConnection(); err != nil {
+	if err := releaseOnFailure(
+		func() error { return cache.CheckConnection(context.Background()) },
+		releaseClient,
+	); err != nil {
 		logging.Debugf("RedisCache: failed to connect: %v", err)
 		return nil, err
 	}
@@ -112,9 +124,8 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 
 	// Set up the index for vector search
 	logging.Debugf("RedisCache: initializing index '%s'", redisConfig.Index.Name)
-	if err := cache.initializeIndex(); err != nil {
+	if err := releaseOnFailure(cache.initializeIndex, releaseClient); err != nil {
 		logging.Debugf("RedisCache: failed to initialize index: %v", err)
-		_ = redisClient.Close()
 		return nil, fmt.Errorf("failed to initialize index: %w", err)
 	}
 	logging.Debugf("RedisCache: initialization complete")
@@ -220,8 +231,12 @@ func (c *RedisCache) initializeIndex() error {
 	return nil
 }
 
-// getEmbedding generates an embedding based on the configured embedding model
-func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
+// getEmbedding generates an embedding based on the configured embedding model.
+// Cancellation is best-effort here; see ctxErr.
+func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
 	modelName := c.embeddingModel
 
 	switch modelName {
@@ -363,7 +378,7 @@ func (c *RedisCache) IsEnabled() bool {
 }
 
 // CheckConnection verifies the Redis connection is healthy
-func (c *RedisCache) CheckConnection() error {
+func (c *RedisCache) CheckConnection(ctx context.Context) error {
 	if !c.enabled {
 		return nil
 	}
@@ -372,7 +387,9 @@ func (c *RedisCache) CheckConnection() error {
 		return fmt.Errorf("redis client is not initialized")
 	}
 
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if c.config != nil && c.config.Connection.Timeout > 0 {
 		timeout := time.Duration(c.config.Connection.Timeout) * time.Second
 		var cancel context.CancelFunc
@@ -402,7 +419,7 @@ func (c *RedisCache) AddPendingRequest(requestID string, model string, query str
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(context.Background(), "", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_pending", "error", time.Since(start).Seconds())
@@ -415,6 +432,7 @@ func (c *RedisCache) AddPendingRequest(requestID string, model string, query str
 
 // UpdateWithResponse completes a pending request by adding the response
 func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
+	ctx := context.Background()
 	start := time.Now()
 
 	if !c.enabled {
@@ -425,8 +443,6 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 		requestID, len(responseBody), ttlSeconds)
 
 	// Find the pending entry by request_id
-	ctx := context.Background()
-
 	// Search for documents with matching request_id using TEXT field syntax (exact match with quotes)
 	// TAG syntax with {} doesn't work well with UUIDs containing hyphens
 	query := fmt.Sprintf("@request_id:\"%s\"", requestID)
@@ -470,7 +486,7 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 	logging.Debugf("RedisCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", docID, model)
 
 	// Update the document with response body and TTL
-	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
+	err = c.addEntry(ctx, docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
@@ -483,7 +499,7 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *RedisCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *RedisCache) AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -496,7 +512,7 @@ func (c *RedisCache) AddEntry(requestID string, model string, query string, requ
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry(ctx, "", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_entry", "error", time.Since(start).Seconds())
@@ -518,9 +534,13 @@ func floatsToBytes(fs []float32) []byte {
 }
 
 // addEntry handles the internal logic for storing entries in Redis
-func (c *RedisCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *RedisCache) addEntry(ctx context.Context, id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	logging.Infof("addEntry called: id='%s', requestID='%s', requestBody_len=%d, responseBody_len=%d, ttl_seconds=%d",
 		id, requestID, len(requestBody), len(responseBody), ttlSeconds)
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
@@ -529,7 +549,7 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := c.getEmbedding(query)
+	embedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -538,8 +558,6 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 	if id == "" {
 		id = fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
 	}
-
-	ctx := context.Background()
 
 	// Convert embedding to bytes
 	embeddingBytes := floatsToBytes(embedding)
@@ -633,46 +651,53 @@ func (c *RedisCache) extractSearchResult(bestDoc redis.Document) (float32, []byt
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *RedisCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	result, err := c.LookupSimilarWithThreshold(model, query, threshold)
+	result, err := c.LookupSimilarWithThreshold(context.Background(), model, query, threshold)
 	return result.ResponseBody, result.Found, err
 }
 
 // LookupSimilarWithThreshold returns response data and similarity atomically.
-func (c *RedisCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+func (c *RedisCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 
 	if !c.enabled {
 		return LookupResult{}, nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	queryEmbedding, err := c.getEmbedding(query)
+	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
 		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	ctx := context.Background()
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
 	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
 
-	searchResult, err := c.client.FTSearchWithArgs(ctx,
-		c.indexName,
-		knnQuery,
-		&redis.FTSearchOptions{
-			Return: []redis.FTSearchReturn{
-				{FieldName: "vector_distance"},
-				{FieldName: "response_body"},
-			},
-			DialectVersion: 2,
-			Params: map[string]interface{}{
-				"vec": embeddingBytes,
-			},
+	searchOptions := &redis.FTSearchOptions{
+		Return: []redis.FTSearchReturn{
+			{FieldName: "vector_distance"},
+			{FieldName: "response_body"},
 		},
-	).Result()
+		DialectVersion: 2,
+		Params: map[string]interface{}{
+			"vec": embeddingBytes,
+		},
+	}
+	var searchResult redis.FTSearchResult
+	if c.searchFn != nil {
+		searchResult, err = c.searchFn(ctx, c.indexName, knnQuery, searchOptions)
+	} else {
+		searchResult, err = c.client.FTSearchWithArgs(ctx, c.indexName, knnQuery, searchOptions).Result()
+	}
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
+		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
+			return LookupResult{}, contextErr
+		}
 		return LookupResult{}, nil
 	}
 
@@ -682,7 +707,6 @@ func (c *RedisCache) LookupSimilarWithThreshold(model string, query string, thre
 	}
 
 	similarity, responseBody, ok := c.extractSearchResult(searchResult.Docs[0])
-	// Store similarity for callers (e.g., x-vsr-cache-similarity response header)
 	if !ok {
 		c.recordCacheMiss("error", time.Since(start))
 		return LookupResult{Similarity: similarity}, nil
@@ -700,6 +724,8 @@ func (c *RedisCache) LookupSimilarWithThreshold(model string, query string, thre
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
+		// The rejected candidate's score belongs to this lookup; see the
+		// in-memory backend for the full rationale.
 		return LookupResult{Similarity: similarity}, nil
 	}
 
