@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -263,8 +264,13 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 		vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
 
 		// Insert
-		_, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn)
-		return err
+		if _, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
+			return err
+		}
+		// Record that this client has written, so Session reads no longer
+		// degrade to Eventually for want of a session timestamp.
+		m.wrote.Store(true)
+		return nil
 	}
 
 	if m.asyncWrites {
@@ -531,6 +537,7 @@ func (m *MilvusStore) replaceRecord(ctx context.Context, record Record) error {
 	if _, err := m.client.Upsert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
 		return fmt.Errorf("failed to upsert updated record: %w", err)
 	}
+	m.wrote.Store(true)
 	return m.client.Flush(ctx, m.collectionName, false)
 }
 
