@@ -59,13 +59,6 @@ type ModelCall struct {
 	LoRAName string
 }
 
-// remomParallelResult is one completed parallel model call in a ReMoM round.
-type remomParallelResult struct {
-	resp  *ModelResponse
-	err   error
-	index int
-}
-
 func remomParallelMaxConcurrent(numCalls, maxFromCfg int) int {
 	if maxFromCfg > 0 && maxFromCfg < numCalls {
 		return maxFromCfg
@@ -80,29 +73,23 @@ func remomParallelMinSuccessful(numCalls, minFromCfg int) int {
 	return numCalls
 }
 
-// remomRunOneParallelCall performs a single gated CallModel for ReMoM parallel rounds.
-func (l *ReMoMLooper) remomRunOneParallelCall(
+// remomDispatchOneCall performs a single ReMoM model call. Concurrency
+// limiting is owned by RunPanel, not this function - it is only ever
+// invoked as a PanelDispatchFunc after RunPanel has already gated it.
+func (l *ReMoMLooper) remomDispatchOneCall(
 	ctx context.Context,
 	idx, numCalls int,
 	mc ModelCall,
 	req *Request,
 	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
-	sem chan struct{},
-) remomParallelResult {
+) (*ModelResponse, error) {
 	modelName := mc.Model
 	if mc.LoRAName != "" {
 		modelName = mc.LoRAName
 	}
 
 	logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
-
-	select {
-	case sem <- struct{}{}:
-	case <-ctx.Done():
-		return remomParallelResult{err: ctx.Err(), index: idx}
-	}
-	defer func() { <-sem }()
 
 	msgCopy := toolFreeLooperRequest(messages)
 	if cfg.Temperature > 0 {
@@ -129,98 +116,77 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 
 	if err != nil {
 		logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
-	} else {
-		logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
+		return nil, err
 	}
-
-	return remomParallelResult{resp: resp, err: err, index: idx}
+	if resp == nil {
+		// The collector this dispatch feeds classifies outcomes purely by
+		// error, so a nil response with a nil error must be turned into an
+		// error here - matching the prior collector's own nil-response check.
+		err = fmt.Errorf("model call %d returned a nil response", idx)
+		logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
+		return nil, err
+	}
+	logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
+	return resp, nil
 }
 
-func collectRemomParallelResults(
-	ctx context.Context,
-	numCalls int,
-	minSuccessful int,
-	results <-chan remomParallelResult,
+// remomDispatchForPanel adapts remomDispatchOneCall into a PanelDispatchFunc.
+// In fail mode, a successful-but-unusable response is turned into an error
+// here too - RunPanel's FailFast only aborts on Outcome==Failed, and
+// ReMoM's fail mode has always treated unusable content the same as a hard
+// error. One narrow, deliberate difference from the prior collector: that
+// aborting response's own token usage is no longer included in the partial
+// result returned alongside the error (it was before, via c.responses),
+// since PanelResult.Successful() only ever surfaces non-error attempts.
+// Fail mode is opt-in (ReMoM defaults to on_error: skip) and the whole
+// request already fails when this triggers, so the accounting gap is on a
+// round whose cost isn't otherwise reported.
+func (l *ReMoMLooper) remomDispatchForPanel(
+	req *Request,
+	messages *openai.ChatCompletionNewParams,
 	cfg *config.ReMoMAlgorithmConfig,
-) ([]*ModelResponse, error) {
-	collector := newRemomResultCollector(numCalls, minSuccessful, cfg)
+	modelCalls []ModelCall,
+) PanelDispatchFunc {
+	numCalls := len(modelCalls)
+	return func(ctx context.Context, call PanelCall) (*ModelResponse, error) {
+		resp, err := l.remomDispatchOneCall(ctx, call.Index, numCalls, modelCalls[call.Index], req, messages, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.OnError == config.ReMoMOnErrorFail && !isUsableReMoMResponse(resp) {
+			return nil, fmt.Errorf("model call %d returned no usable content or reasoning", call.Index)
+		}
+		return resp, nil
+	}
+}
 
-	for completed := 0; completed < numCalls; completed++ {
-		select {
-		case res := <-results:
-			responses, err, done := collector.handleResult(res)
-			if done {
-				return responses, err
-			}
-		case <-ctx.Done():
-			return collector.handleContextDone(ctx.Err())
+func remomUsableCount(attempts []PanelAttempt) int {
+	count := 0
+	for _, attempt := range attempts {
+		if attempt.Outcome == PanelOutcomeSuccess && isUsableReMoMResponse(attempt.Response) {
+			count++
 		}
 	}
-	return collector.finalize()
+	return count
 }
 
-type remomResultCollector struct {
-	numCalls      int
-	minSuccessful int
-	onError       string
-	responses     []*ModelResponse
-	usableCount   int
-	errs          []error
+func remomFailureErrors(failed []PanelAttempt) []error {
+	if len(failed) == 0 {
+		return nil
+	}
+	errs := make([]error, len(failed))
+	for i, attempt := range failed {
+		errs[i] = attempt.Err
+	}
+	return errs
 }
 
-func newRemomResultCollector(numCalls int, minSuccessful int, cfg *config.ReMoMAlgorithmConfig) *remomResultCollector {
-	return &remomResultCollector{
-		numCalls:      numCalls,
-		minSuccessful: minSuccessful,
-		onError:       cfg.OnError,
+func remomFinalize(numCalls int, usableCount int, responses []*ModelResponse, failed []PanelAttempt) ([]*ModelResponse, error) {
+	if usableCount == 0 {
+		return responses, fmt.Errorf("all %d model calls failed or returned no usable response: %v", numCalls, remomFailureErrors(failed))
 	}
-}
-
-func (c *remomResultCollector) handleResult(res remomParallelResult) ([]*ModelResponse, error, bool) {
-	if res.err != nil {
-		c.errs = append(c.errs, res.err)
-		if c.onError == config.ReMoMOnErrorFail {
-			return c.responses, fmt.Errorf("model call %d failed: %w", res.index, res.err), true
-		}
-		return nil, nil, false
-	}
-	if res.resp == nil {
-		err := fmt.Errorf("model call %d returned a nil response", res.index)
-		c.errs = append(c.errs, err)
-		if c.onError == config.ReMoMOnErrorFail {
-			return c.responses, err, true
-		}
-		return nil, nil, false
-	}
-	c.responses = append(c.responses, res.resp)
-	if !isUsableReMoMResponse(res.resp) {
-		err := fmt.Errorf("model call %d returned no usable content or reasoning", res.index)
-		c.errs = append(c.errs, err)
-		if c.onError == config.ReMoMOnErrorFail {
-			return c.responses, err, true
-		}
-		return nil, nil, false
-	}
-	c.usableCount++
-	if c.usableCount < c.minSuccessful {
-		return nil, nil, false
-	}
-	if c.usableCount < c.numCalls {
-		logging.Infof("[ReMoM] Quorum reached with %d/%d usable responses", c.usableCount, c.numCalls)
-	}
-	return c.responses, nil, true
-}
-
-func (c *remomResultCollector) handleContextDone(err error) ([]*ModelResponse, error) {
-	return c.responses, err
-}
-
-func (c *remomResultCollector) finalize() ([]*ModelResponse, error) {
-	if c.usableCount == 0 {
-		return c.responses, fmt.Errorf("all %d model calls failed or returned no usable response: %v", c.numCalls, c.errs)
-	}
-	logging.Infof("[ReMoM] Collected %d/%d usable responses", c.usableCount, c.numCalls)
-	return c.responses, nil
+	logging.Infof("[ReMoM] Collected %d/%d usable responses", usableCount, numCalls)
+	return responses, nil
 }
 
 // ReferenceResponse represents a response used as reference in synthesis
@@ -556,25 +522,45 @@ func (l *ReMoMLooper) executeParallelCalls(
 	messages *openai.ChatCompletionNewParams,
 ) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
-	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
-	minSuccessful := remomParallelMinSuccessful(numCalls, cfg.MinSuccessfulResponses)
-	roundCtx := ctx
-	cancel := func() {}
-	if cfg.RoundTimeoutSeconds > 0 {
-		roundCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
-	}
-	defer cancel()
-
-	sem := make(chan struct{}, maxConcurrent)
-	results := make(chan remomParallelResult, numCalls)
-
-	for i, call := range modelCalls {
-		go func(idx int, mc ModelCall) {
-			results <- l.remomRunOneParallelCall(roundCtx, idx, numCalls, mc, req, messages, cfg, sem)
-		}(i, call)
+	calls := make([]PanelCall, numCalls)
+	for i, mc := range modelCalls {
+		modelName := mc.Model
+		if mc.LoRAName != "" {
+			modelName = mc.LoRAName
+		}
+		calls[i] = PanelCall{Index: i, Model: modelName}
 	}
 
-	return collectRemomParallelResults(roundCtx, numCalls, minSuccessful, results, cfg)
+	result := RunPanel(ctx, calls, PanelPolicy{
+		MaxConcurrent:  remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent),
+		MinSuccessful:  remomParallelMinSuccessful(numCalls, cfg.MinSuccessfulResponses),
+		Timeout:        time.Duration(cfg.RoundTimeoutSeconds) * time.Second,
+		FailFast:       cfg.OnError == config.ReMoMOnErrorFail,
+		CancelOnReturn: true,
+		CountsTowardQuorum: func(a PanelAttempt) bool {
+			return a.Outcome == PanelOutcomeSuccess && isUsableReMoMResponse(a.Response)
+		},
+	}, l.remomDispatchForPanel(req, messages, cfg, modelCalls))
+
+	responses := result.Successful()
+	if result.TimedOut {
+		return responses, result.Err
+	}
+	if result.Err != nil {
+		failedIndex := -1
+		if failed := result.Failed(); len(failed) > 0 {
+			failedIndex = failed[len(failed)-1].Index
+		}
+		return responses, fmt.Errorf("model call %d failed: %w", failedIndex, result.Err)
+	}
+	if result.QuorumMet {
+		usableCount := remomUsableCount(result.Attempts)
+		if usableCount < numCalls {
+			logging.Infof("[ReMoM] Quorum reached with %d/%d usable responses", usableCount, numCalls)
+		}
+		return responses, nil
+	}
+	return remomFinalize(numCalls, remomUsableCount(result.Attempts), responses, result.Failed())
 }
 
 // buildSynthesisPrompt builds the synthesis prompt using template
