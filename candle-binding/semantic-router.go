@@ -1015,8 +1015,8 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if encoding fails
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	if err := validateRequiredText("text", text); err != nil {
+		return nil, err
 	}
 
 	cText := C.CString(text)
@@ -1200,8 +1200,8 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if decoding or encoding fails
 func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if base64Str == "" {
-		return nil, fmt.Errorf("base64Str cannot be empty")
+	if err := validateRequiredText("base64Str", base64Str); err != nil {
+		return nil, err
 	}
 
 	payload := base64Str
@@ -1234,8 +1234,8 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 //   - MultiModalEmbeddingOutput with the embedding and metadata
 //   - error if download, decoding, or encoding fails
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
-	if url == "" {
-		return nil, fmt.Errorf("url cannot be empty")
+	if err := validateRequiredText("url", url); err != nil {
+		return nil, err
 	}
 
 	const (
