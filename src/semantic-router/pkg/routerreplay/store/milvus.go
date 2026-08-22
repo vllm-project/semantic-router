@@ -357,7 +357,7 @@ func (m *MilvusStore) listRecords(ctx context.Context) ([]Record, error) {
 		"",
 		[]string{"id", "timestamp", "data"},
 		client.WithLimit(10000),
-		client.WithSearchQueryConsistencyLevel(m.consistencyLevel),
+		client.WithSearchQueryConsistencyLevel(m.readLevel()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
