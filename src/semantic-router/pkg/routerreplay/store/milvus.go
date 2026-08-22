@@ -228,6 +228,22 @@ func (m *MilvusStore) asyncWriter() {
 	}
 }
 
+// insertRecord writes one marshalled record as a Milvus entity.
+func (m *MilvusStore) insertRecord(ctx context.Context, record Record, data []byte) error {
+	idColumn := entity.NewColumnVarChar("id", []string{record.ID})
+	timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
+	dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
+	vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
+
+	if _, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
+		return err
+	}
+	// Record that this client has written, so Session reads no longer
+	// degrade to Eventually for want of a session timestamp.
+	m.wrote.Store(true)
+	return nil
+}
+
 // Add inserts a new record into Milvus.
 func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 	release, err := m.lifecycle.beginMutation()
@@ -256,22 +272,7 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 		return "", fmt.Errorf("failed to marshal record: %w", err)
 	}
 
-	fn := func() error {
-		// Create columns
-		idColumn := entity.NewColumnVarChar("id", []string{record.ID})
-		timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
-		dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
-		vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
-
-		// Insert
-		if _, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
-			return err
-		}
-		// Record that this client has written, so Session reads no longer
-		// degrade to Eventually for want of a session timestamp.
-		m.wrote.Store(true)
-		return nil
-	}
+	fn := func() error { return m.insertRecord(ctx, record, data) }
 
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error {
