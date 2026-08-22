@@ -297,3 +297,31 @@ func TestWSCheckOrigin(t *testing.T) {
 		})
 	}
 }
+
+// A browser on an allowed origin must be able to open a room socket, not just write. Not
+// parallel: it mutates the package-level allowlist that startup normally owns.
+func TestWSCheckOriginHonorsAllowlist(t *testing.T) {
+	SetWebSocketAllowedOrigins([]string{"http://localhost:3001"})
+	t.Cleanup(func() { SetWebSocketAllowedOrigins(nil) })
+
+	cases := []struct {
+		name   string
+		origin string
+		want   bool
+	}{
+		{name: "allowlisted dev origin", origin: "http://localhost:3001", want: true},
+		{name: "own origin still allowed", origin: "http://example.com", want: true},
+		{name: "cross origin still denied", origin: "https://evil.example"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms/r1/ws", nil)
+			r.Header.Set("Origin", tc.origin)
+
+			if got := wsUpgrader.CheckOrigin(r); got != tc.want {
+				t.Fatalf("CheckOrigin = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

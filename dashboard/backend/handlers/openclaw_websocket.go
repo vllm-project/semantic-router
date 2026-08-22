@@ -69,12 +69,25 @@ type WSClient struct {
 	closeMu  sync.Mutex
 }
 
+// Set once at startup by registerOpenClawRoutes, from the same DASHBOARD_ALLOWED_ORIGINS
+// the CSRF check uses, so a handshake and a write cannot disagree about who may call us.
+var wsAllowedOrigins []string
+
+// SetWebSocketAllowedOrigins wires the configured origin allowlist into the handshake
+// check. Without it a browser on an allowed origin authenticates its writes but cannot
+// open a room socket.
+func SetWebSocketAllowedOrigins(origins []string) {
+	wsAllowedOrigins = append([]string(nil), origins...)
+}
+
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// CORS does not cover handshakes, so this is the only cross-origin control. Every
-	// dashboard client builds its URL from window.location.host. See #2465.
-	CheckOrigin: auth.OriginChecker(nil),
+	// CORS does not cover handshakes, so this is the only cross-origin control. Read at
+	// handshake time, not at init, because the allowlist is wired after this var. See #2465.
+	CheckOrigin: func(r *http.Request) bool {
+		return auth.OriginChecker(wsAllowedOrigins)(r)
+	},
 }
 
 func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
