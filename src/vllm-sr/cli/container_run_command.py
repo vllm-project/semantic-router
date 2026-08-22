@@ -1,6 +1,7 @@
 """Helpers for assembling Docker run/create commands."""
 
 import os
+import sys
 
 from cli.consts import PLATFORM_AMD
 from cli.container_images import _normalize_platform
@@ -94,10 +95,16 @@ def append_mount_specs(cmd, mount_specs: list[str]):
 def append_supplemental_gids(cmd, gids: list[int], runtime: str):
     """Grant only the resolved host groups needed by a service."""
 
-    if gids and runtime == "podman" and os.geteuid() != 0:
+    if (
+        gids
+        and runtime == "podman"
+        and os.geteuid() != 0
+        and sys.platform.startswith("linux")
+    ):
         # Rootless Podman remaps numeric container GIDs. keep-groups asks crun
         # to retain the invoking user's real supplementary groups, including
         # the private spool GID, without making the host file world-writable.
+        # macOS Podman machine runs in remote mode and rejects keep-groups.
         cmd.extend(["--group-add", "keep-groups"])
         return
     for gid in dict.fromkeys(gids):

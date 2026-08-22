@@ -39,9 +39,9 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
 
 ## Must Read
 
-- [AGENTS.md](../../../../../AGENTS.md)
 - [CONTRIBUTING.md](../../../../../CONTRIBUTING.md)
 - [.github/PULL_REQUEST_TEMPLATE.md](../../../../../.github/PULL_REQUEST_TEMPLATE.md)
+- [tools/agent/maintainer-policy.yaml](../../../maintainer-policy.yaml)
 - [.prowlabels.yaml](../../../../../.prowlabels.yaml)
 
 ## Workflow
@@ -53,14 +53,21 @@ description: Manages GitHub issue and pull-request lifecycle including creation,
    - Issues use the canonical issue templates as the schema for title and body.
    - PRs use the canonical PR template as the schema for title, purpose, affected modules, test plan or results, and checklist expectations.
 3. Apply canonical labels and naming.
-   - For issues, start from the template defaults such as `bug` or `feature request`.
-   - Add maintainer labels from `.prowlabels.yaml`; today that taxonomy includes `area` labels and `priority` labels.
+   - New issues start with the template type label and `needs-acceptance`.
+   - A Maintainer applies `accepted` only after confirming scope and exactly
+     one owning `wg/*` label from `tools/agent/maintainer-policy.yaml`.
+   - Use `.prowlabels.yaml` for command-driven `area/*` and `priority/*`
+     taxonomy; do not treat those labels as lifecycle state.
+   - Use `ready-for-dev` only for accepted, unassigned work with review
+     capacity. `help wanted` and `good first issue` are curated subsets.
    - Do not invent labels outside the repository taxonomy unless the maintainer explicitly asks for a new label.
 4. Keep code analysis and management metadata aligned.
    - New implementation issues should cite the relevant files, symbols, or surfaces discovered during analysis.
    - If the work spans multiple resumable loops, link or update the indexed execution plan instead of hiding the plan only in the issue body.
    - If the desired architecture still diverges from the repo after the planned change, link or update the indexed tech-debt entry instead of leaving the gap only in the issue or PR text.
 5. Enforce PR conventions.
+   - A non-trivial PR must link an accepted issue with exactly one Workgroup
+     owner before entering Maintainer review.
    - PR titles must use the classified prefixes from `.github/PULL_REQUEST_TEMPLATE.md`, adding multiple prefixes when the change spans categories.
    - Commits intended for PRs must use `git commit -s`.
    - Commit messages do not need to repeat the PR title prefixes unless the maintainer explicitly wants them.

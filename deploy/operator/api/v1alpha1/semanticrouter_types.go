@@ -1392,6 +1392,15 @@ type PromptGuardConfig struct {
 	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
 	// +optional
 	PositiveLabels []string `json:"positive_labels,omitempty"`
+	// OnError selects what a prompt-guard classifier failure does to the rule
+	// that failed to evaluate. "allow" (the default) tolerates the failure and
+	// treats the content as not matching; "block" treats it as a positive
+	// detection, because an inference failure means the content could not be
+	// verified safe. Without this field on the CRD the setting is pruned by the
+	// API server and an operator-managed deployment silently fails open.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration
