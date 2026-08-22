@@ -27,6 +27,33 @@ pip install -r src/vllm-sr/requirements.txt
 pip install -r e2e/testing/requirements.txt
 ```
 
+## Get work accepted before implementation
+
+New feature and bug reports enter `needs-acceptance`. Opening an issue,
+receiving reactions, or assigning yourself does not make the work part of the
+roadmap.
+
+The issue lifecycle is:
+
+```text
+needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
+```
+
+- A Maintainer applies `accepted` after confirming the goal, scope, roadmap
+  fit, and exactly one owning `wg/*` label.
+- `accepted` work may remain in the backlog until it is sufficiently specified
+  and has review capacity.
+- `ready-for-dev` marks accepted, unassigned work that contributors may claim.
+- Assignment moves accepted work to `in-progress`.
+- `help wanted` and `good first issue` are curated subsets of
+  `ready-for-dev`; they are not intake or acceptance labels.
+- A release milestone is a time-bound commitment and is applied only after
+  acceptance.
+
+Do not begin a non-trivial implementation or open a PR until the tracking issue
+is accepted. PRs must link an accepted issue with exactly one Workgroup owner;
+the Community check enforces this contract.
+
 ## Understand the change surface
 
 [AGENTS.md](AGENTS.md) is the short entrypoint to the repository's development
@@ -134,17 +161,18 @@ of truth for schemas, test selection, or public documentation.
 
 ## Submit a pull request
 
-1. Create a focused branch and make one coherent change.
-2. Update tests, examples, and public docs for behavior the user can observe.
-3. Run the harness-selected tests and record the commands and outcomes in the
+1. Link the change to an accepted issue with exactly one `wg/*` owner.
+2. Create a focused branch and make one coherent change.
+3. Update tests, examples, and public docs for behavior the user can observe.
+4. Run the harness-selected tests and record the commands and outcomes in the
    PR template.
-4. Commit with a Developer Certificate of Origin sign-off:
+5. Commit with a Developer Certificate of Origin sign-off:
 
    ```bash
    git commit -s -m "describe the change"
    ```
 
-5. Open a PR using the module prefixes and sections in
+6. Open a PR using the module prefixes and sections in
    [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
 Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
