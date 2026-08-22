@@ -51,6 +51,7 @@ func TestServiceUnavailableGuard(t *testing.T) {
 		{name: "admin denied", path: "/api/admin/users", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "embedded denied", path: "/embedded/grafana/", wantCode: http.StatusServiceUnavailable, wantNext: false},
 		{name: "login public", path: "/api/auth/login", wantCode: http.StatusOK, wantNext: true},
+		{name: "invitation acceptance public", path: "/api/auth/invitations/info", wantCode: http.StatusOK, wantNext: true},
 		{name: "setup state public", path: "/api/setup/state", wantCode: http.StatusOK, wantNext: true},
 		{name: "static frontend public", path: "/dashboard", wantCode: http.StatusOK, wantNext: true},
 	}
@@ -173,14 +174,14 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/users", expected: PermUsersView},
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
-		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
+		{method: http.MethodGet, path: "/api/status", expected: PermStatusRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
 		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/models/verify", expected: PermEvalRun},
-		{method: http.MethodGet, path: "/api/models/verify", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/models/verify", expected: PermStatusRead},
+		{method: http.MethodGet, path: "/api/models/verify", expected: PermStatusRead},
 		{method: http.MethodGet, path: "/api/mcp/servers", expected: PermMcpRead},
 		{method: http.MethodPost, path: "/api/mcp/servers", expected: PermMcpManage},
 		{method: http.MethodDelete, path: "/api/mcp/servers/server-1/status", expected: PermMcpManage},
@@ -205,6 +206,8 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodGet, path: "/api/router/v1/router_replay", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/router/v1/router_replay/record-1", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/recipe-drafts", expected: PermConfigRead},
+		{method: http.MethodPut, path: "/api/recipe-drafts/speed", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages/", expected: PermConfigRead},
@@ -224,9 +227,15 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate/", expected: PermTopologyRead},
 		{method: http.MethodPost, path: "/api/recipe/probes/lane/variant/validate///", expected: PermTopologyRead},
-		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
-		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
-		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
+		{method: http.MethodGet, path: "/api/v1/access-control/api-keys", expected: PermAccessRead},
+		{method: http.MethodPost, path: "/api/v1/access-control/api-keys", expected: PermAccessManage},
+		{method: http.MethodGet, path: "/api/v1/access-control/usage", expected: PermAccessRead},
+		{method: http.MethodGet, path: "/api/v1/access-control/request-logs", expected: PermAccessRead},
+		{method: http.MethodGet, path: "/api/v1/access-control/audit-logs", expected: PermAccessRead},
+		{method: http.MethodGet, path: "/api/v1/access-control/self/api-keys", expected: PermAccessSelf},
+		{method: http.MethodPost, path: "/api/v1/access-control/self/api-keys", expected: PermAccessSelf},
+		{method: http.MethodGet, path: "/api/playground/v1/models", expected: PermAccessSelf},
+		{method: http.MethodPost, path: "/api/playground/v1/chat/completions", expected: PermAccessSelf},
 	}
 
 	for _, tc := range testCases {
@@ -270,7 +279,7 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 	}
 }
 
-func TestAuthenticateRequestRequiresEvaluationRunForLiveModelVerification(t *testing.T) {
+func TestAuthenticateRequestRestrictsLiveModelVerificationToOperators(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)

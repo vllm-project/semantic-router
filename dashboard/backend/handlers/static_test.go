@@ -43,3 +43,22 @@ func TestStaticFileServerKeepsProxyRoutesReserved(t *testing.T) {
 		t.Fatalf("expected status 502, got %d", recorder.Code)
 	}
 }
+
+func TestStaticFileServerReturnsNotFoundForUnknownAPIRoutes(t *testing.T) {
+	staticDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<html>app</html>"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/security-policy", nil)
+	StaticFileServer(staticDir).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Header().Get("Content-Type"), "application/json") ||
+		!strings.Contains(recorder.Body.String(), `"error":"not_found"`) {
+		t.Fatalf("unexpected API error response: content-type=%q body=%q", recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+}

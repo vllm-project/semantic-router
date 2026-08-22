@@ -1,9 +1,4 @@
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
-import {
-  collectDecisionTargetModels,
-  collectRecipeTargetModels,
-} from './configPageEntrypointsRecipesSupport'
 import type { EntrypointConfig, RecipeConfig } from './configPageSupport'
 import styles from './ConfigPageMoMTopologyDialog.module.css'
 
@@ -23,7 +18,15 @@ export default function ConfigPageMoMTopologyDialog({
     onClose,
   })
   const decisions = recipe.routing.decisions ?? []
-  const models = collectRecipeTargetModels(recipe)
+  const models = [
+    ...new Set(
+      decisions.flatMap((decision) =>
+        (entrypoint.model_bindings?.[decision.name] ?? decision.modelRefs ?? []).map(
+          (reference) => reference.model,
+        ),
+      ),
+    ),
+  ]
 
   return (
     <div className={styles.overlay} role="presentation" onMouseDown={onClose}>
@@ -40,7 +43,7 @@ export default function ConfigPageMoMTopologyDialog({
           <div>
             <span>Mixture topology</span>
             <h2>{entrypoint.model_names.join(', ')}</h2>
-            <p>How the public model resolves into routing decisions and provider model pools.</p>
+            <p>One model, composed from every decision path.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close topology">
             ×
@@ -49,7 +52,7 @@ export default function ConfigPageMoMTopologyDialog({
 
         <div className={styles.canvas}>
           <section className={styles.stage}>
-            <span className={styles.stageLabel}>Entrypoint</span>
+            <span className={styles.stageLabel}>Model</span>
             <div className={`${styles.node} ${styles.entrypointNode}`}>
               {entrypoint.model_names.map((model) => (
                 <code key={model}>{model}</code>
@@ -65,7 +68,7 @@ export default function ConfigPageMoMTopologyDialog({
             <span className={styles.stageLabel}>Recipe</span>
             <div className={`${styles.node} ${styles.recipeNode}`}>
               <strong>{recipe.name}</strong>
-              <small>{decisions.length} decision lanes</small>
+              <small>{decisions.length} decisions</small>
             </div>
           </section>
 
@@ -78,14 +81,14 @@ export default function ConfigPageMoMTopologyDialog({
             <div className={styles.nodeList}>
               {decisions.map((decision) => (
                 <div key={decision.name} className={`${styles.node} ${styles.decisionNode}`}>
-                  <strong>
-                    {formatRoutingMetadataValue('x-vsr-selected-decision', decision.name)}
-                  </strong>
+                  <strong>{decision.name}</strong>
                   <small>P{decision.priority}</small>
                   <div className={styles.decisionTargets}>
-                    {collectDecisionTargetModels(decision).map((model) => (
-                      <code key={`${decision.name}-${model}`}>{model}</code>
-                    ))}
+                    {(entrypoint.model_bindings?.[decision.name] ?? decision.modelRefs ?? [])
+                      .map((reference) => reference.model)
+                      .map((model) => (
+                        <code key={`${decision.name}-${model}`}>{model}</code>
+                      ))}
                   </div>
                 </div>
               ))}

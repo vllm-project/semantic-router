@@ -1,5 +1,5 @@
 import type { FieldConfig } from '../components/EditModal'
-import type { ViewSection } from '../components/ViewModal'
+import type { ViewPanelAction, ViewSection } from '../components/ViewModal'
 import type { ConfigData, Tool } from './configPageSupport'
 
 export type OpenEditModal = <TForm extends object>(
@@ -13,7 +13,8 @@ export type OpenEditModal = <TForm extends object>(
 export type OpenViewModal = (
   title: string,
   sections: ViewSection[],
-  onEdit?: () => void
+  onEdit?: () => void,
+  actions?: ViewPanelAction[],
 ) => void
 
 export type RouterConfigSectionData = Pick<

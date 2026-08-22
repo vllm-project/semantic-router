@@ -1,38 +1,27 @@
 .root {
   display: grid;
-  grid-template-columns: auto minmax(160px, 240px) minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  overflow: hidden;
   border-bottom: 1px solid var(--color-border, #2c2c31);
   background: rgba(255, 255, 255, 0.018);
 }
 
-.root label {
+.heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.label {
+  flex: 0 0 auto;
   color: var(--color-text-secondary, #a1a1aa);
   font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 750;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.root select {
-  width: 100%;
-  height: 32px;
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--color-border, #3f3f46);
-  border-radius: 6px;
-  outline: none;
-  background: var(--color-surface, #18181b);
-  color: var(--color-text, #f4f4f5);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.root select:focus-visible {
-  border-color: var(--color-text-secondary, #71717a);
-  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.2);
 }
 
 .detail {
@@ -44,9 +33,56 @@
   white-space: nowrap;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding-bottom: 0.125rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.tab,
+.activeTab {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0.45rem 0.8rem;
+  color: var(--color-text-secondary, #a1a1aa);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--color-border, #3f3f46);
+  border-radius: 999px;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.tab:hover {
+  color: var(--color-text, #f4f4f5);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.activeTab {
+  color: #fff;
+  background: rgba(225, 29, 72, 0.16);
+  border-color: rgba(251, 113, 133, 0.52);
+}
+
+.tab:focus-visible,
+.activeTab:focus-visible {
+  outline: 2px solid var(--focus-ring, #fb7185);
+  outline-offset: 2px;
+}
+
 @media (max-width: 720px) {
-  .root {
-    grid-template-columns: 1fr;
-    gap: 6px;
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 }

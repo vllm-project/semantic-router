@@ -38,7 +38,9 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         {icon && <span className={styles.icon}>{icon}</span>}
         <h3 className={styles.title}>{title}</h3>
         {count !== undefined && (
-          <span className={styles.badge}>{count} {count === 1 ? 'item' : 'items'}</span>
+          <span className={styles.badge}>
+            {count} {count === 1 ? 'item' : 'items'}
+          </span>
         )}
       </div>
       <div className={styles.actions}>
@@ -47,6 +49,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
             type="search"
             className={styles.searchInput}
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             value={searchValue}
             onChange={(e) => onSearchChange?.(e.target.value)}
           />

@@ -42,7 +42,7 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)

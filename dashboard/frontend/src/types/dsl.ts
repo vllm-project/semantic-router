@@ -112,6 +112,7 @@ export interface ASTProjectionMappingDecl {
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
+  reasoningDescription?: string
   effort?: string
   lora?: string
   paramSize?: string
@@ -172,6 +173,7 @@ export interface ASTTestBlockDecl {
 export interface ASTEntrypointDecl {
   modelNames: string[]
   recipe: string
+  modelBindings?: Record<string, ASTModelRef[]>
   pos: ASTPosition
 }
 
@@ -233,7 +235,14 @@ export interface FormatResult {
 
 // ---------- Deploy Types ----------
 
-export type DeployStep = 'compiling' | 'validating' | 'backing_up' | 'writing' | 'reloading' | 'done' | 'error'
+export type DeployStep =
+  | 'compiling'
+  | 'validating'
+  | 'backing_up'
+  | 'writing'
+  | 'reloading'
+  | 'done'
+  | 'error'
 
 export interface DeployProgress {
   step: DeployStep

@@ -33,7 +33,7 @@ describe('LayoutMobileNavigation contract', () => {
     expect(markup).toContain('Current')
     expect(markup).toContain('data-mobile-nav-control="true"')
     expect(markup).toContain('Routing')
-    expect(markup).toContain('Integrations &amp; Policy')
+    expect(markup).toContain('Integrations')
   })
 
   it('supports roving keyboard focus and returns focus when dismissed', () => {

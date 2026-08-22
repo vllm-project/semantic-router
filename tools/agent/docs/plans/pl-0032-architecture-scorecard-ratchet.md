@@ -16,7 +16,9 @@ This plan owns every open entry indexed by
 - native binding structure and complexity exceptions;
 - Router Flow state-store validation;
 - reviewed content moderation;
-- ONNX binding runtime coverage.
+- ONNX binding runtime coverage; and
+- Router-native access-control cutover until it is promoted into a dedicated
+  implementation or release plan.
 
 Release planning and daily GitHub queue state are out of scope.
 
@@ -42,6 +44,8 @@ Release planning and daily GitHub queue state are out of scope.
   guidance.
 - [ ] `ADC-06` Replace hidden moderation behavior with reviewed policy and code.
 - [ ] `ADC-07` Add mandatory CPU-compatible ONNX binding coverage.
+- [ ] `ADC-08` Promote the accepted Router-native access-control proposal into an
+  execution plan and retire the Dashboard-owned enforcement boundary.
 
 ## Next Action
 

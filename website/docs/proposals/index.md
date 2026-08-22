@@ -52,6 +52,15 @@ different client and transport protocols.
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
 
+## Access & Operations
+
+Identity, credential, authorization, quota, and accounting contracts that protect
+the inference API while keeping management clients replaceable.
+
+| Proposal | Created | Status | Scope |
+| --- | --- | --- | --- |
+| [Router-Native Access Control and Quota Accounting](./router-native-access-control) | 2026-08-22 | Proposal | Router-owned API keys, explicit model grants, global quotas, usage, audit, and Docker/Kubernetes deployment, with [resource](./router-native-access-control-contracts), [Model runtime](./router-native-access-control-model-runtime), [quota runtime](./router-native-access-control-quota-runtime), [Management API](./router-native-access-control-management-api), [authorization](./router-native-access-control-authorization), and [deployment](./router-native-access-control-deployment) appendices. |
+
 ## Serving Integrations
 
 Layering contracts that connect semantic model choice to infrastructure-owned model

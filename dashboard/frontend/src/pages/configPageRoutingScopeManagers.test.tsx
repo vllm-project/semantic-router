@@ -97,7 +97,7 @@ describe('recipe-aware config managers', () => {
     expect(markup).not.toContain('private-pii')
   })
 
-  it('shows recipe-owned decisions with an explicit routing profile selector', () => {
+  it('shows recipe-owned decisions with an explicit recipe selector', () => {
     const markup = renderToStaticMarkup(
       createElement(ConfigPageDecisionsSection, {
         config,
@@ -113,13 +113,13 @@ describe('recipe-aware config managers', () => {
       }),
     )
 
-    expect(markup).toContain('Routing profile')
+    expect(markup).toContain('Recipe')
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('balanced-route')
     expect(markup).not.toContain('private-route')
   })
 
-  it('shows recipe-owned projections through the same routing profile selector', () => {
+  it('shows recipe-owned projections through the same recipe selector', () => {
     const markup = renderToStaticMarkup(
       createElement(ConfigPageProjectionsSection, {
         config,
@@ -130,7 +130,7 @@ describe('recipe-aware config managers', () => {
       }),
     )
 
-    expect(markup).toContain('Routing profile')
+    expect(markup).toContain('Recipe')
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('balanced-score')
     expect(markup).not.toContain('private-score')

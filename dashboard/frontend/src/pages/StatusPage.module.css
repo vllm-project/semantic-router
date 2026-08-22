@@ -1,17 +1,291 @@
 .container {
-  width: 100%;
+  width: min(1280px, 100%);
   flex: 1;
   min-height: 0;
-  padding: clamp(1.25rem, 2vw, 2rem) var(--layout-shell-gutter, clamp(1rem, 3.5vw, 4.5rem)) 3rem;
+  margin: 0 auto;
+  padding: clamp(1.15rem, 2vw, 1.7rem) clamp(1rem, 2vw, 1.4rem) 3rem;
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
-  overflow-y: auto;
+  gap: 0.9rem;
   overflow-x: hidden;
 }
 
 .container > section {
-  flex: 1 0 auto;
+  flex: 0 0 auto;
+}
+
+.statusMasthead {
+  position: relative;
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  overflow: hidden;
+  padding: 1.6rem 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 82% 0%, rgba(61, 93, 177, 0.18), transparent 33%),
+    radial-gradient(circle at 22% 110%, rgba(227, 27, 35, 0.08), transparent 38%), #0d0e11;
+}
+
+.statusMasthead::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  opacity: 0.16;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(90deg, transparent, #000 70%);
+}
+
+.statusMasthead > * {
+  position: relative;
+  z-index: 1;
+}
+
+.statusMasthead h1 {
+  margin: 0.32rem 0 0;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 640;
+  letter-spacing: -0.05em;
+}
+
+.eyebrowRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.brandLockup {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0 0.62rem 0 0.38rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.brandLockup img {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+
+.statusMasthead p {
+  margin: 0.55rem 0 0;
+  color: var(--color-text-muted);
+}
+
+.overallBanner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.3rem;
+  border: 1px solid;
+  border-radius: 10px;
+}
+
+.overallHealthy {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: linear-gradient(120deg, rgba(16, 185, 129, 0.13), rgba(16, 185, 129, 0.035));
+}
+
+.overallDegraded {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: linear-gradient(120deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.035));
+}
+
+.overallIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.overallBanner h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.overallBanner p {
+  margin: 0.3rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.overallBanner dl {
+  display: flex;
+  gap: 1.2rem;
+  margin: 0;
+}
+
+.overallBanner dl > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.overallBanner dt {
+  color: var(--color-text-muted);
+  font-size: 0.67rem;
+}
+
+.overallBanner dd {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.componentBoard,
+.incidentHistory {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: #101012;
+}
+
+.componentBoardHeader,
+.incidentHistory > div:first-child {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.componentBoardHeader span,
+.incidentHistory > div:first-child span {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+}
+
+.componentBoardHeader h2,
+.incidentHistory h2 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  font-weight: 630;
+}
+
+.componentRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(220px, 1fr) 100px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.82rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.componentRow:last-child {
+  border-bottom: 0;
+}
+
+.componentRow > div:first-child {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.componentRow strong {
+  font-size: 0.86rem;
+}
+
+.componentRow > div:first-child span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uptimeBars {
+  height: 28px;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.uptimeBars i {
+  flex: 1;
+  min-width: 3px;
+  border-radius: 2px;
+}
+
+.uptimeUp {
+  background: #34d399;
+}
+.uptimeDown {
+  background: #f87171;
+}
+
+.componentOperational,
+.componentIssue {
+  justify-self: end;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.componentOperational {
+  color: #6ee7b7;
+}
+.componentIssue {
+  color: #fbbf24;
+  text-transform: capitalize;
+}
+
+.incidentHistory article {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 0.35fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1.15rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.incidentHistory article > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.incidentHistory article div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.incidentHistory article strong {
+  text-transform: capitalize;
+}
+.incidentHistory article span,
+.incidentHistory article p,
+.noIncidents span {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+.incidentHistory article p {
+  margin: 0;
+}
+
+.noIncidents {
+  display: grid;
+  gap: 0.28rem;
+  padding: 1.2rem 1.15rem;
 }
 
 .loading {
@@ -86,15 +360,30 @@
   gap: 0.55rem;
 }
 
-.headerTimestamp {
+.liveRefreshButton {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 38px;
-  padding: 0 0.55rem;
+  min-height: 40px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
   color: var(--color-text-muted);
   font-size: 0.76rem;
+  font-weight: 650;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.liveRefreshButton:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+  background: rgba(255, 255, 255, 0.065);
 }
 
 .liveDot {
@@ -102,41 +391,6 @@
   height: 6px;
   border-radius: 50%;
   background: #72d995;
-}
-
-.autoRefreshToggle,
-.refreshButton {
-  min-height: 38px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: #18181b;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-}
-
-.autoRefreshToggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.7rem;
-  cursor: pointer;
-}
-
-.autoRefreshToggle input {
-  cursor: pointer;
-  accent-color: var(--brand-amd);
-}
-
-.refreshButton {
-  padding: 0.55rem 0.85rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.refreshButton:hover {
-  border-color: var(--color-border-hover);
-  color: var(--color-text);
 }
 
 .error {
@@ -152,7 +406,14 @@
 }
 
 .errorIcon {
-  font-size: 1.1rem;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .servicesSection {
@@ -277,7 +538,7 @@
 
 .servicePagination button,
 .clearServiceFilters {
-  min-height: 38px;
+  min-height: 42px;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -492,6 +753,27 @@
 
   .title {
     font-size: clamp(1.8rem, 9vw, 2.4rem);
+  }
+
+  .statusMasthead,
+  .overallBanner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .overallBanner dl {
+    justify-content: space-between;
+    gap: 0.8rem;
+  }
+
+  .componentRow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .uptimeBars {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .servicesSectionHeader {

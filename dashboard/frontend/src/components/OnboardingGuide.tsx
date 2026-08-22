@@ -26,70 +26,67 @@ const GUIDE_STEPS: GuideStep[] = [
   {
     id: 'models',
     pageLabel: 'Models',
-    title: 'Start with the model inventory',
-    description:
-      'This page defines the models and endpoints the router can actually use before any routing logic becomes meaningful.',
+    title: 'Connect your models',
+    description: 'Add the inference endpoints that will power your model paths.',
     highlights: [
-      'Register local or hosted model providers',
-      'Choose the default model used by fallback routes',
-      'Tune endpoint weights and credentials before touching routing',
+      'Choose a provider and connect its API',
+      'Import one or many available models',
+      'Verify every endpoint before routing traffic',
     ],
     route: '/config/models',
     actionLabel: 'Open Models',
   },
   {
-    id: 'routing',
-    pageLabel: 'Decisions',
-    title: 'Turn signals into routing behavior',
-    description:
-      'This is where request signals and explicit preferences become executable model paths.',
+    id: 'mixture',
+    pageLabel: 'Mixture-of-Models',
+    title: 'Build a Mixture-of-Models',
+    description: 'Start from a recipe, then assign the right models to each decision.',
     highlights: [
-      'Turn reusable signals and preference policy into executable model paths',
-      'Choose when to select, cascade, or coordinate models',
-      'Review the complete path before promoting changes',
+      'Choose or create a reusable recipe',
+      'Connect signals, projections, decisions, and algorithms',
+      'Publish a stable model name for applications',
     ],
-    route: '/config/decisions',
-    actionLabel: 'Open Decisions',
+    route: '/config/entrypoints-recipes',
+    actionLabel: 'Open Mixture-of-Models',
   },
   {
     id: 'playground',
     pageLabel: 'Playground',
-    title: 'Test the active router end to end',
-    description:
-      'Use Playground as the shortest loop for checking whether the router is behaving the way you expect after setup.',
+    title: 'Test your model path',
+    description: 'Run a real prompt and watch the router choose the path.',
     highlights: [
-      'Send prompts through the live routing pipeline',
-      'Check whether the active routing graph behaves as expected',
-      'Iterate here before changing real traffic',
+      'Choose a Mixture-of-Models',
+      'Follow the selected decision, algorithm, and model',
+      'Try tools and real conversation turns',
     ],
     route: '/playground',
     actionLabel: 'Open Playground',
   },
   {
-    id: 'dsl',
-    pageLabel: 'DSL Builder',
-    title: 'Author router behavior directly in DSL',
-    description: 'Use Builder when the manager UI is no longer expressive enough.',
+    id: 'access',
+    pageLabel: 'Access',
+    title: 'Give your team access',
+    description: 'Control who can use each model path and how much capacity they receive.',
     highlights: [
-      'Open the Guide drawer for DSL snippets',
-      'Author model cards, signals, routes, and plugins',
-      'Compile and deploy deeper routing changes',
+      'Create a team and invite its members',
+      'Issue API keys with model grants',
+      'Apply RPM, TPM, and daily token budgets',
     ],
-    route: '/builder',
-    actionLabel: 'Open DSL Builder',
+    route: '/access/teams',
+    actionLabel: 'Open Access',
   },
   {
-    id: 'clawos',
-    pageLabel: 'ClawOS',
-    title: 'Orchestrate multi-claw worker systems',
-    description: 'Use ClawOS when one router needs multi-agent orchestration.',
+    id: 'insights',
+    pageLabel: 'Insights',
+    title: 'See what the router saved',
+    description: 'Turn every routed request into a clear cost and model-selection story.',
     highlights: [
-      'Create teams with one leader and workers',
-      'Connect workers to routed models and memory',
-      'Inspect live agents, teams, and runtime health',
+      'Compare actual spend with the baseline',
+      'Inspect model, decision, and signal mix',
+      'Replay individual requests when something looks wrong',
     ],
-    route: '/clawos',
-    actionLabel: 'Open ClawOS',
+    route: '/insights',
+    actionLabel: 'Open Insights',
   },
 ]
 
@@ -173,8 +170,14 @@ const OnboardingGuide: React.FC = () => {
     }
 
     return (
-      <button type="button" className={styles.replayButton} onClick={handleOpenGuide}>
-        {status === 'dismissed' ? 'Resume guide' : 'Guide'}
+      <button
+        type="button"
+        className={styles.replayButton}
+        onClick={handleOpenGuide}
+        aria-label={status === 'dismissed' ? 'Resume product guide' : 'Open product guide'}
+        title={status === 'dismissed' ? 'Resume guide' : 'Product guide'}
+      >
+        <span aria-hidden="true">?</span>
       </button>
     )
   }

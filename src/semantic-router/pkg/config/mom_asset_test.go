@@ -28,11 +28,13 @@ func TestMoMRuntimeContract(t *testing.T) {
 		}
 		decisionCount += len(recipe.Profile.Decisions)
 	}
-	if decisionCount != 43 {
-		t.Fatalf("decision count = %d, want 43", decisionCount)
+	if decisionCount != 26 {
+		t.Fatalf("decision count = %d, want 26", decisionCount)
 	}
 
-	assertMoMMistralReasoning(t, cfg)
+	assertMoMModelPool(t, cfg)
+	assertMoMCapabilityLanes(t, cfg)
+	assertMoMNoSystemPromptPlugins(t, cfg)
 	assertMoMOrchestrationBudgets(t, cfg)
 	assertMoMReplayBoundary(t, cfg)
 	assertMoMManagementBoundary(t, cfg)
@@ -100,7 +102,7 @@ func assertMoMReplayBoundary(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	assertMoMReplayStore(t, cfg.RouterReplay)
 	assertMoMVaultReplayDisabled(t, cfg)
-	if replay := cfg.EffectiveRouterReplayConfigForDecision("balance_standard"); replay == nil || !replay.Enabled {
+	if replay := cfg.EffectiveRouterReplayConfigForDecision("simple"); replay == nil || !replay.Enabled {
 		t.Fatalf("ordinary vLLM-SR MoM decisions must inherit enabled replay: %+v", replay)
 	}
 }
@@ -125,8 +127,8 @@ func assertMoMVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
 	if !ok {
 		t.Fatal("missing Vault recipe")
 	}
-	if len(vault.Profile.Decisions) != 8 {
-		t.Fatalf("Vault decision count = %d, want 8", len(vault.Profile.Decisions))
+	if len(vault.Profile.Decisions) != 5 {
+		t.Fatalf("Vault decision count = %d, want 5", len(vault.Profile.Decisions))
 	}
 	for index := range vault.Profile.Decisions {
 		decision := &vault.Profile.Decisions[index]
@@ -136,32 +138,54 @@ func assertMoMVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertMoMMistralReasoning(t *testing.T, cfg *RouterConfig) {
+func assertMoMModelPool(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	family := cfg.ReasoningFamilies["mistral"]
-	if family.Type != ReasoningFamilyTypeTopLevelReasoningEffort || family.Parameter != "reasoning_effort" {
-		t.Fatalf("Mistral reasoning family = %+v", family)
+	want := []string{
+		"local/deepseek-v4-flash-analyst",
+		"local/gemma4-26b-balanced",
+		"local/qwen3-coder-next",
+		"local/qwen3.5-122b-frontier",
+		"local/qwen3.6-27b-omni",
+		"local/qwen3.6-35b-flash",
+		"remote/glm-5.2",
 	}
-	if got := cfg.ModelConfig["local/mistral-small-4"].ReasoningFamily; got != "mistral" {
-		t.Fatalf("Mistral model reasoning_family = %q, want mistral", got)
+	got := make([]string, 0, len(cfg.ModelConfig))
+	for name := range cfg.ModelConfig {
+		got = append(got, name)
 	}
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("vLLM-SR MoM model pool = %v, want %v", got, want)
+	}
+}
 
-	mistralRefs := 0
-	for _, recipe := range cfg.Recipes {
-		for _, decision := range recipe.Profile.Decisions {
-			for _, modelRef := range decision.ModelRefs {
-				if modelRef.Model != "local/mistral-small-4" {
-					continue
-				}
-				mistralRefs++
-				if modelRef.UseReasoning == nil || !*modelRef.UseReasoning || modelRef.ReasoningEffort != "high" {
-					t.Fatalf("%s Mistral modelRef must use explicit high effort: %+v", decision.Name, modelRef)
-				}
-			}
+func assertMoMCapabilityLanes(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	for _, recipeName := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
+		decision := momDecision(t, cfg, recipeName, "omni")
+		if len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "local/qwen3.6-27b-omni" {
+			t.Fatalf("recipe %q omni lane = %+v", recipeName, decision.ModelRefs)
 		}
 	}
-	if mistralRefs == 0 {
-		t.Fatal("vLLM-SR MoM recipe has no Mistral modelRefs")
+	agentic := momDecision(t, cfg, "balance", "agentic")
+	if len(agentic.ModelRefs) == 0 || agentic.ModelRefs[0].Model != "local/qwen3-coder-next" {
+		t.Fatalf("balance agentic lane = %+v", agentic.ModelRefs)
+	}
+	workflow := momDecision(t, cfg, "accuracy", "orchestrate")
+	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
+		workflow.Algorithm.Workflows.Planner.Model != "local/qwen3-coder-next" {
+		t.Fatalf("accuracy planner lane = %+v", workflow.Algorithm)
+	}
+}
+
+func assertMoMNoSystemPromptPlugins(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	for _, recipe := range cfg.Recipes {
+		for _, decision := range recipe.Profile.Decisions {
+			if decision.HasPlugin(DecisionPluginSystemPrompt) {
+				t.Fatalf("built-in decision %q must not inject a system prompt", decision.Name)
+			}
+		}
 	}
 }
 
@@ -169,12 +193,11 @@ func assertMoMOrchestrationBudgets(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	assertMoMWorkflowBudget(t, cfg)
 	assertMoMFusionBudgets(t, cfg)
-	assertMoMReMoMBudget(t, cfg)
 }
 
 func assertMoMWorkflowBudget(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	workflow := momDecision(t, cfg, "accuracy", "accuracy_dynamic_workflow")
+	workflow := momDecision(t, cfg, "accuracy", "orchestrate")
 	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
 		workflow.Algorithm.Workflows.MaxCompletionTokens != 2048 ||
 		workflow.Algorithm.Workflows.Planner.MaxCompletionTokens != 2048 {
@@ -184,20 +207,10 @@ func assertMoMWorkflowBudget(t *testing.T, cfg *RouterConfig) {
 
 func assertMoMFusionBudgets(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	decision := momDecision(t, cfg, "accuracy", "accuracy_expert_fusion")
+	decision := momDecision(t, cfg, "accuracy", "experts")
 	if decision.Algorithm == nil || decision.Algorithm.Fusion == nil ||
 		decision.Algorithm.Fusion.MaxCompletionTokens != 2048 {
 		t.Fatalf("accuracy Fusion output budget changed: %+v", decision.Algorithm)
-	}
-}
-
-func assertMoMReMoMBudget(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	remom := momDecision(t, cfg, "accuracy", "accuracy_multi_round_exploration")
-	if remom.Algorithm == nil || remom.Algorithm.ReMoM == nil ||
-		remom.Algorithm.ReMoM.MaxCompletionTokens == nil ||
-		*remom.Algorithm.ReMoM.MaxCompletionTokens != 2048 {
-		t.Fatalf("accuracy ReMoM output budget changed: %+v", remom.Algorithm)
 	}
 }
 

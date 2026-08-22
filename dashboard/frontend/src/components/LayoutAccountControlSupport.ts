@@ -23,6 +23,12 @@ export function formatAccountRole(role?: string): string {
     .join(' ')
 }
 
+export function formatPermissionAction(permission: string): string {
+  const parts = permission.split(/[.:]/).filter(Boolean)
+  const action = parts[parts.length - 1] || permission
+  return formatAccountRole(action)
+}
+
 function permissionNamespace(permission: string): string {
   const separatorIndex = permission.search(/[.:]/)
   return separatorIndex > 0 ? permission.slice(0, separatorIndex) : 'general'

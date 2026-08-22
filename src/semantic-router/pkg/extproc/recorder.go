@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -194,6 +195,9 @@ func buildReplayRoutingRecord(
 	decisionTier, decisionPriority := replayDecisionMetadata(ctx)
 	record := routerreplay.RoutingRecord{
 		RequestID:         ctx.RequestID,
+		UserID:            replayIdentityHeader(ctx, "x-vllm-sr-user-id"),
+		TeamID:            replayIdentityHeader(ctx, "x-vllm-sr-team-id"),
+		APIKeyID:          replayIdentityHeader(ctx, "x-vllm-sr-api-key-id"),
 		SessionID:         ctx.SessionID,
 		TurnIndex:         ctx.TurnIndex,
 		Decision:          decisionName,
@@ -264,6 +268,18 @@ func buildReplayRoutingRecord(
 	}
 
 	return record
+}
+
+func replayIdentityHeader(ctx *RequestContext, name string) string {
+	if ctx == nil {
+		return ""
+	}
+	for key, value := range ctx.Headers {
+		if strings.EqualFold(key, name) {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func replayDecisionMetadata(ctx *RequestContext) (int, int) {

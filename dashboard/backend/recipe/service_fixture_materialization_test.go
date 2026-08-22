@@ -192,6 +192,15 @@ func TestProbeImageFixtureMaterializesVerifiedDataURIAndMetadata(t *testing.T) {
 	}
 	probes, _ := flattenProbes(manifest)
 	probe := probes[0]
+	assertMaterializedFixtureMessages(t, probe)
+	assertMaterializedFixtureRequestsMatch(t, probe)
+	assertImageFixtureMetadata(t, probe)
+	assertImageFixturePayloadIsPrivate(t, probe)
+	assertImageFixtureCloneIsIsolated(t, probe)
+}
+
+func assertMaterializedFixtureMessages(t *testing.T, probe ProbeDetail) {
+	t.Helper()
 	messages, err := materializeMessages(probe)
 	if err != nil {
 		t.Fatalf("materializeMessages(): %v", err)
@@ -201,6 +210,10 @@ func TestProbeImageFixtureMaterializesVerifiedDataURIAndMetadata(t *testing.T) {
 	if image["url"] != "data:image/png;base64,"+validOnePixelPNGBase64 {
 		t.Fatalf("materialized image fixture = %#v", content[1])
 	}
+}
+
+func assertMaterializedFixtureRequestsMatch(t *testing.T, probe ProbeDetail) {
+	t.Helper()
 	chatRequest, err := materializeChatRequest(probe)
 	if err != nil {
 		t.Fatalf("materializeChatRequest(): %v", err)
@@ -214,11 +227,19 @@ func TestProbeImageFixtureMaterializesVerifiedDataURIAndMetadata(t *testing.T) {
 	if string(chatMessages) != string(evalMessages) {
 		t.Fatalf("Run and Validate materialization drifted:\nrun: %s\nvalidate: %s", chatMessages, evalMessages)
 	}
+}
+
+func assertImageFixtureMetadata(t *testing.T, probe ProbeDetail) {
+	t.Helper()
 	metadata := probe.ImageFixtures["pixel"]
 	if metadata.Description != "One-pixel fixture for loader tests." || metadata.MediaType != "image/png" ||
 		metadata.Bytes != 68 || metadata.SHA256 != validOnePixelPNGSHA256 {
 		t.Fatalf("image fixture metadata = %#v", metadata)
 	}
+}
+
+func assertImageFixturePayloadIsPrivate(t *testing.T, probe ProbeDetail) {
+	t.Helper()
 	encoded, err := json.Marshal(probe)
 	if err != nil {
 		t.Fatal(err)
@@ -226,6 +247,10 @@ func TestProbeImageFixtureMaterializesVerifiedDataURIAndMetadata(t *testing.T) {
 	if strings.Contains(string(encoded), "data_base64") || strings.Contains(string(encoded), validOnePixelPNGBase64) {
 		t.Fatalf("probe detail exposed fixture payload: %s", encoded)
 	}
+}
+
+func assertImageFixtureCloneIsIsolated(t *testing.T, probe ProbeDetail) {
+	t.Helper()
 	cloned := cloneProbeDetail(probe)
 	cloned.ImageFixtures["pixel"] = ImageFixtureMetadata{Description: "mutated"}
 	if probe.ImageFixtures["pixel"].Description != "One-pixel fixture for loader tests." {
@@ -471,11 +496,11 @@ func TestMoMGeneratedTextPreservesLegacyTextReceipt(t *testing.T) {
 		t.Fatalf("decodeProbes(%s): %v", path, err)
 	}
 	receipt := materializeMoMFixtureReceipt(t, manifest)
-	if receipt.probeCount != 222 || receipt.messageProbes != 82 || receipt.generatedProbes != 50 ||
-		receipt.imageParts != 54 || receipt.textBytes != 26_229_486 {
+	if receipt.probeCount != 223 || receipt.messageProbes != 82 || receipt.generatedProbes != 50 ||
+		receipt.imageParts != 54 || receipt.textBytes != 26_229_513 {
 		t.Fatalf("receipt counts = %#v", receipt)
 	}
-	if receipt.textDigest != "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5" {
+	if receipt.textDigest != "6ee8e85b50c8842e7b2dd3cafd044a7b52da0a96b617025d2cedba48c0a14486" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)

@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
-import ViewModal, { ViewSection } from '../components/ViewModal'
+import ViewModal, { type ViewPanelAction, ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
-import { canDeployConfig, canRunEvaluation, canWriteConfig } from '../utils/accessControl'
+import { canVerifyModels, canWriteConfig } from '../utils/accessControl'
 import { getActiveRecipe } from '../utils/recipeApi'
 import type { RecipeDescriptor } from '../types/recipe'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
@@ -18,7 +18,6 @@ import ConfigPageMCPSection from './ConfigPageMCPSection'
 import ConfigPageManagedRecipeBanner from './ConfigPageManagedRecipeBanner'
 import {
   resolveManagedRecipeProtection,
-  resolveRecipePackageCapabilities,
   presentRuntimeConfigMutationError,
 } from './configPageMoMPackagesSupport'
 import {
@@ -44,15 +43,10 @@ interface ConfigPageProps {
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config' }) => {
-  const { isReadonly, serverReadonly, runtimeConfigWritable } = useReadonly()
+  const { isReadonly } = useReadonly()
   const { user } = useAuth()
   const isMCPSection = activeSection === 'mcp'
   const configReadonly = isReadonly || !canWriteConfig(user)
-  const recipePackageCapabilities = resolveRecipePackageCapabilities(
-    serverReadonly,
-    runtimeConfigWritable,
-    canDeployConfig(user),
-  )
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(!isMCPSection)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +81,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [viewModalTitle, setViewModalTitle] = useState('')
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
+  const [viewModalActions, setViewModalActions] = useState<ViewPanelAction[]>([])
 
   // Search state
   const [decisionsSearch, setDecisionsSearch] = useState('')
@@ -114,6 +109,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setEditModalOpen(false)
     setEditModalCallback(null)
     setViewModalEditCallback(null)
+    setViewModalActions([])
   }, [managedRecipeProtection])
 
   // Fetch tools database when config is loaded
@@ -174,14 +170,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     } finally {
       if (showLoading) setRecipeProtectionLoading(false)
     }
-  }
-
-  const refreshAfterRecipeLifecycleChange = async (): Promise<boolean> => {
-    const [configRefreshed, protectionRefreshed] = await Promise.all([
-      fetchConfig(false),
-      fetchManagedRecipeProtection(false),
-    ])
-    return configRefreshed && protectionRefreshed
   }
 
   const fetchRouterDefaults = async () => {
@@ -291,10 +279,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setEditModalCallback(null)
   }
 
-  const openViewModal: OpenViewModal = (title, sections, onEdit) => {
+  const openViewModal: OpenViewModal = (title, sections, onEdit, actions = []) => {
     setViewModalTitle(title)
     setViewModalSections(sections)
     setViewModalEditCallback(() => onEdit || null)
+    setViewModalActions(
+      actions.map((action) => ({
+        ...action,
+        onClick: () => {
+          setViewModalOpen(false)
+          action.onClick()
+        },
+      })),
+    )
     setViewModalOpen(true)
   }
 
@@ -385,6 +382,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     setViewModalTitle('')
     setViewModalSections([])
     setViewModalEditCallback(null)
+    setViewModalActions([])
   }
 
   // ============================================================================
@@ -446,7 +444,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       config={config}
       isPythonCLI={isPythonCLI}
       isReadonly={configEditorReadonly}
-      canVerifyModels={canRunEvaluation(user)}
+      canVerifyModels={canVerifyModels(user)}
       models={models}
       defaultModel={defaultModel}
       reasoningFamilies={reasoningFamilies}
@@ -467,10 +465,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         config={config}
         isReadonly={configEditorReadonly}
         models={models}
-        packageCapabilities={recipePackageCapabilities}
-        refreshConfig={refreshAfterRecipeLifecycleChange}
         saveConfig={saveConfig}
-        openEditModal={openEditModal}
         openViewModal={openViewModal}
       />
     ) : null
@@ -572,6 +567,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         onEdit={configEditorReadonly ? undefined : viewModalEditCallback || undefined}
         title={viewModalTitle}
         sections={viewModalSections}
+        actions={configEditorReadonly ? [] : viewModalActions}
       />
     </div>
   )

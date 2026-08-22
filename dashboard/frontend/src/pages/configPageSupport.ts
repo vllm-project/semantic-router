@@ -247,6 +247,7 @@ export interface RoutingConfig {
 export interface EntrypointConfig {
   model_names: string[]
   recipe: string
+  model_bindings?: Record<string, DecisionModelRef[]>
 }
 
 export interface RecipeRoutingConfig {

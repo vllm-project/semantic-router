@@ -55,13 +55,14 @@ const ChatComponent = ({
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const [probeDraft, setProbeDraft] = useState<ActivePlaygroundInvocationDraft | null>(null)
+  const { user, isLoading: authLoading } = useAuth()
   const {
     model,
     models: routingModels,
     retry: retryRoutingModelDiscovery,
     setModel,
     status: routingModelStatus,
-  } = usePlaygroundRoutingModel(endpoint)
+  } = usePlaygroundRoutingModel(endpoint, user?.role === 'admin')
   const isRoutingModelReady = routingModelStatus === 'ready'
   const {
     conversationErrors,
@@ -72,14 +73,13 @@ const ChatComponent = ({
     setConversationThinkingState,
   } = useChatConversationState()
   const [isFullscreen] = useState(isFullscreenMode)
-  const [enableWebSearch, setEnableWebSearch] = useState(true)
+  const [enableWebSearch, setEnableWebSearch] = useState(false)
   const [enableClawMode, setEnableClawMode] = useState<boolean>(readClawModePreference)
   const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
-  const { user, isLoading: authLoading } = useAuth()
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -168,11 +168,8 @@ const ChatComponent = ({
     conversationIdRef.current = conversationId
   }, [conversationId])
 
-  // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
   const { refresh: refreshMCPTools } = useMCPToolSync({ enabled: true, pollInterval: 30000 })
 
-  // Tool Registry integration
-  // Search tools (controlled by web search toggle)
   const { definitions: searchToolDefinitions } = useToolRegistry({
     enabledOnly: true,
     categories: ['search'],
@@ -239,7 +236,7 @@ const ChatComponent = ({
         await refreshMCPTools()
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to enable Claw Mode'
-        console.warn(`[ClawOS] UI mode enabled, but MCP bootstrap failed: ${message}`)
+        console.warn(`[OpenClaw] UI mode enabled, but MCP bootstrap failed: ${message}`)
       } finally {
         if (isCurrent) {
           setIsTogglingClawMode(false)
@@ -322,6 +319,10 @@ const ChatComponent = ({
 
   const buildTaskTools = useCallback(
     (task: PlaygroundTask) => {
+      const toolsDisabled =
+        !task.requestOptions.enableWebSearch &&
+        (!task.requestOptions.enableClawMode || clawManagementDisabled)
+      if (toolsDisabled) return []
       const otherTools =
         task.requestOptions.enableClawMode && !clawManagementDisabled
           ? [...baseOtherToolDefinitions, ...clawToolDefinitions]

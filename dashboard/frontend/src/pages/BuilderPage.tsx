@@ -27,7 +27,7 @@ import {
 import { useBuilderScopedEntityMutations } from './useBuilderScopedEntityMutations'
 import { useReadonly } from '@/contexts/ReadonlyContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { canDeployConfig } from '@/utils/accessControl'
+import { canDeployConfig, canWriteConfig } from '@/utils/accessControl'
 import type { EntityKind, SectionState, Selection } from './builderPageTypes'
 
 // ---------- Component ----------
@@ -79,6 +79,7 @@ const BuilderPage: React.FC = () => {
   const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
   const { user } = useAuth()
   const hasDeployPermission = canDeployConfig(user)
+  const hasWritePermission = canWriteConfig(user)
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [sections, setSections] = useState<SectionState>({
@@ -176,6 +177,7 @@ const BuilderPage: React.FC = () => {
 
   const handleModeSwitch = useCallback(
     (newMode: EditorMode) => {
+      if (!hasWritePermission && newMode === 'nl') return
       setMode(newMode)
       setOutputPanelOpen(newMode !== 'nl')
       // When switching to visual, parse AST
@@ -183,7 +185,7 @@ const BuilderPage: React.FC = () => {
         parseAST()
       }
     },
-    [setMode, wasmReady, dslSource, parseAST],
+    [hasWritePermission, setMode, wasmReady, dslSource, parseAST],
   )
   const hasPendingNLDraft = nlStagedDraft !== null
   const deployDisabled =
@@ -218,15 +220,17 @@ const BuilderPage: React.FC = () => {
   // --- Import Config handlers ---
 
   const handleOpenImport = useCallback(() => {
+    if (!hasWritePermission) return
     setImportText('')
     setImportError(null)
     setImportUrl('')
     setImportUrlLoading(false)
     setShowImportModal(true)
     setTimeout(() => importTextareaRef.current?.focus(), 50)
-  }, [])
+  }, [hasWritePermission])
 
   const handleImportConfirm = useCallback(() => {
+    if (!hasWritePermission) return
     const yaml = importText.trim()
     if (!yaml) {
       setImportError('Please paste YAML content')
@@ -243,7 +247,7 @@ const BuilderPage: React.FC = () => {
         'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
       )
     }
-  }, [importText, importYaml, compile])
+  }, [hasWritePermission, importText, importYaml, compile])
 
   const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -315,11 +319,17 @@ const BuilderPage: React.FC = () => {
   }, [loadFromRouter, compile])
 
   const handleRequestDeploy = useCallback(() => {
-    if (deployDisabled) {
+    if (!hasWritePermission || deployDisabled) {
       return
     }
     requestDeploy()
-  }, [deployDisabled, requestDeploy])
+  }, [deployDisabled, hasWritePermission, requestDeploy])
+
+  useEffect(() => {
+    if (hasWritePermission) return
+    setAddingEntity(null)
+    if (mode === 'nl') setMode('visual')
+  }, [hasWritePermission, mode, setMode])
 
   // On first entry, load current router config and compile it by default.
   useEffect(() => {
@@ -414,6 +424,7 @@ const BuilderPage: React.FC = () => {
   return (
     <div className={styles.page}>
       <BuilderToolbar
+        readOnly={!hasWritePermission}
         dirty={dirty}
         mode={mode}
         wasmReady={wasmReady}
@@ -455,6 +466,7 @@ const BuilderPage: React.FC = () => {
         <div className={styles.editorArea}>
           {mode === 'visual' && (
             <VisualMode
+              readOnly={!hasWritePermission}
               ast={visualAst}
               dslSource={dslSource}
               diagnostics={diagnostics}
@@ -503,10 +515,10 @@ const BuilderPage: React.FC = () => {
           )}
           {mode === 'dsl' && (
             <div className={styles.dslModeContainer}>
-              <DslEditorPage embedded hideOutput />
+              <DslEditorPage embedded hideOutput readOnly={!hasWritePermission} />
             </div>
           )}
-          {mode === 'nl' && (
+          {hasWritePermission && mode === 'nl' && (
             <BuilderNaturalLanguagePanel
               currentDsl={dslSource}
               baseConfigYaml={baseConfigYaml}
@@ -554,44 +566,48 @@ const BuilderPage: React.FC = () => {
       />
 
       {/* Hidden file input for YAML import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".yaml,.yml,.json"
-        style={{ display: 'none' }}
-        onChange={handleImportFile}
-      />
-
-      <BuilderImportModal
-        open={showImportModal}
-        importUrl={importUrl}
-        importText={importText}
-        importError={importError}
-        importUrlLoading={importUrlLoading}
-        loadingFromRouter={loadingFromRouter}
-        importTextareaRef={importTextareaRef}
-        onClose={() => setShowImportModal(false)}
-        onImportUrlChange={(value) => {
-          setImportUrl(value)
-          setImportError(null)
-        }}
-        onImportTextChange={(value) => {
-          setImportText(value)
-          setImportError(null)
-        }}
-        onImportUrl={handleImportUrl}
-        onSelectFile={() => fileInputRef.current?.click()}
-        onLoadFromRouter={handleLoadFromRouter}
-        onConfirm={handleImportConfirm}
-      />
+      {hasWritePermission ? (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".yaml,.yml,.json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+          <BuilderImportModal
+            open={showImportModal}
+            importUrl={importUrl}
+            importText={importText}
+            importError={importError}
+            importUrlLoading={importUrlLoading}
+            loadingFromRouter={loadingFromRouter}
+            importTextareaRef={importTextareaRef}
+            onClose={() => setShowImportModal(false)}
+            onImportUrlChange={(value) => {
+              setImportUrl(value)
+              setImportError(null)
+            }}
+            onImportTextChange={(value) => {
+              setImportText(value)
+              setImportError(null)
+            }}
+            onImportUrl={handleImportUrl}
+            onSelectFile={() => fileInputRef.current?.click()}
+            onLoadFromRouter={handleLoadFromRouter}
+            onConfirm={handleImportConfirm}
+          />
+        </>
+      ) : null}
 
       <BuilderGuideDrawer
-        open={!isNaturalLanguageMode && guideOpen}
+        open={hasWritePermission && !isNaturalLanguageMode && guideOpen}
         width={guideWidth}
         isDragging={isGuideDragging}
         onClose={() => setGuideOpen(false)}
         onDragStart={handleGuideDragStart}
         onInsertSnippet={(snippet) => {
+          if (!hasWritePermission) return
           if (mode !== 'dsl') setMode('dsl')
           const store = useDSLStore.getState()
           const src = store.dslSource

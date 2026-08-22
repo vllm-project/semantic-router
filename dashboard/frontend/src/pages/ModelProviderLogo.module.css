@@ -1,0 +1,47 @@
+.logo {
+  --provider-accent: #9ca3af;
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background: #18181b;
+  color: rgba(255, 255, 255, 0.76);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+}
+
+.logo img {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+}
+
+.logo .monoIcon {
+  filter: invert(1);
+  opacity: 0.9;
+}
+
+.logo .colorIcon {
+  width: 66%;
+  height: 66%;
+}
+
+.small {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 0.52rem;
+}
+.medium {
+  width: 34px;
+  height: 34px;
+  font-size: 0.62rem;
+}
+.large {
+  width: 44px;
+  height: 44px;
+  font-size: 0.72rem;
+}

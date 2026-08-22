@@ -1,0 +1,228 @@
+.dialog {
+  width: min(760px, 100%);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 10px 28px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tabs button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.72rem;
+  font-weight: 660;
+}
+
+.tabs button:hover {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.tabs .activeTab {
+  border-bottom-color: #f4f4f5;
+  color: #f4f4f5;
+}
+
+.body {
+  min-height: 250px;
+}
+
+.designPane {
+  display: grid;
+  gap: 24px;
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 12px;
+}
+
+.identityGrid label {
+  display: grid;
+  gap: 7px;
+}
+
+.identityGrid span,
+.strategySection > span {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.71rem;
+  font-weight: 650;
+}
+
+.identityGrid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  outline: 0;
+  background: #1a1a1d;
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.identityGrid input:focus {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.055);
+}
+
+.strategySection {
+  display: grid;
+  gap: 9px;
+}
+
+.strategySection > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.strategySection button {
+  display: grid;
+  gap: 5px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: #17171a;
+  color: rgba(255, 255, 255, 0.62);
+  text-align: left;
+}
+
+.strategySection button:hover,
+.strategySection .selectedStrategy {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+/* Keep native menus legible when this module gains a select control. */
+.identityGrid select option {
+  background: #1a1a1d;
+  color: #f5f5f7;
+}
+
+.strategySection strong {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.78rem;
+}
+
+.strategySection small {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.67rem;
+}
+
+.recipeSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+}
+
+.recipeSummary > div {
+  display: grid;
+  gap: 5px;
+  padding: 20px;
+  border: 0;
+  background: #0e0e10;
+  text-align: left;
+}
+
+.recipeSummary > div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.recipeSummary strong {
+  color: #f4f4f5;
+  font-size: 1.45rem;
+  letter-spacing: -0.04em;
+}
+
+.recipeSummary span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.67rem;
+}
+
+.jsonPane {
+  display: grid;
+  height: 100%;
+  min-height: 430px;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+
+.jsonPane > div {
+  display: grid;
+  gap: 4px;
+}
+
+.jsonPane strong {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.82rem;
+}
+
+.jsonPane span {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.69rem;
+}
+
+.jsonPane textarea {
+  width: 100%;
+  min-height: 380px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  outline: 0;
+  background: #09090b;
+  color: #d8d8dc;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.jsonPane textarea:focus {
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.projectionJSON {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  outline: 0;
+  background: #09090b;
+  color: #d8d8dc;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+@media (max-width: 720px) {
+  .tabs {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .identityGrid,
+  .strategySection > div,
+  .recipeSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .recipeSummary > div + div {
+    border-top: 1px solid rgba(255, 255, 255, 0.075);
+    border-left: 0;
+  }
+}

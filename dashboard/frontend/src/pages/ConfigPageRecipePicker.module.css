@@ -1,0 +1,134 @@
+.root {
+  display: grid;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.search {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0.6875rem 0.75rem;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.search:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
+}
+
+.count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.list {
+  display: grid;
+  gap: 0.375rem;
+  max-height: min(320px, 38vh);
+  padding: 0.375rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.option,
+.optionSelected {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  min-height: 58px;
+  padding: 0.6875rem 0.75rem;
+  color: var(--text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.option:hover,
+.optionSelected {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--border-subtle);
+}
+
+.optionSelected {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: rgba(251, 113, 133, 0.42);
+}
+
+.option:focus-visible,
+.optionSelected:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.optionCopy {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.optionCopy strong,
+.optionCopy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionCopy strong {
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+}
+
+.optionCopy span,
+.meta {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.meta {
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 1.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .option,
+  .optionSelected {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .meta {
+    white-space: normal;
+  }
+}

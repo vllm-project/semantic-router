@@ -307,6 +307,7 @@ describe('playground request stability', () => {
 
   it('pins every turn in one conversation to the same Router session', () => {
     expect(buildPlaygroundRequestHeaders('conv-demo')).toMatchObject({
+      Accept: 'text/event-stream',
       'x-session-id': 'conv-demo',
       'x-vsr-debug': 'true',
     })

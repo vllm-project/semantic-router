@@ -4,19 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
 	RoleAdmin = "admin"
 	RoleWrite = "write"
 	RoleRead  = "read"
-)
-
-const (
-	legacyRoleSuperAdmin = "super_admin"
-	legacyRoleOperator   = "operator"
-	legacyRoleUser       = "user"
-	legacyRoleReadonly   = "readonly"
 )
 
 const (
@@ -38,29 +32,32 @@ const (
 	PermMlPipeline     = "mlpipeline.manage"
 	PermFeedbackSubmit = "feedback.submit"
 	PermReplayRead     = "replay.read"
-	PermSecurityManage = "security.manage"
+	PermAccessRead     = "access.read"
+	PermAccessManage   = "access.manage"
+	PermAccessSelf     = "access.self"
+	PermUsageRead      = "usage.read"
+	PermUsageSelf      = "usage.self"
+	PermAuditRead      = "audit.read"
+	PermStatusRead     = "status.read"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermReplayRead},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermAccessRead, PermAccessManage, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead, PermStatusRead},
+	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermAccessRead, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead, PermStatusRead},
+	// Read is the model-consumer surface: routing is inspectable while model
+	// credentials, request logs, and usage remain scoped to the signed-in user.
+	RoleRead: {PermConfigRead, PermTopologyRead, PermToolsUse, PermReplayRead, PermAccessSelf, PermUsageSelf},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
-
-var legacyRoleAliases = map[string]string{
-	legacyRoleSuperAdmin: RoleAdmin,
-	legacyRoleOperator:   RoleWrite,
-	legacyRoleUser:       RoleRead,
-	legacyRoleReadonly:   RoleRead,
-}
 
 var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
-	PermFeedbackSubmit, PermReplayRead, PermSecurityManage,
+	PermFeedbackSubmit, PermReplayRead,
+	PermAccessRead, PermAccessManage, PermAccessSelf, PermUsageRead, PermUsageSelf, PermAuditRead,
+	PermStatusRead,
 }
 
 func normalizeRole(raw string) (string, error) {
@@ -68,24 +65,12 @@ func normalizeRole(raw string) (string, error) {
 	if role == "" {
 		return "", nil
 	}
-	if aliased, ok := legacyRoleAliases[role]; ok {
-		role = aliased
-	}
-
 	switch role {
 	case RoleAdmin, RoleWrite, RoleRead:
 		return role, nil
 	default:
 		return "", fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
 	}
-}
-
-func canonicalRole(raw string) string {
-	role, err := normalizeRole(raw)
-	if err != nil || role == "" {
-		return strings.ToLower(strings.TrimSpace(raw))
-	}
-	return role
 }
 
 type User struct {
@@ -106,7 +91,6 @@ func scanUser(row *sql.Row) (*User, error) {
 	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin); err != nil {
 		return nil, err
 	}
-	u.Role = canonicalRole(u.Role)
 	if lastLogin.Valid {
 		t := lastLogin.Int64
 		u.LastLoginAt = &t
@@ -120,7 +104,6 @@ func scanUserRows(rows *sql.Rows) (*User, error) {
 	if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt, &lastLogin); err != nil {
 		return nil, err
 	}
-	u.Role = canonicalRole(u.Role)
 	if lastLogin.Valid {
 		t := lastLogin.Int64
 		u.LastLoginAt = &t
@@ -139,6 +122,27 @@ CREATE TABLE IF NOT EXISTS users (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   last_login_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dashboard_member_invitations (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL,
+  team_id TEXT NOT NULL DEFAULT '',
+  team_role TEXT NOT NULL DEFAULT 'member',
+  token_digest TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  expires_at INTEGER NOT NULL,
+  accepted_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL,
+  created_by TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_sent_at INTEGER,
+  delivery_status TEXT NOT NULL DEFAULT 'not_requested',
+  delivery_error TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
@@ -185,6 +189,10 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at);
 CREATE INDEX IF NOT EXISTS idx_users_status_created_at ON users(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_dashboard_member_invitations_created_at ON dashboard_member_invitations(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dashboard_member_invitations_email ON dashboard_member_invitations(email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_member_pending_invite_email
+  ON dashboard_member_invitations(email) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_created_at ON user_audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_user_id ON user_audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_user_created_at ON user_audit_logs(user_id, created_at DESC);
@@ -192,3 +200,38 @@ CREATE INDEX IF NOT EXISTS idx_user_audit_logs_action_created_at ON user_audit_l
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_resource_created_at ON user_audit_logs(resource, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_audit_logs_status_created_at ON user_audit_logs(status_code, created_at DESC);
 `
+
+const (
+	InvitationPending  = "pending"
+	InvitationAccepted = "accepted"
+	InvitationRevoked  = "revoked"
+	InvitationExpired  = "expired"
+)
+
+type DashboardMemberInvitation struct {
+	ID              string `json:"id"`
+	Email           string `json:"email"`
+	Name            string `json:"name"`
+	Role            string `json:"role"`
+	TeamID          string `json:"teamId,omitempty"`
+	TeamRole        string `json:"teamRole,omitempty"`
+	Status          string `json:"status"`
+	ExpiresAt       int64  `json:"expiresAt"`
+	AcceptedAt      *int64 `json:"acceptedAt,omitempty"`
+	RevokedAt       *int64 `json:"revokedAt,omitempty"`
+	CreatedAt       int64  `json:"createdAt"`
+	CreatedBy       string `json:"createdBy"`
+	UpdatedAt       int64  `json:"updatedAt"`
+	LastSentAt      *int64 `json:"lastSentAt,omitempty"`
+	DeliveryStatus  string `json:"deliveryStatus"`
+	DeliveryError   string `json:"deliveryError,omitempty"`
+	InvitationToken string `json:"invitationToken,omitempty"`
+	InvitationPath  string `json:"invitationPath,omitempty"`
+}
+
+func (invitation DashboardMemberInvitation) effectiveStatus(now time.Time) string {
+	if invitation.Status == InvitationPending && invitation.ExpiresAt <= now.Unix() {
+		return InvitationExpired
+	}
+	return invitation.Status
+}

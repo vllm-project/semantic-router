@@ -810,38 +810,66 @@
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: 1rem;
   width: 100%;
-  max-width: 1200px;
-  padding-bottom: var(--spacing-xl);
+  min-height: 100%;
+  padding: 0.35rem 0 1.5rem;
 }
 
 .dashboardHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--spacing-md);
+  gap: 1rem;
+  padding: 0.35rem 0.15rem 0.45rem;
+}
+
+.dashboardHeading {
+  min-width: 0;
+}
+
+.dashboardEyebrow {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .dashboardTitle {
-  font-size: var(--text-lg);
-  font-weight: 700;
+  margin: 0.24rem 0 0;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
   color: var(--color-text);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
 }
 
-.dashboardTitle svg {
-  color: var(--color-primary);
+.dashboardHeading p {
+  margin: 0.42rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .dashboardBadge {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  padding: 0.25rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-height: 30px;
+  padding: 0 0.72rem;
   border-radius: 999px;
-  letter-spacing: 0.02em;
+  font-size: 0.65rem;
+  font-weight: 680;
+  letter-spacing: 0.015em;
+}
+
+.dashboardBadge > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .dashboardBadgeOk {
@@ -858,56 +886,86 @@
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
 }
 
 .statCard {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md) var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  transition: all var(--transition-fast);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.08rem 0.72rem;
+  min-height: 76px;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 60%), var(--color-bg-secondary);
+  color: inherit;
   cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
-.statCard:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(143, 148, 156, 0.1);
+.statCard:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--color-bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.statCard:disabled {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .statLabel {
-  font-size: var(--text-xs);
+  grid-column: 2;
+  grid-row: 2;
+  overflow: hidden;
   color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
+  font-size: 0.66rem;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .statValue {
-  font-size: 1.75rem;
-  font-weight: 700;
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 1.25rem;
+  font-weight: 650;
   color: var(--color-text);
   font-family: var(--font-mono);
+  line-height: 1.1;
 }
 
 .statIcon {
-  width: 20px;
-  height: 20px;
-  color: var(--color-primary);
-  margin-bottom: 0.125rem;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 18px;
+  height: 18px;
+  padding: 8px;
+  box-sizing: content-box;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text-secondary);
 }
 
 .statBadge {
-  font-size: 0.5625rem;
-  font-weight: 700;
-  padding: 0.125rem 0.375rem;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  padding: 0.2rem 0.45rem;
   border-radius: 999px;
-  width: fit-content;
-  letter-spacing: 0.02em;
+  font-size: 0.55rem;
+  font-weight: 680;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
 }
 
 .statBadgeOk {
@@ -923,77 +981,126 @@
 /* ── Dashboard Section ── */
 
 .dashSection {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  gap: 0.85rem;
+  padding: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.022), transparent 52%), var(--color-bg-secondary);
+}
+
+.dashboardWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(250px, 0.85fr);
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.dashboardRail {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.routeSection {
+  min-height: 390px;
+}
+
+.dashSectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.dashSectionHeading p {
+  margin: 0.28rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
 }
 
 .dashSectionTitle {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 660;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+}
+
+.routeCount {
+  min-width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
 }
 
 /* ── Quick Actions ── */
 
 .quickActions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .quickActionBtn {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.875rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: 0.55rem;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0.48rem 0.55rem;
   color: var(--color-text);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
-  transition: all 0.2s ease;
-  letter-spacing: 0.01em;
+  font-size: 0.68rem;
+  font-weight: 620;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .quickActionBtn:hover {
-  border-color: var(--color-primary);
-  background: rgba(143, 148, 156, 0.1);
-  color: var(--color-primary);
-  box-shadow: 0 2px 12px rgba(143, 148, 156, 0.12);
-  transform: translateY(-1px);
-}
-
-.quickActionBtn:active {
-  transform: translateY(0);
-  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .quickActionIcon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: rgba(143, 148, 156, 0.1);
-  color: var(--color-primary);
-  font-weight: 700;
-  font-size: 1.125rem;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 620;
   flex-shrink: 0;
 }
 
 /* ── Route Map ── */
 
 .routeMap {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1075,10 +1182,26 @@
 }
 
 .routeMapEmpty {
-  padding: 0.75rem;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem;
   color: var(--color-text-muted);
-  font-style: italic;
   font-family: var(--font-sans);
+  text-align: center;
+}
+
+.routeMapEmpty strong {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.routeMapEmpty span {
+  font-size: 0.66rem;
 }
 
 /* ── Entity List View ── */
@@ -1206,42 +1329,119 @@
 
 .dashModes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
+  gap: 0.45rem;
 }
 
 .dashModeBtn {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.375rem;
-  padding: var(--spacing-md);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  gap: 0.65rem;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
-  transition: all var(--transition-fast);
-  text-align: center;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .dashModeBtn:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(143, 148, 156, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .dashModeBtnIcon {
-  font-size: 1.25rem;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text-secondary);
+}
+
+.dashModeBtnIcon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.dashModeBtnCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
 }
 
 .dashModeBtnLabel {
-  font-size: 0.75rem;
-  font-weight: 700;
+  overflow: hidden;
   color: var(--color-text);
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dashModeBtnDesc {
-  font-size: 0.625rem;
+  overflow: hidden;
   color: var(--color-text-muted);
+  font-size: 0.59rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashModeBtnArrow {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+@media (max-width: 1050px) {
+  .dashboardWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardRail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboardRail {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboardHeader {
+    align-items: flex-start;
+  }
+
+  .dashboardHeading p {
+    display: none;
+  }
+
+  .statsGrid,
+  .quickActions {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Entity Editor Panel ===== */
@@ -3042,4 +3242,14 @@
   background: var(--color-bg-elevated);
   border-color: var(--color-border-hover);
   color: var(--color-text);
+}
+.entityEditorFields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.entityEditorFields:disabled {
+  opacity: 0.82;
 }

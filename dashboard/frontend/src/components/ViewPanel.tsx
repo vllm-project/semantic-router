@@ -16,7 +16,7 @@ export interface ViewSection {
 export interface ViewPanelAction {
   label: string
   onClick: () => void
-  tone?: 'secondary' | 'primary'
+  tone?: 'secondary' | 'primary' | 'destructive'
   disabled?: boolean
 }
 
@@ -39,16 +39,10 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
   actions = [],
   variant = 'modal',
 }) => {
-  const panelClassName = [
-    styles.modal,
-    variant === 'page' ? styles.modalStandalone : '',
-  ]
+  const panelClassName = [styles.modal, variant === 'page' ? styles.modalStandalone : '']
     .filter(Boolean)
     .join(' ')
-  const contentClassName = [
-    styles.content,
-    variant === 'page' ? styles.contentStandalone : '',
-  ]
+  const contentClassName = [styles.content, variant === 'page' ? styles.contentStandalone : '']
     .filter(Boolean)
     .join(' ')
   const hasFooter = actions.length > 0 || Boolean(onClose) || Boolean(onEdit)
@@ -56,9 +50,22 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
   return (
     <div className={panelClassName}>
       <div className={styles.header}>
-        <h2 className={styles.title}>{title}</h2>
+        <div className={styles.headerIdentity}>
+          <div className={styles.headerLogo} aria-hidden="true">
+            <img src="/vllm.png" alt="" />
+          </div>
+          <div>
+            <span className={styles.eyebrow}>Details</span>
+            <h2 className={styles.title}>{title}</h2>
+          </div>
+        </div>
         {onClose ? (
-          <button className={styles.closeButton} onClick={onClose} type="button" aria-label={closeLabel}>
+          <button
+            className={styles.closeButton}
+            onClick={onClose}
+            type="button"
+            aria-label={closeLabel}
+          >
             ×
           </button>
         ) : null}
@@ -91,7 +98,9 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
               className={
                 action.tone === 'primary'
                   ? styles.primaryFooterButton
-                  : styles.closeFooterButton
+                  : action.tone === 'destructive'
+                    ? styles.destructiveFooterButton
+                    : styles.closeFooterButton
               }
               onClick={action.onClick}
               type="button"

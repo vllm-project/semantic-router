@@ -16,23 +16,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type ModelUserProvisioner interface {
+	EnsureModelUser(ctx context.Context, id, email, name string) error
+	AssignModelUserTeam(ctx context.Context, id, teamID, role string) error
+	ModelTeamName(ctx context.Context, teamID string) (string, error)
+	RemoveModelUser(ctx context.Context, id string) error
+}
+
 type Service struct {
 	store       *Store
 	jwtSecret   []byte
 	ttlDuration time.Duration
 
+	invitationMailer  InvitationMailer
+	invitationBaseURL string
+	modelUsers        ModelUserProvisioner
+
 	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
 	allowOpenBootstrap bool
-	// setupModeFn reports whether first-run setup mode is currently active.
-	//
-	// A function rather than a bool because setup mode ends when activation
-	// rewrites the router config, and the dashboard does not restart itself at
-	// that point. A stored bool would keep the unauthenticated bootstrap
-	// endpoint armed until the next restart. See #2795.
-	//
-	// Installed once during route setup, before the server serves, so it needs
-	// no lock. The resolver behind it is goroutine-safe.
-	setupModeFn func() bool
+	// setupMode enables bootstrap during dashboard-first local install (trusted phase).
+	setupMode bool
 	// bootstrapMu serializes the check-then-create in BootstrapRegister so that two
 	// concurrent requests cannot both pass the "no users yet" check and each create an
 	// admin. The dashboard runs single-replica (enforced by the chart's replicaCount
@@ -63,6 +66,68 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 	return &Service{store: store, jwtSecret: []byte(secret), ttlDuration: time.Duration(ttlHours) * time.Hour}
 }
 
+func (s *Service) ConfigureModelUsers(provisioner ModelUserProvisioner) {
+	s.modelUsers = provisioner
+}
+
+func (s *Service) provisionModelUser(
+	ctx context.Context,
+	id string,
+	email string,
+	name string,
+	teamID *string,
+	teamRole string,
+) error {
+	if s.modelUsers == nil {
+		return nil
+	}
+	if err := s.modelUsers.EnsureModelUser(ctx, id, email, name); err != nil {
+		return err
+	}
+	if teamID == nil {
+		return nil
+	}
+	if err := s.modelUsers.AssignModelUserTeam(ctx, id, *teamID, teamRole); err != nil {
+		_ = s.modelUsers.RemoveModelUser(ctx, id)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) modelTeamName(ctx context.Context, teamID string) string {
+	if s.modelUsers == nil || strings.TrimSpace(teamID) == "" {
+		return ""
+	}
+	name, err := s.modelUsers.ModelTeamName(ctx, teamID)
+	if err != nil {
+		return ""
+	}
+	return name
+}
+
+func (s *Service) removeModelUser(ctx context.Context, id string) error {
+	if s.modelUsers == nil {
+		return nil
+	}
+	return s.modelUsers.RemoveModelUser(ctx, id)
+}
+
+func (s *Service) ReconcileModelUsers(ctx context.Context) error {
+	if s.modelUsers == nil {
+		return nil
+	}
+	users, err := s.store.ListAllUsers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		if err := s.provisionModelUser(ctx, user.ID, user.Email, user.Name, nil, ""); err != nil {
+			return fmt.Errorf("provision model user %s: %w", user.ID, err)
+		}
+	}
+	return nil
+}
+
 // AddAuditLog records one authenticated control-plane action without exposing
 // the underlying auth store to other dashboard packages.
 func (s *Service) AddAuditLog(ctx context.Context, entry AuditLog) error {
@@ -75,25 +140,11 @@ func (s *Service) AddAuditLog(ctx context.Context, entry AuditLog) error {
 // SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
 func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
 
-// SetSetupModeFunc installs the live setup-mode source. Pass the resolver's
-// Active method; the auth service must not read the config itself.
-func (s *Service) SetSetupModeFunc(fn func() bool) { s.setupModeFn = fn }
-
-// SetSetupMode pins setup mode to a fixed value. Retained for tests and for
-// callers with no resolver. Production wiring uses SetSetupModeFunc.
-func (s *Service) SetSetupMode(v bool) { s.setupModeFn = func() bool { return v } }
+// SetSetupMode toggles dashboard-first setup mode for trusted first-run bootstrap.
+func (s *Service) SetSetupMode(v bool) { s.setupMode = v }
 
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
-//
-// allowOpenBootstrap is checked first so an operator who enabled it does not pay
-// a config stat on every unauthenticated request.
-func (s *Service) OpenBootstrapEnabled() bool {
-	if s.allowOpenBootstrap {
-		return true
-	}
-	// Fail closed. NewService installs no source, so an unwired Service stays shut.
-	return s.setupModeFn != nil && s.setupModeFn()
-}
+func (s *Service) OpenBootstrapEnabled() bool { return s.allowOpenBootstrap || s.setupMode }
 
 // BootstrapRegister atomically creates the first admin. The "no users yet" check and
 // the create run under bootstrapMu, so two concurrent requests cannot each create an
@@ -131,7 +182,7 @@ func (s *Service) VerifyPassword(hash, password string) bool {
 }
 
 func (s *Service) Login(ctx context.Context, email, password string) (string, *User, error) {
-	id, e, n, role, status, _, _, _, hash, err := s.store.GetUserByEmail(ctx, email)
+	id, _, _, _, status, _, _, _, hash, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil, errors.New("invalid credentials")
@@ -147,7 +198,10 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, *U
 	if updateErr := s.store.UpdateLoginTime(ctx, id); updateErr != nil {
 		return "", nil, updateErr
 	}
-	u := &User{ID: id, Email: e, Name: n, Role: role, Status: status}
+	u, err := s.store.GetUserByID(ctx, id)
+	if err != nil {
+		return "", nil, err
+	}
 	token, err := s.issueTokenForContext(ctx, u)
 	if err != nil {
 		return "", nil, err

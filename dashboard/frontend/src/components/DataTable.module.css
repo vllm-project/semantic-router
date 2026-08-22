@@ -1,5 +1,8 @@
 /* Graphite Control Plane Data Table */
 .tableContainer {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 12px;
@@ -7,6 +10,9 @@
 }
 
 .tableViewport {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -14,6 +20,7 @@
 .table {
   width: 100%;
   min-width: 600px; /* Ensure table has minimum width for proper column display */
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -83,6 +90,16 @@
   background: rgba(255, 255, 255, 0.035);
 }
 
+.trInteractive {
+  cursor: pointer;
+}
+
+.trInteractive:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.75);
+}
+
 .trSelected {
   background: rgba(255, 255, 255, 0.055);
   box-shadow: inset 2px 0 0 #f5f5f7;
@@ -97,6 +114,7 @@
   font-size: 0.875rem;
   color: var(--color-text);
   vertical-align: middle;
+  overflow-wrap: anywhere;
 }
 
 .selectionColumn,
@@ -108,8 +126,8 @@
 }
 
 .selectionCheckbox {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   margin: 0;
   padding: 0;
   border-radius: 4px;
@@ -131,7 +149,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,6 +194,10 @@
   box-shadow: -12px 0 18px rgba(0, 0, 0, 0.14);
 }
 
+.actionsColumnWidth {
+  width: 220px;
+}
+
 .actionsCell {
   position: sticky;
   right: 0;
@@ -205,6 +229,7 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
+  min-height: 36px;
 }
 
 .viewButton:hover {
@@ -282,8 +307,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);
@@ -305,8 +330,6 @@
 @media (max-width: 768px) {
   .tableContainer {
     border-radius: var(--radius-md);
-    /* Ensure horizontal scrolling is visible */
-    overflow-x: auto;
   }
 
   .table {
@@ -330,7 +353,8 @@
   }
 
   .actionButton {
-    padding: 0.25rem 0.5rem;
+    min-height: 40px;
+    padding: 0.45rem 0.6rem;
     font-size: 0.75rem;
     white-space: nowrap;
   }
@@ -338,6 +362,10 @@
   .actionsColumn {
     width: 100px;
     min-width: 100px;
+  }
+
+  .actionsColumnWidth {
+    width: 100px;
   }
 
   .pagination {
@@ -352,6 +380,11 @@
   .paginationControls {
     grid-column: 1 / -1;
     justify-content: space-between;
+  }
+
+  .paginationControls button {
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -371,12 +404,17 @@
   }
 
   .actionButton {
-    padding: 0.2rem 0.4rem;
+    min-height: 40px;
+    padding: 0.45rem 0.5rem;
     font-size: 0.6875rem;
   }
 
   .actionsColumn {
     width: 80px;
     min-width: 80px;
+  }
+
+  .actionsColumnWidth {
+    width: 80px;
   }
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -28,15 +27,13 @@ type configRouteOptions struct {
 	modelVerificationAuditor handlers.ModelVerificationAuditor
 }
 
-// setupResolver is required, not an option, because the setup routes have no
-// fallback source of truth for setup mode.
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver, routeOptions ...coreRouteOptions) {
+func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...coreRouteOptions) {
 	options := coreRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
 	}
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.recipeStore})
-	registerHealthAndSetupRoutes(mux, cfg, setupResolver)
+	registerHealthAndSetupRoutes(mux, cfg)
 	registerConfigRoutes(mux, cfg, configRouteOptions{
 		credentialStore:          store,
 		modelVerificationAuditor: options.modelVerificationAuditor,
@@ -45,7 +42,6 @@ func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *s
 	registerStatusRoutes(mux, cfg, store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
-	registerSecurityPolicyRoutes(mux, cfg)
 }
 
 func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*recipe.Store) {
@@ -97,46 +93,14 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 	}
 }
 
-func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
-	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	handlers.SetSecurityPolicyConfigPaths(cfg.AbsConfigPath, cfg.ConfigDir)
-	mux.HandleFunc("/api/security/policy", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.HandleGetSecurityPolicy(w, r)
-		case http.MethodPut:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard is in read-only mode", http.StatusForbidden)
-				return
-			}
-			handlers.HandleUpdateSecurityPolicy(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/security/policy/preview", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard runtime configuration is read-only", http.StatusForbidden)
-				return
-			}
-			handlers.HandlePreviewSecurityFragment(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
-}
-
-func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
+func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
-	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg, setupResolver))
-	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver))
+	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
+	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	mux.HandleFunc("/api/setup/presets", handlers.PresetsHandler())
 	mux.HandleFunc("/api/setup/presets/delta", handlers.PresetDeltaHandler())
 }
@@ -148,6 +112,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewCLIModelCatalogSource(cfg.PythonPath)))
+	mux.HandleFunc("/api/models/discover", handlers.ModelDiscoveryHandler())
 	mux.HandleFunc("/api/models/verify", handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
@@ -162,7 +127,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	mux.HandleFunc("/api/router/config/nl/verify", handlers.BuilderNLVerifyHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
 	mux.HandleFunc("/api/router/config/nl/generate/stream", handlers.BuilderNLGenerateStreamHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
 	mux.HandleFunc("/api/router/config/nl/generate", handlers.BuilderNLGenerateHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
-	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/verify, /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
+	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
@@ -222,7 +187,7 @@ func registerTopologyRoutes(mux *http.ServeMux, cfg *config.Config, credentialPr
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
 }
 
-func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config, scopeResolvers ...handlers.EvaluationScopeResolver) {
 	if !cfg.EvaluationEnabled {
 		log.Printf("Evaluation feature disabled")
 		return
@@ -252,7 +217,16 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 		ResultsDir:    cfg.EvaluationResultsDir,
 		MaxConcurrent: 10,
 	})
-	evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
+	var scopeResolver handlers.EvaluationScopeResolver
+	if len(scopeResolvers) > 0 {
+		scopeResolver = scopeResolvers[0]
+	}
+	var evalHandler *handlers.EvaluationHandler
+	if scopeResolver != nil {
+		evalHandler = handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL, scopeResolver)
+	} else {
+		evalHandler = handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
+	}
 
 	mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {

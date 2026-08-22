@@ -33,6 +33,7 @@ export interface DataTableProps<T> {
   onView?: (row: T) => void
   onEdit?: (row: T) => void
   onDelete?: (row: T) => void
+  openOnRowClick?: boolean
   expandable?: boolean
   renderExpandedRow?: (row: T) => React.ReactNode
   isRowExpanded?: (row: T) => boolean
@@ -118,6 +119,7 @@ export function DataTable<T>({
   onView,
   onEdit,
   onDelete,
+  openOnRowClick = false,
   expandable = false,
   renderExpandedRow,
   isRowExpanded,
@@ -143,7 +145,7 @@ export function DataTable<T>({
 
   const effectiveOnEdit = readonly ? undefined : onEdit
   const effectiveOnDelete = readonly ? undefined : onDelete
-  const hasActions = Boolean(onView || effectiveOnEdit || effectiveOnDelete)
+  const hasActions = Boolean((onView && !openOnRowClick) || effectiveOnEdit || effectiveOnDelete)
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
@@ -196,6 +198,14 @@ export function DataTable<T>({
     <div className={`${styles.tableContainer} ${className}`}>
       <div className={styles.tableViewport}>
         <table className={styles.table}>
+          <colgroup>
+            {selection ? <col className={styles.selectionColumn} /> : null}
+            {expandable ? <col className={styles.expandColumn} /> : null}
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            {hasActions ? <col className={styles.actionsColumnWidth} /> : null}
+          </colgroup>
           <thead className={styles.thead}>
             <tr>
               {selection ? (
@@ -265,11 +275,28 @@ export function DataTable<T>({
                 const key = keyExtractor(row)
                 const expanded = isRowExpanded?.(row) || false
                 const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
+                const rowOpensDetails = Boolean(openOnRowClick && onView)
+                const openRow = () => onView?.(row)
+                const handleRowClick = (event: React.MouseEvent<HTMLTableRowElement>) => {
+                  if (!rowOpensDetails) return
+                  const target = event.target as HTMLElement
+                  if (target.closest('button, a, input, select, textarea, [role="button"]')) return
+                  openRow()
+                }
+                const handleRowKeyDown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                  if (!rowOpensDetails || (event.key !== 'Enter' && event.key !== ' ')) return
+                  event.preventDefault()
+                  openRow()
+                }
 
                 return (
                   <React.Fragment key={key}>
                     <tr
-                      className={`${styles.tr} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+                      className={`${styles.tr} ${rowOpensDetails ? styles.trInteractive : ''} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+                      tabIndex={rowOpensDetails ? 0 : undefined}
+                      aria-label={rowOpensDetails ? `Open ${key}` : undefined}
+                      onClick={handleRowClick}
+                      onKeyDown={handleRowKeyDown}
                     >
                       {selection ? (
                         <td className={styles.selectionCell}>
@@ -317,7 +344,7 @@ export function DataTable<T>({
                       {hasActions ? (
                         <td className={`${styles.td} ${styles.actionsCell}`}>
                           <div className={styles.actionButtons}>
-                            {onView ? (
+                            {onView && !openOnRowClick ? (
                               <button
                                 type="button"
                                 className={`${styles.actionButton} ${styles.viewButton}`}

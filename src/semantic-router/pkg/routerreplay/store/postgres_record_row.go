@@ -22,7 +22,8 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details, recipe
+	cache_similarity, context_token_count, hallucination_span_details, recipe,
+	user_id, team_id, api_key_id
 `
 
 type postgresRowScanner interface {
@@ -76,6 +77,9 @@ type postgresRecordRow struct {
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
 	recipe                       sql.NullString
+	userID                       sql.NullString
+	teamID                       sql.NullString
+	apiKeyID                     sql.NullString
 	endedAt                      sql.NullTime
 	terminalReason               sql.NullString
 }
@@ -207,6 +211,9 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.ContextTokenCount,
 		record.hallucinationSpanDetailsJSON,
 		emptyStringSQL(record.record.Recipe),
+		emptyStringSQL(record.record.UserID),
+		emptyStringSQL(record.record.TeamID),
+		emptyStringSQL(record.record.APIKeyID),
 	}
 }
 
@@ -304,6 +311,9 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.ContextTokenCount,
 		&row.hallucinationSpanDetailsJSON,
 		&row.recipe,
+		&row.userID,
+		&row.teamID,
+		&row.apiKeyID,
 	}
 }
 
@@ -332,6 +342,7 @@ func (row *postgresRecordRow) decode() (Record, error) {
 	)
 	row.assignReplaySessionIdentifiers()
 	row.assignReplayRecipe()
+	row.assignReplayIdentity()
 	if row.endedAt.Valid {
 		row.record.EndedAt = cloneTimePtr(&row.endedAt.Time)
 	}
@@ -339,6 +350,18 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.record.TerminalReason = row.terminalReason.String
 	}
 	return row.record, nil
+}
+
+func (row *postgresRecordRow) assignReplayIdentity() {
+	if row.userID.Valid {
+		row.record.UserID = row.userID.String
+	}
+	if row.teamID.Valid {
+		row.record.TeamID = row.teamID.String
+	}
+	if row.apiKeyID.Valid {
+		row.record.APIKeyID = row.apiKeyID.String
+	}
 }
 
 func (row *postgresRecordRow) unmarshalDecodedJSON() error {

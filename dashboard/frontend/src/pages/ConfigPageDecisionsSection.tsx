@@ -60,13 +60,13 @@ export default function ConfigPageDecisionsSection({
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const {
-    applyScopedConfig,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  } = useRoutingScopeManager(config, saveConfig)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -224,7 +224,20 @@ export default function ConfigPageDecisionsSection({
       })
     }
 
-    openViewModal(`Decision: ${decision.name}`, sections, () => handleEditDecision(decision))
+    openViewModal(
+      `Decision: ${decision.name}`,
+      sections,
+      () => handleEditDecision(decision),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete decision',
+              tone: 'destructive',
+              onClick: () => handleDeleteDecision(decision),
+            },
+          ],
+    )
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
@@ -773,7 +786,7 @@ export default function ConfigPageDecisionsSection({
       }
 
       newConfig.decisions.push(newDecision)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<DecisionFormState>(
@@ -809,7 +822,7 @@ export default function ConfigPageDecisionsSection({
       }
       const newConfig: ConfigData = cloneConfigData(scopedConfig)
       removeDecisionByName(newConfig, decisionPendingDelete.name)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setDecisionPendingDelete(null)
     } catch (error) {
       setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')
@@ -821,7 +834,7 @@ export default function ConfigPageDecisionsSection({
   return (
     <ConfigPageManagerLayout
       title="Decisions"
-      description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
+      description="Map intent to the right models."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
@@ -847,8 +860,7 @@ export default function ConfigPageDecisionsSection({
             data={filteredDecisions}
             keyExtractor={(row) => row.name}
             onView={handleViewDecision}
-            onEdit={handleEditDecision}
-            onDelete={handleDeleteDecision}
+            openOnRowClick
             emptyMessage={
               decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'
             }

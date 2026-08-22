@@ -12,31 +12,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type SetupStateResponse struct {
-	SetupMode bool `json:"setupMode"`
-	// Reason explains a config that could not be read, or a legacy --setup-mode
-	// value that disagrees with the config file. Omitted when the state resolved
-	// cleanly, so the happy-path response shape is unchanged.
-	Reason       string `json:"reason,omitempty"`
-	ListenerPort int    `json:"listenerPort"`
-	Models       int    `json:"models"`
-	Decisions    int    `json:"decisions"`
-	HasModels    bool   `json:"hasModels"`
-	HasDecisions bool   `json:"hasDecisions"`
-	CanActivate  bool   `json:"canActivate"`
+	SetupMode    bool `json:"setupMode"`
+	ListenerPort int  `json:"listenerPort"`
+	Models       int  `json:"models"`
+	Decisions    int  `json:"decisions"`
+	HasModels    bool `json:"hasModels"`
+	HasDecisions bool `json:"hasDecisions"`
+	CanActivate  bool `json:"canActivate"`
 }
-
-// unreadableConfigReason is used when this handler cannot decode the router
-// config but the resolver answered cleanly from the setup block alone.
-//
-// It never embeds the decoder error, which would quote config values into a
-// response served from an unauthenticated endpoint.
-const unreadableConfigReason = "the router config could not be read as a canonical config; " +
-	"setup state was resolved from its setup.mode block alone"
 
 type SetupConfigRequest struct {
 	Config json.RawMessage `json:"config"`
@@ -76,40 +63,22 @@ type setupConfigSummary struct {
 	Signals   int
 }
 
-func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
+func SetupStateHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		resolution := setupResolver.Resolve()
-
 		configFile, err := readSetupConfigFile(configPath)
 		if err != nil {
-			// The setup state resolved, so answer rather than 500. The frontend
-			// already coerces a failed fetch to "not in setup mode" silently;
-			// returning the reason makes the same outcome explainable.
-			//
-			// SetupMode carries the resolved value, not a hardcoded false. The
-			// resolver decodes only the setup block, so it can answer for a
-			// config this handler cannot. Reporting false while the bootstrap
-			// gate reads true is the split this change exists to remove.
-			reason := resolution.Reason
-			if reason == "" {
-				reason = unreadableConfigReason
-			}
-			writeSetupStateResponse(w, SetupStateResponse{
-				SetupMode: resolution.Active,
-				Reason:    reason,
-			})
+			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		summary := summarizeSetupConfig(&configFile.CanonicalConfig)
 		resp := SetupStateResponse{
-			SetupMode:    resolution.Active,
-			Reason:       resolution.Reason,
+			SetupMode:    hasSetupMode(configFile),
 			ListenerPort: firstListenerPort(configFile),
 			Models:       summary.Models,
 			Decisions:    summary.Decisions,
@@ -118,25 +87,21 @@ func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) htt
 			CanActivate:  summary.Models > 0 && summary.Decisions > 0,
 		}
 
-		writeSetupStateResponse(w, resp)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	}
 }
 
-func writeSetupStateResponse(w http.ResponseWriter, resp SetupStateResponse) {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
-}
-
-func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
+func SetupValidateHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		candidate, err := buildSetupCandidateConfig(configPath, r.Body, setupResolver)
+		candidate, err := buildSetupCandidateConfig(configPath, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -169,12 +134,7 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 	}
 }
 
-func SetupActivateHandler(
-	configPath string,
-	readonlyMode bool,
-	configDir string,
-	setupResolver *setupmode.Resolver,
-) http.HandlerFunc {
+func SetupActivateHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -191,7 +151,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		candidate, err := buildSetupCandidateConfig(configPath, r.Body, setupResolver)
+		candidate, err := buildSetupCandidateConfig(configPath, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -233,12 +193,6 @@ func SetupActivateHandler(
 			}
 		}
 
-		// The config no longer declares setup mode. Drop the cached resolution
-		// here, right after the write and before any later step can return
-		// early, so every setup surface sees the new state at once. Needed
-		// because the write can land in the same mtime tick as the last read.
-		setupResolver.Invalidate()
-
 		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
 			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
 			return
@@ -274,7 +228,7 @@ func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
 	configFile.Global = &defaults
 }
 
-func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
+func SetupImportRemoteHandler(configPath string) http.HandlerFunc {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +237,7 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			return
 		}
 
-		if _, err := loadBootstrapConfig(configPath, setupResolver); err != nil {
+		if _, err := loadBootstrapConfig(configPath); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -356,6 +310,10 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 	}
 }
 
+func hasSetupMode(configFile *setupConfigFile) bool {
+	return configFile != nil && configFile.Setup != nil && configFile.Setup.Mode
+}
+
 func firstListenerPort(configFile *setupConfigFile) int {
 	if configFile == nil || len(configFile.Listeners) == 0 {
 		return 0
@@ -363,12 +321,8 @@ func firstListenerPort(configFile *setupConfigFile) int {
 	return configFile.Listeners[0].Port
 }
 
-func buildSetupCandidateConfig(
-	configPath string,
-	bodyReader io.Reader,
-	setupResolver *setupmode.Resolver,
-) (*setupConfigFile, error) {
-	configFile, err := loadBootstrapConfig(configPath, setupResolver)
+func buildSetupCandidateConfig(configPath string, bodyReader io.Reader) (*setupConfigFile, error) {
+	configFile, err := loadBootstrapConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -392,18 +346,13 @@ func buildSetupCandidateConfig(
 	return &merged, nil
 }
 
-// loadBootstrapConfig gates the setup write endpoints on the resolver and
-// returns the current config for them to build on.
-//
-// The gate runs before the read, so a request that must not be served costs no
-// file read, and all four setup surfaces share one rule.
-func loadBootstrapConfig(configPath string, setupResolver *setupmode.Resolver) (*setupConfigFile, error) {
-	if !setupResolver.Active() {
-		return nil, fmt.Errorf("setup mode is not active for this workspace")
-	}
+func loadBootstrapConfig(configPath string) (*setupConfigFile, error) {
 	configFile, err := readSetupConfigFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read existing config: %w", err)
+	}
+	if !hasSetupMode(configFile) {
+		return nil, fmt.Errorf("setup mode is not active for this workspace")
 	}
 	return configFile, nil
 }

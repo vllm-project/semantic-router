@@ -14,7 +14,7 @@ engines. Start or bind the required provider services before serving a model.
 
 | Family | Description | Model Card |
 | --- | --- | --- |
-| MoM V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a shared local model pool. | [MoM V1](latest/mom-v1/README.md) |
+| MoM V1 | Five balanced, cost, speed, accuracy, and privacy profiles over a co-designed distributed model pool. | [MoM V1](latest/mom-v1/README.md) |
 
 ## Discover a model
 

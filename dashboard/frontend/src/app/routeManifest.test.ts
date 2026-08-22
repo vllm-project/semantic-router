@@ -24,6 +24,14 @@ describe('dashboard route manifest', () => {
 
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {
     expect(redirectRouteDefinitions).toContainEqual({
+      path: '/access',
+      to: '/access/usage',
+    })
+    expect(redirectRouteDefinitions).toContainEqual({
+      path: '/access/statistics',
+      to: '/access/usage',
+    })
+    expect(redirectRouteDefinitions).toContainEqual({
       path: '/knowledge-bases',
       to: '/knowledge-bases/bases',
     })

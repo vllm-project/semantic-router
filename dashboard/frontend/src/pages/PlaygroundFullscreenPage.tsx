@@ -6,7 +6,7 @@ const PlaygroundFullscreenPage = () => {
   useEffect(() => {
     // Add fullscreen class to body on mount
     document.body.classList.add('playground-fullscreen')
-    
+
     // Remove on unmount
     return () => {
       document.body.classList.remove('playground-fullscreen')
@@ -15,13 +15,9 @@ const PlaygroundFullscreenPage = () => {
 
   return (
     <div className={styles.container}>
-      <ChatComponent
-        endpoint="/api/router/v1/chat/completions"
-        isFullscreenMode={true}
-      />
+      <ChatComponent endpoint="/api/playground/v1/chat/completions" isFullscreenMode={true} />
     </div>
   )
 }
 
 export default PlaygroundFullscreenPage
-

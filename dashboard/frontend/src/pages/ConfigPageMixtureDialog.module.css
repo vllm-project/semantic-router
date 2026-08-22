@@ -1,0 +1,389 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.dialog {
+  width: min(900px, 100%);
+  max-height: min(880px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 18px;
+  outline: 0;
+  background: #111113;
+  box-shadow: 0 36px 100px rgba(0, 0, 0, 0.62);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 25px 28px 21px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header span,
+.sectionHeader span {
+  color: #ff9195;
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 6px 0 0;
+  color: #f7f7f8;
+  font-size: 1.5rem;
+  letter-spacing: -0.035em;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.8rem;
+}
+
+.header > button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 1.35rem;
+}
+
+.error {
+  padding: 11px 28px;
+  border-bottom: 1px solid rgba(248, 113, 113, 0.2);
+  background: rgba(127, 29, 29, 0.23);
+  color: #fecaca;
+  font-size: 0.78rem;
+}
+
+.body {
+  display: grid;
+  gap: 20px;
+  padding: 24px 28px 28px;
+  overflow-y: auto;
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: 12px;
+}
+
+.identityGrid label,
+.advanced label {
+  display: grid;
+  gap: 7px;
+}
+
+.identityGrid label > span,
+.advanced label > span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.identityGrid input,
+.identityGrid select,
+.pickerToolbar input,
+.advanced textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  outline: 0;
+  background: #1a1a1d;
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.identityGrid input:focus,
+.identityGrid select:focus,
+.pickerToolbar input:focus,
+.advanced textarea:focus {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.055);
+}
+
+.identityGrid select option {
+  background: #1a1a1d;
+  color: #f5f5f7;
+}
+
+.decisionSection {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background: #0d0d0f;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 17px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.sectionHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sectionHeader strong {
+  color: #f4f4f5;
+  font-size: 0.9rem;
+}
+
+.sectionHeader p {
+  max-width: 46ch;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignments {
+  display: grid;
+  max-height: min(430px, 46vh);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.assignment {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.assignment:last-child {
+  border-bottom: 0;
+}
+
+.assignment summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 62px;
+  padding: 10px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.assignment summary::-webkit-details-marker {
+  display: none;
+}
+
+.assignment summary > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.assignment summary strong {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.78rem;
+}
+
+.assignment summary small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectionCount {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(76, 217, 142, 0.1);
+  color: #8ce9b7;
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.missingCount {
+  background: rgba(248, 113, 113, 0.09);
+  color: #fca5a5;
+}
+
+.assignmentBody {
+  padding: 0 16px 16px;
+}
+
+.pickerToolbar {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.pickerToolbar input {
+  min-height: 35px;
+}
+
+.pickerToolbar button {
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+}
+
+.modelPicker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 210px;
+  gap: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.modelPicker label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 37px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.modelPicker label:hover,
+.modelPicker .selectedModel {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.modelPicker input {
+  position: absolute;
+  opacity: 0;
+}
+
+.modelPicker label > span {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  color: transparent;
+  font-size: 0.62rem;
+}
+
+.modelPicker input:checked + span {
+  border-color: #f1f1f2;
+  background: #f1f1f2;
+  color: #111113;
+}
+
+.modelPicker code {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelPicker p,
+.empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 20px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.advanced {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.advanced summary {
+  width: fit-content;
+  color: rgba(255, 255, 255, 0.48);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.advanced[open] summary {
+  margin-bottom: 14px;
+}
+
+.advanced textarea {
+  min-height: 80px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 15px 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 8, 9, 0.72);
+}
+
+.cancel,
+.save {
+  min-height: 41px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.cancel {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.save {
+  border: 1px solid #f3f3f4;
+  background: #f3f3f4;
+  color: #101012;
+}
+
+@media (max-width: 720px) {
+  .backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dialog {
+    max-height: 94vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .identityGrid,
+  .modelPicker {
+    grid-template-columns: 1fr;
+  }
+}

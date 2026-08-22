@@ -95,15 +95,19 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 		return fmt.Errorf("failed to sync runtime config: %w", err)
 	}
 
-	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
+	if isRunningInContainer() {
 		if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
 			return regenerateAndReloadManagedSplitEnvoyLocally(effectiveConfigPath)
 		}
 		return nil
 	}
 
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
-		return propagateConfigToManagedContainer()
+	// A host-side Dashboard may coexist with another managed stack. Only push
+	// into that stack when this mutation targets its configured runtime path;
+	// an arbitrary file must remain an isolated file update.
+	if isManagedContainerConfigPath(configPath) &&
+		getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
+		return propagateConfigToManagedContainer(configPath)
 	}
 
 	return nil
@@ -111,8 +115,8 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 
 func isManagedContainerConfigPath(configPath string) bool {
 	cleaned := filepath.Clean(configPath)
-	configured := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
-	return cleaned == configured || cleaned == legacyManagedContainerConfigPath
+	configured := configuredRuntimeConfigPath(defaultManagedContainerConfigPath)
+	return cleaned == configured || cleaned == defaultManagedContainerConfigPath
 }
 
 func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {
@@ -165,8 +169,8 @@ func refreshManagedSplitEnvoyConfig(configPath string) error {
 	return nil
 }
 
-func propagateConfigToManagedContainer() error {
-	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer()
+func propagateConfigToManagedContainer(configPath string) error {
+	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer(configPath)
 	if err != nil {
 		return err
 	}

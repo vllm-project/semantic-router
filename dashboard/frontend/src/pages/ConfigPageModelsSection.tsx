@@ -1,6 +1,7 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfigPageAddModelsDialog, { type ModelBatchImportInput } from './ConfigPageAddModelsDialog'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
 import ModelDeleteDialog from './ModelDeleteDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -23,7 +24,6 @@ import {
   getModelReferenceCounts,
   getReasoningFamilyFilterOptions,
   validateModelStructuredFields,
-  validateNewModelName,
   type ModelEndpointFilter,
   type ModelRoleFilter,
 } from './configPageModelInventory'
@@ -44,6 +44,7 @@ import {
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 import { useModelLiveVerification } from './useModelLiveVerification'
+import modelStyles from './ConfigPageModelsSection.module.css'
 
 interface ConfigPageModelsSectionProps {
   config: ConfigData | null
@@ -86,6 +87,7 @@ export default function ConfigPageModelsSection({
   openViewModal,
 }: ConfigPageModelsSectionProps) {
   const [reasoningFamilyFilter, setReasoningFamilyFilter] = useState('all')
+  const [addModelsOpen, setAddModelsOpen] = useState(false)
   const [endpointFilter, setEndpointFilter] = useState<ModelEndpointFilter>('all')
   const [roleFilter, setRoleFilter] = useState<ModelRoleFilter>('all')
   const [reasoningFamilySearch, setReasoningFamilySearch] = useState('')
@@ -98,7 +100,48 @@ export default function ConfigPageModelsSection({
   )
   const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
   const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
-  const liveVerification = useModelLiveVerification(config)
+  const autoVerificationKey = useMemo(
+    () =>
+      JSON.stringify(
+        models
+          .filter((model) => model.endpoints?.some((endpoint) => endpoint.endpoint.trim()))
+          .map((model) => ({
+            name: model.name,
+            endpoints: model.endpoints?.map((endpoint) => endpoint.endpoint),
+          })),
+      ),
+    [models],
+  )
+  const { states: liveVerificationStates, verify: verifyModel } =
+    useModelLiveVerification(autoVerificationKey)
+  useEffect(() => {
+    const configuredModels = JSON.parse(autoVerificationKey) as Array<{ name: string }>
+    if (!canVerifyModels || configuredModels.length === 0) return
+
+    let cancelled = false
+    const cacheKey = `vllm-sr.models.auto-verified.${Array.from(autoVerificationKey).reduce(
+      (hash, character) => ((hash << 5) - hash + character.charCodeAt(0)) | 0,
+      0,
+    )}`
+    const timeout = window.setTimeout(() => {
+      try {
+        if (window.sessionStorage.getItem(cacheKey)) return
+        window.sessionStorage.setItem(cacheKey, '1')
+      } catch {
+        // Browsers can disable session storage; verification still works.
+      }
+      void (async () => {
+        for (const model of configuredModels.slice(0, 10)) {
+          if (cancelled) return
+          await verifyModel(model.name)
+        }
+      })()
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [autoVerificationKey, canVerifyModels, verifyModel])
 
   const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
   const modelReferenceCounts = useMemo(() => getModelReferenceCounts(config), [config])
@@ -355,152 +398,71 @@ export default function ConfigPageModelsSection({
       })
     }
 
-    openViewModal(`Model: ${model.name}`, sections, () => handleEditModel(model))
+    openViewModal(
+      `Model: ${model.name}`,
+      sections,
+      () => handleEditModel(model),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete model',
+              tone: 'destructive',
+              onClick: () => handleDeleteModel(model),
+            },
+          ],
+    )
   }
 
-  const handleAddModel = () => {
-    const reasoningFamilyNames = Object.keys(reasoningFamilies)
+  const handleBatchImport = async (input: ModelBatchImportInput) => {
+    if (!config) return
+    const nextConfig = cloneConfigData(config)
+    const providers = ensureProvidersConfig(nextConfig)
+    const knownNames = new Set(models.map((model) => model.name))
 
-    openEditModal(
-      'Add New Model',
-      {
-        model_name: '',
-        reasoning_family: reasoningFamilyNames[0] || '',
-        provider_model_id: '',
-        api_format: '',
-        external_model_ids: {},
-        param_size: '',
-        context_window_size: '',
-        description: '',
-        capabilities: [],
-        loras: [],
-        tags: [],
-        quality_score: '',
-        modality: '',
+    for (const discovered of input.models) {
+      const modelName = `${input.namePrefix}${discovered.id}`.trim()
+      if (!modelName) throw new Error('Model name is required.')
+      if (knownNames.has(modelName)) throw new Error(`Model “${modelName}” already exists.`)
+      knownNames.add(modelName)
+      const endpointName = `${modelName.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'model'}-primary`
+      upsertRoutingModelCard(nextConfig, modelName, {
+        param_size: input.paramSize || undefined,
+        context_window_size: input.contextWindowSize,
+        description: input.description || undefined,
+        capabilities: input.capabilities.length > 0 ? input.capabilities : undefined,
+        tags: input.tags.length > 0 ? input.tags : undefined,
+        loras: input.loras.length > 0 ? input.loras.map((name) => ({ name })) : undefined,
+        quality_score: input.qualityScore,
+        modality: input.modality || undefined,
+      })
+      providers.models.push({
+        name: modelName,
+        reasoning_family: input.reasoningFamily || undefined,
+        provider_model_id: discovered.id,
+        api_format: input.apiFormat,
+        external_model_ids: { [input.providerId]: discovered.id },
+        pricing: input.pricing,
         backend_refs: [
           {
-            name: 'endpoint-1',
-            endpoint: 'localhost:8000',
-            protocol: 'http' as const,
-            weight: 1,
+            name: endpointName,
+            weight: input.endpointWeight,
+            type: input.providerId,
+            provider: input.runtimeProvider,
+            base_url: input.baseUrl,
+            auth_header: input.authHeader || undefined,
+            auth_prefix: input.authPrefix || undefined,
+            extra_headers:
+              Object.keys(input.extraHeaders).length > 0 ? input.extraHeaders : undefined,
+            api_version: input.apiVersion || undefined,
+            chat_path: input.chatPath || undefined,
+            api_key: input.apiKey || undefined,
+            api_key_env: input.apiKeyEnv || undefined,
           },
         ],
-        pricing: {
-          currency: 'USD',
-          prompt_per_1m: 0,
-          cached_input_per_1m: 0,
-          completion_per_1m: 0,
-        },
-      },
-      [
-        {
-          name: 'model_name',
-          label: 'Model Name',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., openai/gpt-4',
-          description: 'Unique identifier for the model',
-        },
-        {
-          name: 'reasoning_family',
-          label: 'Reasoning Family',
-          type: 'select',
-          options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families',
-        },
-        {
-          name: 'provider_model_id',
-          label: 'Provider Model ID',
-          type: 'text',
-          placeholder: 'e.g., openai/gpt-4.1',
-          description:
-            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
-        },
-        {
-          name: 'api_format',
-          label: 'API Format',
-          type: 'text',
-          placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format',
-        },
-        {
-          name: 'param_size',
-          label: 'Parameter Size',
-          type: 'text',
-          placeholder: 'e.g., 8B',
-        },
-        {
-          name: 'context_window_size',
-          label: 'Context Window Size',
-          type: 'number',
-          placeholder: 'e.g., 131072',
-        },
-        {
-          name: 'modality',
-          label: 'Modality',
-          type: 'text',
-          placeholder: 'e.g., text, omni, diffusion',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'Short routing-facing model description',
-        },
-        ...getModelStructuredFormFields(),
-      ],
-      async (data) => {
-        if (!config) {
-          return
-        }
-        validateModelStructuredFields(data)
-        const modelName = validateNewModelName(data.model_name, models)
-        const capabilities = normalizeStringList(data.capabilities)
-        const tags = normalizeStringList(data.tags)
-        const loras = normalizeModelLoras(data.loras)
-
-        const newConfig = cloneConfigData(config)
-
-        if (isPythonCLI) {
-          const providers = ensureProvidersConfig(newConfig)
-          upsertRoutingModelCard(newConfig, modelName, {
-            param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size
-              ? Number(data.context_window_size)
-              : undefined,
-            description: data.description || undefined,
-            capabilities: capabilities.length > 0 ? capabilities : undefined,
-            loras: loras.length > 0 ? loras : undefined,
-            tags: tags.length > 0 ? tags : undefined,
-            quality_score:
-              data.quality_score === '' || data.quality_score === undefined
-                ? undefined
-                : Number(data.quality_score),
-            modality: data.modality || undefined,
-          })
-          providers.models.push(buildProviderModelPayload(modelName, data))
-        } else {
-          if (!newConfig.model_config) {
-            newConfig.model_config = {}
-          }
-          newConfig.model_config[modelName] = {
-            reasoning_family: data.reasoning_family,
-            pricing: normalizeModelPricing(data.pricing),
-            api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
-            external_model_ids: normalizeModelStringMap(data.external_model_ids),
-            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
-              .map((backendRef) => backendRef.name || '')
-              .filter(Boolean),
-            model_id:
-              typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-                ? data.provider_model_id.trim()
-                : modelName,
-          }
-        }
-        await saveConfig(newConfig)
-      },
-      'add',
-    )
+      })
+    }
+    await saveConfig(nextConfig)
   }
 
   const handleEditModel = (model: ModelRow) => {
@@ -714,6 +676,15 @@ export default function ConfigPageModelsSection({
         },
       ],
       () => handleEditReasoningFamily(familyName),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete family',
+              tone: 'destructive',
+              onClick: () => handleDeleteReasoningFamily(familyName),
+            },
+          ],
     )
   }
 
@@ -850,12 +821,13 @@ export default function ConfigPageModelsSection({
     }
   }
 
-  type ReasoningFamilyRow = { name: string; type: string; parameter: string }
+  type ReasoningFamilyRow = { name: string; type: string; parameter: string; modelCount: number }
   const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(
     ([name, config]) => ({
       name,
       type: config.type,
       parameter: config.parameter,
+      modelCount: models.filter((model) => model.reasoning_family === name).length,
     }),
   )
   const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
@@ -871,32 +843,59 @@ export default function ConfigPageModelsSection({
   const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
     {
       key: 'name',
-      header: 'Family Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'type',
-      header: 'Type',
-      width: '200px',
+      header: 'Reasoning Family',
+      width: '360px',
       sortable: true,
       render: (row) => (
-        <span
-          className={styles.badge}
-          style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}
-        >
-          {row.type}
-        </span>
+        <div className={modelStyles.reasoningFamilyIdentity}>
+          <span className={modelStyles.reasoningFamilyGlyph} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="7" cy="7" r="2.25" />
+              <circle cx="17" cy="7" r="2.25" />
+              <circle cx="12" cy="17" r="2.25" />
+              <path d="M8.8 8.4 11 14.7M15.2 8.4 13 14.7M9.3 7h5.4" />
+            </svg>
+          </span>
+          <span className={modelStyles.reasoningFamilyCopy}>
+            <strong title={row.name}>{row.name}</strong>
+            <small>
+              {row.modelCount
+                ? `${row.modelCount} ${row.modelCount === 1 ? 'model' : 'models'}`
+                : 'Not assigned'}
+            </small>
+          </span>
+        </div>
       ),
     },
     {
+      key: 'type',
+      header: 'Control Type',
+      width: '250px',
+      sortable: true,
+      render: (row) => {
+        const label =
+          row.type === 'reasoning_effort'
+            ? 'Reasoning effort'
+            : row.type === 'chat_template_kwargs'
+              ? 'Template argument'
+              : 'Custom control'
+        return (
+          <span className={modelStyles.reasoningFamilyType}>
+            <i aria-hidden="true" />
+            <span>
+              <strong>{label}</strong>
+              <small>{row.type}</small>
+            </span>
+          </span>
+        )
+      },
+    },
+    {
       key: 'parameter',
-      header: 'Parameter',
+      header: 'Request Parameter',
       sortable: true,
       render: (row) => (
-        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          {row.parameter}
-        </code>
+        <code className={modelStyles.reasoningFamilyParameter}>{row.parameter}</code>
       ),
     },
   ]
@@ -905,7 +904,7 @@ export default function ConfigPageModelsSection({
     <>
       <ConfigPageManagerLayout
         title="Models"
-        description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions."
+        description="Connect the models behind your Mixture-of-Models."
       >
         <div className={styles.sectionPanel}>
           <div className={styles.sectionTableBlock}>
@@ -935,16 +934,14 @@ export default function ConfigPageModelsSection({
               }}
               operationError={operationError}
               onDismissOperationError={() => setOperationError(null)}
-              onAddModel={handleAddModel}
+              onAddModel={() => setAddModelsOpen(true)}
               onViewModel={handleViewModel}
-              onEditModel={handleEditModel}
-              onDeleteModel={handleDeleteModel}
               expandedModels={expandedModels}
               onToggleExpand={handleToggleExpand}
               renderExpandedRow={renderModelEndpoints}
               getDeleteBlocker={getDeleteBlocker}
-              liveVerificationStates={liveVerification.states}
-              onVerifyModel={(modelName) => void liveVerification.verify(modelName)}
+              liveVerificationStates={liveVerificationStates}
+              onVerifyModel={(modelName) => void verifyModel(modelName)}
               canVerifyModels={canVerifyModels}
             />
           </div>
@@ -966,10 +963,9 @@ export default function ConfigPageModelsSection({
               data={filteredReasoningFamilyData}
               keyExtractor={(row) => row.name}
               onView={(row) => handleViewReasoningFamily(row.name)}
-              onEdit={(row) => handleEditReasoningFamily(row.name)}
-              onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+              openOnRowClick
               emptyMessage="No reasoning families configured"
-              className={styles.managerTable}
+              className={`${styles.managerTable} ${modelStyles.reasoningFamilyTable}`}
               readonly={isReadonly}
               pagination={{
                 pageSize: 25,
@@ -981,6 +977,16 @@ export default function ConfigPageModelsSection({
           </div>
         </div>
       </ConfigPageManagerLayout>
+
+      {addModelsOpen ? (
+        <ConfigPageAddModelsDialog
+          isOpen
+          existingModelNames={models.map((model) => model.name)}
+          reasoningFamilies={Object.keys(reasoningFamilies)}
+          onClose={() => setAddModelsOpen(false)}
+          onImport={handleBatchImport}
+        />
+      ) : null}
 
       <ModelDeleteDialog
         modelNames={modelsPendingDelete}

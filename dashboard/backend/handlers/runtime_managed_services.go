@@ -114,16 +114,23 @@ func managedRuntimeContainerStatus() string {
 }
 
 func managedEnvoyReadyURL() string {
+	return managedEnvoyReadyURLForEnvironment(isRunningInContainer())
+}
+
+func managedEnvoyReadyURLForEnvironment(inContainer bool) string {
 	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_ADMIN_URL")); candidate != "" {
 		return strings.TrimRight(candidate, "/") + "/ready"
 	}
 
-	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL")); candidate != "" {
-		return strings.TrimRight(candidate, "/") + "/ready"
+	// The public listener serves routed inference traffic; Envoy readiness is
+	// exposed only by the admin listener. Split dashboard deployments share the
+	// runtime network, so resolve that admin listener by its managed container.
+	if managedRuntimeUsesSplitContainers() && inContainer {
+		return "http://" + managedContainerNameForService("envoy") + ":9901/ready"
 	}
 
-	if managedRuntimeUsesSplitContainers() && isRunningInContainer() {
-		return ""
+	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL")); candidate != "" {
+		return strings.TrimRight(candidate, "/") + "/ready"
 	}
 
 	return "http://localhost:8801/ready"

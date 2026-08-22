@@ -71,13 +71,13 @@ export default function ConfigPageSignalsSection({
   const [deleteError, setDeleteError] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const {
-    applyScopedConfig,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  } = useRoutingScopeManager(config, saveConfig)
   React.useEffect(() => {
     setSelectedSignalKeys(new Set())
     setSignalsPendingDelete([])
@@ -769,7 +769,20 @@ export default function ConfigPageSignalsSection({
       })
     }
 
-    openViewModal(`Signal: ${signal.name}`, sections, () => handleEditSignal(signal))
+    openViewModal(
+      `Signal: ${signal.name}`,
+      sections,
+      () => handleEditSignal(signal),
+      isReadonly || !isPythonCLI
+        ? []
+        : [
+            {
+              label: 'Delete signal',
+              tone: 'destructive',
+              onClick: () => handleDeleteSignal(signal),
+            },
+          ],
+    )
   }
 
   const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
@@ -1260,7 +1273,7 @@ export default function ConfigPageSignalsSection({
           throw new Error('Unsupported signal type.')
       }
 
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<AddSignalFormState>(
@@ -1319,7 +1332,7 @@ export default function ConfigPageSignalsSection({
       removeSignalByName(newConfig, signal.type, signal.name),
     )
     try {
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setSelectedSignalKeys(new Set())
       setSignalsPendingDelete([])
     } catch (err) {
@@ -1330,9 +1343,9 @@ export default function ConfigPageSignalsSection({
   }
 
   return (
-    <ConfigPageManagerLayout
-      title="Signals"
-      description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
+      <ConfigPageManagerLayout
+        title="Signals"
+        description="Define what the router understands about every request."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
@@ -1392,8 +1405,7 @@ export default function ConfigPageSignalsSection({
             data={filteredSignals}
             keyExtractor={signalKey}
             onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
+            openOnRowClick
             emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
             className={styles.managerTable}
             readonly={isReadonly || !isPythonCLI}

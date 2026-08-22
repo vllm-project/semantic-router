@@ -21,8 +21,10 @@ func getDockerContainerStatus(containerName string) string {
 	return strings.TrimSpace(string(output))
 }
 
-// isRunningInContainer checks if the current process is running inside a Docker container.
-func isRunningInContainer() bool {
+var isRunningInContainer = detectRunningInContainer
+
+// detectRunningInContainer checks if the current process is running inside a Docker container.
+func detectRunningInContainer() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
 	}

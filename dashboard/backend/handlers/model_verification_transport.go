@@ -13,6 +13,8 @@ import (
 
 var errModelVerificationResponseTooLarge = errors.New("provider response exceeded the size limit")
 
+const modelVerificationReasoningSummary = "Provider returned a valid reasoning response."
+
 func (service *modelVerificationService) call(ctx context.Context, target modelVerificationTarget) (string, error) {
 	payload, err := buildModelVerificationPayload(target)
 	if err != nil {
@@ -75,7 +77,7 @@ func (service *modelVerificationService) call(ctx context.Context, target modelV
 		return "", modelVerificationFailure(
 			http.StatusBadGateway,
 			"invalid_provider_response",
-			"The provider returned no generated text for the verification query.",
+			"The provider returned no generated text or reasoning for the verification query.",
 		)
 	}
 	return redactModelVerificationSecrets(content, target.secrets...), nil
@@ -151,12 +153,7 @@ func decodeModelVerificationContent(body []byte, dialect string) (string, error)
 		return strings.Join(parts, " "), nil
 	}
 	var response struct {
-		Choices []struct {
-			Message struct {
-				Content json.RawMessage `json:"content"`
-			} `json:"message"`
-			Text string `json:"text"`
-		} `json:"choices"`
+		Choices []modelVerificationOpenAIChoice `json:"choices"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return "", err
@@ -164,9 +161,41 @@ func decodeModelVerificationContent(body []byte, dialect string) (string, error)
 	if len(response.Choices) == 0 {
 		return "", errors.New("response has no choices")
 	}
-	content := extractOpenAIChatContent(response.Choices[0].Message.Content)
-	if content == "" {
-		content = strings.TrimSpace(response.Choices[0].Text)
+	for _, choice := range response.Choices {
+		if content := extractOpenAIChatContent(choice.Message.Content); content != "" {
+			return content, nil
+		}
+		if content := strings.TrimSpace(choice.Text); content != "" {
+			return content, nil
+		}
 	}
-	return content, nil
+	for _, choice := range response.Choices {
+		for _, reasoning := range []json.RawMessage{
+			choice.Message.ReasoningContent,
+			choice.Message.Reasoning,
+			choice.ReasoningContent,
+			choice.Reasoning,
+		} {
+			if extractOpenAIChatContent(reasoning) != "" {
+				return modelVerificationReasoningSummary, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// vLLM and compatible gateways expose reasoning output in either the message
+// or choice envelope. A short verification token budget can legitimately end
+// before a reasoning model emits final content, so reasoning is valid evidence
+// that the configured model executed. The reasoning itself is never returned
+// to the dashboard.
+type modelVerificationOpenAIChoice struct {
+	Message struct {
+		Content          json.RawMessage `json:"content"`
+		ReasoningContent json.RawMessage `json:"reasoning_content"`
+		Reasoning        json.RawMessage `json:"reasoning"`
+	} `json:"message"`
+	Text             string          `json:"text"`
+	ReasoningContent json.RawMessage `json:"reasoning_content"`
+	Reasoning        json.RawMessage `json:"reasoning"`
 }

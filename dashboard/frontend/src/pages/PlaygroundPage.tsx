@@ -28,7 +28,7 @@ const PlaygroundPage = () => {
       <AnimatedBackground speed="slow" />
       <div className={styles.chatWrapper}>
         <ChatComponent
-          endpoint="/api/router/v1/chat/completions"
+          endpoint="/api/playground/v1/chat/completions"
           invocation={invocation}
           onInvocationConsumed={handleInvocationConsumed}
         />

@@ -177,7 +177,7 @@ describe('graphite dashboard theme contract', () => {
 
     expect(dslTheme).toContain("'editor.background': '#050505'")
     expect(dslTheme).toContain("'editorCursor.foreground': '#e31b23'")
-    expect(insightsCharts).toMatch(/const CHART_COLORS = \[\s*'#e31b23'/)
+    expect(insightsCharts).toContain("const CHART_PRIMARY = '#e31b23'")
   })
 
   it('does not reintroduce the retired legacy brand palette', () => {

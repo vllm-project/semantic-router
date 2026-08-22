@@ -642,6 +642,20 @@ decisions:
         self.assertEqual(report["results"][0]["error"], "request timed out")
         self.assertTrue(report["results"][1]["matched"])
 
+    def test_http_transport_normalizes_remote_disconnect(self) -> None:
+        with (
+            mock.patch(
+                "urllib.request.urlopen",
+                side_effect=ConnectionResetError("remote closed connection"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "remote closed connection"),
+        ):
+            router_calibration_support.http_json(
+                "POST",
+                "http://router.example:8080/api/v1/eval",
+                {"text": "probe"},
+            )
+
     def test_evaluate_probes_scopes_trace_inventory_by_recipe(self) -> None:
         probes = [
             router_calibration_manifest.Probe(

@@ -400,6 +400,28 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Access & Operations',
+          items: [
+            {
+              type: 'category',
+              label: 'Router-Native Access Control',
+              link: {
+                type: 'doc',
+                id: 'proposals/router-native-access-control',
+              },
+              items: [
+                'proposals/router-native-access-control-contracts',
+                'proposals/router-native-access-control-model-runtime',
+                'proposals/router-native-access-control-quota-runtime',
+                'proposals/router-native-access-control-management-api',
+                'proposals/router-native-access-control-authorization',
+                'proposals/router-native-access-control-deployment',
+              ],
+            },
+          ],
+        },
+        {
+          type: 'category',
           label: 'Serving Integrations',
           items: [
             'proposals/production-stack-integration',

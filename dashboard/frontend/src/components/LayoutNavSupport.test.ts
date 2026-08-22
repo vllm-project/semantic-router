@@ -4,6 +4,7 @@ import {
   BUILD_MENU_CATEGORIES,
   findActiveLayoutMenuCategory,
   isLayoutMenuItemActive,
+  PRIMARY_NAV_LINKS,
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
@@ -18,24 +19,33 @@ describe('layout navigation route matching', () => {
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
   })
 
-  it('keeps Config Builder first and Mixture-of-Models in Design', () => {
-    const design = BUILD_MENU_CATEGORIES.find(
-      (category) => category.key === 'routing',
-    )?.sections.find((section) => section.title === 'Design')
-    const entrypoints = design?.items.find(
-      (item) => item.kind === 'config' && item.configSection === 'entrypoints-recipes',
-    )
+  it('groups model configuration, routing logic, and design tools into three columns', () => {
+    const sections = BUILD_MENU_CATEGORIES.find((category) => category.key === 'routing')?.sections
 
-    expect(design?.items[0]).toMatchObject({
+    expect(
+      sections?.map((section) => ({
+        title: section.title,
+        items: section.items.map((item) => item.label),
+      })),
+    ).toEqual([
+      { title: 'Models', items: ['Models', 'Mixture-of-Models'] },
+      { title: 'Routing Logic', items: ['Signals', 'Projections', 'Decisions'] },
+      { title: 'Design', items: ['Brain Topology', 'DSL Builder', 'Insights'] },
+    ])
+
+    expect(sections?.[2].items[1]).toMatchObject({
       kind: 'route',
-      label: 'Config Builder',
+      label: 'DSL Builder',
       to: '/builder',
     })
-    expect(entrypoints).toMatchObject({
-      kind: 'config',
-      label: 'Mixture-of-Models',
-      configSection: 'entrypoints-recipes',
-    })
-    expect(design?.items.indexOf(entrypoints!)).toBe(1)
+  })
+
+  it('opens Access directly on Usage and keeps the link active across Access views', () => {
+    const access = PRIMARY_NAV_LINKS.find((link) => link.label === 'Access')
+
+    expect(access).toMatchObject({ to: '/access/usage' })
+    expect(access?.activePathPattern?.test('/access/api-keys')).toBe(true)
+    expect(access?.activePathPattern?.test('/logs')).toBe(true)
+    expect(access?.activePathPattern?.test('/config/models')).toBe(false)
   })
 })

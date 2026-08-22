@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
@@ -86,13 +85,23 @@ func TestRegisterCoreRoutesExposesReadOnlyModelCatalogEndpoint(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	cfg := &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}
-	registerCoreRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
 
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/models/catalog", nil))
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST /api/models/catalog status=%d want=%d body=%s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+}
+
+func TestRegisterCoreRoutesExposesModelDiscoveryEndpoint(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/models/discover", nil))
+	if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != http.MethodPost {
+		t.Fatalf("GET /api/models/discover status=%d allow=%q body=%s", response.Code, response.Header().Get("Allow"), response.Body.String())
 	}
 }
 
@@ -223,9 +232,8 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		RecipeStoreWritable:   true,
 	}
 	mux := http.NewServeMux()
-	registerHealthAndSetupRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
+	registerHealthAndSetupRoutes(mux, cfg)
 	registerConfigRoutes(mux, cfg)
-	registerSecurityPolicyRoutes(mux, cfg)
 
 	for _, target := range []struct {
 		method string
@@ -238,8 +246,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/global/update"},
 		{method: http.MethodPost, path: "/api/router/config/global/raw/update"},
 		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
-		{method: http.MethodPut, path: "/api/security/policy"},
-		{method: http.MethodPost, path: "/api/security/policy/preview"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, strings.NewReader(`{}`)))

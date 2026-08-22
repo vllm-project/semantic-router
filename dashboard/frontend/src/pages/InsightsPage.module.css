@@ -1,3 +1,13 @@
+.page {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 1.25rem clamp(1rem, 2.6vw, 2rem) 3rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .loading {
   display: flex;
   flex-direction: column;
@@ -6,6 +16,60 @@
   gap: 1rem;
   min-height: 50vh;
   color: var(--color-text-secondary);
+}
+
+.loadingInline {
+  display: flex;
+  min-height: 240px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.loadingInline .spinner {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+.overviewLoading {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #09090a;
+}
+
+.overviewLoadingCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.overviewLoadingCards span {
+  min-height: 78px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, #101012 25%, #18181b 45%, #101012 65%);
+  background-size: 220% 100%;
+  animation: overviewLoading 1.25s ease-in-out infinite;
+}
+
+.overviewLoading p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+@keyframes overviewLoading {
+  to {
+    background-position-x: -220%;
+  }
 }
 
 .spinner {
@@ -30,6 +94,8 @@
   align-items: flex-start;
   flex-wrap: wrap;
   margin-bottom: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .toolbarActions {
@@ -37,6 +103,7 @@
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .sectionTitle {
@@ -68,6 +135,7 @@
 
 .refreshButton,
 .paginationButton {
+  min-height: 40px;
   padding: 0.55rem 0.95rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -79,6 +147,47 @@
     border-color var(--transition-fast),
     background var(--transition-fast),
     color var(--transition-fast);
+}
+
+.recordStage {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.recordStageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 40px;
+  padding: 0.55rem 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.backButton svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.backButton:hover {
+  color: var(--color-text);
 }
 
 .refreshButton:hover,
@@ -103,10 +212,15 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-bottom: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .filterSelect {
+  flex: 1 1 180px;
   min-width: 180px;
+  max-width: 100%;
+  min-height: 42px;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -157,13 +271,21 @@
 
 .pagination {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: rgba(16, 16, 18, 0.84);
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-top: 1px solid var(--color-border);
+  background: #0d0d0f;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .paginationButton:disabled {
@@ -177,10 +299,59 @@
   padding: 0 0.5rem;
 }
 
+.paginationRange {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .insightsTable table {
-  width: max-content;
-  min-width: 100%;
+  width: 2060px;
+  min-width: max(100%, 2060px);
   table-layout: fixed;
+}
+
+.insightsTable {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .toolbar,
+  .toolbarActions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .toolbarActions {
+    justify-content: space-between;
+  }
+
+  .filterSelect {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .overviewLoadingCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pagination,
+  .paginationControls {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .paginationControls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overviewLoadingCards span {
+    animation: none;
+  }
 }
 
 .requestId,
@@ -189,6 +360,13 @@
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+.timestamp {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .requestIdLink {
@@ -471,6 +649,14 @@
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.readonlyLock svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 .toolTraceTimeline {

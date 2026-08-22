@@ -11,6 +11,7 @@ import {
 
 import RouteLoadingFallback from './RouteLoadingFallback'
 import { resetDashboardRouteLoader, type RouteLoader } from './routeLoaders'
+import { recoverRouteAssetOnce } from './routeAssetRecovery'
 import { getRouteLoadFailureCopy, routeLoadErrorMessage } from './routeLoadFailureSupport'
 import styles from './RecoverableLazyRoute.module.css'
 
@@ -37,6 +38,7 @@ class RouteLoadErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (recoverRouteAssetOnce(error)) return
     console.error('Lazy dashboard route failed:', error, errorInfo)
   }
 

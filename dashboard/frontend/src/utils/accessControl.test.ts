@@ -4,15 +4,17 @@ import {
   canAccessMLSetup,
   canAccessDashboardPath,
   canAccessReplayFlowDetails,
+  canManageInferenceAccess,
   canDeployConfig,
   canManageMCP,
   canManageOpenClaw,
-  canManageSecurity,
   canManageUsers,
   canRunEvaluation,
   canViewUsers,
   canWriteConfig,
   canWriteEvaluation,
+  canVerifyModels,
+  isModelConsumer,
 } from './accessControl'
 
 describe('config write access', () => {
@@ -70,7 +72,49 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['mcp.read'] }, '/config/mcp')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
-    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
+    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['access.read'] }, '/access/api-keys')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/access/api-keys')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/usage')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/statistics')).toBe(
+      false,
+    )
+    expect(canAccessDashboardPath({ permissions: ['access.self'] }, '/access/users')).toBe(false)
+  })
+
+  it('keeps model consumers inside routing and their own access surfaces', () => {
+    const consumer = {
+      role: 'read',
+      permissions: ['config.read', 'topology.read', 'access.self', 'usage.self'],
+    }
+    expect(isModelConsumer(consumer)).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/config/models')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/builder')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/knowledge-bases/bases')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/fleet-sim')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/global-config')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/status')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/insights')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/evaluation')).toBe(false)
+  })
+
+  it('keeps operator surfaces unavailable to model consumers', () => {
+    const reader = {
+      role: 'read',
+      permissions: [
+        'config.read',
+        'topology.read',
+        'replay.read',
+        'evaluation.read',
+        'access.self',
+        'usage.self',
+      ],
+    }
+    expect(isModelConsumer(reader)).toBe(true)
+    expect(canAccessDashboardPath(reader, '/insights')).toBe(true)
+    expect(canAccessDashboardPath(reader, '/evaluation')).toBe(false)
+    expect(canVerifyModels(reader)).toBe(false)
+    expect(canVerifyModels({ permissions: ['status.read'] })).toBe(true)
   })
 
   it('separates read, write, run, and manage actions', () => {
@@ -83,8 +127,8 @@ describe('config write access', () => {
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
-    expect(canManageSecurity({ role: 'write' })).toBe(false)
-    expect(canManageSecurity({ role: 'admin' })).toBe(true)
+    expect(canManageInferenceAccess({ permissions: ['access.manage'] })).toBe(true)
+    expect(canManageInferenceAccess({ permissions: ['access.read'] })).toBe(false)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {

@@ -155,6 +155,41 @@ def ensure_writable_directory(path: str) -> None:
     probe_writable_directory(path)
 
 
+def ensure_shared_directory(root_path: str, target_path: str, gid: int) -> None:
+    """Create a shared directory below a pinned root and repair every ancestor."""
+
+    root_absolute = os.path.abspath(root_path)
+    target_absolute = os.path.abspath(target_path)
+    if os.path.commonpath((root_absolute, target_absolute)) != root_absolute:
+        raise OSError("shared Dashboard directory must stay below its state root")
+    relative = os.path.relpath(target_absolute, root_absolute)
+    parts = [part for part in relative.split(os.sep) if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        raise OSError("shared Dashboard directory must be below its state root")
+
+    descriptor = open_directory(root_absolute)
+    try:
+        for part in parts:
+            with suppress(FileExistsError):
+                os.mkdir(part, 0o2770, dir_fd=descriptor)
+            next_descriptor = os.open(part, DIRECTORY_FLAGS, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+            info = os.fstat(descriptor)
+            os.fchown(descriptor, -1, gid)
+            os.fchmod(
+                descriptor,
+                stat.S_IMODE(info.st_mode)
+                | stat.S_IRGRP
+                | stat.S_IWGRP
+                | stat.S_IXGRP
+                | stat.S_ISGID,
+            )
+    finally:
+        os.close(descriptor)
+    probe_writable_directory(target_absolute)
+
+
 def prepare_regular_file(path: str, gid: int) -> None:
     descriptor = open_path(
         path,
@@ -183,6 +218,21 @@ def prepare_directory(path: str, gid: int) -> None:
             | stat.S_IXGRP
             | stat.S_ISGID,
         )
+    finally:
+        os.close(descriptor)
+
+
+def prepare_private_directory(path: str, uid: int, gid: int) -> None:
+    """Create one Dashboard-owned private directory below a pinned parent."""
+
+    ensure_writable_directory(path)
+    descriptor = open_directory(path)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISDIR(info.st_mode):
+            raise OSError("private Dashboard path must be a directory")
+        os.fchown(descriptor, uid, gid)
+        os.fchmod(descriptor, 0o700)
     finally:
         os.close(descriptor)
 
@@ -270,12 +320,20 @@ def build_parser() -> argparse.ArgumentParser:
     writable_directory.add_argument("path")
     ensure_directory = commands.add_parser("ensure-directory")
     ensure_directory.add_argument("path")
+    shared_directory = commands.add_parser("ensure-shared-directory")
+    shared_directory.add_argument("root_path")
+    shared_directory.add_argument("target_path")
+    shared_directory.add_argument("gid", type=int)
     regular = commands.add_parser("prepare-file")
     regular.add_argument("path")
     regular.add_argument("gid", type=int)
     directory = commands.add_parser("prepare-directory")
     directory.add_argument("path")
     directory.add_argument("gid", type=int)
+    private_directory = commands.add_parser("prepare-private-directory")
+    private_directory.add_argument("path")
+    private_directory.add_argument("uid", type=int)
+    private_directory.add_argument("gid", type=int)
     tree = commands.add_parser("prepare-tree")
     tree.add_argument("path")
     tree.add_argument("gid", type=int)
@@ -297,10 +355,14 @@ def main() -> None:
         probe_writable_directory(args.path)
     elif args.command == "ensure-directory":
         ensure_writable_directory(args.path)
+    elif args.command == "ensure-shared-directory":
+        ensure_shared_directory(args.root_path, args.target_path, args.gid)
     elif args.command == "prepare-file":
         prepare_regular_file(args.path, args.gid)
     elif args.command == "prepare-directory":
         prepare_directory(args.path, args.gid)
+    elif args.command == "prepare-private-directory":
+        prepare_private_directory(args.path, args.uid, args.gid)
     else:
         prepare_shared_tree(
             args.path,

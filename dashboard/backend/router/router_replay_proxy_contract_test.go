@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,12 @@ import (
 
 type replayProxyCredentialProvider struct {
 	token string
+}
+
+type replayProxyScopeResolver struct{}
+
+func (replayProxyScopeResolver) ListTeamIDsForUser(context.Context, string) ([]string, error) {
+	return []string{"team-1"}, nil
 }
 
 func (provider replayProxyCredentialProvider) ManagementCredential() (string, error) {
@@ -51,6 +58,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 		&config.Config{RouterAPIURL: routerServer.URL},
 		envoyProxy,
 		replayProxyCredentialProvider{token: "router-service-token"},
+		replayProxyScopeResolver{},
 	)
 	tests := []struct {
 		name       string
@@ -59,7 +67,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 	}{
 		{
 			name:       "read-only user receives redacted detail",
-			context:    auth.AuthContext{Role: auth.RoleRead, Perms: map[string]bool{auth.PermReplayRead: true}},
+			context:    auth.AuthContext{UserID: "user-read", Role: auth.RoleRead, Perms: map[string]bool{auth.PermReplayRead: true}},
 			wantPrompt: "",
 		},
 		{
@@ -96,9 +104,13 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 	if envoyCalls != 0 || routerCalls != len(tests) {
 		t.Fatalf("proxy calls: envoy=%d management=%d", envoyCalls, routerCalls)
 	}
+	wantPaths := []string{
+		"/v1/router_replay/replay-1?scope_team_id=team-1&scope_user_id=user-read&source=dashboard",
+		"/v1/router_replay/replay-1?source=dashboard",
+	}
 	for index := range upstreamPaths {
-		if upstreamPaths[index] != "/v1/router_replay/replay-1?source=dashboard" {
-			t.Fatalf("management path %d = %q", index, upstreamPaths[index])
+		if upstreamPaths[index] != wantPaths[index] {
+			t.Fatalf("management path %d = %q, want %q", index, upstreamPaths[index], wantPaths[index])
 		}
 		if upstreamAuthorizations[index] != "Bearer router-service-token" {
 			t.Fatalf("management Authorization %d = %q", index, upstreamAuthorizations[index])

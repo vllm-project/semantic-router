@@ -95,6 +95,7 @@ func RequiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
 	for _, resolver := range []func(string, string) (string, bool){
 		adminPermission,
+		accessControlPermission,
 		settingsPermission,
 		routerPermission,
 		knowledgePermission,
@@ -116,8 +117,27 @@ func RequiredPermission(method, path string) string {
 	return ""
 }
 
-func recipePermission(_ string, path string) (string, bool) {
+func accessControlPermission(method string, path string) (string, bool) {
+	if strings.HasPrefix(path, "/api/playground/v1/") {
+		return PermAccessSelf, true
+	}
+	if !strings.HasPrefix(path, "/api/v1/access-control/") && path != "/api/v1/access-control" {
+		return "", false
+	}
+	if matchesRoute(path, "/api/v1/access-control/self") {
+		if strings.Contains(path, "/usage") || strings.Contains(path, "/request-logs") {
+			return PermUsageSelf, true
+		}
+		return PermAccessSelf, true
+	}
+	return readOrManagePermission(method, PermAccessRead, PermAccessManage), true
+}
+
+func recipePermission(method string, path string) (string, bool) {
 	path = strings.TrimRight(path, "/")
+	if matchesRoute(path, "/api/recipe-drafts") {
+		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
+	}
 	if matchesRoute(path, "/api/recipe/import") {
 		return PermConfigWrite, true
 	}
@@ -188,7 +208,7 @@ func routerPermission(method, path string) (string, bool) {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
 	case path == "/api/models/verify":
-		return PermEvalRun, true
+		return PermStatusRead, true
 	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
 		return PermFeedbackSubmit, true
 	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
@@ -253,7 +273,7 @@ func readOrManagePermission(method, readPermission, managePermission string) str
 func observabilityPermission(_ string, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/status"):
-		return PermTopologyRead, true
+		return PermStatusRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
@@ -286,18 +306,9 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
 	default:
 		return "", false
 	}
-}
-
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
 }
 
 func openclawPermission(method, path string) (string, bool) {
@@ -447,6 +458,8 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/auth/logout"):
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
+		return false
+	case strings.HasPrefix(path, "/api/auth/invitations/"):
 		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true

@@ -124,7 +124,7 @@ func TestPasswordRotationAcceptsPasswordAtTheLimit(t *testing.T) {
 	}
 }
 
-func TestUserCreationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
+func TestDirectUserCreationRequiresInvitation(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)
@@ -134,22 +134,12 @@ func TestUserCreationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	RegisterAdminRoutes(mux, svc)
 	handler := AuthenticateRequest(svc)(mux)
 
-	body, err := json.Marshal(map[string]string{
-		"email":    "new-user@example.com",
-		"name":     "New User",
-		"password": strings.Repeat("a", MaxPasswordBytes+1),
-		"role":     RoleRead,
-	})
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, newAuthenticatedRequest(
-		t, svc, admin, http.MethodPost, "/api/admin/users", string(body),
+		t, svc, admin, http.MethodPost, "/api/admin/users", `{}`,
 	))
 
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
 	}
 }

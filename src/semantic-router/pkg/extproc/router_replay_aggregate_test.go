@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -122,6 +123,49 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 	}
 }
 
+func TestRouterReplayPrincipalScopeAppliesToListsAggregatesAndDetails(t *testing.T) {
+	router := newReplayAggregateTestRouter(t)
+	for _, path := range []string{
+		"/v1/router_replay?scope_user_id=user-a",
+		"/v1/router_replay/aggregate?scope_user_id=user-a",
+	} {
+		response := router.handleRouterReplayAPI("GET", path)
+		body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+		countKey := "count"
+		if strings.Contains(path, "aggregate") {
+			countKey = "record_count"
+		}
+		if got := int(body[countKey].(float64)); got != 1 {
+			t.Fatalf("%s %s=%d, want 1", path, countKey, got)
+		}
+	}
+
+	denied := router.handleRouterReplayAPI(
+		"GET",
+		"/v1/router_replay/replay-2?scope_user_id=user-a&scope_team_id=team-a",
+	)
+	if got := denied.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_NotFound {
+		t.Fatalf("scoped detail status = %v, want not found", got)
+	}
+}
+
+func TestReplayIdentityHeaderReadsGatewayScopeCaseInsensitively(t *testing.T) {
+	ctx := &RequestContext{Headers: map[string]string{
+		"X-VLLM-SR-User-ID": " user-a ",
+		"x-vllm-sr-team-id": "team-a",
+	}}
+
+	if got := replayIdentityHeader(ctx, "x-vllm-sr-user-id"); got != "user-a" {
+		t.Fatalf("user identity = %q, want user-a", got)
+	}
+	if got := replayIdentityHeader(ctx, "X-VLLM-SR-TEAM-ID"); got != "team-a" {
+		t.Fatalf("team identity = %q, want team-a", got)
+	}
+	if got := replayIdentityHeader(ctx, "x-vllm-sr-api-key-id"); got != "" {
+		t.Fatalf("missing API key identity = %q, want empty", got)
+	}
+}
+
 func TestRouterReplayAggregateExcludesNonCompletedCostAndReportsLifecycle(t *testing.T) {
 	cost := 1.25
 	records := []routerreplay.RoutingRecord{
@@ -161,6 +205,8 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 	records := []routerreplay.RoutingRecord{
 		{
 			ID:               "replay-1",
+			UserID:           "user-a",
+			TeamID:           "team-a",
 			Timestamp:        time.Unix(1, 0).UTC(),
 			RequestID:        "req-alpha",
 			Recipe:           "alpha",
@@ -184,6 +230,8 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 		},
 		{
 			ID:               "replay-2",
+			UserID:           "user-b",
+			TeamID:           "team-b",
 			Timestamp:        time.Unix(2, 0).UTC(),
 			RequestID:        "req-beta",
 			Recipe:           "beta",

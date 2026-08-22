@@ -18,6 +18,12 @@ type Config struct {
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
 	BootstrapAdminName     string
+	DashboardPublicURL     string
+	SMTPHost               string
+	SMTPPort               int
+	SMTPUsername           string
+	SMTPPassword           string
+	SMTPFrom               string
 	StaticDir              string
 	ConfigFile             string
 	AbsConfigPath          string
@@ -38,13 +44,7 @@ type Config struct {
 	ReadonlyMode          bool
 	RuntimeConfigWritable bool
 	RecipeStoreWritable   bool
-
-	// SetupMode is the legacy --setup-mode / DASHBOARD_SETUP_MODE input. It no
-	// longer decides anything; setup mode resolves from the router config's
-	// setup.mode block (see dashboard/backend/setupmode). Kept so a stale value
-	// can be reported. The vllm-sr CLI still sets it; remove this field once it
-	// does not.
-	SetupMode bool
+	SetupMode             bool
 
 	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated
 	// web-form bootstrap endpoint. Off by default; production should provision the
@@ -81,6 +81,14 @@ type Config struct {
 
 	// Durable deployed-config projection read model
 	ConfigProjectionDBPath string
+
+	// Access control is an independent inference control plane. PostgreSQL is
+	// authoritative for identities, keys, policy, usage, and audit data; Redis
+	// owns only short-lived global quota counters shared by every replica.
+	AccessControlEnabled     bool
+	AccessControlDatabaseURL string
+	AccessControlRedisURL    string
+	AccessControlKeySecret   string
 }
 
 // env returns the env var or default
@@ -91,6 +99,27 @@ func env(key, def string) string {
 	return def
 }
 
+func defaultRouterAPIURL() string {
+	return defaultRouterAPIURLForEnvironment(runningInContainer())
+}
+
+func defaultRouterAPIURLForEnvironment(inContainer bool) string {
+	if !inContainer {
+		return "http://localhost:8080"
+	}
+
+	containerName := strings.TrimSpace(os.Getenv("VLLM_SR_ROUTER_CONTAINER_NAME"))
+	if containerName == "" {
+		containerName = "vllm-sr-router-container"
+	}
+	return "http://" + containerName + ":8080"
+}
+
+func runningInContainer() bool {
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
+}
+
 type authFlags struct {
 	dbPath            *string
 	jwtSecret         *string
@@ -98,6 +127,12 @@ type authFlags struct {
 	bootstrapEmail    *string
 	bootstrapPassword *string
 	bootstrapName     *string
+	publicURL         *string
+	smtpHost          *string
+	smtpPort          *string
+	smtpUsername      *string
+	smtpPassword      *string
+	smtpFrom          *string
 }
 
 func bindAuthFlags() authFlags {
@@ -108,6 +143,12 @@ func bindAuthFlags() authFlags {
 		bootstrapEmail:    flag.String("bootstrap-admin-email", env("DASHBOARD_ADMIN_EMAIL", ""), "bootstrap admin email"),
 		bootstrapPassword: flag.String("bootstrap-admin-password", env("DASHBOARD_ADMIN_PASSWORD", ""), "bootstrap admin password"),
 		bootstrapName:     flag.String("bootstrap-admin-name", env("DASHBOARD_ADMIN_NAME", ""), "bootstrap admin name"),
+		publicURL:         flag.String("dashboard-public-url", env("DASHBOARD_PUBLIC_URL", ""), "public dashboard URL used in member invitations"),
+		smtpHost:          flag.String("smtp-host", env("DASHBOARD_SMTP_HOST", ""), "SMTP host for dashboard member invitations"),
+		smtpPort:          flag.String("smtp-port", env("DASHBOARD_SMTP_PORT", "587"), "SMTP port for dashboard member invitations"),
+		smtpUsername:      flag.String("smtp-username", env("DASHBOARD_SMTP_USERNAME", ""), "SMTP username"),
+		smtpPassword:      flag.String("smtp-password", env("DASHBOARD_SMTP_PASSWORD", ""), "SMTP password"),
+		smtpFrom:          flag.String("smtp-from", env("DASHBOARD_SMTP_FROM", ""), "SMTP From address for dashboard member invitations"),
 	}
 }
 
@@ -162,6 +203,10 @@ type parsedFlags struct {
 	mlServiceURL           *string
 	workflowDBPath         *string
 	configProjectionDBPath *string
+	accessControlEnabled   *bool
+	accessControlDatabase  *string
+	accessControlRedis     *string
+	accessControlKeySecret *string
 	auth                   authFlags
 	openClaw               openClawFlags
 }
@@ -197,6 +242,10 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.MLServiceURL = *flags.mlServiceURL
 	cfg.WorkflowDBPath = *flags.workflowDBPath
 	cfg.ConfigProjectionDBPath = *flags.configProjectionDBPath
+	cfg.AccessControlEnabled = *flags.accessControlEnabled
+	cfg.AccessControlDatabaseURL = strings.TrimSpace(*flags.accessControlDatabase)
+	cfg.AccessControlRedisURL = strings.TrimSpace(*flags.accessControlRedis)
+	cfg.AccessControlKeySecret = strings.TrimSpace(*flags.accessControlKeySecret)
 }
 
 func applyAuthConfig(cfg *Config, flags authFlags) error {
@@ -205,12 +254,22 @@ func applyAuthConfig(cfg *Config, flags authFlags) error {
 	cfg.BootstrapAdminEmail = *flags.bootstrapEmail
 	cfg.BootstrapAdminPassword = *flags.bootstrapPassword
 	cfg.BootstrapAdminName = *flags.bootstrapName
+	cfg.DashboardPublicURL = strings.TrimRight(strings.TrimSpace(*flags.publicURL), "/")
+	cfg.SMTPHost = strings.TrimSpace(*flags.smtpHost)
+	cfg.SMTPUsername = strings.TrimSpace(*flags.smtpUsername)
+	cfg.SMTPPassword = *flags.smtpPassword
+	cfg.SMTPFrom = strings.TrimSpace(*flags.smtpFrom)
 
 	ttl, err := strconv.Atoi(*flags.jwtTTL)
 	if err != nil {
 		return err
 	}
 	cfg.JWTExpiryHours = ttl
+	smtpPort, err := strconv.Atoi(*flags.smtpPort)
+	if err != nil {
+		return err
+	}
+	cfg.SMTPPort = smtpPort
 	return nil
 }
 
@@ -239,10 +298,7 @@ func resolveConfigPaths(cfg *Config) error {
 	return nil
 }
 
-// LoadConfig loads configuration from flags and environment variables
-func LoadConfig() (*Config, error) {
-	cfg := &Config{}
-
+func bindParsedFlags() parsedFlags {
 	// Flags/env for configuration
 	port := flag.String("port", env("DASHBOARD_PORT", "8700"), "dashboard port")
 	staticDir := flag.String("static", env("DASHBOARD_STATIC_DIR", "../frontend"), "static assets directory")
@@ -251,7 +307,7 @@ func LoadConfig() (*Config, error) {
 	// Upstream targets
 	grafanaURL := flag.String("grafana", env("TARGET_GRAFANA_URL", ""), "Grafana base URL")
 	promURL := flag.String("prometheus", env("TARGET_PROMETHEUS_URL", ""), "Prometheus base URL")
-	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", "http://localhost:8080"), "Router API base URL")
+	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", defaultRouterAPIURL()), "Router API base URL")
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
 	envoyURL := flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions")
@@ -261,9 +317,7 @@ func LoadConfig() (*Config, error) {
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
 	runtimeConfigWritable := flag.Bool("runtime-config-writable", env("DASHBOARD_RUNTIME_CONFIG_WRITABLE", "true") == "true", "allow runtime config mutation when the mounted config state is writable")
 	recipeStoreWritable := flag.Bool("recipe-store-writable", env("DASHBOARD_RECIPE_STORE_WRITABLE", "true") == "true", "allow Recipe package import when the package store is writable")
-	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true",
-		"DEPRECATED: setup mode is resolved from the setup.mode block in the router config. "+
-			"This flag is ignored except to warn when it disagrees with the config.")
+	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
 	allowOpenBootstrap := flag.Bool("allow-open-bootstrap", env("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false") == "true", "allow first-admin creation via the public web-form bootstrap endpoint (off by default; production should provision the admin via DASHBOARD_ADMIN_*)")
 
 	// Platform branding
@@ -286,13 +340,20 @@ func LoadConfig() (*Config, error) {
 	workflowDBPath := flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
 	configProjectionDBPath := flag.String("config-projection-db", env("DASHBOARD_CONFIG_PROJECTION_DB_PATH", "./data/config-projection.sqlite"), "SQLite path for deployed config projection state")
 
+	// Inference access-control configuration uses a dedicated control-plane
+	// contract with shared durable and counter stores.
+	accessControlEnabled := flag.Bool("access-control", env("ACCESS_CONTROL_ENABLED", "false") == "true", "enable inference API key and quota control plane")
+	accessControlDatabase := flag.String("access-control-database", env("ACCESS_CONTROL_DATABASE_URL", ""), "PostgreSQL connection URL for inference access control")
+	accessControlRedis := flag.String("access-control-redis", env("ACCESS_CONTROL_REDIS_URL", ""), "Redis connection URL for global inference quotas")
+	accessControlKeySecret := flag.String("access-control-key-secret", env("ACCESS_CONTROL_KEY_SECRET", ""), "Secret used to protect inference API keys at rest")
+
 	// Authentication configuration
 	auth := bindAuthFlags()
 
 	// OpenClaw configuration
 	openClaw := bindOpenClawFlags()
 
-	flags := parsedFlags{
+	return parsedFlags{
 		port:                   port,
 		staticDir:              staticDir,
 		configFile:             configFile,
@@ -320,10 +381,19 @@ func LoadConfig() (*Config, error) {
 		mlServiceURL:           mlServiceURL,
 		workflowDBPath:         workflowDBPath,
 		configProjectionDBPath: configProjectionDBPath,
+		accessControlEnabled:   accessControlEnabled,
+		accessControlDatabase:  accessControlDatabase,
+		accessControlRedis:     accessControlRedis,
+		accessControlKeySecret: accessControlKeySecret,
 		auth:                   auth,
 		openClaw:               openClaw,
 	}
+}
 
+// LoadConfig loads configuration from flags and environment variables
+func LoadConfig() (*Config, error) {
+	cfg := &Config{}
+	flags := bindParsedFlags()
 	flag.Parse()
 
 	applyCoreConfig(cfg, flags)

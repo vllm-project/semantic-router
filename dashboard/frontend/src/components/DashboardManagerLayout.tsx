@@ -21,7 +21,7 @@ interface DashboardManagerLayoutProps {
 }
 
 export default function DashboardManagerLayout({
-  compactHero = false,
+  compactHero = true,
   eyebrow,
   title,
   description,

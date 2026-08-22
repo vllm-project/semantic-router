@@ -11,8 +11,6 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func createBootstrapSetupConfig(t *testing.T, dir string) string {
@@ -205,7 +203,7 @@ func TestSetupStateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/setup/state", nil)
 	w := httptest.NewRecorder()
 
-	SetupStateHandler(configPath, setupmode.New(configPath, false))(w, req)
+	SetupStateHandler(configPath)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
@@ -239,7 +237,7 @@ func TestSetupValidateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
+	SetupValidateHandler(configPath)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -314,7 +312,7 @@ func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
+	SetupValidateHandler(configPath)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -371,7 +369,7 @@ routing:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
+	SetupImportRemoteHandler(configPath)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -472,7 +470,7 @@ global:
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
+	SetupImportRemoteHandler(configPath)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -491,7 +489,7 @@ func TestSetupActivateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -567,7 +565,7 @@ func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
@@ -639,7 +637,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
+	SetupActivateHandler(configPath, false, tempDir)(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
