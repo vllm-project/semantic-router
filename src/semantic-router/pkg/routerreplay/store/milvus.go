@@ -302,7 +302,7 @@ func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, e
 
 	// Query by ID
 	expr := fmt.Sprintf("id == '%s'", id)
-	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"}, client.WithSearchQueryConsistencyLevel(m.consistencyLevel))
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"}, client.WithSearchQueryConsistencyLevel(m.readLevel()))
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
 	}
