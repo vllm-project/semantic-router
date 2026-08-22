@@ -2,8 +2,12 @@ name: Community
 
 on:
   pull_request:
-    types: [opened, reopened, edited, ready_for_review]
+    types: [opened, reopened, edited, ready_for_review, converted_to_draft]
     branches: [main]
+  pull_request_review:
+    types: [submitted, dismissed]
+  issues:
+    types: [opened, reopened, edited, labeled, unlabeled, assigned, unassigned, milestoned, demilestoned]
   issue_comment:
     types: [created, edited]
 
@@ -12,9 +16,10 @@ permissions:
 
 jobs:
   linked-issue:
-    name: Check linked issue
+    name: Check linked accepted issue
     if: >-
-      github.event_name == 'pull_request'
+      (github.event_name == 'pull_request'
+      || github.event_name == 'pull_request_review')
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
@@ -23,59 +28,29 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - name: Verify pull request links an issue
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const relatedPattern =
-              /\brelated\b\s*:?\s*(?:https?:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/|[\w.-]+\/[\w.-]+#|#)(\d+)/gi;
+      - name: Check out the pull request
+        uses: actions/checkout@v4
 
-            const relatedNumbers = new Set();
-            const text =
-              `${context.payload.pull_request.title || ''}\n` +
-              `${context.payload.pull_request.body || ''}`;
-            for (const match of text.matchAll(relatedPattern)) {
-              relatedNumbers.add(Number(match[1]));
-            }
+      - name: Verify the linked issue is accepted and owned
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py validate-pr --event "$GITHUB_EVENT_PATH"
 
-            const query = `
-              query ($owner: String!, $repo: String!, $number: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $number) {
-                    closingIssuesReferences(first: 20) {
-                      nodes { number title url }
-                    }
-                  }
-                }
-              }
-            `;
-            const result = await github.graphql(query, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              number: context.payload.pull_request.number,
-            });
-            const linked = [
-              ...(result.repository.pullRequest.closingIssuesReferences.nodes || []),
-            ];
+  issue-lifecycle:
+    name: Enforce issue lifecycle
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
 
-            for (const issue_number of relatedNumbers) {
-              try {
-                const {data: issue} = await github.rest.issues.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number,
-                });
-                if (!issue.pull_request) linked.push(issue);
-              } catch (error) {
-                if (error.status !== 404) throw error;
-              }
-            }
-
-            if (linked.length === 0) {
-              core.setFailed(
-                'Link a tracking issue with `Closes #123` or `Related #123`.',
-              );
-            }
+      - name: Synchronize acceptance and delivery labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py sync-issue --event "$GITHUB_EVENT_PATH"
 
   issue-manager:
     name: Issue commands

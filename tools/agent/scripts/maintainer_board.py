@@ -15,6 +15,7 @@ from typing import Any
 
 import maintainer_ga_readiness
 import yaml
+from maintainer_lifecycle import proposed_actions
 from maintainer_release_plan import (
     match_release_tasks_to_issues,
     open_release_tasks,
@@ -172,9 +173,12 @@ def grouped_issue_state(
     lifecycle = policy["labels"]["lifecycle"]
     stale_days = int(policy["staleness"]["issue_stale_days"])
     groups: dict[str, list[dict[str, Any]]] = {
+        "release-blocker": [],
+        "needs-acceptance": [],
+        "in-progress": [],
+        "ready-for-dev": [],
+        "close-candidate": [],
         "milestone-bound": [],
-        "milestone-candidate": [],
-        "incoming-triage": [],
         "backlog": [],
         "stale": [],
     }
@@ -184,18 +188,24 @@ def grouped_issue_state(
         is_active_milestone = bool(item_milestone) and (
             milestone is None or item_milestone == milestone
         )
+        if lifecycle["release_blocker"] in labels:
+            groups["release-blocker"].append(issue)
+        if lifecycle["needs_acceptance"] in labels:
+            groups["needs-acceptance"].append(issue)
+        if lifecycle["in_progress"] in labels:
+            groups["in-progress"].append(issue)
+        if lifecycle["ready_for_dev"] in labels:
+            groups["ready-for-dev"].append(issue)
+        if lifecycle["close_candidate"] in labels:
+            groups["close-candidate"].append(issue)
         if lifecycle["stale"] in labels or (
             not item_milestone and age_days(issue.get("updatedAt"), now) >= stale_days
         ):
             groups["stale"].append(issue)
-        elif is_active_milestone:
+        if is_active_milestone:
             groups["milestone-bound"].append(issue)
-        elif lifecycle["milestone_candidate"] in labels:
-            groups["milestone-candidate"].append(issue)
-        elif lifecycle["backlog"] in labels:
+        if lifecycle["backlog"] in labels:
             groups["backlog"].append(issue)
-        else:
-            groups["incoming-triage"].append(issue)
     return groups
 
 
@@ -226,6 +236,7 @@ def grouped_pr_state(
     groups: dict[str, list[dict[str, Any]]] = {
         "merge-candidate": [],
         "review-now": [],
+        "needs-author": [],
         "unblock": [],
         "needs-rebase": [],
         "close-candidate": [],
@@ -240,17 +251,20 @@ def grouped_pr_state(
             groups["close-candidate"].append(pr)
         elif pr_labels["needs_rebase"] in labels or merge_state in {"DIRTY", "BEHIND"}:
             groups["needs-rebase"].append(pr)
+        elif pr_labels["needs_author"] in labels or pr.get("isDraft"):
+            groups["needs-author"].append(pr)
         elif pr_labels["blocked"] in labels or checks == "failing":
             groups["unblock"].append(pr)
-        elif (
+        elif pr_labels["merge_ready"] in labels or (
             not pr.get("isDraft")
             and review == "APPROVED"
             and checks == "green"
             and merge_state not in {"DIRTY", "BLOCKED"}
         ):
             groups["merge-candidate"].append(pr)
-        elif not pr.get("isDraft") and (
-            checks in {"green", "unknown"} or stale >= attention_days
+        elif pr_labels["needs_review"] in labels or (
+            not pr.get("isDraft")
+            and (checks in {"green", "unknown"} or stale >= attention_days)
         ):
             groups["review-now"].append(pr)
         else:
@@ -274,10 +288,29 @@ def render_today(snapshot: dict[str, Any]) -> str:
         "",
     ]
     lines.extend(maintainer_ga_readiness.render(snapshot))
+    lines.extend(["## Maintainer Issue Focus", ""])
+    for group in ("release-blocker", "needs-acceptance", "close-candidate"):
+        items = snapshot["groups"]["issues"].get(group, [])
+        lines.append(f"### {group} ({len(items)})")
+        lines.extend(f"- {summarize_item(item)}" for item in items[:20])
+        if not items:
+            lines.append("- none")
+        lines.append("")
+
+    lines.extend(["## Active Issue Delivery", ""])
+    for group in ("in-progress", "ready-for-dev"):
+        items = snapshot["groups"]["issues"].get(group, [])
+        lines.append(f"### {group} ({len(items)})")
+        lines.extend(f"- {summarize_item(item)}" for item in items[:20])
+        if not items:
+            lines.append("- none")
+        lines.append("")
+
     lines.extend(["## PR Actions", ""])
     for group in (
         "merge-candidate",
         "review-now",
+        "needs-author",
         "unblock",
         "needs-rebase",
         "close-candidate",
@@ -289,12 +322,10 @@ def render_today(snapshot: dict[str, Any]) -> str:
             lines.append("- none")
         lines.append("")
 
-    lines.append("## Issue Actions")
+    lines.append("## Issue Context")
     lines.append("")
     for group in (
         "milestone-bound",
-        "milestone-candidate",
-        "incoming-triage",
         "backlog",
         "stale",
     ):
@@ -329,13 +360,14 @@ def render_milestone(snapshot: dict[str, Any]) -> str:
         lines.append(f"- {summarize_item(item)}")
     if not snapshot["groups"]["issues"]["milestone-bound"]:
         lines.append("- none")
-    lines.extend(["", "## Candidate Issues", ""])
-    for item in snapshot["groups"]["issues"]["milestone-candidate"]:
-        lines.append(f"- {summarize_item(item)}")
-    if not snapshot["groups"]["issues"]["milestone-candidate"]:
-        lines.append("- none")
     lines.extend(["", "## PRs Requiring Maintainer Action", ""])
-    for group in ("review-now", "unblock", "needs-rebase", "close-candidate"):
+    for group in (
+        "review-now",
+        "needs-author",
+        "unblock",
+        "needs-rebase",
+        "close-candidate",
+    ):
         lines.append(f"### {group}")
         items = snapshot["groups"]["pull_requests"][group]
         lines.extend(f"- {summarize_item(item)}" for item in items)
@@ -450,47 +482,6 @@ def release_blocker_groups(snapshot: dict[str, Any]) -> list[tuple[str, list[str
     return groups
 
 
-def proposed_actions(
-    snapshot: dict[str, Any], policy: dict[str, Any]
-) -> list[dict[str, Any]]:
-    actions: list[dict[str, Any]] = []
-    lifecycle = policy["labels"]["lifecycle"]
-    pr_state = policy["labels"]["pr_state"]
-    for issue in snapshot["groups"]["issues"]["incoming-triage"]:
-        actions.append(
-            {
-                "action": "label_issue",
-                "target": f"#{issue['number']}",
-                "labels": [lifecycle["needs_triage"]],
-            }
-        )
-    for issue in snapshot["groups"]["issues"]["stale"]:
-        actions.append(
-            {
-                "action": "label_issue",
-                "target": f"#{issue['number']}",
-                "labels": [lifecycle["stale"]],
-            }
-        )
-    for pr in snapshot["groups"]["pull_requests"]["needs-rebase"]:
-        actions.append(
-            {
-                "action": "label_pr",
-                "target": f"#{pr['number']}",
-                "labels": [pr_state["needs_rebase"]],
-            }
-        )
-    for pr in snapshot["groups"]["pull_requests"]["close-candidate"]:
-        actions.append(
-            {
-                "action": "label_pr",
-                "target": f"#{pr['number']}",
-                "labels": [pr_state["close_candidate"]],
-            }
-        )
-    return actions
-
-
 def build_snapshot(
     github_state: dict[str, Any], policy: dict[str, Any], milestone: str | None
 ) -> dict[str, Any]:
@@ -577,7 +568,7 @@ def create_issue_actions(
             for item in match_release_tasks_to_issues(tasks, issues)
             if not item["matches"]
         ]
-    labels = [] if args.no_help_wanted else [policy["labels"]["help_wanted"]]
+    labels = [policy["labels"]["lifecycle"]["needs_acceptance"]]
     track = policy.get("release_tracks", {}).get(args.track or "")
     if track and track.get("label"):
         labels.append(track["label"])
@@ -735,7 +726,6 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--labels", default=None)
     create.add_argument("--include-matched", action="store_true")
     create.add_argument("--dry-run", action="store_true")
-    create.add_argument("--no-help-wanted", action="store_true")
     create.add_argument("--apply", action="store_true")
     create.add_argument("--confirm", action="store_true")
     create.set_defaults(func=handle_create_issues)
