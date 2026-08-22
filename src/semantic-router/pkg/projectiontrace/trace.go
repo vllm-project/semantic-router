@@ -58,6 +58,7 @@ type MappingDecision struct {
 	MappingName      string           `json:"mapping_name"`
 	SourceScore      string           `json:"source_score"`
 	ScoreValue       float64          `json:"score_value"`
+	MatchedOutputs   []string         `json:"matched_outputs,omitempty"` // all matched outputs, especially for multi_emit mappings
 	SelectedOutput   string           `json:"selected_output,omitempty"`
 	Confidence       float64          `json:"confidence,omitempty"`
 	BoundaryDistance float64          `json:"boundary_distance,omitempty"`
