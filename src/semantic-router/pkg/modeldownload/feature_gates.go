@@ -13,12 +13,14 @@ var optionalModelFeatureGates = []modelFeatureGate{
 			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
+			// Canonical form, so these match the paths resolveAliasForField collected
+			// for the same fields. Gates over ModelID stay literal for the same reason.
 			return []string{
-				cfg.Qwen3ModelPath,
-				cfg.GemmaModelPath,
-				cfg.MmBertModelPath,
-				cfg.MultiModalModelPath,
-				cfg.BertModelPath,
+				config.ResolveModelPath(cfg.Qwen3ModelPath),
+				config.ResolveModelPath(cfg.GemmaModelPath),
+				config.ResolveModelPath(cfg.MmBertModelPath),
+				config.ResolveModelPath(cfg.MultiModalModelPath),
+				config.ResolveModelPath(cfg.BertModelPath),
 			}
 		},
 	},
@@ -89,7 +91,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 			if cfg.ModalityDetector.Classifier == nil {
 				return nil
 			}
-			return []string{cfg.ModalityDetector.Classifier.ModelPath}
+			return []string{config.ResolveModelPath(cfg.ModalityDetector.Classifier.ModelPath)}
 		},
 	},
 }
