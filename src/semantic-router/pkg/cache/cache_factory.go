@@ -8,7 +8,7 @@ import (
 )
 
 // NewCacheBackend creates a cache backend instance from the provided configuration
-func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
+func NewCacheBackend(config CacheConfig) (LegacyCacheBackend, error) {
 	if err := ValidateCacheConfig(config); err != nil {
 		return nil, fmt.Errorf("invalid cache config: %w", err)
 	}
@@ -21,82 +21,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		}), nil
 	}
 
-	switch config.BackendType {
-	case InMemoryCacheType, "":
-		// Use in-memory cache as the default backend
-		logging.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s, UseHNSW: %t",
-			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel, config.UseHNSW)
-
-		options := InMemoryCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			MaxEntries:          config.MaxEntries,
-			TTLSeconds:          config.TTLSeconds,
-			EvictionPolicy:      config.EvictionPolicy,
-			UseHNSW:             config.UseHNSW,
-			HNSWM:               config.HNSWM,
-			HNSWEfConstruction:  config.HNSWEfConstruction,
-			EmbeddingModel:      config.EmbeddingModel,
-		}
-		return NewInMemoryCache(options), nil
-
-	case MilvusCacheType:
-		logging.Debugf("Creating Milvus cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
-		return NewMilvusCache(MilvusCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			TTLSeconds:          config.TTLSeconds,
-			Config:              config.Milvus,
-			EmbeddingModel:      config.EmbeddingModel,
-		})
-
-	case RedisCacheType:
-		logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-			config.Redis, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
-		return NewRedisCache(RedisCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			TTLSeconds:          config.TTLSeconds,
-			Config:              config.Redis,
-			EmbeddingModel:      config.EmbeddingModel,
-		})
-
-	case ValkeyCacheType:
-		if config.Valkey == nil {
-			return nil, fmt.Errorf("valkey configuration is required for Valkey cache backend")
-		}
-		logging.Debugf("Creating Valkey cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-			config.Valkey, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
-		options := ValkeyCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			TTLSeconds:          config.TTLSeconds,
-			Config:              config.Valkey,
-			EmbeddingModel:      config.EmbeddingModel,
-		}
-		return NewValkeyCache(options)
-
-	case HybridCacheType:
-		logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
-		return NewHybridCache(hybridCacheOptionsFromConfig(config))
-
-	case QdrantCacheType:
-		logging.Debugf("Creating Qdrant cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
-			config.Qdrant, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
-		return NewQdrantCache(QdrantCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			TTLSeconds:          config.TTLSeconds,
-			Config:              config.Qdrant,
-			EmbeddingModel:      config.EmbeddingModel,
-		})
-
-	default:
-		logging.Debugf("Unsupported cache backend type: %s", config.BackendType)
-		return nil, fmt.Errorf("unsupported cache backend type: %s", config.BackendType)
-	}
+	return buildRegisteredBackend(config)
 }
 
 func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
@@ -127,30 +52,7 @@ func ValidateCacheConfig(config CacheConfig) error {
 }
 
 func validateCacheBackend(config CacheConfig) error {
-	switch config.BackendType {
-	case InMemoryCacheType, "":
-		return validateInMemoryCacheConfig(config)
-	case MilvusCacheType:
-		if config.Milvus == nil {
-			return fmt.Errorf("milvus configuration is required for Milvus cache backend")
-		}
-		logging.Debugf("Milvus configuration: %+v", config.Milvus)
-	case RedisCacheType:
-		if config.Redis == nil {
-			return fmt.Errorf("redis configuration is required for Redis cache backend")
-		}
-	case HybridCacheType:
-		if config.Milvus == nil {
-			return fmt.Errorf("milvus configuration is required for hybrid cache backend")
-		}
-	case ValkeyCacheType:
-		if config.Valkey == nil {
-			return fmt.Errorf("valkey configuration is required for Valkey cache backend")
-		}
-	case QdrantCacheType:
-		return validateQdrantCacheConfig(config.Qdrant)
-	}
-	return nil
+	return validateRegisteredBackend(config)
 }
 
 func validateInMemoryCacheConfig(config CacheConfig) error {
@@ -188,19 +90,21 @@ func GetDefaultCacheConfig() CacheConfig {
 
 // CacheBackendInfo describes the capabilities and features of a cache backend
 type CacheBackendInfo struct {
-	Type        CacheBackendType `json:"type"`
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Features    []string         `json:"features"`
+	Type         CacheBackendType    `json:"type"`
+	Name         string              `json:"name"`
+	Description  string              `json:"description"`
+	Features     []string            `json:"features"`
+	Capabilities BackendCapabilities `json:"capabilities"`
 }
 
 // GetAvailableCacheBackends returns metadata for all supported cache backends
 func GetAvailableCacheBackends() []CacheBackendInfo {
 	return []CacheBackendInfo{
 		{
-			Type:        InMemoryCacheType,
-			Name:        "In-Memory Cache",
-			Description: "High-performance in-memory semantic cache with BERT embeddings",
+			Type:         InMemoryCacheType,
+			Name:         "In-Memory Cache",
+			Description:  "High-performance in-memory semantic cache with BERT embeddings",
+			Capabilities: CapabilitiesForBackend(InMemoryCacheType),
 			Features: []string{
 				"Fast access",
 				"No external dependencies",
@@ -210,9 +114,10 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 			},
 		},
 		{
-			Type:        MilvusCacheType,
-			Name:        "Milvus Vector Database",
-			Description: "Enterprise-grade semantic cache powered by Milvus vector database",
+			Type:         MilvusCacheType,
+			Name:         "Milvus Vector Database",
+			Description:  "Enterprise-grade semantic cache powered by Milvus vector database",
+			Capabilities: CapabilitiesForBackend(MilvusCacheType),
 			Features: []string{
 				"Highly scalable",
 				"Persistent storage",
@@ -223,9 +128,10 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 			},
 		},
 		{
-			Type:        RedisCacheType,
-			Name:        "Redis Vector Database",
-			Description: "High-performance semantic cache powered by Redis with vector search",
+			Type:         RedisCacheType,
+			Name:         "Redis Vector Database",
+			Description:  "High-performance semantic cache powered by Redis with vector search",
+			Capabilities: CapabilitiesForBackend(RedisCacheType),
 			Features: []string{
 				"Fast in-memory performance",
 				"Persistent storage with AOF/RDB",
@@ -236,9 +142,10 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 			},
 		},
 		{
-			Type:        ValkeyCacheType,
-			Name:        "Valkey Vector Database",
-			Description: "High-performance semantic cache powered by Valkey with vector search",
+			Type:         ValkeyCacheType,
+			Name:         "Valkey Vector Database",
+			Description:  "High-performance semantic cache powered by Valkey with vector search",
+			Capabilities: CapabilitiesForBackend(ValkeyCacheType),
 			Features: []string{
 				"Fast in-memory performance",
 				"Persistent storage with AOF/RDB",
@@ -247,6 +154,20 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Redis-compatible protocol",
 				"TTL support",
 			},
+		},
+		{
+			Type:         QdrantCacheType,
+			Name:         "Qdrant Vector Database",
+			Description:  "Distributed response cache backed by Qdrant vector search",
+			Features:     []string{"Exact lookup", "Semantic lookup", "TTL support"},
+			Capabilities: CapabilitiesForBackend(QdrantCacheType),
+		},
+		{
+			Type:         HybridCacheType,
+			Name:         "Hybrid HNSW and Milvus",
+			Description:  "Process-local HNSW hot tier backed by shared Milvus storage",
+			Features:     []string{"Hot tier", "Shared persistence", "TTL support"},
+			Capabilities: CapabilitiesForBackend(HybridCacheType),
 		},
 	}
 }

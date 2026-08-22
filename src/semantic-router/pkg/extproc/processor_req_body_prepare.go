@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -101,16 +103,22 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	fast *FastExtractResult,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
+	r.resolveEntrypointForRequest(originalModel, ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
-	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
+	applyFastRequestContextEstimate(fast, ctx)
+	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
 		ctx,
 	)
-	if authzErr != nil {
-		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
-		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
+	if decisionErr != nil {
+		if errors.Is(decisionErr, context.Canceled) ||
+			errors.Is(decisionErr, context.DeadlineExceeded) {
+			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
+		}
+		logging.Errorf("[Request Body] Authz evaluation failed: %v", decisionErr)
+		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
 
 	metrics.RecordModelRequest(selectedModel)
@@ -120,6 +128,12 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
+		r.attachRouterReplayResponse(
+			ctx,
+			resp.GetImmediateResponse().GetBody(),
+			true,
+		)
+		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyRateLimitAndCacheChecks(ctx, selectedModel, decisionName); resp != nil {
@@ -138,6 +152,16 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		reasoningDecision: reasoningDecision,
 		selectedModel:     selectedModel,
 	}, nil
+}
+
+func applyFastRequestContextEstimate(fast *FastExtractResult, ctx *RequestContext) {
+	if fast == nil || ctx == nil {
+		return
+	}
+	ctx.VSRContextTokenCount = fast.ContextTokenFloor
+	ctx.VSRContextTextBytes = fast.ContextTextBytes
+	ctx.VSRContextEquivalentBytes = fast.ContextEquivalentBytes
+	ctx.VSRContextHasNonText = fast.ContextHasNonText
 }
 
 func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
@@ -169,7 +193,7 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 		ctx.RateLimitCtx = &rlCtx
 	}
 
-	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+	if response, shouldReturn := r.handleCaching(ctx, decisionName, selectedModel); shouldReturn {
 		logging.ComponentDebugEvent("extproc", "cache_short_circuit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"decision":   decisionName,
@@ -219,11 +243,17 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	if ctx.MemoryContext != "" {
-		ctx.OriginalRequestBody = requestBody
+	ctx.setWorkingRequestBody(requestBody)
+	requestBody, compressionErr := r.applyContextCompressionPolicy(ctx, requestBody)
+	if compressionErr != nil {
+		return nil, r.createErrorResponse(
+			500,
+			"Context compression failed under fail_closed policy",
+		), nil
 	}
+	ctx.setWorkingRequestBody(requestBody)
 	r.refreshResponseAPITranslatedBody(ctx, requestBody)
-	openAIRequest = r.reparseRequestWithMemory(requestBody, openAIRequest, ctx)
+	openAIRequest = r.reparseRequestAfterMutation(requestBody, openAIRequest, ctx)
 
 	return openAIRequest, nil, nil
 }
@@ -258,25 +288,25 @@ func (r *OpenAIRouter) refreshResponseAPITranslatedBody(ctx *RequestContext, req
 	}
 }
 
-func (r *OpenAIRouter) reparseRequestWithMemory(
+func (r *OpenAIRouter) reparseRequestAfterMutation(
 	requestBody []byte,
 	openAIRequest *openai.ChatCompletionNewParams,
 	ctx *RequestContext,
 ) *openai.ChatCompletionNewParams {
-	if ctx.MemoryContext == "" {
+	if ctx.MemoryContext == "" && !ctx.ContextCompressionApplied {
 		return openAIRequest
 	}
 
 	updatedReq, err := parseRequestForProtocol(ctx, requestBody)
 	if err != nil {
-		logging.ComponentErrorEvent("extproc", "memory_request_reparse_failed", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "mutated_request_reparse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      err.Error(),
 		})
 		return openAIRequest
 	}
 
-	logging.ComponentDebugEvent("extproc", "memory_request_reparsed", map[string]interface{}{
+	logging.ComponentDebugEvent("extproc", "mutated_request_reparsed", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"body_len":   len(requestBody),
 	})

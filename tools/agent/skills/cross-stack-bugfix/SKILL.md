@@ -26,7 +26,7 @@ description: Diagnoses and fixes bugs that span multiple layers (runtime, CLI, U
 
 ## Must Read
 
-- [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
+- [tools/agent/docs/change-surfaces.md](../../../../tools/agent/docs/change-surfaces.md)
 
 ## Standard Commands
 

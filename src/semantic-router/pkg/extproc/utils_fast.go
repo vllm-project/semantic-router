@@ -1,12 +1,20 @@
 package extproc
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+const (
+	maxRoutingMetadataEntries  = 32
+	maxRoutingMetadataKeyLen   = 128
+	maxRoutingMetadataValueLen = 1024
 )
 
 // FastExtractResult holds fields extracted from the request body via gjson
@@ -19,6 +27,14 @@ type FastExtractResult struct {
 	NonUserMessages   []string
 	HasAssistantReply bool
 	FirstImageURL     string
+	ImageContentCount int
+	Metadata          map[string]string
+	// Request-aware context estimate. These are content-free scalar summaries;
+	// raw tool results, schemas, image URLs, and image bytes are never retained.
+	ContextTokenFloor      int
+	ContextTextBytes       int
+	ContextEquivalentBytes int
+	ContextHasNonText      bool
 
 	// Conversation-shape fields for the conversation signal family.
 	HasDeveloperMessage     bool
@@ -44,27 +60,94 @@ func extractContentFast(body []byte) (*FastExtractResult, error) {
 	if err := extractModelAndStreamFast(body, r); err != nil {
 		return nil, err
 	}
+	if err := extractMetadataFast(body, r); err != nil {
+		return nil, err
+	}
+	contextEstimate := classification.EstimateOpenAIRequestContext(body)
+	r.ContextTokenFloor = contextEstimate.TokenFloor
+	r.ContextTextBytes = contextEstimate.TextBytes
+	r.ContextEquivalentBytes = contextEstimate.EquivalentBytes
+	r.ContextHasNonText = contextEstimate.HasNonText
 
+	countFastToolDefinitions(body, r)
 	messages := gjson.GetBytes(body, "messages")
 	if !messages.Exists() || !messages.IsArray() {
 		return r, nil
 	}
 
 	populateFastExtractMessages(messages, r)
-	countFastToolDefinitions(body, r)
 
 	return r, nil
 }
 
 func countFastToolDefinitions(body []byte, result *FastExtractResult) {
-	tools := gjson.GetBytes(body, "tools")
-	if !tools.Exists() || !tools.IsArray() {
-		return
+	for _, field := range []string{"tools", "functions"} {
+		definitions := gjson.GetBytes(body, field)
+		if !definitions.Exists() || !definitions.IsArray() {
+			continue
+		}
+		definitions.ForEach(func(_, _ gjson.Result) bool {
+			result.ToolDefinitionCount++
+			return true
+		})
 	}
-	tools.ForEach(func(_, _ gjson.Result) bool {
-		result.ToolDefinitionCount++
+}
+
+func extractMetadataFast(body []byte, result *FastExtractResult) error {
+	metadata := gjson.GetBytes(body, "metadata")
+	if !metadata.Exists() {
+		return nil
+	}
+	if !metadata.IsObject() {
+		return &jsonTypeError{field: "metadata", want: "object", got: metadata.Type.String()}
+	}
+	values := make(map[string]string)
+	var invalidKey string
+	invalidValue := false
+	var validationErr error
+	metadata.ForEach(func(key, value gjson.Result) bool {
+		if len(values) >= maxRoutingMetadataEntries {
+			validationErr = fmt.Errorf("metadata cannot contain more than %d entries", maxRoutingMetadataEntries)
+			return false
+		}
+		if value.Type != gjson.String {
+			invalidKey = key.String()
+			invalidValue = true
+			return false
+		}
+		keyValue := key.String()
+		stringValue := value.String()
+		if len(keyValue) == 0 || len(keyValue) > maxRoutingMetadataKeyLen {
+			validationErr = fmt.Errorf("metadata key length must be between 1 and %d bytes", maxRoutingMetadataKeyLen)
+			return false
+		}
+		if len(stringValue) > maxRoutingMetadataValueLen {
+			validationErr = fmt.Errorf(
+				"metadata value for key %q exceeds %d bytes",
+				keyValue,
+				maxRoutingMetadataValueLen,
+			)
+			return false
+		}
+		values[keyValue] = stringValue
 		return true
 	})
+	if validationErr != nil {
+		return validationErr
+	}
+	if invalidValue {
+		field := "metadata"
+		if invalidKey != "" {
+			field += "." + invalidKey
+		}
+		return &jsonTypeError{
+			field: field,
+			want:  "string",
+			got:   "non-string",
+		}
+	}
+	result.Metadata = values
+	return nil
 }
 
 func extractModelAndStreamFast(body []byte, result *FastExtractResult) error {
@@ -141,6 +224,7 @@ func countAssistantToolCalls(msg gjson.Result, result *FastExtractResult) {
 }
 
 func recordFastExtractUserMessage(result *FastExtractResult, text string, content gjson.Result) {
+	result.ImageContentCount += countImageContentParts(content)
 	if result.FirstImageURL == "" {
 		result.FirstImageURL = extractImageURLFromContent(content)
 	}
@@ -151,6 +235,21 @@ func recordFastExtractUserMessage(result *FastExtractResult, text string, conten
 		result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
 	}
 	result.UserContent = text
+}
+
+func countImageContentParts(content gjson.Result) int {
+	if !content.IsArray() {
+		return 0
+	}
+	count := 0
+	content.ForEach(func(_, part gjson.Result) bool {
+		switch part.Get("type").String() {
+		case "image_url", "input_image":
+			count++
+		}
+		return true
+	})
+	return count
 }
 
 func recordFastExtractNonUserMessage(result *FastExtractResult, role string, text string) {

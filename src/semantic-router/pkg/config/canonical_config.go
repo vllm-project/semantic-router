@@ -26,28 +26,31 @@ type CanonicalRouting struct {
 	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
 	Projections CanonicalProjections `yaml:"projections,omitempty"`
 	Decisions   []Decision           `yaml:"decisions,omitempty"`
+	Strategy    RoutingStrategy      `yaml:"strategy,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
-	Domains       []Category         `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
-	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
-	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
-	Language      []LanguageRule     `yaml:"language,omitempty"`
-	Context       []ContextRule      `yaml:"context,omitempty"`
-	Structure     []StructureRule    `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule     `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PII           []PIIRule          `yaml:"pii,omitempty"`
-	KB            []KBSignalRule     `yaml:"kb,omitempty"`
-	Conversation  []ConversationRule `yaml:"conversation,omitempty"`
-	EventRules    []EventRule        `yaml:"events,omitempty"`
+	Keywords      []KeywordRule          `yaml:"keywords,omitempty"`
+	Embeddings    []EmbeddingRule        `yaml:"embeddings,omitempty"`
+	Domains       []Category             `yaml:"domains,omitempty"`
+	FactCheck     []FactCheckRule        `yaml:"fact_check,omitempty"`
+	UserFeedbacks []UserFeedbackRule     `yaml:"user_feedbacks,omitempty"`
+	Reasks        []ReaskRule            `yaml:"reasks,omitempty"`
+	Preferences   []PreferenceRule       `yaml:"preferences,omitempty"`
+	Language      []LanguageRule         `yaml:"language,omitempty"`
+	Context       []ContextRule          `yaml:"context,omitempty"`
+	Structure     []StructureRule        `yaml:"structure,omitempty"`
+	Complexity    []ComplexityRule       `yaml:"complexity,omitempty"`
+	Modality      []ModalityRule         `yaml:"modality,omitempty"`
+	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
+	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	PII           []PIIRule              `yaml:"pii,omitempty"`
+	KB            []KBSignalRule         `yaml:"kb,omitempty"`
+	Conversation  []ConversationRule     `yaml:"conversation,omitempty"`
+	EventRules    []EventRule            `yaml:"events,omitempty"`
+	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
+	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -112,6 +115,9 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
+	if canonical.Routing.Strategy != "" {
+		cfg.Strategy = canonical.Routing.Strategy
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -149,6 +155,9 @@ func mergeCanonicalProviderModelParams(modelConfig map[string]ModelParams, model
 		params := modelConfig[modelName]
 		if params.Pricing == (ModelPricing{}) {
 			params.Pricing = providerParams.Pricing
+		}
+		if params.Reliability == (ProviderReliability{}) {
+			params.Reliability = providerParams.Reliability
 		}
 		if params.ReasoningFamily == "" {
 			params.ReasoningFamily = providerParams.ReasoningFamily
@@ -207,6 +216,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 				return fmt.Errorf("providers.models[%s].reasoning_family %q not found in providers.defaults.reasoning_families", model.Name, model.ReasoningFamily)
 			}
 		}
+		if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
+			return err
+		}
 		if len(canonicalBackendRefs(model)) == 0 {
 			if !canonicalProviderModelHasMetadata(model) {
 				return fmt.Errorf("providers.models[%s] must define backend_refs or provider metadata such as reasoning_family, pricing, api_format, external_model_ids, or provider_model_id", model.Name)
@@ -252,7 +264,7 @@ func validateCanonicalDecisionModelRefs(decision Decision, modelsByName map[stri
 		// request time with a misleading upstream "401 No api key".
 		//
 		// Only enforced when the config declares a model surface (modelCards).
-		// Partial DSL fragments without modelCards (e.g. config/decision/**
+		// Partial DSL fragments without modelCards (e.g. config/fragments/decision/**
 		// examples) carry no model surface to validate against and are skipped,
 		// mirroring how default_model existence is only checked when set.
 		if len(modelCards) > 0 && !canonicalModelOrLoRAExists(modelsByName, modelCards, modelRef.Model) {
@@ -293,6 +305,8 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		KBRules:           append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
 		EventRules:        append([]EventRule(nil), signals.EventRules...),
+		MetadataRules:     append([]MetadataRule(nil), signals.Metadata...),
+		ClassifierRules:   append([]ClassifierSignalRule(nil), signals.Classifiers...),
 	}
 
 	if len(result.Categories) == 0 {
@@ -318,7 +332,8 @@ func canonicalProviderModelHasMetadata(model CanonicalProviderModel) bool {
 	if model.ReasoningFamily != "" || model.ProviderModelID != "" || model.APIFormat != "" || len(model.ExternalModelIDs) > 0 {
 		return true
 	}
-	return model.Pricing != (ModelPricing{})
+	return model.Pricing != (ModelPricing{}) ||
+		model.Reliability != (ProviderReliability{})
 }
 
 func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[string]ProviderProfile, []VLLMEndpoint, map[string]ModelParams, error) {
@@ -334,6 +349,7 @@ func normalizeCanonicalProviderModels(models []CanonicalProviderModel) (map[stri
 		params := modelParams[model.Name]
 		params.ReasoningFamily = model.ReasoningFamily
 		params.Pricing = model.Pricing
+		params.Reliability = model.Reliability
 		params.APIFormat = model.APIFormat
 		params.ExternalModelIDs = normalizeExternalModelIDsFromProviderModel(model)
 

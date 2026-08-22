@@ -25,8 +25,90 @@ config:
           - name: local-vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+      - name: premium-model
+        provider_model_id: base-model
+        pricing:
+          currency: USD
+          prompt_per_1m: 10
+        backend_refs:
+          - name: local-vllm-premium
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: economy-model
+        provider_model_id: base-model
+        pricing:
+          currency: USD
+          prompt_per_1m: 1
+        backend_refs:
+          - name: local-vllm-economy
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  entrypoints:
+    - model_names: [vllm-sr/metadata-policy]
+      recipe: metadata-policy
+  recipes:
+    - name: metadata-policy
+      description: Deterministic recipe-local metadata routing probe.
+      routing:
+        strategy: priority
+        signals:
+          metadata:
+            - name: canary_cohort
+              key: cohort
+              predicate:
+                equals: canary
+        decisions:
+          - name: metadata_recipe_decision
+            description: Route canary metadata inside the selected recipe.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: metadata
+                  name: canary_cohort
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
   routing:
     decisions:
+      - name: quality_policy_decision
+        description: Quality-only multi-factor policy
+        priority: 250
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: quality_policy
+        modelRefs:
+          - model: premium-model
+          - model: economy-model
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            weights:
+              quality: 1
+              latency: 0
+              cost: 0
+              load: 0
+      - name: cost_policy_decision
+        description: Cost-only multi-factor policy
+        priority: 250
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: cost_policy
+        modelRefs:
+          - model: premium-model
+          - model: economy-model
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            weights:
+              quality: 0
+              latency: 0
+              cost: 1
+              load: 0
       - name: code_keywords_decision
         description: Code and programming queries (BM25 classified)
         priority: 150
@@ -113,12 +195,23 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.75
     signals:
       keywords:
+        - name: quality_policy
+          operator: OR
+          keywords:
+            - decision scoped quality policy
+          case_sensitive: false
+        - name: cost_policy
+          operator: OR
+          keywords:
+            - decision scoped cost policy
+          case_sensitive: false
         - name: code_keywords
           operator: OR
           method: bm25
@@ -235,6 +328,10 @@ config:
           description: Block all PII
     modelCards:
       - name: base-model
+      - name: premium-model
+        quality_score: 0.9
+      - name: economy-model
+        quality_score: 0.1
   global:
     model_catalog:
       kbs: []
@@ -290,7 +387,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

@@ -7,13 +7,13 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerru
 // change routing; it exists so an operator or offline materializer can
 // inspect what Router Learning has observed so far (#2240).
 func (rt *routerLearningRuntime) ExperienceSnapshots() []routerruntime.RouterExperienceSnapshot {
-	if rt == nil {
+	if rt == nil || rt.shared == nil {
 		return nil
 	}
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	snapshots := make([]routerruntime.RouterExperienceSnapshot, 0, len(rt.experience))
-	for key, exp := range rt.experience {
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
+	snapshots := make([]routerruntime.RouterExperienceSnapshot, 0, len(rt.shared.experience))
+	for key, exp := range rt.shared.experience {
 		decision := key.decision
 		if decision == "_global" {
 			decision = ""

@@ -27,6 +27,8 @@ const signalTypes: SignalType[] = [
   'Jailbreak',
   'PII',
   'KB',
+  'Metadata',
+  'Classifier',
 ]
 
 const hideUnless = (type: SignalType) => (formData: AddSignalFormState) => formData.type !== type
@@ -95,6 +97,89 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       label: 'Description',
       type: 'textarea',
       placeholder: 'Optional signal description',
+    },
+    {
+      name: 'metadata_key',
+      label: 'Metadata Key',
+      type: 'text',
+      required: true,
+      shouldHide: hideUnless('Metadata'),
+    },
+    {
+      name: 'metadata_predicate_type',
+      label: 'Metadata Predicate',
+      type: 'select',
+      options: ['equals', 'in', 'exists'],
+      required: true,
+      shouldHide: hideUnless('Metadata'),
+    },
+    {
+      name: 'metadata_equals',
+      label: 'Equals',
+      type: 'text',
+      shouldHide: (formData) =>
+        formData.type !== 'Metadata' || formData.metadata_predicate_type !== 'equals',
+    },
+    stringListField({
+      name: 'metadata_in',
+      label: 'Allowed Values',
+      signalType: 'Metadata',
+      addLabel: 'Add value',
+      emptyLabel: 'No values configured.',
+      itemLabel: 'Value',
+      shouldHide: (formData) =>
+        formData.type !== 'Metadata' || formData.metadata_predicate_type !== 'in',
+    }),
+    {
+      name: 'metadata_exists',
+      label: 'Must Exist',
+      type: 'boolean',
+      shouldHide: (formData) =>
+        formData.type !== 'Metadata' || formData.metadata_predicate_type !== 'exists',
+    },
+    {
+      name: 'classifier_type',
+      label: 'Classifier Backend',
+      type: 'select',
+      options: ['local', 'llm'],
+      required: true,
+      shouldHide: hideUnless('Classifier'),
+    },
+    {
+      name: 'classifier_model',
+      label: 'External Model',
+      type: 'text',
+      shouldHide: (formData) =>
+        formData.type !== 'Classifier' || formData.classifier_type !== 'llm',
+    },
+    {
+      name: 'classifier_model_path',
+      label: 'Local Model Path',
+      type: 'text',
+      shouldHide: (formData) =>
+        formData.type !== 'Classifier' || formData.classifier_type !== 'local',
+    },
+    stringListField({
+      name: 'classifier_labels',
+      label: 'Labels',
+      signalType: 'Classifier',
+      addLabel: 'Add label',
+      emptyLabel: 'No labels configured.',
+      itemLabel: 'Label',
+    }),
+    {
+      name: 'classifier_instructions',
+      label: 'Instructions',
+      type: 'textarea',
+      shouldHide: (formData) =>
+        formData.type !== 'Classifier' || formData.classifier_type !== 'llm',
+    },
+    {
+      name: 'classifier_use_cpu',
+      label: 'Use CPU',
+      type: 'boolean',
+      shouldHide: (formData) =>
+        formData.type !== 'Classifier' || formData.classifier_type !== 'local',
     },
     stringListField({
       name: 'preference_examples',

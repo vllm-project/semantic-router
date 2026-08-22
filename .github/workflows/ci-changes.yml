@@ -1,305 +1,181 @@
-name: CI Changes
+name: CI Change Classification
+
 on:
   workflow_call:
     outputs:
       core:
-        value: ${{ jobs.filter.outputs.core }}
+        value: ${{ jobs.classify.outputs.core }}
+      core_test:
+        value: ${{ jobs.classify.outputs.core_test }}
       dashboard:
-        value: ${{ jobs.filter.outputs.dashboard }}
+        value: ${{ jobs.classify.outputs.dashboard }}
       website:
-        value: ${{ jobs.filter.outputs.website }}
+        value: ${{ jobs.classify.outputs.website }}
       docs:
-        value: ${{ jobs.filter.outputs.docs }}
+        value: ${{ jobs.classify.outputs.docs }}
+      docs_paper:
+        value: ${{ jobs.classify.outputs.docs_paper }}
+      paper:
+        value: ${{ jobs.classify.outputs.paper }}
       helm:
-        value: ${{ jobs.filter.outputs.helm }}
+        value: ${{ jobs.classify.outputs.helm }}
       e2e:
-        value: ${{ jobs.filter.outputs.e2e }}
+        value: ${{ jobs.classify.outputs.e2e }}
+      e2e_profiles:
+        value: ${{ jobs.classify.outputs.e2e_profiles }}
+      full_e2e_profiles:
+        value: ${{ jobs.classify.outputs.full_e2e_profiles }}
+      cli:
+        value: ${{ jobs.classify.outputs.cli }}
+      memory:
+        value: ${{ jobs.classify.outputs.memory }}
       ci:
-        value: ${{ jobs.filter.outputs.ci }}
+        value: ${{ jobs.classify.outputs.ci }}
       docker:
-        value: ${{ jobs.filter.outputs.docker }}
+        value: ${{ jobs.classify.outputs.docker }}
+      images:
+        value: ${{ jobs.classify.outputs.images }}
+      pr_images:
+        value: ${{ jobs.classify.outputs.pr_images }}
+      publish_images:
+        value: ${{ jobs.classify.outputs.publish_images }}
       make:
-        value: ${{ jobs.filter.outputs.make }}
+        value: ${{ jobs.classify.outputs.make }}
       operator:
-        value: ${{ jobs.filter.outputs.operator }}
+        value: ${{ jobs.classify.outputs.operator }}
+      openvino:
+        value: ${{ jobs.classify.outputs.openvino }}
+      performance:
+        value: ${{ jobs.classify.outputs.performance }}
+      router_learning:
+        value: ${{ jobs.classify.outputs.router_learning }}
+      recipe_conformance:
+        value: ${{ jobs.classify.outputs.recipe_conformance }}
       agent_text:
-        value: ${{ jobs.filter.outputs.agent_text }}
+        value: ${{ jobs.classify.outputs.agent_text }}
       agent_exec:
-        value: ${{ jobs.filter.outputs.agent_exec }}
-      # Per-profile e2e change detection
-      e2e_istio:
-        value: ${{ jobs.filter.outputs.e2e_istio }}
-      e2e_agentgateway:
-        value: ${{ jobs.filter.outputs.e2e_agentgateway }}
-      e2e_kubernetes:
-        value: ${{ jobs.filter.outputs.e2e_kubernetes }}
-      e2e_aibrix:
-        value: ${{ jobs.filter.outputs.e2e_aibrix }}
-      e2e_dashboard:
-        value: ${{ jobs.filter.outputs.e2e_dashboard }}
-      e2e_dynamic_config:
-        value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing:
-        value: ${{ jobs.filter.outputs.e2e_multimodal_routing }}
-      e2e_remote_embedding:
-        value: ${{ jobs.filter.outputs.e2e_remote_embedding }}
-      e2e_llm_d:
-        value: ${{ jobs.filter.outputs.e2e_llm_d }}
-      e2e_routing_strategies:
-        value: ${{ jobs.filter.outputs.e2e_routing_strategies }}
-      e2e_production_stack:
-        value: ${{ jobs.filter.outputs.e2e_production_stack }}
-      e2e_response_api:
-        value: ${{ jobs.filter.outputs.e2e_response_api }}
-      e2e_response_api_redis:
-        value: ${{ jobs.filter.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster:
-        value: ${{ jobs.filter.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection:
-        value: ${{ jobs.filter.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint:
-        value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac:
-        value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
-      e2e_streaming:
-        value: ${{ jobs.filter.outputs.e2e_streaming }}
-      e2e_anthropic_shim:
-        value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
-      e2e_common:
-        value: ${{ jobs.filter.outputs.e2e_common }}
+        value: ${{ jobs.classify.outputs.agent_exec }}
       docs_only:
-        value: ${{ jobs.filter.outputs.docs_only }}
+        value: ${{ jobs.classify.outputs.docs_only }}
+      security:
+        value: ${{ jobs.classify.outputs.security }}
+      full:
+        value: ${{ jobs.classify.outputs.full }}
+      e2e_istio:
+        value: ${{ jobs.classify.outputs.e2e_istio }}
+      e2e_agentgateway:
+        value: ${{ jobs.classify.outputs.e2e_agentgateway }}
+      e2e_envoy_ai_gateway:
+        value: ${{ jobs.classify.outputs.e2e_envoy_ai_gateway }}
+      e2e_aibrix:
+        value: ${{ jobs.classify.outputs.e2e_aibrix }}
+      e2e_dashboard:
+        value: ${{ jobs.classify.outputs.e2e_dashboard }}
+      e2e_dynamic_config:
+        value: ${{ jobs.classify.outputs.e2e_dynamic_config }}
+      e2e_multimodal_routing:
+        value: ${{ jobs.classify.outputs.e2e_multimodal_routing }}
+      e2e_remote_embedding:
+        value: ${{ jobs.classify.outputs.e2e_remote_embedding }}
+      e2e_llm_d:
+        value: ${{ jobs.classify.outputs.e2e_llm_d }}
+      e2e_routing_strategies:
+        value: ${{ jobs.classify.outputs.e2e_routing_strategies }}
+      e2e_production_stack:
+        value: ${{ jobs.classify.outputs.e2e_production_stack }}
+      e2e_response_api:
+        value: ${{ jobs.classify.outputs.e2e_response_api }}
+      e2e_response_api_redis:
+        value: ${{ jobs.classify.outputs.e2e_response_api_redis }}
+      e2e_response_api_redis_cluster:
+        value: ${{ jobs.classify.outputs.e2e_response_api_redis_cluster }}
+      e2e_ml_model_selection:
+        value: ${{ jobs.classify.outputs.e2e_ml_model_selection }}
+      e2e_multi_endpoint:
+        value: ${{ jobs.classify.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac:
+        value: ${{ jobs.classify.outputs.e2e_authz_rbac }}
+      e2e_streaming:
+        value: ${{ jobs.classify.outputs.e2e_streaming }}
+      e2e_anthropic_shim:
+        value: ${{ jobs.classify.outputs.e2e_anthropic_shim }}
+      e2e_common:
+        value: ${{ jobs.classify.outputs.e2e_common }}
+
+permissions:
+  contents: read
 
 jobs:
-  filter:
+  classify:
+    name: Classify changed files
     runs-on: ubuntu-latest
     outputs:
-      core: ${{ steps.changes.outputs.core }}
-      dashboard: ${{ steps.changes.outputs.dashboard }}
-      website: ${{ steps.changes.outputs.website }}
-      docs: ${{ steps.changes.outputs.docs }}
-      helm: ${{ steps.changes.outputs.helm }}
-      e2e: ${{ steps.changes.outputs.e2e }}
-      ci: ${{ steps.changes.outputs.ci }}
-      docker: ${{ steps.changes.outputs.docker }}
-      make: ${{ steps.changes.outputs.make }}
-      operator: ${{ steps.changes.outputs.operator }}
-      agent_text: ${{ steps.changes.outputs.agent_text }}
-      agent_exec: ${{ steps.changes.outputs.agent_exec }}
-      # Per-profile e2e outputs
-      e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_agentgateway: ${{ steps.changes.outputs.e2e_agentgateway }}
-      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
-      e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
-      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
-      e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing: ${{ steps.changes.outputs.e2e_multimodal_routing }}
-      e2e_remote_embedding: ${{ steps.changes.outputs.e2e_remote_embedding }}
-      e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
-      e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
-      e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
-      e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
-      e2e_response_api_redis: ${{ steps.changes.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
-      e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
-      e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
-      e2e_common: ${{ steps.changes.outputs.e2e_common }}
-      docs_only: ${{ steps.docs_only.outputs.docs_only }}
+      core: ${{ steps.matrix.outputs.core }}
+      core_test: ${{ steps.matrix.outputs.core_test }}
+      dashboard: ${{ steps.matrix.outputs.dashboard }}
+      website: ${{ steps.matrix.outputs.website }}
+      docs: ${{ steps.matrix.outputs.docs }}
+      docs_paper: ${{ steps.matrix.outputs.docs_paper }}
+      paper: ${{ steps.matrix.outputs.paper }}
+      helm: ${{ steps.matrix.outputs.helm }}
+      e2e: ${{ steps.matrix.outputs.e2e }}
+      e2e_profiles: ${{ steps.matrix.outputs.e2e_profiles }}
+      full_e2e_profiles: ${{ steps.matrix.outputs.full_e2e_profiles }}
+      cli: ${{ steps.matrix.outputs.cli }}
+      memory: ${{ steps.matrix.outputs.memory }}
+      ci: ${{ steps.matrix.outputs.ci }}
+      docker: ${{ steps.matrix.outputs.docker }}
+      images: ${{ steps.matrix.outputs.images }}
+      pr_images: ${{ steps.matrix.outputs.pr_images }}
+      publish_images: ${{ steps.matrix.outputs.publish_images }}
+      make: ${{ steps.matrix.outputs.make }}
+      operator: ${{ steps.matrix.outputs.operator }}
+      openvino: ${{ steps.matrix.outputs.openvino }}
+      performance: ${{ steps.matrix.outputs.performance }}
+      router_learning: ${{ steps.matrix.outputs.router_learning }}
+      recipe_conformance: ${{ steps.matrix.outputs.recipe_conformance }}
+      agent_text: ${{ steps.matrix.outputs.agent_text }}
+      agent_exec: ${{ steps.matrix.outputs.agent_exec }}
+      docs_only: ${{ steps.matrix.outputs.docs_only }}
+      security: ${{ steps.matrix.outputs.security }}
+      full: ${{ steps.matrix.outputs.full }}
+      e2e_istio: ${{ steps.matrix.outputs.e2e_istio }}
+      e2e_agentgateway: ${{ steps.matrix.outputs.e2e_agentgateway }}
+      e2e_envoy_ai_gateway: ${{ steps.matrix.outputs.e2e_envoy_ai_gateway }}
+      e2e_aibrix: ${{ steps.matrix.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.matrix.outputs.e2e_dashboard }}
+      e2e_dynamic_config: ${{ steps.matrix.outputs.e2e_dynamic_config }}
+      e2e_multimodal_routing: ${{ steps.matrix.outputs.e2e_multimodal_routing }}
+      e2e_remote_embedding: ${{ steps.matrix.outputs.e2e_remote_embedding }}
+      e2e_llm_d: ${{ steps.matrix.outputs.e2e_llm_d }}
+      e2e_routing_strategies: ${{ steps.matrix.outputs.e2e_routing_strategies }}
+      e2e_production_stack: ${{ steps.matrix.outputs.e2e_production_stack }}
+      e2e_response_api: ${{ steps.matrix.outputs.e2e_response_api }}
+      e2e_response_api_redis: ${{ steps.matrix.outputs.e2e_response_api_redis }}
+      e2e_response_api_redis_cluster: ${{ steps.matrix.outputs.e2e_response_api_redis_cluster }}
+      e2e_ml_model_selection: ${{ steps.matrix.outputs.e2e_ml_model_selection }}
+      e2e_multi_endpoint: ${{ steps.matrix.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac: ${{ steps.matrix.outputs.e2e_authz_rbac }}
+      e2e_streaming: ${{ steps.matrix.outputs.e2e_streaming }}
+      e2e_anthropic_shim: ${{ steps.matrix.outputs.e2e_anthropic_shim }}
+      e2e_common: ${{ steps.matrix.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          token: ${{ github.token }}
-          filters: |
-            core:
-              - 'src/**'
-              - 'candle-binding/**'
-              - 'openvino-binding/**'
-              - 'bench/**'
-              - 'config/**'
-              - 'scripts/**'
-              - 'deploy/examples/**'
-              - 'tools/**'
-              - 'go.mod'
-              - 'go.sum'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'pyproject.toml'
-              - 'e2e/testing/llm-katan/**'
-              - 'e2e/testing/anthropic-shim/**'
-            dashboard:
-              - 'dashboard/**'
-            website:
-              - 'website/**'
-            docs:
-              - 'docs/**'
-              - '**/*.md'
-              - '**/*.mdx'
-            helm:
-              - 'deploy/helm/**'
-            e2e:
-              - 'e2e/testing/**'
-              - 'e2e/**'
-              - 'deploy/kubernetes/**'
-              - 'deploy/kserve/**'
-              - 'deploy/openshift/**'
-            ci:
-              - '.github/workflows/**'
-            docker:
-              - 'src/vllm-sr/Dockerfile*'
-              - 'dashboard/backend/Dockerfile'
-              - 'tools/docker/Dockerfile*'
-              - 'docker/**'
-            make:
-              - 'Makefile'
-              - 'tools/make/**'
-            # PR-level gate for operator-ci.yml jobs (its pull_request trigger
-            # has no paths filter). The operator consumes the config package,
-            # so config contract changes must re-run operator checks. Keep in
-            # sync with the push paths in operator-ci.yml.
-            operator:
-              - 'deploy/operator/**'
-              - 'src/semantic-router/pkg/config/**'
-              - '.github/workflows/operator-ci.yml'
-            perf:
-              - 'perf/**'
-            bindings:
-              - 'ml-binding/**'
-              - 'nlp-binding/**'
-              - 'onnx-binding/**'
-            agent_text:
-              - 'AGENTS.md'
-              - 'docs/agent/**'
-              - 'tools/agent/skills/**'
-              - 'src/fleet-sim/AGENTS.md'
-              - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
-              - 'src/vllm-sr/cli/AGENTS.md'
-              - 'src/semantic-router/pkg/config/AGENTS.md'
-              - 'src/semantic-router/pkg/classification/AGENTS.md'
-              - 'src/semantic-router/pkg/extproc/AGENTS.md'
-              - 'deploy/operator/api/v1alpha1/AGENTS.md'
-              - 'deploy/operator/controllers/AGENTS.md'
-              - 'dashboard/frontend/src/AGENTS.md'
-              - 'dashboard/frontend/src/pages/AGENTS.md'
-              - 'dashboard/frontend/src/components/AGENTS.md'
-              - 'dashboard/backend/handlers/AGENTS.md'
-              - 'e2e/testcases/AGENTS.md'
-              - '.github/copilot-instructions.md'
-              - '.github/PULL_REQUEST_TEMPLATE.md'
-              - '.github/ISSUE_TEMPLATE/**'
-              - '.prowlabels.yaml'
-            agent_exec:
-              - 'tools/agent/*.yaml'
-              - 'tools/agent/scripts/**'
-              - 'tools/make/agent.mk'
-              - '.github/workflows/ci-changes.yml'
-              - '.github/workflows/integration-test-k8s.yml'
-              - '.github/workflows/integration-test-memory.yml'
-              - '.github/workflows/integration-test-vllm-sr-cli.yml'
-              - '.github/workflows/pre-commit.yml'
-            # Per-profile e2e filters
-            e2e_istio:
-              - 'e2e/profiles/istio/**'
-              - 'deploy/kubernetes/istio/**'
-            e2e_agentgateway:
-              - 'e2e/profiles/agentgateway/**'
-              - 'deploy/kubernetes/agentgateway/**'
-            e2e_kubernetes:
-              - 'e2e/profiles/ai-gateway/**'
-              - 'deploy/kubernetes/ai-gateway/**'
-            e2e_aibrix:
-              - 'e2e/profiles/aibrix/**'
-              - 'deploy/kubernetes/aibrix/**'
-            e2e_dashboard:
-              - 'e2e/profiles/dashboard/**'
-              - 'e2e/testcases/dashboard_*.go'
-              - 'e2e/testcases/security_policy_apply.go'
-              - 'deploy/kubernetes/observability/dashboard/**'
-              - 'dashboard/backend/handlers/security_policy*.go'
-              - 'dashboard/backend/handlers/deploy.go'
-              - 'dashboard/backend/handlers/canonical_transport.go'
-            e2e_dynamic_config:
-              - 'e2e/profiles/dynamic-config/**'
-            e2e_multimodal_routing:
-              - 'e2e/profiles/multimodal-routing/**'
-            e2e_remote_embedding:
-              - 'e2e/profiles/remote-embedding/**'
-              - 'e2e/testcases/remote_embedding_routing.go'
-            e2e_llm_d:
-              - 'e2e/profiles/llm-d/**'
-              - 'deploy/kubernetes/llmd-base/**'
-            e2e_routing_strategies:
-              - 'e2e/profiles/routing-strategies/**'
-              - 'deploy/kubernetes/routing-strategies/**'
-            e2e_production_stack:
-              - 'e2e/profiles/production-stack/**'
-              - 'deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml'
-              - 'deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml'
-            e2e_response_api:
-              - 'e2e/profiles/response-api/**'
-              - 'e2e/profiles/response-api-redis/**'
-              - 'e2e/profiles/response-api-redis-cluster/**'
-              - 'deploy/kubernetes/response-api/**'
-            e2e_response_api_redis:
-              - 'e2e/profiles/response-api-redis/**'
-              - 'deploy/kubernetes/response-api/redis.yaml'
-            e2e_response_api_redis_cluster:
-              - 'e2e/profiles/response-api-redis-cluster/**'
-              - 'deploy/kubernetes/response-api/redis-cluster.yaml'
-            e2e_ml_model_selection:
-              - 'e2e/profiles/ml-model-selection/**'
-              - 'src/semantic-router/pkg/modelselection/**'
-              - 'src/training/model_selection/ml_model_selection/**'
-              - 'ml-binding/**'
-            e2e_multi_endpoint:
-              - 'e2e/profiles/multi-endpoint/**'
-              - 'e2e/config/config.multi-endpoint.yaml'
-              - 'scripts/multi-endpoint/**'
-            e2e_authz_rbac:
-              - 'e2e/profiles/authz-rbac/**'
-              - 'e2e/config/config.authz-rbac.yaml'
-              - 'e2e/config/authz-profile-*.yaml'
-              - 'src/semantic-router/pkg/classification/authz*.go'
-              - 'src/semantic-router/pkg/authz/**'
-              - 'dashboard/backend/handlers/security_policy*.go'
-            e2e_streaming:
-              - 'e2e/profiles/streaming/**'
-              - 'deploy/kubernetes/streaming/**'
-              - 'src/semantic-router/pkg/extproc/processor_req_body_streamed*.go'
-            e2e_anthropic_shim:
-              - 'e2e/profiles/anthropic-shim/**'
-              - 'e2e/testing/anthropic-shim/**'
-              - 'deploy/kubernetes/anthropic-backend/**'
-              - 'src/semantic-router/pkg/anthropic/outbound*.go'
-            # Common e2e code that affects all profiles
-            e2e_common:
-              - 'e2e/pkg/**'
-              - 'e2e/cmd/**'
-              - 'e2e/testcases/**'
-              - 'e2e/*.go'
-              - 'e2e/go.mod'
-              - 'e2e/go.sum'
-      - id: docs_only
+
+      - id: matrix
+        name: Build domain, image, and E2E matrices
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}
         run: |
-          python3 tools/agent/scripts/ci_docs_only.py \
-            --website "${{ steps.changes.outputs.website }}" \
-            --docs "${{ steps.changes.outputs.docs }}" \
-            --agent-text "${{ steps.changes.outputs.agent_text }}" \
-            --core "${{ steps.changes.outputs.core }}" \
-            --dashboard "${{ steps.changes.outputs.dashboard }}" \
-            --helm "${{ steps.changes.outputs.helm }}" \
-            --e2e "${{ steps.changes.outputs.e2e }}" \
-            --docker "${{ steps.changes.outputs.docker }}" \
-            --make "${{ steps.changes.outputs.make }}" \
-            --ci "${{ steps.changes.outputs.ci }}" \
-            --agent-exec "${{ steps.changes.outputs.agent_exec }}" \
-            --operator "${{ steps.changes.outputs.operator }}" \
-            --perf "${{ steps.changes.outputs.perf }}" \
-            --bindings "${{ steps.changes.outputs.bindings }}" \
-            --github-output
+          full_arg=()
+          if [[ "$FULL" == "true" ]]; then
+            full_arg+=(--full)
+          fi
+          python3 tools/ci/classify_pr_changes.py \
+            --base "$BASE_SHA" \
+            --head "$GITHUB_SHA" \
+            "${full_arg[@]}" \
+            --github-output "$GITHUB_OUTPUT"

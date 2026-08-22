@@ -91,7 +91,7 @@ func (p *PreferenceClassifier) classifyExternal(conversationJSON string) (*Prefe
 	}
 
 	output := resp.Choices[0].Message.Content
-	logging.Infof("Preference classification response: %s", output)
+	logging.Infof("Preference classification response: %s", logging.ContentDescriptor(output))
 
 	result, err := p.parsePreferenceOutput(output)
 	if err != nil {

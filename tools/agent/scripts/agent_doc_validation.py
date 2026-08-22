@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from agent_governance_doc_support import validate_plan_inventory_and_template
@@ -18,34 +19,34 @@ from agent_tech_debt_support import validate_tech_debt_inventory_and_template
 MAX_AGENTS_ENTRY_LINES = 90
 TEMPORARY_WORKING_NOTES = {"TASKS.md", "CI_LOOP.md"}
 REQUIRED_DOC_SECTIONS = {
-    "docs/agent/README.md": [
+    "tools/agent/docs/README.md": [
         "## Maintainer",
         "## Contributor",
         "## Coding Agent",
         "## Governance",
         "## Executable Contract",
     ],
-    "docs/agent/context-management.md": [
+    "tools/agent/docs/context-management.md": [
         "## Why This Exists",
         "## Disclosure Layers",
         "## Context Pack Flow",
         "## Source of Truth",
         "## Maintenance Rules",
     ],
-    "docs/agent/governance.md": [
+    "tools/agent/docs/governance.md": [
         "## Rule Layers",
         "## Source of Truth Policy",
         "## What Does Not Belong in the Canonical Harness",
         "## Maintenance Rules",
         "## Standard Validation Entry",
     ],
-    "docs/agent/tech-debt-register.md": [
+    "tools/agent/docs/tech-debt-register.md": [
         "## Why This Exists",
         "## Canonical Files",
         "## Policy",
         "## How to Retire Debt",
     ],
-    "docs/agent/tech-debt/README.md": [
+    "tools/agent/docs/tech-debt/README.md": [
         "## When to Create or Update a Debt Entry",
         "## What Belongs in a Debt Entry",
         "## What Does Not Belong in a Debt Entry",
@@ -53,7 +54,7 @@ REQUIRED_DOC_SECTIONS = {
         "## Debt Entry Template",
         "## Open Debt By Owner Plan",
     ],
-    "docs/agent/plans/README.md": [
+    "tools/agent/docs/plans/README.md": [
         "## Maintainer Model",
         "## When to Use an Execution Plan",
         "## What Belongs in an Execution Plan",
@@ -64,17 +65,17 @@ REQUIRED_DOC_SECTIONS = {
         "## Current Debt Plans",
         "## Current Execution Plans",
     ],
-    "docs/agent/local-rules.md": [
+    "tools/agent/docs/local-rules.md": [
         "## Indexed Local `AGENTS.md` Files",
         "## Policy",
     ],
-    "docs/agent/skill-catalog.md": [
+    "tools/agent/docs/skill-catalog.md": [
         "## Audience Model",
         "## Primary Skills",
         "## Support Skills",
         "## Source of Truth",
     ],
-    "docs/agent/maintainer-ops.md": [
+    "tools/agent/docs/maintainer-ops.md": [
         "## Why This Exists",
         "## Local Board",
         "## Issue Groups",
@@ -138,9 +139,9 @@ def validate_agent_harness_layers(
 
 def validate_agent_entry_docs(repo_manifest: dict, errors: list[str]) -> None:
     if not AGENT_INDEX_DOC.exists():
-        errors.append("Missing docs/agent/README.md")
+        errors.append("Missing tools/agent/docs/README.md")
     if not AGENT_GOVERNANCE_DOC.exists():
-        errors.append("Missing docs/agent/governance.md")
+        errors.append("Missing tools/agent/docs/governance.md")
 
     agents_text = AGENTS_ENTRY_DOC.read_text(encoding="utf-8")
     agent_line_count = len(agents_text.splitlines())
@@ -148,11 +149,20 @@ def validate_agent_entry_docs(repo_manifest: dict, errors: list[str]) -> None:
         errors.append(
             f"AGENTS.md is {agent_line_count} lines; keep the agent entry under {MAX_AGENTS_ENTRY_LINES} lines"
         )
-    if "docs/agent/README.md" not in agents_text:
-        errors.append("AGENTS.md must link to docs/agent/README.md")
+    required_entry_refs = {
+        "tools/agent/docs/README.md": "link to the agent docs index",
+        "make agent-report": "require the repository task-routing command",
+        "tools/agent/skills/": "point to routed repository skills",
+    }
+    for required_ref, purpose in required_entry_refs.items():
+        if required_ref not in agents_text:
+            errors.append(f"AGENTS.md must {purpose}: missing '{required_ref}'")
 
     repo_docs = set(repo_manifest.get("docs", []))
-    for required_doc in ("docs/agent/README.md", "docs/agent/governance.md"):
+    for required_doc in (
+        "tools/agent/docs/README.md",
+        "tools/agent/docs/governance.md",
+    ):
         if required_doc not in repo_docs:
             errors.append(
                 f"repo-manifest docs must include canonical agent doc '{required_doc}'"
@@ -172,8 +182,10 @@ def validate_agent_contract_subsystem(repo_manifest: dict, errors: list[str]) ->
         errors.append("repo-manifest is missing the 'agent-contract' subsystem")
         return
 
-    if "docs/agent/README.md" not in agent_contract.get("entrypoints", []):
-        errors.append("agent-contract entrypoints must include docs/agent/README.md")
+    if "tools/agent/docs/README.md" not in agent_contract.get("entrypoints", []):
+        errors.append(
+            "agent-contract entrypoints must include tools/agent/docs/README.md"
+        )
     validate_no_temporary_canonical_refs(
         "repo-manifest agent-contract paths",
         agent_contract.get("paths", []),
@@ -218,7 +230,7 @@ def validate_agent_doc_inventory(repo_manifest: dict, errors: list[str]) -> None
     manifest_docs = set(repo_manifest.get("docs", []))
     actual_docs = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in sorted((REPO_ROOT / "docs" / "agent").rglob("*.md"))
+        for path in sorted((REPO_ROOT / "tools" / "agent" / "docs").rglob("*.md"))
     }
     missing_from_manifest = actual_docs - manifest_docs
     if missing_from_manifest:
@@ -231,22 +243,25 @@ def validate_agent_doc_inventory(repo_manifest: dict, errors: list[str]) -> None
 def validate_doc_index_coverage(repo_manifest: dict, errors: list[str]) -> None:
     readme_text = AGENT_INDEX_DOC.read_text(encoding="utf-8")
     for doc_path in repo_manifest.get("docs", []):
-        if not doc_path.startswith("docs/agent/") or doc_path == "docs/agent/README.md":
-            continue
         if (
-            doc_path.startswith("docs/agent/plans/")
-            and doc_path != "docs/agent/plans/README.md"
+            not doc_path.startswith("tools/agent/docs/")
+            or doc_path == "tools/agent/docs/README.md"
         ):
             continue
         if (
-            doc_path.startswith("docs/agent/tech-debt/")
-            and doc_path != "docs/agent/tech-debt/README.md"
+            doc_path.startswith("tools/agent/docs/plans/")
+            and doc_path != "tools/agent/docs/plans/README.md"
         ):
             continue
-        relative_target = Path(doc_path).relative_to("docs/agent").as_posix()
+        if (
+            doc_path.startswith("tools/agent/docs/tech-debt/")
+            and doc_path != "tools/agent/docs/tech-debt/README.md"
+        ):
+            continue
+        relative_target = Path(doc_path).relative_to("tools/agent/docs").as_posix()
         if f"({relative_target})" not in readme_text:
             errors.append(
-                f"docs/agent/README.md must link to canonical agent doc '{doc_path}'"
+                f"tools/agent/docs/README.md must link to canonical agent doc '{doc_path}'"
             )
 
 
@@ -256,9 +271,9 @@ def validate_local_agent_rule_inventory(repo_manifest: dict, errors: list[str]) 
         errors.append("repo-manifest must define local_agent_rules")
         return
 
-    local_rules_text = (REPO_ROOT / "docs" / "agent" / "local-rules.md").read_text(
-        encoding="utf-8"
-    )
+    local_rules_text = (
+        REPO_ROOT / "tools" / "agent" / "docs" / "local-rules.md"
+    ).read_text(encoding="utf-8")
     for entry in local_rules:
         path = entry["path"]
         absolute_path = REPO_ROOT / path
@@ -268,12 +283,11 @@ def validate_local_agent_rule_inventory(repo_manifest: dict, errors: list[str]) 
         for field in ("steward", "freshness"):
             if not entry.get(field):
                 errors.append(f"Local agent rule '{path}' is missing {field}")
-        relative_link_target = Path(path).as_posix()
-        if (
-            f"({Path('..', '..', relative_link_target).as_posix()})"
-            not in local_rules_text
-        ):
-            errors.append(f"docs/agent/local-rules.md must link to '{path}'")
+        relative_link_target = Path(
+            os.path.relpath(absolute_path, AGENT_INDEX_DOC.parent)
+        ).as_posix()
+        if f"({relative_link_target})" not in local_rules_text:
+            errors.append(f"tools/agent/docs/local-rules.md must link to '{path}'")
         validate_local_agent_rule_template(path, absolute_path, errors)
 
 
@@ -370,7 +384,7 @@ def validate_doc_governance(repo_manifest: dict, errors: list[str]) -> None:
     expected_paths = {
         path
         for path in repo_manifest.get("docs", [])
-        if path == "AGENTS.md" or path.startswith("docs/agent/")
+        if path == "AGENTS.md" or path.startswith("tools/agent/docs/")
     }
     missing_paths = expected_paths - governed_paths
     if missing_paths:

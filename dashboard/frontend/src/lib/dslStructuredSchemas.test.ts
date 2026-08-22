@@ -50,6 +50,15 @@ describe('DSL structured field schemas', () => {
       'max_cost_per_1m',
       'max_inflight',
     ])
+
+    const prompt = getAlgorithmFieldSchema('prompt')
+    const promptConfig = requireField(prompt, 'prompt')
+    expect(promptConfig.type).toBe('object')
+    expect(promptConfig.fields?.map((field) => field.key)).toEqual([
+      'model',
+      'instructions',
+      'timeout_seconds',
+    ])
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
@@ -69,9 +78,20 @@ describe('DSL structured field schemas', () => {
     expect(requireField(getSignalFieldSchema('authz'), 'subjects').type).toBe('object[]')
     expect(requireField(getSignalFieldSchema('kb'), 'target').type).toBe('object')
 
+    const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')
+    expect(metadataPredicate.fields?.map((field) => field.key)).toEqual(['equals', 'in', 'exists'])
+    expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
+
     const headerMutation = getPluginFieldSchema('header_mutation')
     expect(requireField(headerMutation, 'add').type).toBe('object[]')
     expect(requireField(headerMutation, 'update').type).toBe('object[]')
     expect(requireField(headerMutation, 'delete').type).toBe('string[]')
+
+    const tools = getPluginFieldSchema('tools')
+    expect(requireField(tools, 'strip_tool_history').type).toBe('boolean')
+    const dynamicRetrieval = requireField(tools, 'dynamic_retrieval')
+    expect(dynamicRetrieval.type).toBe('object')
+    expect(requireField(dynamicRetrieval.fields || [], 'history_window').type).toBe('number')
+    expect(requireField(dynamicRetrieval.fields || [], 'weights').type).toBe('object')
   })
 })

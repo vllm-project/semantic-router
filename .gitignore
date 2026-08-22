@@ -93,8 +93,7 @@ models
 # Training data
 wikipedia_data/
 
-# Added by Claude Task Master
-# Logs
+# Logs and dependency state
 logs
 *.log
 npm-debug.log*
@@ -102,26 +101,32 @@ yarn-debug.log*
 yarn-error.log*
 dev-debug.log
 node_modules/
-# Editor directories and files
-.idea
-.vscode
+
+# Local task and AI-tool state
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
-# Task files
 tasks.json
 tasks/
 .cursor/
 .roo/
-.env.example
 .taskmasterconfig
 example_prd.txt
 .roomodes
 .windsurfrules
-scripts/prd.txt
 .env.taskmaster
+.augment
+.cursorrules
+.cursorrules.*
+.opencode.yaml
+**/.cursorrules
+**/.cursorrules.*
+**/.opencode.yaml
+**/[Cc]laude*.md
+**/[Cc]ursor*.md
+.github/[Cc]laude*.md
+.github/[Cc]ursor*.md
 
 website/build
 .docusaurus
@@ -130,21 +135,6 @@ spec/
 results/
 reports/
 test-results/
-
-# AI tooling — block personal/local agent configs in subdirectories
-**/[Cc]laude*.md
-**/[Cc]ursor*.md
-.github/[Cc]laude*.md
-.github/[Cc]ursor*.md
-**/.cursorrules
-**/.cursorrules.*
-
-# Allow only the root-level agent manifests that are intentionally tracked
-!/CLAUDE.md
-!/.cursorrules
-
-# augment editor rules
-.augment
 
 # Local agent harness artifacts
 .agent-harness/
@@ -180,17 +170,8 @@ dashboard/backend/dashboard-server.exe
 dashboard/backend/data/*
 !dashboard/backend/data/.gitignore
 
-# Keep old HTML backup for reference
+# Local HTML backup
 dashboard/frontend/index.html.old
-
-
-* text=auto eol=lf
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.pdf binary
-*.zip binary
 
 # Kind cluster configuration
 tools/kind/kind-config.yaml
@@ -205,10 +186,6 @@ FactCHD_dataset/
 .vllm-sr/
 .codex-go-cache/
 .copilot-tmp/
-
-# AWS deployment files (contain instance IPs and IDs)
-src/training/cache_embeddings/aws/vllm-instance-*.txt
-src/training/cache_embeddings/aws/vllm-inventory-*.ini
 
 # Dashboard Grafana configuration
 grafana/

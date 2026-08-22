@@ -17,11 +17,24 @@ providers:
       gpt:
         type: reasoning_effort
         parameter: reasoning.effort
+      mistral:
+        type: top_level_reasoning_effort
+        parameter: reasoning_effort
   models:
     - name: qwen3-8b
       reasoning_family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+        health_check_path: /health
+        health_check_interval: 10s
+        health_check_timeout: 2s
       pricing:
         currency: USD
         prompt_per_1m: 0.18
@@ -96,6 +109,7 @@ providers:
           weight: 100
 
 routing:
+  strategy: priority
   modelCards:
     - name: qwen3-8b
       param_size: 8B
@@ -338,6 +352,14 @@ routing:
             pattern: '[?？]'
         predicate:
           lt: 0.05
+      - name: long_current_turn_bytes
+        description: Current user turn is at least four thousand UTF-8 bytes.
+        feature:
+          type: count
+          source:
+            type: text_bytes
+        predicate:
+          gte: 4000
 
     complexity:
       - name: needs_reasoning
@@ -476,6 +498,12 @@ routing:
         predicate:
           gt: 5
           lte: 99
+      - name: has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
 
     events:
       - name: critical_payment_event
@@ -489,6 +517,29 @@ routing:
         action_codes:
           - TXN_DECLINE
         temporal: true
+
+    metadata:
+      - name: consent_denied
+        description: Caller explicitly denied remote processing consent.
+        key: consent
+        predicate:
+          equals: denied
+
+    classifiers:
+      - name: generic-safety-score
+        description: Generic binary safety classification head.
+        type: local
+        model_path: models/mmbert32k-jailbreak-detector-merged
+        labels: [SAFE, JAILBREAK]
+        use_cpu: true
+      - name: tool-risk
+        description: Prompted tool execution risk labeler.
+        type: llm
+        model: external-classifier
+        labels: [SAFE, RISKY]
+        instructions: >-
+          Choose RISKY only for destructive, privileged, or irreversible tool
+          operations.
 
   projections:
     partitions:
@@ -555,6 +606,9 @@ routing:
       priority: 200
       tier: 2
       output_contract: Preserve any explicit user-requested output format exactly.
+      annotations:
+        policy_class: business
+        owner: routing-platform
       rules:
         operator: AND
         conditions:
@@ -585,11 +639,68 @@ routing:
             enabled: true
             mode: insert
             system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
-            similarity_threshold: 0.82
+            mode: exact_then_semantic
+            scope: user
+            semantic:
+              similarity_threshold: 0.82
             ttl_seconds: 7200
+            request_controls:
+              enabled: true
+              header: x-vsr-cache-control
+              allowed:
+                - no-cache
+                - no-store
+                - bypass
+                - max-age
+                - ttl
+              max_ttl_seconds: 7200
+            personalized:
+              mode: disabled
+            revision:
+              cache_epoch: "2026-08"
+              model_revision: "model-catalog-v1"
+              prompt_revision: "prompts-v1"
+              policy_revision: "policy-v1"
+        - type: context_compression
+          configuration:
+            enabled: true
+            mode: auto
+            budget:
+              trigger_tokens: auto
+              target_tokens: auto
+              reserve_output_tokens: auto
+            targets:
+              tool_outputs:
+                mode: extractive
+                min_tokens: 2000
+                target_tokens: 1000
+              history:
+                mode: preserve
+              rag:
+                mode: preserve
+              memory:
+                mode: preserve
+            scoring:
+              method: bm25
+              embedding_model_ref: ""
+            recovery:
+              enabled: false
+              store: response_cache
+              ttl_seconds: 900
+              max_bytes_per_request: 10485760
+              max_total_bytes: 268435456
+              max_retrievals: 8
+            request_controls:
+              enabled: false
+              header: x-vsr-compression-control
+              allowed:
+                - bypass
+                - target
+              max_target_tokens: 16000
+            failure_mode: fail_open
         - type: tools
           configuration:
             enabled: true
@@ -653,7 +764,7 @@ routing:
           on_error: skip
           escalation_order: small_to_large
           cost_quality_tradeoff: 0.45
-          token_filter: alpha_numeric
+          token_filter: tool_call_args
           verifier_server_url: ""
           verifier_timeout_seconds: 0
       plugins:
@@ -761,6 +872,7 @@ routing:
           synthesis_template: Fuse the strongest technical findings into a final answer.
           synthesis_model: qwen3-32b
           max_concurrent: 3
+          max_completion_tokens: 1024
           round_timeout_seconds: 120
           min_successful_responses: 2
           on_error: skip
@@ -1011,6 +1123,12 @@ routing:
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            strip_tool_history: true
     - name: spanish_adaptive_route
       description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
       priority: 135
@@ -1125,6 +1243,45 @@ routing:
 
     # multi_factor example: composes quality/latency/cost/load into one
     # weighted score with optional SLO ceilings. Issue #37.
+    - name: prompt_selected_route
+      description: Prompt-driven selection among bounded decision candidates.
+      priority: 126
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: prompt
+        on_error: fallback
+        prompt:
+          model: qwen3-8b
+          instructions: >-
+            Choose qwen3-8b for ordinary requests and qwen3-32b for hard
+            reasoning, coding, or multi-step analysis.
+          timeout_seconds: 5
+
+    - name: classifier_band_route
+      description: Route a bounded generic classifier score to a local model.
+      priority: 125
+      rules:
+        operator: AND
+        conditions:
+          - type: classifier
+            name: generic-safety-score
+            label: JAILBREAK
+            predicate:
+              gte: 0.5
+            on_error: no_match
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+
     - name: multi_factor_route
       description: Compose quality, latency, cost, and load signals into a single weighted score.
       priority: 124
@@ -1371,6 +1528,7 @@ recipes:
   - name: privacy-first
     description: Keeps privacy-sensitive traffic on the local default-tier model.
     routing:
+      strategy: confidence
       signals:
         keywords:
           - name: privacy_recipe_keywords
@@ -1476,6 +1634,15 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+      state_store:
+        backend: redis
+        ttl_seconds: 86400
+        timeout_ms: 50
+        redis:
+          address: redis:6379
+          password: redis-secret
+          database: 2
+          key_prefix: "vsr:router-session:v1:"
 
   services:
     api:
@@ -1550,16 +1717,17 @@ global:
         user_id_header: x-user-id
         user_groups_header: x-user-groups
       providers:
-        - type: header
+        - type: header-injection
           headers:
             X-Plan: premium
             X-Role: admin
     ratelimit:
       fail_open: false
       providers:
-        - type: redis
-          address: redis:6379
+        - type: envoy-ratelimit
+          address: ratelimit.default.svc.cluster.local:8081
           domain: api
+        - type: local-limiter
           rules:
             - name: premium-per-minute
               match:
@@ -1591,7 +1759,10 @@ global:
             - metrics.read
             - classify.invoke
             - config.read
+            - replay.read
             - data.read
+            - cache.read
+            - compression.read
           operator:
             - health.read
             - ready.read
@@ -1601,8 +1772,14 @@ global:
             - config.read
             - config.write
             - learning.ingest
+            - replay.read
+            - replay.detail
             - data.read
             - data.write
+            - cache.read
+            - cache.invalidate
+            - compression.read
+            - compression.preview
           admin:
             - "*"
     startup_status:
@@ -1647,7 +1824,7 @@ global:
         collection_name: router_replay
 
   stores:
-    semantic_cache:
+    response_cache:
       backend_type: milvus
       enabled: true
       similarity_threshold: 0.86
@@ -1655,39 +1832,6 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
-      redis:
-        connection:
-          host: redis
-          port: 6379
-          database: 0
-          password: redis-secret
-          timeout: 5
-          tls:
-            enabled: false
-            cert_file: certs/redis.crt
-            key_file: certs/redis.key
-            ca_file: certs/ca.crt
-        index:
-          name: semantic_cache_idx
-          prefix: "vsr:cache:"
-          vector_field:
-            name: embedding
-            dimension: 768
-            metric_type: COSINE
-          index_type: HNSW
-          params:
-            M: 16
-            efConstruction: 200
-        search:
-          topk: 10
-        development:
-          drop_index_on_startup: false
-          auto_create_index: true
-          verbose_errors: true
-        logging:
-          level: info
-          enable_query_log: true
-          enable_metrics: true
       milvus:
         connection:
           host: milvus
@@ -1744,46 +1888,6 @@ global:
           drop_collection_on_startup: false
           auto_create_collection: true
           verbose_errors: true
-      valkey:
-        connection:
-          host: valkey
-          port: 6379
-          database: 0
-          password: valkey-secret
-          timeout: 5
-          tls:
-            enabled: false
-            cert_file: certs/valkey.crt
-            key_file: certs/valkey.key
-            ca_file: certs/ca.crt
-        index:
-          name: semantic_cache_idx
-          prefix: "vsr:cache:"
-          vector_field:
-            name: embedding
-            dimension: 768
-            metric_type: COSINE
-          index_type: HNSW
-          params:
-            M: 16
-            efConstruction: 200
-        search:
-          topk: 10
-        development:
-          drop_index_on_startup: false
-          auto_create_index: true
-          verbose_errors: true
-        logging:
-          level: info
-          enable_query_log: true
-          enable_metrics: true
-      qdrant:
-        host: qdrant
-        port: 6334
-        api_key: ""
-        use_tls: false
-        connect_timeout: 10
-        collection_name: semantic_cache
     memory:
       enabled: true
       backend: milvus
@@ -1954,7 +2058,7 @@ global:
       enabled: true
       top_k: 5
       similarity_threshold: 0.35
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
       advanced_filtering:
         enabled: true
@@ -2053,7 +2157,8 @@ global:
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
     external:
-      - llm_provider: openai
+      - name: external-guardrail
+        llm_provider: openai
         model_role: guardrail
         llm_endpoint:
           address: openai-proxy
@@ -2069,6 +2174,22 @@ global:
         access_key: external-guardrail-key
         max_tokens: 2048
         temperature: 0.2
+      - name: external-classifier
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: openai-proxy
+          port: 443
+          protocol: https
+          name: openai-classifier
+          use_chat_template: true
+          prompt_template: "{{ .Prompt }}"
+        llm_model_name: gpt-4.1-mini
+        llm_timeout_seconds: 15
+        parser_type: json
+        access_key: external-classifier-key
+        max_tokens: 128
+        temperature: 0
     kbs:
       - name: privacy_kb
         source:
@@ -2182,12 +2303,18 @@ global:
         model_id: models/mmbert32k-jailbreak-detector-merged
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
+        variant: mmbert32k
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        use_vllm: false
+        positive_labels: [jailbreak]
+        # allow (default) tolerates a classifier-backend failure and treats the
+        # affected content as not matching; block treats it as a match instead,
+        # since an inference failure means the content could not be verified safe.
+        on_error: allow
       classifier:
         domain:
+          # Omit to keep the historical behaviour of running whenever a model is
+          # configured; false disables the classifier outright.
+          enabled: true
           model_ref: domain_classifier
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
@@ -2208,6 +2335,9 @@ global:
           threshold: 0.6
           timeout_seconds: 15
         pii:
+          # Omit to keep the historical behaviour of running whenever a model is
+          # configured; false disables the classifier outright.
+          enabled: true
           model_ref: pii_classifier
           model_id: models/mmbert32k-pii-detector-merged
           threshold: 0.9
@@ -2242,6 +2372,9 @@ global:
           use_cpu: true
           use_mmbert_32k: true
         detector:
+          backend: candle
+          endpoint: ""
+          include_explanation: false
           model_ref: hallucination_detector
           model_id: models/mom-halugate-detector
           threshold: 0.82

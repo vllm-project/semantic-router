@@ -226,7 +226,7 @@ func (c *HTTPClient) CallTool(ctx context.Context, name string, arguments map[st
 
 	response, err := c.sendRequest(ctx, "tools/call", request)
 	if err != nil {
-		c.log(LoggingLevelError, fmt.Sprintf("Tool call failed: %v", err))
+		c.log(LoggingLevelError, toolCallFailureLogMessage(name, err))
 		return nil, fmt.Errorf("tool call failed: %w", err)
 	}
 

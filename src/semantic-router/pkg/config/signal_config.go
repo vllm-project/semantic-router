@@ -7,24 +7,26 @@ import (
 )
 
 type Signals struct {
-	KeywordRules      []KeywordRule      `yaml:"keyword_rules,omitempty"`
-	EmbeddingRules    []EmbeddingRule    `yaml:"embedding_rules,omitempty"`
-	Categories        []Category         `yaml:"categories"`
-	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
-	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
-	ReaskRules        []ReaskRule        `yaml:"reask_rules,omitempty"`
-	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
-	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
-	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
-	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
-	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
-	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
-	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
-	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
-	KBRules           []KBSignalRule     `yaml:"kb,omitempty"`
-	ConversationRules []ConversationRule `yaml:"conversation,omitempty"`
-	EventRules        []EventRule        `yaml:"events,omitempty"`
+	KeywordRules      []KeywordRule          `yaml:"keyword_rules,omitempty"`
+	EmbeddingRules    []EmbeddingRule        `yaml:"embedding_rules,omitempty"`
+	Categories        []Category             `yaml:"categories"`
+	FactCheckRules    []FactCheckRule        `yaml:"fact_check_rules,omitempty"`
+	UserFeedbackRules []UserFeedbackRule     `yaml:"user_feedback_rules,omitempty"`
+	ReaskRules        []ReaskRule            `yaml:"reask_rules,omitempty"`
+	PreferenceRules   []PreferenceRule       `yaml:"preference_rules,omitempty"`
+	LanguageRules     []LanguageRule         `yaml:"language_rules,omitempty"`
+	ContextRules      []ContextRule          `yaml:"context_rules,omitempty"`
+	StructureRules    []StructureRule        `yaml:"structure_rules,omitempty"`
+	ComplexityRules   []ComplexityRule       `yaml:"complexity_rules,omitempty"`
+	ModalityRules     []ModalityRule         `yaml:"modality_rules,omitempty"`
+	RoleBindings      []RoleBinding          `yaml:"role_bindings,omitempty"`
+	JailbreakRules    []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	PIIRules          []PIIRule              `yaml:"pii,omitempty"`
+	KBRules           []KBSignalRule         `yaml:"kb,omitempty"`
+	ConversationRules []ConversationRule     `yaml:"conversation,omitempty"`
+	EventRules        []EventRule            `yaml:"events,omitempty"`
+	MetadataRules     []MetadataRule         `yaml:"metadata,omitempty"`
+	ClassifierRules   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.
@@ -293,36 +295,8 @@ type ModelScore struct {
 	UseReasoning *bool   `yaml:"use_reasoning"`
 }
 
-type DomainAwarePolicies struct {
-	SystemPromptPolicy    `yaml:",inline"`
-	SemanticCachingPolicy `yaml:",inline"`
-	JailbreakPolicy       `yaml:",inline"`
-	PIIDetectionPolicy    `yaml:",inline"`
-}
-
 type CategoryMetadata struct {
 	Name           string   `yaml:"name"`
 	Description    string   `yaml:"description,omitempty"`
 	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
-}
-
-type SystemPromptPolicy struct {
-	SystemPrompt        string `yaml:"system_prompt,omitempty"`
-	SystemPromptEnabled *bool  `yaml:"system_prompt_enabled,omitempty"`
-	SystemPromptMode    string `yaml:"system_prompt_mode,omitempty"`
-}
-
-type SemanticCachingPolicy struct {
-	SemanticCacheEnabled             *bool    `yaml:"semantic_cache_enabled,omitempty"`
-	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
-}
-
-type JailbreakPolicy struct {
-	JailbreakEnabled   *bool    `yaml:"jailbreak_enabled,omitempty"`
-	JailbreakThreshold *float32 `yaml:"jailbreak_threshold,omitempty"`
-}
-
-type PIIDetectionPolicy struct {
-	PIIEnabled   *bool    `yaml:"pii_enabled,omitempty"`
-	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
 }

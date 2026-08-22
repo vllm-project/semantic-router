@@ -2,10 +2,13 @@ package services
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 func mustMessageContent(t *testing.T, value interface{}) json.RawMessage {
@@ -55,6 +58,185 @@ func TestIntentRequestResolveSignalInput_UsesMessagesConversationHistory(t *test
 	)
 }
 
+func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *testing.T) {
+	req := IntentRequest{
+		Tools: []json.RawMessage{
+			mustMessageContent(t, map[string]any{"type": "function", "name": "search"}),
+			mustMessageContent(t, map[string]any{"type": "function", "name": "edit"}),
+		},
+		Messages: []IntentMessage{
+			{Role: "developer", Content: mustMessageContent(t, "Use tools when needed.")},
+			{Role: "user", Content: mustMessageContent(t, "Investigate the failure.")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, ""),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{"id": "call-1"})},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "failure log")},
+			{Role: "user", Content: mustMessageContent(t, "Now implement the fix.")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.True(t, facts.HasDeveloperMessage)
+	assert.Equal(t, 2, facts.UserMessageCount)
+	assert.Equal(t, 1, facts.AssistantMessageCount)
+	assert.Equal(t, 1, facts.ToolMessageCount)
+	assert.Equal(t, 2, facts.ToolDefinitionCount)
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Equal(t, 1, facts.ToolResultCount)
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.True(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_LastUserAfterToolResultRequiresAdjacency(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "run the tool")},
+			{
+				Role:      "assistant",
+				Content:   mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"call-1"}`)},
+			},
+			{Role: "tool", ToolCallID: "call-1", Content: mustMessageContent(t, "done")},
+			{Role: "user", Content: mustMessageContent(t, "continue")},
+			{Role: "assistant", Content: mustMessageContent(t, "intermediate reply")},
+			{Role: "user", Content: mustMessageContent(t, "new turn")},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, "user", facts.LastMessageRole)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.False(t, facts.LastUserAfterToolResult,
+		"an older tool result must not mark a non-adjacent user turn")
+}
+
+func TestIntentRequestResolveSignalInput_PendingAssistantToolCallIsNotToolResult(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "look this up")},
+			{
+				Role:    "assistant",
+				Content: mustMessageContent(t, nil),
+				ToolCalls: []json.RawMessage{json.RawMessage(
+					`{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}"}}`,
+				)},
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	facts := input.conversationFacts
+	assert.Equal(t, 1, facts.AssistantToolCallCount)
+	assert.Zero(t, facts.ToolResultCount)
+	assert.Equal(t, "assistant", facts.LastMessageRole)
+	assert.False(t, facts.LastMessageToolResult)
+	assert.False(t, facts.LastUserAfterToolResult)
+}
+
+func TestIntentRequestResolveSignalInput_RequestContextEstimateMatchesDataPlaneContract(t *testing.T) {
+	priorUser := strings.Repeat("prior", 2_000)
+	toolResult := strings.Repeat("result", 2_000)
+	schema := strings.Repeat("schema", 2_000)
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, priorUser)},
+			{
+				Role:             "assistant",
+				Content:          mustMessageContent(t, nil),
+				ReasoningContent: json.RawMessage(`"checked exact integer arguments"`),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{
+					"id":   "call-1",
+					"type": "function",
+					"function": map[string]any{
+						"name": "lookup",
+						"arguments": json.RawMessage(
+							`{"id":9007199254740993123456789}`,
+						),
+					},
+				})},
+			},
+			{
+				Role:       "tool",
+				ToolCallID: "call-1",
+				Content:    mustMessageContent(t, toolResult),
+			},
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]any{
+					{"type": "text", "text": "ok"},
+					{
+						"type": "image_url",
+						"image_url": map[string]string{
+							"url": "data:image/png;base64,PRIVATE",
+						},
+					},
+				}),
+			},
+		},
+		Tools: []json.RawMessage{mustMessageContent(t, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "lookup",
+				"description": schema,
+				"parameters":  map[string]any{"type": "object"},
+			},
+		})},
+		Functions: []json.RawMessage{mustMessageContent(t, map[string]any{
+			"name":       "legacy_lookup",
+			"parameters": map[string]any{"type": "object"},
+		})},
+		ToolChoice:          json.RawMessage(`{"type":"function","function":{"name":"lookup"}}`),
+		FunctionCall:        json.RawMessage(`{"name":"legacy_lookup"}`),
+		ResponseFormat:      json.RawMessage(`{"type":"json_object"}`),
+		MaxTokens:           json.RawMessage(`8192`),
+		MaxCompletionTokens: json.RawMessage(`4096`),
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	envelope, err := json.Marshal(req)
+	require.NoError(t, err)
+	want := classification.EstimateOpenAIRequestContext(envelope)
+
+	assert.Equal(t, "ok", input.evaluationText,
+		"semantic signals must still receive only the current user text")
+	assert.Equal(t, want.TokenFloor, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, want.TextBytes, input.requestFacts.ContextTextBytes)
+	assert.Equal(t, want.EquivalentBytes, input.requestFacts.ContextEquivalentBytes)
+	assert.Equal(t, want.HasNonText, input.requestFacts.ContextHasNonText)
+	assert.Greater(t, input.requestFacts.ContextTokenFloor, 16_000)
+	assert.Equal(t, 2, input.conversationFacts.ToolDefinitionCount)
+}
+
+func TestIntentRequestResolveSignalInput_DoesNotDoubleCountTopLevelTextWithCurrentUser(t *testing.T) {
+	req := IntentRequest{
+		Text: "same current user turn",
+		Messages: []IntentMessage{{
+			Role:    "user",
+			Content: mustMessageContent(t, "same current user turn"),
+		}},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	envelope, err := json.Marshal(req)
+	require.NoError(t, err)
+	want := classification.EstimateOpenAIRequestContext(envelope)
+
+	assert.Equal(t, want.TokenFloor, input.requestFacts.ContextTokenFloor)
+	assert.Equal(t, want.TextBytes, input.requestFacts.ContextTextBytes)
+}
+
 func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	req := IntentRequest{Text: "Fallback single-turn request"}
 
@@ -88,6 +270,8 @@ func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *tes
 
 	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
 }
 
 func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) {
@@ -108,6 +292,7 @@ func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) 
 
 	assert.Empty(t, input.evaluationText)
 	assert.Equal(t, dataURI, input.imageURL)
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount)
 }
 
 func TestIntentRequestResolveSignalInput_CanonicalizesUppercaseImageURL(t *testing.T) {
@@ -249,6 +434,51 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 
 	assert.Equal(t, "Describe it.", input.evaluationText)
 	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
+	assert.Equal(t, 1, input.conversationFacts.ImageContentCount,
+		"image_content is a shape fact and must not depend on URL fetch safety")
+}
+
+func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {
+	req := IntentRequest{Metadata: map[string]string{"cohort": "canary"}}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, "canary", input.requestFacts.Metadata["cohort"])
+}
+
+func TestIntentRequestResolveSignalInput_PreservesWhitespaceForTextBytes(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{{
+			Role:    "user",
+			Content: mustMessageContent(t, " \t \n"),
+		}},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+	assert.Equal(t, 1, input.conversationFacts.UserMessageCount)
+}
+
+func TestIntentRequestResolveSignalInput_PreservesTopLevelWhitespaceForTextBytes(t *testing.T) {
+	input, err := (IntentRequest{Text: " \t \n"}).resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, " \t \n", input.currentUserText)
+}
+
+func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) {
+	req := IntentRequest{
+		Metadata: map[string]string{"cohort": strings.Repeat("x", maxIntentMetadataValueBytes+1)},
+	}
+
+	_, err := req.resolveSignalInput()
+	require.ErrorIs(t, err, ErrInvalidRequestFacts)
 }
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {

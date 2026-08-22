@@ -1,28 +1,24 @@
 name: Pre-commit
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
+    inputs:
+      docs_only:
+        description: Run the lightweight docs and website gate.
+        required: true
+        type: boolean
+      website:
+        description: Build the website in lightweight mode.
+        required: false
+        default: false
+        type: boolean
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  changes:
-    uses: ./.github/workflows/ci-changes.yml
-
   docs-precommit:
-    needs: changes
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      && needs.changes.outputs.docs_only == 'true'
-      && github.event_name != 'workflow_dispatch'
-      && (github.event_name != 'pull_request'
-          || !contains(github.event.pull_request.labels.*.name, 'ci/full'))
+    if: inputs.docs_only
     runs-on: ubuntu-latest
     name: Docs and website lightweight checks
 
@@ -38,13 +34,13 @@ jobs:
           python-version: "3.11"
 
       - name: Set up Node
-        if: needs.changes.outputs.website == 'true'
+        if: inputs.website
         uses: actions/setup-node@v5
         with:
           node-version: 20
 
       - name: Cache Node dependencies
-        if: needs.changes.outputs.website == 'true'
+        if: inputs.website
         uses: actions/cache@v4
         with:
           path: |
@@ -64,22 +60,16 @@ jobs:
           make agent-docs-ci-gate
 
       - name: Build website
-        if: needs.changes.outputs.website == 'true'
+        if: inputs.website
         run: |
           cd website
           npm ci
           npm run build
 
   full-precommit:
-    needs: changes
-    if: >-
-      github.repository == 'vllm-project/semantic-router'
-      && (needs.changes.outputs.docs_only != 'true'
-          || github.event_name == 'workflow_dispatch'
-          || (github.event_name == 'pull_request'
-              && contains(github.event.pull_request.labels.*.name, 'ci/full')))
+    if: ${{ !inputs.docs_only }}
     runs-on: ubuntu-latest
-    name: Run pre-commit hooks check file lint
+    name: Full pre-commit checks
 
     steps:
       - name: Check out the repo
@@ -163,28 +153,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
-      - name: Install tree-sitter for security scan
-        run: |
-          # Pin tree-sitter core + grammars to an ABI-compatible set (see
-          # security-scan.yml); unpinned installs segfault the scanner on ABI drift.
-          pip install \
-            tree-sitter==0.25.2 \
-            tree-sitter-python==0.25.0 \
-            tree-sitter-javascript==0.25.0 \
-            tree-sitter-typescript==0.23.2 \
-            tree-sitter-go==0.25.0 \
-            tree-sitter-rust==0.24.0
-
-      - name: Run AST supply chain security scan
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            scan . --fail-on HIGH
-
-      - name: Run AST PR diff security scan
-        if: github.event_name == 'pull_request'
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            diff "origin/${{ github.base_ref }}" --fail-on HIGH
+      # agent-ci-lint runs the selected domains' fast tests, which for dashboard
+      # changes includes make dashboard-check. Some dashboard backend tests shell
+      # out to the vllm-sr CLI, so its Python dependencies must be importable.
+      - name: Install vllm-sr CLI
+        run: pip install -e src/vllm-sr
 
       - name: Run agent CI lint on changed files
         run: |

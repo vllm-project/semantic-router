@@ -58,6 +58,8 @@ def generate_envoy_config_from_user_config(
     output_file: str,
     template_file: str | None = None,
     template_root: str | None = None,
+    *,
+    log_summary: bool = True,
 ) -> Path:
     """
     Generate Envoy configuration from user config.
@@ -67,6 +69,8 @@ def generate_envoy_config_from_user_config(
         output_file: Output file path for Envoy config
         template_file: Path to Envoy template (optional)
         template_root: Template root directory (optional)
+        log_summary: Emit the human-readable generation summary. Machine-readable
+            callers disable this so their output streams remain valid documents.
 
     Returns:
         Path: Path to generated Envoy config
@@ -80,7 +84,8 @@ def generate_envoy_config_from_user_config(
         default_template_root = cli_dir / "templates"
         template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
 
-    log.info("Generating Envoy config...")
+    if log_summary:
+        log.info("Generating Envoy config...")
 
     # Extract all listeners
     listeners = []
@@ -125,11 +130,13 @@ def generate_envoy_config_from_user_config(
                 model
             ):
                 anthropic_models.append({"name": model.name})
-                log.info(
-                    f"  Anthropic model: {model.name} (will use shared anthropic_api_cluster)"
-                )
+                if log_summary:
+                    log.info(
+                        f"  Anthropic model: {model.name} "
+                        "(will use shared anthropic_api_cluster)"
+                    )
                 continue
-            if model.api_format == "anthropic":
+            if model.api_format == "anthropic" and log_summary:
                 log.info(f"  Anthropic model: {model.name} (dedicated cluster)")
 
         endpoints = []
@@ -233,6 +240,11 @@ def generate_envoy_config_from_user_config(
                 "has_https": has_https,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
+                "reliability": (
+                    model.reliability.model_dump()
+                    if model.reliability is not None
+                    else {}
+                ),
             }
         )
 
@@ -259,17 +271,21 @@ def generate_envoy_config_from_user_config(
         "use_original_dst": False,  # Use static clusters for now
     }
 
-    log.info("  Listeners:")
-    for listener in listeners:
-        log.info(f"    - {listener['name']}: {listener['address']}:{listener['port']}")
-    log.info(f"  Found {len(models)} vLLM model(s):")
-    for model in models:
-        log.info(f"    - {model['name']} (cluster: {model['cluster_name']})")
-        for ep in model["endpoints"]:
+    if log_summary:
+        log.info("  Listeners:")
+        for listener in listeners:
             log.info(
-                f"        - {ep['name']}: {ep['address']}:{ep['port']} (weight: {ep['weight']})"
+                f"    - {listener['name']}: {listener['address']}:{listener['port']}"
             )
-    if anthropic_models:
+        log.info(f"  Found {len(models)} vLLM model(s):")
+        for model in models:
+            log.info(f"    - {model['name']} (cluster: {model['cluster_name']})")
+            for ep in model["endpoints"]:
+                log.info(
+                    f"        - {ep['name']}: {ep['address']}:{ep['port']} "
+                    f"(weight: {ep['weight']})"
+                )
+    if anthropic_models and log_summary:
         log.info(f"  Found {len(anthropic_models)} Anthropic model(s):")
         for model in anthropic_models:
             log.info(f"    - {model['name']} (cluster: anthropic_api_cluster)")
@@ -299,7 +315,8 @@ def generate_envoy_config_from_user_config(
     try:
         with open(output_path, "w") as f:
             f.write(rendered)
-        log.info(f"Generated Envoy config: {output_path}")
+        if log_summary:
+            log.info(f"Generated Envoy config: {output_path}")
     except Exception as e:
         log.error(f"Failed to write Envoy config: {e}")
         raise

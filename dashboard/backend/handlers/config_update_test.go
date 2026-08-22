@@ -80,6 +80,64 @@ func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
 	}
 }
 
+func TestUpdateConfigHandler_PreservesEntrypointsAndRecipes(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	body := canonicalConfigBody("127.0.0.1:8000")
+	body["entrypoints"] = []map[string]interface{}{
+		{
+			"model_names": []string{"vllm-sr/mom-v1-vault"},
+			"recipe":      "privacy-first",
+		},
+	}
+	body["recipes"] = []map[string]interface{}{
+		{
+			"name":        "privacy-first",
+			"description": "Keep private traffic on the governed model.",
+			"routing": map[string]interface{}{
+				"decisions": []map[string]interface{}{
+					{
+						"name":        "privacy-route",
+						"description": "Private recipe route",
+						"priority":    100,
+						"rules":       map[string]interface{}{"operator": "AND"},
+						"modelRefs": []map[string]interface{}{
+							{"model": "test-model", "use_reasoning": false},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal multi-recipe config: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, "")(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	updated, err := readCanonicalConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("read updated canonical config: %v", err)
+	}
+	if len(updated.Entrypoints) != 1 || updated.Entrypoints[0].Recipe != "privacy-first" {
+		t.Fatalf("entrypoints were not preserved: %+v", updated.Entrypoints)
+	}
+	if len(updated.Recipes) != 1 || updated.Recipes[0].Name != "privacy-first" {
+		t.Fatalf("recipes were not preserved: %+v", updated.Recipes)
+	}
+	if got := updated.Recipes[0].Routing.Decisions[0].ModelRefs[0].Model; got != "test-model" {
+		t.Fatalf("recipe model ref = %q, want test-model", got)
+	}
+}
+
 func TestUpdateConfigHandler_InvalidUpdates(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)

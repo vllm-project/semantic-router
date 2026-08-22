@@ -77,7 +77,10 @@ func DefaultManagementAPIRoles() map[string][]string {
 			"metrics.read",
 			"classify.invoke",
 			"config.read",
+			"replay.read",
 			"data.read",
+			"cache.read",
+			"compression.read",
 		},
 		"operator": {
 			"health.read",
@@ -88,8 +91,14 @@ func DefaultManagementAPIRoles() map[string][]string {
 			"config.read",
 			"config.write",
 			"learning.ingest",
+			"replay.read",
+			"replay.detail",
 			"data.read",
 			"data.write",
+			"cache.read",
+			"cache.invalidate",
+			"compression.read",
+			"compression.preview",
 		},
 		// Wildcard includes secret_view so admin can read plaintext secrets.
 		"admin": {ManagementPermWildcard},
@@ -99,41 +108,69 @@ func DefaultManagementAPIRoles() map[string][]string {
 // ResolvedManagementAPI merges config defaults with runtime CLI overrides.
 func (c ManagementAPIConfig) ResolvedManagementAPI(opts ManagementAPIRuntimeOptions) (ManagementAPIConfig, error) {
 	resolved := c
-	if resolved.BindAddress == "" {
-		resolved.BindAddress = DefaultManagementAPIConfig().BindAddress
-	}
-	if opts.BindAddress != "" {
-		resolved.BindAddress = opts.BindAddress
-	}
-	if resolved.Port <= 0 {
-		resolved.Port = DefaultManagementAPIConfig().Port
-	}
-	if opts.Port > 0 {
-		resolved.Port = opts.Port
-	}
-	if opts.RemoteExposure != nil {
-		resolved.RemoteExposure = *opts.RemoteExposure
-	}
-	if opts.AuthMode != "" {
-		resolved.Auth.Mode = opts.AuthMode
-	}
-	if resolved.Auth.Mode == "" {
-		resolved.Auth.Mode = ManagementAuthModeDisabled
-	}
-	if len(resolved.Auth.Roles) == 0 {
-		resolved.Auth.Roles = DefaultManagementAPIRoles()
-	}
-
-	if err := resolved.validateBindAddress(); err != nil {
-		return ManagementAPIConfig{}, err
-	}
-	if err := resolved.validateExposurePolicy(); err != nil {
-		return ManagementAPIConfig{}, err
-	}
-	if err := resolved.validateBindExposureConsistency(); err != nil {
+	resolved.applyManagementAPIDefaults(opts)
+	if err := resolved.validateManagementAPI(); err != nil {
 		return ManagementAPIConfig{}, err
 	}
 	return resolved, nil
+}
+
+func (c *ManagementAPIConfig) applyManagementAPIDefaults(opts ManagementAPIRuntimeOptions) {
+	defaults := DefaultManagementAPIConfig()
+	if c.BindAddress == "" {
+		c.BindAddress = defaults.BindAddress
+	}
+	if opts.BindAddress != "" {
+		c.BindAddress = opts.BindAddress
+	}
+	if c.Port == 0 {
+		c.Port = defaults.Port
+	}
+	if opts.Port != 0 {
+		c.Port = opts.Port
+	}
+	if opts.RemoteExposure != nil {
+		c.RemoteExposure = *opts.RemoteExposure
+	}
+	if opts.AuthMode != "" {
+		c.Auth.Mode = opts.AuthMode
+	}
+	if c.Auth.Mode == "" {
+		c.Auth.Mode = ManagementAuthModeDisabled
+	}
+	if len(c.Auth.Roles) == 0 {
+		c.Auth.Roles = DefaultManagementAPIRoles()
+	}
+}
+
+func (c ManagementAPIConfig) validateManagementAPI() error {
+	validators := []func() error{
+		c.validateBindAddress,
+		c.validatePort,
+		c.validateAuthMode,
+		c.validateExposurePolicy,
+		c.validateBindExposureConsistency,
+	}
+	for _, validate := range validators {
+		if err := validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c ManagementAPIConfig) validateAuthMode() error {
+	if c.Auth.Mode != ManagementAuthModeDisabled && c.Auth.Mode != ManagementAuthModeBearer {
+		return fmt.Errorf("management_api.auth.mode must be disabled or bearer")
+	}
+	return nil
+}
+
+func (c ManagementAPIConfig) validatePort() error {
+	if c.Port < 1 || c.Port > 65535 {
+		return fmt.Errorf("management_api.port must be between 1 and 65535")
+	}
+	return nil
 }
 
 func (c ManagementAPIConfig) ListenAddress() string {

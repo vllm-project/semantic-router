@@ -88,3 +88,38 @@ func cacheScopeUserID(ctx *RequestContext) string {
 	})
 	return ""
 }
+
+func responseCacheScope(ctx *RequestContext) string {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return "global"
+	}
+	plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	if plugin == nil {
+		return "global"
+	}
+	scope := strings.TrimSpace(plugin.Scope)
+	if scope == "" {
+		return "user"
+	}
+	return scope
+}
+
+func responseCacheScopeIdentity(ctx *RequestContext) string {
+	switch responseCacheScope(ctx) {
+	case "global":
+		return ""
+	case "tenant":
+		return headerValueCI(ctx, headers.AuthzTenantID)
+	case "team":
+		if team := headerValueCI(ctx, headers.AuthzTeamID); team != "" {
+			return team
+		}
+		groups := strings.Split(headerValueCI(ctx, headers.AuthzUserGroups), ",")
+		if len(groups) > 0 {
+			return strings.TrimSpace(groups[0])
+		}
+		return ""
+	default:
+		return cacheScopeUserID(ctx)
+	}
+}

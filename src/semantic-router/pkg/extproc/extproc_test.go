@@ -28,6 +28,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -1015,7 +1016,6 @@ var _ = Describe("Security Checks", func() {
 			cfg.PromptGuard.Enabled = true
 			cfg.PromptGuard.ModelID = modelPath
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
-			cfg.PromptGuard.UseModernBERT = true
 			cfg.PromptGuard.UseCPU = true
 
 			jailbreakMapping := &classification.JailbreakMapping{
@@ -2804,7 +2804,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			}
 
 			// Call the function under test
-			modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, tc.enabled, "test-category")
+			modifiedBytes, err := router.setReasoningModeToRequestBody(requestBytes, tc.enabled, router.Config.GetDecisionByName("test-category"))
 			if err != nil {
 				t.Fatalf("setReasoningModeToRequestBody failed: %v", err)
 			}
@@ -2986,7 +2986,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	fmt.Printf("Original request body:\n%s\n\n", string(originalBody))
 
 	// Add reasoning mode
-	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, "math")
+	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, router.Config.GetDecisionByName("math"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode: %v\n", err)
 		return
@@ -3034,7 +3034,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	fmt.Printf("Original deepseek request:\n%s\n\n", string(deepseekBody))
 
 	// Add reasoning mode to DeepSeek model
-	modifiedDeepseekBody, err := router.setReasoningModeToRequestBody(deepseekBody, true, "math")
+	modifiedDeepseekBody, err := router.setReasoningModeToRequestBody(deepseekBody, true, router.Config.GetDecisionByName("math"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to deepseek: %v\n", err)
 		return
@@ -3086,7 +3086,7 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 		return
 	}
 
-	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true, "chemistry")
+	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true, router.Config.GetDecisionByName("chemistry"))
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to complex request: %v\n", err)
 		return
@@ -3370,8 +3370,20 @@ func TestHandleModelsRequest(t *testing.T) {
 				if model.Created == 0 {
 					t.Error("Expected non-zero created timestamp")
 				}
-				if model.OwnedBy != "vllm-semantic-router" {
-					t.Errorf("Expected model owned_by 'vllm-semantic-router', got %s", model.OwnedBy)
+				if model.OwnedBy == "" {
+					t.Errorf("Expected non-empty model owner for %s", model.ID)
+				}
+				switch model.Routing.Resolution {
+				case publicmodels.ResolutionVirtual:
+					if !model.Routing.Selectable {
+						t.Errorf("Expected virtual model %s to be selectable", model.ID)
+					}
+				case publicmodels.ResolutionPassthrough:
+					if model.Routing.Selectable {
+						t.Errorf("Expected passthrough model %s to be non-selectable", model.ID)
+					}
+				default:
+					t.Errorf("Expected model %s to declare a supported routing resolution, got %q", model.ID, model.Routing.Resolution)
 				}
 			}
 

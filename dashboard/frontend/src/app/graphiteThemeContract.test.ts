@@ -205,4 +205,20 @@ describe('graphite dashboard theme contract', () => {
 
     expect(violations).toEqual([])
   })
+
+  it('gives every translucent-light select an opaque option background', () => {
+    const violations = themeSources
+      .filter(({ path }) => path.endsWith('.css'))
+      .flatMap(({ path, source }) => {
+        const declaresTranslucentLightSelect =
+          /\.select[^{]*\{[^}]*background[^;]*rgba\(\s*255\s*,\s*255\s*,\s*255/.test(source)
+        if (!declaresTranslucentLightSelect) {
+          return []
+        }
+        const pinsOptionBackground = /option[^{]*\{[^}]*background/.test(source)
+        return pinsOptionBackground ? [] : [path]
+      })
+
+    expect(violations).toEqual([])
+  })
 })

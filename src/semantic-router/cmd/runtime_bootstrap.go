@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -43,7 +42,7 @@ func parseRuntimeOptions() runtimeOptions {
 	var (
 		configPath             = flag.String("config", "config/config.yaml", "Path to the configuration file")
 		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort                = flag.Int("api-port", 8080, "Port to listen on for the router apiserver")
+		apiPort                = flag.Int("api-port", 0, "Port to listen on for the router apiserver (default from config: 8080)")
 		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
 		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: bearer or disabled")
 		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires bearer auth tokens in config)")
@@ -72,6 +71,32 @@ func parseRuntimeOptions() runtimeOptions {
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
 	}
+}
+
+func resolveRuntimeManagementOptions(opts runtimeOptions, cfg *config.RouterConfig) (runtimeOptions, error) {
+	if !opts.enableAPI {
+		return opts, nil
+	}
+	if cfg == nil {
+		return runtimeOptions{}, errors.New("management API configuration is unavailable")
+	}
+	resolved, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
+		Port:           opts.apiPort,
+		BindAddress:    opts.apiBind,
+		RemoteExposure: opts.managementRemoteExpose,
+		AuthMode:       opts.managementAuthMode,
+	})
+	if err != nil {
+		return runtimeOptions{}, fmt.Errorf("invalid management API configuration: %w", err)
+	}
+	if resolved.Port == opts.port || resolved.Port == opts.metricsPort {
+		return runtimeOptions{}, errors.New("management API port conflicts with another Router service port")
+	}
+	opts.apiPort = resolved.Port
+	opts.apiBind = resolved.BindAddress
+	opts.managementAuthMode = resolved.Auth.Mode
+	opts.managementRemoteExpose = &resolved.RemoteExposure
+	return opts, nil
 }
 
 // boolFlagOverride returns a pointer to value only when the named flag was
@@ -250,21 +275,13 @@ func initializeWindowedMetricsIfEnabled(cfg *config.RouterConfig) {
 	})
 }
 
-func registerSignalHandler(shutdownHooks *[]func()) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		sig := <-sigChan
-		logging.ComponentEvent("router", "shutdown_signal_received", map[string]interface{}{
-			"signal": sig.String(),
-		})
-		for _, hook := range *shutdownHooks {
-			hook()
-		}
-		shutdownTracing()
-		os.Exit(0)
-	}()
+func runShutdownHooks(shutdownHooks *[]func()) {
+	if shutdownHooks == nil {
+		return
+	}
+	for _, hook := range *shutdownHooks {
+		hook()
+	}
 }
 
 func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
@@ -441,17 +458,38 @@ func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.Emb
 	if router == nil {
 		return
 	}
-	_, _ = modelruntime.WarmupToolsDatabase(context.Background(), embeddingState.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+	_, _ = modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
+		{
+			Name:       "tools_database",
+			Ready:      embeddingState.ToolsReady,
+			SkipReason: "embedding_runtime_not_ready_for_tools",
+			Load:       router.LoadToolsDatabase,
+		},
+		{
+			Name:       "knowledge_bases",
+			Ready:      embeddingState.AnyReady,
+			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+			Load:       router.PreloadKnowledgeBases,
+		},
+	}, modelruntime.WarmupRouterOptions{
 		Component:      "router",
-		MaxParallelism: 1,
+		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 
-func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) {
+func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) error {
 	if !opts.enableAPI {
-		return
+		return nil
 	}
+	if runtimeRegistry == nil || runtimeRegistry.CurrentConfig() == nil {
+		return errors.New("management API configuration is unavailable")
+	}
+	resolvedOpts, err := resolveRuntimeManagementOptions(opts, runtimeRegistry.CurrentConfig())
+	if err != nil {
+		return err
+	}
+	opts = resolvedOpts
 
 	go func() {
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
@@ -474,6 +512,7 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 			})
 		}
 	}()
+	return nil
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {

@@ -1,192 +1,125 @@
-# Unified Config Contract v0.3
-
-Issue: [#1505](https://github.com/vllm-project/semantic-router/issues/1505)
-
+---
+title: Unified Config Contract v0.3
+description: Records the implemented configuration contract shared by the router, CLI, dashboard, Helm, operator, and DSL.
+created: 2026-03-17
+status: Implemented
 ---
 
-## Before
+> **Status:** Implemented · **Created:** 2026-03-17
 
-Before v0.3, the repo had several partially overlapping config contracts:
+## Problem
 
-- router runtime consumed a flat Go config
-- Python CLI used its own nested YAML plus merge/default logic
-- dashboard and onboarding imported YAML but still assumed legacy top-level `signals` and `decisions`
-- Helm and operator each translated config differently
-- DSL mixed routing semantics with legacy `BACKEND` and `GLOBAL` expectations
+The router, CLI, dashboard, Helm chart, operator, and DSL previously interpreted
+overlapping configuration shapes. A file accepted by one surface could require
+translation or undocumented defaults in another. Model identity was also mixed with
+deployment endpoints and credentials.
 
-This caused three persistent problems:
+## Implemented contract
 
-1. The same concept had to be edited in multiple schema layers.
-2. Endpoint, API key, and model semantics were mixed together.
-3. Runtime defaults depended on external template files such as `router-defaults.yaml`, which made defaults harder to reason about and replace.
-
-## Problems with the old model
-
-### CLI and router drifted
-
-The Python CLI and Go router did not share one schema owner. A user could build config through the CLI, the dashboard, or Kubernetes and still hit structural mismatches.
-
-### Model semantics and deployment bindings were entangled
-
-Logical models were carrying:
-
-- semantic routing identity
-- endpoint binding
-- API key
-- provider model ID
-
-That made reuse hard. If several logical models pointed at the same backend, config still repeated backend details.
-
-### DSL scope was too broad
-
-DSL was useful for routing semantics, but legacy `BACKEND` and `GLOBAL` blocks made it look like the right place to author deployment and runtime state too. That was not sustainable across local, dashboard, and Kubernetes workflows.
-
-## v0.3 contract
-
-v0.3 defines one canonical config:
+The public configuration has seven top-level sections:
 
 ```yaml
 version:
 listeners:
 providers:
 routing:
+entrypoints:
+recipes:
 global:
 ```
 
-### What each section means
+| Section | Responsibility |
+| --- | --- |
+| `version` | Selects the configuration contract. |
+| `listeners` | Defines request-facing and management listeners. |
+| `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
+| `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
+| `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
+| `global` | Holds router-wide services, stores, integrations, model modules, and sparse runtime overrides. |
 
-- `providers`: deployment bindings and provider defaults
-- `routing`: semantic routing graph
-- `global`: sparse router-wide runtime overrides
+Unknown or retired shapes should fail with a clear validation error rather than be
+silently translated at runtime.
 
-### DSL boundary
+## Provider and model boundary
 
-DSL now owns only:
+`providers.defaults` owns the default provider behavior and default model.
+`providers.models[].backend_refs[]` owns physical backend bindings and reliability
+settings.
 
-- `routing.modelCards`
-- `routing.signals`
-- `routing.projections` for signal coordination and derived routing outputs
-- `routing.decisions`, including route-local `algorithm`, plugin references, emitted directives, and bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
+`routing.modelCards` describes routing-facing model identity. Optional
+`routing.modelCards[].loras` declare LoRA adapters that decisions may select with
+`lora_name`. Signals and decisions reference logical model names, not endpoints or
+credentials.
 
-It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
+## Routing and DSL boundary
 
-### Deployment binding split
+Routing owns:
 
-Model semantics and deployment bindings are now separated explicitly:
+- model cards;
+- named signals and projections;
+- decisions, candidate `modelRefs`, algorithms, and plugins;
+- route-local output and adaptation policy.
 
-- `routing.modelCards` carries semantic catalog data such as size, context window, description, and capabilities
-- `routing.modelCards[].loras` carries the canonical LoRA adapter catalog for each logical model
-- `providers.defaults` carries provider-wide defaults such as `default_model`, `reasoning_families`, and `default_reasoning_effort`
-- `providers.models` carries per-model access bindings directly
-- each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
-- `providers.models[].pricing` can price prompt, cached-input, cache-write, and completion tokens independently; an omitted cache-write rate inherits the prompt rate
-- `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
-- `routing.decisions[].output_contract` is the decision-scoped, model-visible final response format contract. Loop algorithms merge it with any format already present in the client request instead of hard-coding benchmark- or task-specific prompts inside algorithms.
-- `routing.decisions[].output_contract_spec` is the typed router-executable output contract. Use it for machine-checked post-processing such as `type: choice`, `type: structured_json` with `json_schema.schema_ref: terminal_action_v1`, or `type: reference_selection` with `postprocess: [{type: dereference_selected_reference}]`; extraction defaults to exact `content` matching and must be widened explicitly with `extract.sources`. Do not encode these runtime behaviors as prompt-text heuristics.
-- `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
-- `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
+Top-level `entrypoints` select the default routing profile or a named item from
+top-level `recipes`; they are not nested inside `routing`.
 
-### Entrypoints and multi-recipe routing
+The DSL is an authoring view of routing semantics. It does not own provider
+credentials, listeners, stores, or global runtime services. Import and export must
+preserve the same canonical routing document rather than invent another steady-state
+schema.
 
-Issue [#2331](https://github.com/vllm-project/semantic-router/issues/2331) adds
-an optional additive layer above `routing`:
+## Entrypoints and multi-recipe routing
 
-```yaml
-entrypoints:
-  - model_names: ["vllm-sr/privacy"]
-    recipe: privacy-first
+`entrypoints[]` map request model names to either top-level routing or one named
+recipe. `recipes[]` contain isolated routing profiles that reuse the same provider
+inventory and global runtime.
 
-recipes:
-  - name: privacy-first
-    routing:
-      signals: {}
-      projections: {}
-      decisions: []
-```
+This keeps the public API stable while allowing several routing policies to coexist in
+one process. An entrypoint resolves the recipe before signals and decisions run.
 
-- the top-level `routing` block is the `default` recipe; `recipes[]` adds named additional profiles
-- each `recipes[].routing` block keeps the recipe-level profile shape — `signals`, `projections`, `decisions` — and never owns `modelCards` or provider bindings
-- signal and projection names share one global registry across recipes, so one classifier evaluates any recipe's rules and cross-recipe name collisions fail validation
-- `entrypoints[]` maps request-facing virtual model names onto recipes; the names behave like auto-model aliases, are listed by `/v1/models`, and never reach a backend
-- a recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so single-profile configs keep working unchanged
+## Defaults and configuration source
 
-## Global defaults
+Built-in defaults live in the router. `global.router.config_source` selects file-backed
+configuration or Kubernetes CRD reconciliation. External templates must not apply
+hidden defaults after validation.
 
-Router-global defaults are now owned by the router itself, not by a second user-maintained defaults file.
+The dashboard, Helm chart, and operator may help users author or transport config, but
+the resulting document still uses the same contract.
 
-- the router provides typed built-in defaults
-- `global:` only overrides what you need to change
-- `global.router` groups router-engine control knobs, including `config_source`
-- `global.router.auto_model_names` registers full-router auto aliases such as `vllm-sr/auto`, `auto`, and `MoM`; the legacy `auto_model_name` field remains a single-name compatibility shortcut
-- `global.router.learning` owns cross-request Router Learning state.
-- `global.router.learning.adaptation` is online model-choice learning. `global.router.learning.protection` is session/conversation stability protection. Decisions remain semantic and can opt out with `routing.decisions[].adaptations.mode: bypass`; `algorithm.type: session_aware|elo|rl_driven|gmtrouter` is not part of the public contract.
-- `global.services` groups shared APIs and runtime services
-- `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
-- `global.stores` groups storage-backed services
-- `global.integrations` groups helper runtime integrations, including looper-owned ReMoM direct model slug registration for `vllm-sr/remom`, Fusion direct model slug registration for `vllm-sr/fusion`, and Router Flow direct model slug registration for `vllm-sr/flow`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.*.model_names`; breadth, judge, panel, workflow planning, worker policy, and output contracts remain on `routing.decisions[]`.
-- `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
-- `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
-- `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
-- omitted fields keep the built-in default
+## Repository sources
 
-This makes local, dashboard, Helm, and operator behavior converge on the same baseline.
+`config/config.yaml` is the exhaustive canonical reference config. Reusable examples
+live under:
 
-## How the surfaces unify
+- `config/fragments/signal/`;
+- `config/fragments/decision/`;
+- `config/fragments/algorithm/`; and
+- `config/fragments/plugin/`.
 
-### Onboarding import
+Runtime deployment examples remain separate from routing fragments. Contract tests
+and `make agent-lint` keep the reference config, schema, examples, and public docs
+aligned.
 
-Remote onboarding import can fetch and apply a full canonical YAML file. That keeps the original intent of "one remote YAML can set up the whole router".
+## Migration
 
-### DSL import
+Use `vllm-sr config migrate --config old-config.yaml` to convert supported legacy
+layouts. Review the result, resolve credentials through the deployment's secret
+mechanism, and validate it before serving.
 
-DSL import still accepts a full router config YAML, but it decompiles only the `routing` section into DSL. Static deployment and global runtime settings stay in YAML.
+`vllm-sr init` was removed. Canonical YAML is the steady-state configuration source;
+interactive or graphical authoring tools must export that same document.
 
-The router parser itself now accepts only canonical v0.3 YAML for steady-state runtime config. Legacy mixed layouts must go through explicit migration first.
+## Scope and non-goals
 
-The remaining in-process CRD reconciliation path now also re-enters the same canonical parser through `global.router.config_source: kubernetes`, instead of maintaining a separate steady-state runtime layout.
+The contract unifies configuration ownership. It does not require every authoring
+surface to expose every advanced field in one form, nor does it make the DSL a
+deployment-language replacement.
 
-### Repository config assets
+## References
 
-The repo no longer ships large full-example trees under `config/intelligent-routing/` and similar directories. Instead:
-
-- `config/config.yaml` is the exhaustive canonical reference config
-- `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
-- `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
-- `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
-- latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
-- runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
-- harness-only manifests live under `e2e/config/`
-- `go test ./pkg/config/...` and `make agent-lint` enforce that `config/config.yaml` stays exhaustive and aligned with the public config contract
-
-### Helm and operator
-
-Helm values and operator config now align to the same canonical concepts instead of inventing separate steady-state router schemas.
-
-## Migration path
-
-Older configs can be migrated with:
-
-```bash
-vllm-sr config migrate --config old-config.yaml
-```
-
-That command rewrites legacy config into canonical `providers/routing/global`.
-
-It covers both mixed nested layouts and older flat runtime layouts such as top-level `keyword_rules`, `model_config`, `vllm_endpoints`, and `provider_profiles`.
-
-`vllm-sr init` was removed as part of the cleanup. Canonical `config.yaml` is now the only steady-state file users are expected to author.
-
-## Result
-
-The repo now has one public config story:
-
-- full router configuration lives in canonical YAML
-- DSL is the routing-semantic view of that config
-- deployment bindings live in `providers.defaults` and `providers.models[]`
-- runtime overrides live in `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog`, with model-backed modules under `global.model_catalog.modules`
-- structure-signal `density` uses one built-in multilingual normalization path instead of exposing per-rule `normalize_by` choices
-- `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
-- built-in defaults live in the router
-- repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples
-
-That removes the old CLI/router/dashboard/Helm/operator drift and gives every environment one shared contract.
+- [Current configuration guide](../installation/configuration)
+- [Configuration workflows](../installation/configuration-workflows)
+- [Signals, decisions, and model selection](../overview/signal-driven-decisions)
+- [Virtual Models](../tutorials/global/entrypoints-and-recipes)
+- [Related issue #1505](https://github.com/vllm-project/semantic-router/issues/1505)

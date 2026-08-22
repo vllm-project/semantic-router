@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -101,12 +102,23 @@ def _model_route(rendered_config, model_name):
     raise AssertionError(f"route for model {model_name!r} not found")
 
 
+def _default_route(rendered_config):
+    """Find the fallback route without an x-selected-model header match."""
+    listener = rendered_config["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    routes = hcm["route_config"]["virtual_hosts"][0]["routes"]
+    for route in reversed(routes):
+        if not route.get("match", {}).get("headers"):
+            return route
+    raise AssertionError("default route not found")
+
+
 def test_backend_ref_ip_port_path_produces_correct_envoy_cluster_and_route(
     tmp_path, monkeypatch
 ):
     """Backend ref http://10.0.0.1:8000/v1 should split into address=10.0.0.1,
     port=8000, host_authority=10.0.0.1:8000, path_prefix=/v1, and the route
-    should use regex ^/v1(.*)$ to avoid duplicating /v1."""
+    should match only a complete /v1 path segment."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -145,6 +157,7 @@ routing:
 
     # --- cluster assertions ---
     cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
     assert ep["address"]["socket_address"]["address"] == "10.0.0.1"
@@ -154,8 +167,192 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
     assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+
+
+def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "gemini-model"
+  models:
+    - name: "gemini-model"
+      provider_model_id: "gemini-model"
+      backend_refs:
+        - name: "gemini"
+          base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+          provider: "openai"
+          weight: 100
+routing:
+  modelCards:
+    - name: "gemini-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "gemini-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    for route in (_model_route(rendered, "gemini-model"), _default_route(rendered)):
+        rewrite = route["route"]["regex_rewrite"]
+        pattern = rewrite["pattern"]["regex"]
+        substitution = rewrite["substitution"]
+
+        assert pattern == r"^/v1([/?].*)?$"
+        for request_path, upstream_path in (
+            ("/v1", "/v1beta/openai"),
+            (
+                "/v1/chat/completions",
+                "/v1beta/openai/chat/completions",
+            ),
+            (
+                "/v1?api-version=test",
+                "/v1beta/openai?api-version=test",
+            ),
+        ):
+            rewritten_path = re.sub(pattern, substitution, request_path)
+            assert rewritten_path == upstream_path
+            assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+
+
+@pytest.mark.skip(
+    reason=(
+        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
+        "paths that still begin with the /v1 segment after rewriting."
+    )
+)
+def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(
+    tmp_path, monkeypatch
+):
+    """Document the known gap: /v1/chat -> /v1/provider/chat rewrites twice today."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "provider-model"
+  models:
+    - name: "provider-model"
+      provider_model_id: "provider-model"
+      backend_refs:
+        - name: "provider"
+          base_url: "https://api.example.com/v1/provider"
+          provider: "openai"
+          weight: 100
+routing:
+  modelCards:
+    - name: "provider-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "provider-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    for route in (_model_route(rendered, "provider-model"), _default_route(rendered)):
+        rewrite = route["route"]["regex_rewrite"]
+        pattern = rewrite["pattern"]["regex"]
+        substitution = rewrite["substitution"]
+        upstream_path = "/v1/provider/chat/completions"
+
+        rewritten_path = re.sub(pattern, substitution, "/v1/chat/completions")
+        assert rewritten_path == upstream_path
+        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+
+
+def test_provider_reliability_renders_retry_outlier_and_least_request(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      reliability:
+        lb_policy: least_request
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 45s
+        max_ejection_percent: 25
+        health_check_path: /health
+        health_check_interval: 15s
+        health_check_timeout: 3s
+      backend_refs:
+        - endpoint: 10.0.0.1:8000
+        - endpoint: 10.0.0.2:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      description: default route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    route = _model_route(rendered, "test-model")["route"]
+    assert route["retry_policy"] == {
+        "retry_on": "connect-failure,refused-stream",
+        "num_retries": 2,
+    }
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["lb_policy"] == "LEAST_REQUEST"
+    assert cluster["least_request_lb_config"]["choice_count"] == 2
+    assert cluster["outlier_detection"]["consecutive_5xx"] == 5
+    assert cluster["outlier_detection"]["base_ejection_time"] == "45s"
+    assert cluster["outlier_detection"]["max_ejection_percent"] == 25
+    assert cluster["health_checks"][0]["http_health_check"]["path"] == "/health"
+    assert cluster["health_checks"][0]["interval"] == "15s"
+    assert cluster["health_checks"][0]["timeout"] == "3s"
+    assert cluster["circuit_breakers"]["thresholds"][0]["max_requests"] == 4096
 
 
 def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
@@ -214,7 +411,7 @@ routing:
     route_action = route["route"]
     # standard port 443 → host_authority should omit port
     assert route_action["host_rewrite_literal"] == "api.example.com"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
     assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
 
 

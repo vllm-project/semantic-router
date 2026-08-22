@@ -7,7 +7,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // evaluateKBSignals runs all configured knowledge bases, records structured KB
@@ -58,12 +57,12 @@ func (c *Classifier) evaluateKBSignals(results *SignalResults, mu *sync.Mutex, t
 		}
 		results.MatchedKBRules = append(results.MatchedKBRules, rule.Name)
 		results.SignalConfidences[config.SignalTypeKB+":"+rule.Name] = confidence
-		metrics.RecordSignalMatch(config.SignalTypeKB, rule.Name)
+		c.recordSignalMatch(config.SignalTypeKB, rule.Name)
 	}
 
 	results.Metrics.KB.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000.0
 	results.Metrics.KB.Confidence = signalSetBestConfidence(results.SignalConfidences, config.SignalTypeKB, results.MatchedKBRules)
-	metrics.RecordSignalExtraction(config.SignalTypeKB, "kb", time.Since(start).Seconds())
+	c.recordSignalExtraction(config.SignalTypeKB, "kb", time.Since(start).Seconds())
 }
 
 func kbSignalMatchConfidence(rule config.KBSignalRule, result *KBClassifyResult) (float64, bool) {

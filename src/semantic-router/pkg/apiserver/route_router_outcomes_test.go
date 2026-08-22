@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
@@ -85,6 +86,11 @@ func TestHandleRouterOutcomeUsesLearningRuntime(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-1")
+	req = req.WithContext(withManagementPrincipal(req.Context(), managementPrincipal{
+		Role:        "operator",
+		AuthEnabled: true,
+	}))
 	w := httptest.NewRecorder()
 
 	server.handleRouterOutcome(w, req)
@@ -95,12 +101,35 @@ func TestHandleRouterOutcomeUsesLearningRuntime(t *testing.T) {
 	if learningRuntime.last == nil || learningRuntime.last.TargetRef != "model-a" {
 		t.Fatalf("expected outcome forwarded to runtime, got %#v", learningRuntime.last)
 	}
+	if learningRuntime.last.Source != routerruntime.RouterOutcomeSourceOperator {
+		t.Fatalf("expected principal-derived source operator, got %#v", learningRuntime.last.Source)
+	}
+	if learningRuntime.last.IdempotencyKey != "outcome-key-1" {
+		t.Fatalf("expected idempotency key forwarded, got %#v", learningRuntime.last)
+	}
 	var response RouterOutcomeResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("expected JSON response: %v", err)
 	}
 	if response.Updated != 1 || !response.Recorded {
 		t.Fatalf("expected outcome response to expose update and replay recording, got %#v", response)
+	}
+}
+
+func TestHandleRouterOutcomeRequiresIdempotencyKey(t *testing.T) {
+	body, _ := json.Marshal(RouterOutcomeRequest{
+		ReplayID: "replay-1",
+		Target:   "model",
+		Verdict:  "good_fit",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	(&ClassificationAPIServer{}).handleRouterOutcome(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -114,12 +143,35 @@ func TestHandleRouterOutcomeRejectsInvalidScore(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-score")
 	w := httptest.NewRecorder()
 
 	(&ClassificationAPIServer{}).handleRouterOutcome(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestLearningOutcomeIngestPolicyRateLimit(t *testing.T) {
+	policy := &learningOutcomeIngestPolicy{
+		limit:  2,
+		window: learningOutcomeRateWindow,
+		hits:   map[string][]time.Time{},
+	}
+	principal := managementPrincipal{Role: "operator", AuthEnabled: true}
+	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", nil)
+	req.Header.Set(learningOutcomeIdempotencyHeader, "k1")
+	if _, _, err := policy.enforce(req, principal); err != nil {
+		t.Fatalf("first request should pass: %#v", err)
+	}
+	req.Header.Set(learningOutcomeIdempotencyHeader, "k2")
+	if _, _, err := policy.enforce(req, principal); err != nil {
+		t.Fatalf("second request should pass: %#v", err)
+	}
+	req.Header.Set(learningOutcomeIdempotencyHeader, "k3")
+	if _, _, err := policy.enforce(req, principal); err == nil || err.Code != "RATE_LIMITED" {
+		t.Fatalf("expected rate limit, got %#v", err)
 	}
 }
 

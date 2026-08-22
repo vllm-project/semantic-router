@@ -21,8 +21,12 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 import yaml
+from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 
 HTTP_STATUS_OK = 200
+AGENT_SMOKE_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
+)
 
 
 def _coerce_timeout_stream(value: str | bytes | None) -> str:
@@ -32,6 +36,15 @@ def _coerce_timeout_stream(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode(errors="replace")
     return value
+
+
+def _api_only_global_config() -> dict[str, object]:
+    """Reuse the canonical smoke global block for API-only integration tests."""
+    smoke_config = yaml.safe_load(AGENT_SMOKE_CONFIG_PATH.read_text(encoding="utf-8"))
+    global_config = smoke_config.get("global")
+    if not isinstance(global_config, dict):
+        raise AssertionError(f"{AGENT_SMOKE_CONFIG_PATH} must define a global mapping")
+    return global_config
 
 
 class CLITestBase(unittest.TestCase):
@@ -58,11 +71,31 @@ class CLITestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class - ensure clean state."""
+        cls.runtime_stack = resolve_runtime_stack()
+        stack_name = cls.runtime_stack.stack_name
+        cls.CONTAINER_NAME = (
+            "vllm-sr-container"
+            if stack_name == DEFAULT_STACK_NAME
+            else f"{stack_name}-vllm-sr-container"
+        )
+        cls.ROUTER_CONTAINER_NAME = cls.runtime_stack.router_container_name
+        cls.ENVOY_CONTAINER_NAME = cls.runtime_stack.envoy_container_name
+        cls.DASHBOARD_CONTAINER_NAME = cls.runtime_stack.dashboard_container_name
+        cls.SIM_CONTAINER_NAME = cls.runtime_stack.fleet_sim_container_name
+        cls.AUXILIARY_CONTAINER_NAMES = (
+            cls.runtime_stack.grafana_container_name,
+            cls.runtime_stack.prometheus_container_name,
+            cls.runtime_stack.jaeger_container_name,
+            cls.runtime_stack.redis_container_name,
+            cls.runtime_stack.postgres_container_name,
+            cls.runtime_stack.milvus_container_name,
+        )
+
         # Detect container runtime
         cls.container_runtime = cls._detect_container_runtime()
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Using container runtime: {cls.container_runtime}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Ensure no leftover container from previous tests
         cls._cleanup_container()
@@ -115,6 +148,12 @@ class CLITestBase(unittest.TestCase):
             return "docker"
         if shutil.which("podman"):
             return "podman"
+        if os.getenv("RUN_INTEGRATION_TESTS", "").lower() != "true":
+            # Unit-only suites mock container commands at their behavioral
+            # seams. Keep a deterministic command name so those tests can run
+            # inside the precommit image, which intentionally has no runtime
+            # client or daemon.
+            return "docker"
         raise RuntimeError("Neither docker nor podman was found in PATH")
 
     @staticmethod
@@ -163,25 +202,19 @@ class CLITestBase(unittest.TestCase):
             result = self._run_subprocess(
                 [
                     self.container_runtime,
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
+                    "inspect",
                     "--format",
-                    "{{.Status}}",
+                    "{{.State.Status}}",
+                    container_name,
                 ],
                 timeout=10,
             )
-            status = result.stdout.strip()
-            if not status:
+            if result.returncode != 0:
                 return "not found"
-            if "Up" in status:
-                return "running"
-            if "Exited" in status:
-                return "exited"
-            if "Paused" in status:
-                return "paused"
-            return "unknown"
+            status = result.stdout.strip().lower()
+            if status in {"running", "created", "exited", "paused"}:
+                return status
+            return status or "unknown"
         except Exception as e:
             print(f"Failed to get container status: {e}")
             return "error"
@@ -277,9 +310,24 @@ class CLITestBase(unittest.TestCase):
         port: int = 8888,
         model_name: str = "test-model",
         endpoint: str = "host.docker.internal:8000",
+        base_url: str | None = None,
+        provider: str | None = None,
+        api_only: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace."""
         config_path = Path(self.test_dir) / "config.yaml"
+        backend_ref: dict[str, object] = {
+            "name": "primary",
+            "weight": 100,
+        }
+        if base_url is not None:
+            backend_ref["base_url"] = base_url
+        else:
+            backend_ref["endpoint"] = endpoint
+            backend_ref["protocol"] = "http"
+        if provider is not None:
+            backend_ref["provider"] = provider
+
         config = {
             "version": "v0.3",
             "listeners": [
@@ -299,14 +347,7 @@ class CLITestBase(unittest.TestCase):
                     {
                         "name": model_name,
                         "provider_model_id": model_name,
-                        "backend_refs": [
-                            {
-                                "name": "primary",
-                                "weight": 100,
-                                "endpoint": endpoint,
-                                "protocol": "http",
-                            }
-                        ],
+                        "backend_refs": [backend_ref],
                     }
                 ],
             },
@@ -323,6 +364,8 @@ class CLITestBase(unittest.TestCase):
                 ],
             },
         }
+        if api_only:
+            config["global"] = _api_only_global_config()
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",
@@ -466,11 +509,11 @@ class CLITestBase(unittest.TestCase):
 
     def print_test_header(self, name: str, description: str | None = None):
         """Print a formatted test header."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"TEST: {name}")
         if description:
             print(f"Description: {description}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def print_test_result(self, passed: bool, message: str = ""):
         """Print test result with pass/fail indicator."""

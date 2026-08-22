@@ -235,7 +235,16 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 		Confidence: 0.91,
 	}
 
-	response := service.buildIntentResponseFromSignals(signals, decisionResult, "projection_route", 0.91, 12, req)
+	response := service.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		"projection_route",
+		0.91,
+		12,
+		req,
+		service.classifier,
+		service.config,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.MatchedSignals)
 
@@ -267,6 +276,13 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 			Decisions: []config.Decision{
 				{
 					Name: "reasoning_route",
+					Algorithm: &config.AlgorithmConfig{
+						Type: "remom",
+					},
+					Plugins: []config.DecisionPlugin{
+						{Type: "semantic_cache"},
+						{Type: "system_prompt"},
+					},
 					Rules: config.RuleCombination{
 						Operator: "AND",
 						Conditions: []config.RuleNode{{
@@ -291,7 +307,12 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 		Decision: &routerConfig.Decisions[0],
 	}
 
-	response := service.buildEvalResponse("reason carefully", signals, decisionResult)
+	response := service.buildEvalResponse(
+		"reason carefully",
+		signals,
+		decisionResult,
+		service.classifier,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.DecisionResult)
 	require.NotNil(t, response.DecisionResult.UsedSignals)
@@ -301,6 +322,8 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.UsedSignals.Projection)
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.MatchedSignals.Projection)
 	assert.Equal(t, []string{"balance_medium"}, response.DecisionResult.UnmatchedSignals.Projection)
+	assert.Equal(t, "remom", response.DecisionResult.Algorithm)
+	assert.Equal(t, []string{"response_cache", "system_prompt"}, response.DecisionResult.Plugins)
 }
 
 func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
@@ -310,12 +333,19 @@ func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
 		Metrics:               &classification.SignalMetricsCollection{},
 		SignalConfidences:     map[string]float64{"structure:many_questions": 1},
 		SignalValues:          map[string]float64{"structure:many_questions": 4},
+		SignalErrors:          map[string]string{"classifier:risk": "timeout"},
 	}
 
-	response := service.buildEvalResponse("why? why? why? why?", signals, nil)
+	response := service.buildEvalResponse(
+		"why? why? why? why?",
+		signals,
+		nil,
+		nil,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.SignalValues)
 	assert.Equal(t, 4.0, response.SignalValues["structure:many_questions"])
+	assert.Equal(t, "timeout", response.SignalErrors["classifier:risk"])
 }
 
 // Benchmark tests for performance validation

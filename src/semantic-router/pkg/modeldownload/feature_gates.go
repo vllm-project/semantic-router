@@ -48,7 +48,8 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsFactCheckClassifierEnabled()
+			return cfg.NeedsFactCheckModelForAPI() ||
+				cfg.NeedsFactCheckModelForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.HallucinationMitigation.FactCheckModel.ModelID}
@@ -56,18 +57,27 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsHallucinationModelEnabled()
+			return cfg.NeedsLocalHallucinationModelsForRouting() ||
+				(cfg.NeedsHallucinationDetectorForDefaultRuntime() &&
+					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendCandle)
 		},
 		paths: func(cfg *config.RouterConfig) []string {
-			return []string{
-				cfg.HallucinationMitigation.HallucinationModel.ModelID,
-				cfg.HallucinationMitigation.NLIModel.ModelID,
-			}
+			return []string{cfg.HallucinationMitigation.HallucinationModel.ModelID}
 		},
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsFeedbackDetectorEnabled()
+			return cfg.NeedsLocalHallucinationNLIForAPI() ||
+				cfg.NeedsLocalHallucinationNLIForRouting()
+		},
+		paths: func(cfg *config.RouterConfig) []string {
+			return []string{cfg.HallucinationMitigation.NLIModel.ModelID}
+		},
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool {
+			return cfg.NeedsFeedbackModelForAPI() ||
+				cfg.NeedsFeedbackModelForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.FeedbackDetector.ModelID}

@@ -1,5 +1,6 @@
 import styles from './HeaderDisplay.module.css'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
+import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 interface HeaderDisplayProps {
   headers: Record<string, string>
@@ -210,9 +211,10 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
+    .map((value) => formatRoutingMetadataValue(key, value))
 
   if (!shouldSummarizeHeaderValue(key, values)) {
-    return rawValue
+    return values.join(', ')
   }
 
   return `${values[0]} +${values.length - 1}`
@@ -257,7 +259,7 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
             <div
               key={key}
               className={`${styles.header} ${styles[info.type]}`}
-              title={`${info.label}: ${value}`}
+              title={`${info.label}: ${displayValue}`}
             >
               <span className={styles.label}>{info.label}</span>
               <span className={styles.value}>{displayValue}</span>

@@ -486,8 +486,8 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	p := cfg.Decisions[0].Plugins[0]
-	if p.Type != "semantic-cache" { // normalized
-		t.Errorf("expected plugin type semantic-cache, got %s", p.Type)
+	if p.Type != "response_cache" { // normalized
+		t.Errorf("expected plugin type response_cache, got %s", p.Type)
 	}
 }
 
@@ -2223,10 +2223,10 @@ ROUTE test {
   WHEN domain("test")
   MODEL "m1:7b", "m2:3b"
   ALGORITHM confidence {
-    confidence_method: "logprob"
+    confidence_method: "hybrid"
     threshold: 0.8
-    on_error: "fallback"
-    escalation_order: "asc"
+    on_error: "skip"
+    escalation_order: "automix"
     cost_quality_tradeoff: 0.7
     hybrid_weights: { logprob_weight: 0.5, margin_weight: 0.5 }
   }
@@ -2236,13 +2236,13 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	c := cfg.Decisions[0].Algorithm.Confidence
-	if c.ConfidenceMethod != "logprob" {
+	if c.ConfidenceMethod != "hybrid" {
 		t.Errorf("method = %q", c.ConfidenceMethod)
 	}
-	if c.OnError != "fallback" {
+	if c.OnError != "skip" {
 		t.Errorf("on_error = %q", c.OnError)
 	}
-	if c.EscalationOrder != "asc" {
+	if c.EscalationOrder != "automix" {
 		t.Errorf("escalation_order = %q", c.EscalationOrder)
 	}
 	if c.CostQualityTradeoff != 0.7 {
@@ -2269,6 +2269,7 @@ ROUTE test {
     synthesis_template: "custom-template"
     synthesis_model: "m2:3b"
     max_concurrent: 8
+    max_completion_tokens: 1024
     round_timeout_seconds: 90
     min_successful_responses: 2
     on_error: "skip"
@@ -2302,6 +2303,9 @@ ROUTE test {
 	if r.MaxConcurrent != 8 {
 		t.Errorf("max_concurrent = %d", r.MaxConcurrent)
 	}
+	if r.MaxCompletionTokens == nil || *r.MaxCompletionTokens != 1024 {
+		t.Errorf("max_completion_tokens = %v", r.MaxCompletionTokens)
+	}
 	if r.RoundTimeoutSeconds != 90 {
 		t.Errorf("round_timeout_seconds = %d", r.RoundTimeoutSeconds)
 	}
@@ -2313,6 +2317,40 @@ ROUTE test {
 	}
 	if r.MaxResponsesPerRound != 4 {
 		t.Errorf("max_responses_per_round = %d", r.MaxResponsesPerRound)
+	}
+
+	decompiled, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile remom config: %v", err)
+	}
+	if !strings.Contains(decompiled, "max_completion_tokens: 1024") {
+		t.Fatalf("decompiled ReMoM config omitted max_completion_tokens:\n%s", decompiled)
+	}
+}
+
+func TestCompileReMoMRejectsNonPositiveCompletionLimit(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		t.Run(fmt.Sprintf("limit_%d", limit), func(t *testing.T) {
+			input := fmt.Sprintf(`
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m1:7b"
+  ALGORITHM remom {
+    breadth_schedule: [1]
+    max_completion_tokens: %d
+  }
+}`, limit)
+
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatalf("expected max_completion_tokens=%d to fail", limit)
+			}
+			if !strings.Contains(fmt.Sprint(errs), "max_completion_tokens must be >= 1 when set") {
+				t.Fatalf("unexpected compile errors: %v", errs)
+			}
+		})
 	}
 }
 
@@ -2622,14 +2660,14 @@ ROUTE route_b {
 
 	// route_a: uses template as-is
 	pA := cfg.Decisions[0].Plugins[0]
-	if pA.Type != "semantic-cache" {
-		t.Errorf("route_a plugin type = %q, want semantic-cache", pA.Type)
+	if pA.Type != "response_cache" {
+		t.Errorf("route_a plugin type = %q, want response_cache", pA.Type)
 	}
 
 	// route_b: uses template with override
 	pB := cfg.Decisions[1].Plugins[0]
-	if pB.Type != "semantic-cache" {
-		t.Errorf("route_b plugin type = %q, want semantic-cache", pB.Type)
+	if pB.Type != "response_cache" {
+		t.Errorf("route_b plugin type = %q, want response_cache", pB.Type)
 	}
 }
 
@@ -2906,7 +2944,7 @@ ROUTE test {
   ALGORITHM confidence {
     confidence_method: "hybrid"
     threshold: 0.5
-    on_error: "fallback"
+    on_error: "skip"
   }
 }`
 	cfg, errs := Compile(input)
@@ -2918,8 +2956,8 @@ ROUTE test {
 	if algo.OnError != "" {
 		t.Errorf("algo top-level on_error = %q, want empty", algo.OnError)
 	}
-	if algo.Confidence == nil || algo.Confidence.OnError != "fallback" {
-		t.Errorf("algo.Confidence.OnError = %q, want fallback", algo.Confidence.OnError)
+	if algo.Confidence == nil || algo.Confidence.OnError != "skip" {
+		t.Errorf("algo.Confidence.OnError = %q, want skip", algo.Confidence.OnError)
 	}
 }
 

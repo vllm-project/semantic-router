@@ -9,22 +9,24 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":   pluginFieldsSystemPrompt,
-	"semantic-cache":  pluginFieldsSemanticCache,
-	"router_replay":   pluginFieldsRouterReplay,
-	"memory":          pluginFieldsMemory,
-	"hallucination":   pluginFieldsHallucination,
-	"image_gen":       pluginFieldsImageGen,
-	"fast_response":   pluginFieldsFastResponse,
-	"request_params":  pluginFieldsRequestParams,
-	"tool_selection":  pluginFieldsToolSelection,
-	"tools":           pluginFieldsTools,
-	"rag":             pluginFieldsRAG,
-	"header_mutation": pluginFieldsHeaderMutation,
+	"system_prompt":       pluginFieldsSystemPrompt,
+	"response_cache":      pluginFieldsResponseCache,
+	"context_compression": pluginFieldsStructuredConfiguration,
+	"router_replay":       pluginFieldsRouterReplay,
+	"memory":              pluginFieldsMemory,
+	"hallucination":       pluginFieldsHallucination,
+	"image_gen":           pluginFieldsImageGen,
+	"fast_response":       pluginFieldsFastResponse,
+	"request_params":      pluginFieldsRequestParams,
+	"tool_selection":      pluginFieldsToolSelection,
+	"tools":               pluginFieldsTools,
+	"rag":                 pluginFieldsRAG,
+	"header_mutation":     pluginFieldsHeaderMutation,
+	"response_jailbreak":  pluginFieldsResponseJailbreak,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
-	if fn, ok := pluginFieldsDecoders[p.Type]; ok {
+	if fn, ok := pluginFieldsDecoders[config.NormalizeDecisionPluginType(p.Type)]; ok {
 		return fn(p)
 	}
 	return map[string]Value{}
@@ -48,19 +50,16 @@ func pluginFieldsSystemPrompt(p *config.DecisionPlugin) map[string]Value {
 	return fields
 }
 
-func pluginFieldsSemanticCache(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.SemanticCachePluginConfig](p)
+func pluginFieldsResponseCache(p *config.DecisionPlugin) map[string]Value {
+	return pluginFieldsStructuredConfiguration(p)
+}
+
+func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Value {
+	object, ok := structuredPayloadObjectValue(p.Configuration)
 	if !ok {
-		return fields
+		return map[string]Value{}
 	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	return fields
+	return object.Fields
 }
 
 func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
@@ -83,6 +82,12 @@ func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.MaxBodyBytes != 0 {
 		fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
+	}
+	if cfg.MaxToolTraceBytes != 0 {
+		fields["max_tool_trace_bytes"] = IntValue{V: cfg.MaxToolTraceBytes}
+	}
+	if cfg.MaxToolTraceSteps != 0 {
+		fields["max_tool_trace_steps"] = IntValue{V: cfg.MaxToolTraceSteps}
 	}
 	return fields
 }
@@ -122,6 +127,12 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.HallucinationAction != "" {
 		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
+	}
+	if cfg.UnverifiedFactualAction != "" {
+		fields["unverified_factual_action"] = StringValue{V: cfg.UnverifiedFactualAction}
+	}
+	if cfg.IncludeHallucinationDetails {
+		fields["include_hallucination_details"] = BoolValue{V: true}
 	}
 	return fields
 }
@@ -235,6 +246,9 @@ func pluginFieldsTools(p *config.DecisionPlugin) map[string]Value {
 	if len(cfg.BlockTools) > 0 {
 		fields["block_tools"] = stringsToArray(cfg.BlockTools)
 	}
+	if cfg.StripToolHistory {
+		fields["strip_tool_history"] = BoolValue{V: true}
+	}
 	if cfg.DynamicRetrieval != nil {
 		fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)
 	}
@@ -323,6 +337,24 @@ func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {
 	}
 	if len(cfg.Delete) > 0 {
 		fields["delete"] = stringsToArray(cfg.Delete)
+	}
+	return fields
+}
+
+func pluginFieldsResponseJailbreak(
+	p *config.DecisionPlugin,
+) map[string]Value {
+	fields := make(map[string]Value)
+	cfg, ok := decodePluginConfig[config.ResponseJailbreakPluginConfig](p)
+	if !ok {
+		return fields
+	}
+	fields["enabled"] = BoolValue{V: cfg.Enabled}
+	if cfg.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(cfg.Threshold)}
+	}
+	if cfg.Action != "" {
+		fields["action"] = StringValue{V: cfg.Action}
 	}
 	return fields
 }

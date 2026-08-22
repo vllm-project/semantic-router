@@ -45,7 +45,7 @@ const useCaseTabs: UseCaseTab[] = [
     summary: translate({
       id: 'homepage.useCases.tab.routing.summary',
       message:
-        'Classify intent and complexity, then route each request to the best model in your fleet.',
+        'Classify request signals, apply recipe policy, and select an eligible model from the configured pool.',
     }),
     flow: [
       {
@@ -54,7 +54,7 @@ const useCaseTabs: UseCaseTab[] = [
       },
       {
         label: translate({ id: 'homepage.useCases.tab.routing.flow2', message: 'Signal layer' }),
-        detail: translate({ id: 'homepage.useCases.tab.routing.flow2.detail', message: '16 signal families' }),
+        detail: translate({ id: 'homepage.useCases.tab.routing.flow2.detail', message: '20 signal families' }),
       },
       {
         label: translate({ id: 'homepage.useCases.tab.routing.flow3', message: 'Decision engine' }),
@@ -98,7 +98,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.routing.feature3.desc',
           message:
-            'Balance quality, latency, cost, and load without reading prompt content.',
+            'Balance quality, latency, cost, and load using model metadata and live local metrics.',
         }),
         docTo: '/docs/tutorials/algorithm/selection/multi-factor',
       },
@@ -110,7 +110,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.routing.feature4.desc',
           message:
-            'Chain lightweight models for triage and escalate hard prompts to frontier models.',
+            'Use loopers to triage with lightweight models, escalate difficult prompts, or combine answers.',
         }),
         docTo: '/docs/intro',
       },
@@ -133,7 +133,7 @@ const useCaseTabs: UseCaseTab[] = [
     summary: translate({
       id: 'homepage.useCases.tab.policy.summary',
       message:
-        'Enforce PII detection, jailbreak screening, authz, and rate limits before any model is called.',
+        'Evaluate configured PII, jailbreak, authorization, and rate-limit policy before model dispatch.',
     }),
     flow: [
       {
@@ -157,12 +157,12 @@ const useCaseTabs: UseCaseTab[] = [
       {
         title: translate({
           id: 'homepage.useCases.tab.policy.feature1.title',
-          message: 'Block prompt attacks and data leaks',
+          message: 'Detect prompt attacks and sensitive data',
         }),
         description: translate({
           id: 'homepage.useCases.tab.policy.feature1.desc',
           message:
-            'Run jailbreak and PII classifiers inline. Block, redact, or route to safer models automatically.',
+            'Run jailbreak and PII classifiers inline, then block or steer requests through configured decisions.',
         }),
         docTo: '/docs/tutorials/signal/learned/pii',
       },
@@ -198,7 +198,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.policy.feature4.desc',
           message:
-            'Apply request and token-based rate limits with model pricing awareness.',
+            'Apply role-based request and token limits, then use pricing metadata in cost-aware selectors.',
         }),
         docTo: '/docs/tutorials/global/api-and-observability',
       },
@@ -212,7 +212,7 @@ const useCaseTabs: UseCaseTab[] = [
     }),
     subtitle: translate({
       id: 'homepage.useCases.tab.observability.subtitle',
-      message: 'Audit every routing decision',
+      message: 'Inspect configured routing telemetry',
     }),
     heading: translate({
       id: 'homepage.useCases.tab.observability.heading',
@@ -221,12 +221,12 @@ const useCaseTabs: UseCaseTab[] = [
     summary: translate({
       id: 'homepage.useCases.tab.observability.summary',
       message:
-        'Capture signals, model selection, token usage, and cost for every request. Debug misroutes and tune policies with full replay fidelity.',
+        'Enable replay to retain routing evidence for debugging and evaluation. Stored detail, usage, and cost depend on configuration and backend data.',
     }),
     flow: [
       {
         label: translate({ id: 'homepage.useCases.tab.observability.flow1', message: 'Routed request' }),
-        detail: translate({ id: 'homepage.useCases.tab.observability.flow1.detail', message: 'Every API call' }),
+        detail: translate({ id: 'homepage.useCases.tab.observability.flow1.detail', message: 'Replay-enabled route' }),
       },
       {
         label: translate({ id: 'homepage.useCases.tab.observability.flow2', message: 'Replay record' }),
@@ -245,12 +245,12 @@ const useCaseTabs: UseCaseTab[] = [
       {
         title: translate({
           id: 'homepage.useCases.tab.observability.feature1.title',
-          message: 'Trace every request and token',
+          message: 'Inspect routing records',
         }),
         description: translate({
           id: 'homepage.useCases.tab.observability.feature1.desc',
           message:
-            'Router replay records decision metadata and usage/cost — summaries for browsing, detail on demand.',
+            'Replay can store decision metadata plus usage and cost when providers and recipe settings supply them.',
         }),
         docTo: '/docs/tutorials/global/api-and-observability',
       },
@@ -262,7 +262,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.observability.feature2.desc',
           message:
-            'Visualize decision distribution, signal frequency, and savings vs baseline models.',
+            'Explore decision distribution and signal frequency from available replay and metrics data.',
         }),
         docTo: '/docs/installation',
       },
@@ -274,7 +274,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.observability.feature3.desc',
           message:
-            'Every routed response carries a replay ID so operators can jump to the exact routing record.',
+            'Replay-enabled responses can carry an ID that links operators to the corresponding routing record.',
         }),
         docTo: '/docs/tutorials/plugin/router-replay',
       },
@@ -286,7 +286,7 @@ const useCaseTabs: UseCaseTab[] = [
         description: translate({
           id: 'homepage.useCases.tab.observability.feature4.desc',
           message:
-            'Export routing metrics and health signals for production monitoring.',
+            'Export available routing metrics and health signals for production monitoring.',
         }),
         docTo: '/docs/tutorials/global/api-and-observability',
       },
@@ -396,7 +396,7 @@ export default function UseCaseExplorer(): JSX.Element {
               <Translate id="homepage.useCases.title">One router, three use cases</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.useCases.subtitle">See how signals, policies, and models connect for every request.</Translate>
+              <Translate id="homepage.useCases.subtitle">See how signals, policies, and model pools connect inside a recipe.</Translate>
             </p>
           </header>
         </ScrollReveal>

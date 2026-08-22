@@ -4,8 +4,6 @@
 
 `request_params` is a route-local plugin that validates and trims OpenAI Chat Completions request bodies before they are forwarded to backends.
 
-It aligns to `config/plugin/request-params/budget-tier.yaml`.
-
 ## Key Advantages
 
 - Caps expensive parameters (`max_tokens`, `n`) per route.
@@ -24,7 +22,7 @@ Model routing can restrict which backend serves a request, but clients can still
 
 ## Configuration
 
-Use this fragment under `routing.decisions[].plugins` (list of plugin entries):
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -48,3 +46,9 @@ PLUGIN request_params {
   strip_unknown: true
 }
 ```
+
+This plugin enforces a bounded set of OpenAI Chat Completions fields. It is not
+a general JSON-schema firewall and does not authorize a caller. Test
+`strip_unknown` against clients that add provider-specific fields before
+enabling it. See a complete example:
+[`config/fragments/plugin/request-params/budget-tier.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/request-params/budget-tier.yaml).

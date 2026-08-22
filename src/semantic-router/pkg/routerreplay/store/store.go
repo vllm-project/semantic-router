@@ -30,6 +30,8 @@ type Signal struct {
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
 	Event        []string `json:"event,omitempty"`
+	Metadata     []string `json:"metadata,omitempty"`
+	Classifier   []string `json:"classifier,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -57,6 +59,14 @@ type Outcome struct {
 	Score     float64           `json:"score,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
+
+const (
+	LifecycleUnknown    = "unknown"
+	LifecycleInProgress = "in_progress"
+	LifecycleCompleted  = "completed"
+	LifecycleAborted    = "aborted"
+	LifecycleFailed     = "failed"
+)
 
 // ToolTrace captures the request-local assistant/tool exchange timeline.
 type ToolTrace struct {
@@ -104,26 +114,50 @@ type ToolTraceStep struct {
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
-	Decision             string `json:"decision,omitempty"`
-	DecisionTier         int    `json:"decision_tier,omitempty"`
-	DecisionPriority     int    `json:"decision_priority,omitempty"`
-	SelectionMethod      string `json:"selection_method,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
-	ProposalModel        string `json:"proposal_model,omitempty"`
-	PreviousModel        string `json:"previous_model,omitempty"`
-	SelectedModel        string `json:"selected_model,omitempty"`
-	SessionPolicyApplied bool   `json:"session_policy_applied,omitempty"`
-	SessionAction        string `json:"session_action,omitempty"`
-	SessionPhase         string `json:"session_phase,omitempty"`
-	SessionReason        string `json:"session_reason,omitempty"`
-	HardLockReason       string `json:"hard_lock_reason,omitempty"`
-	DecisionReason       string `json:"decision_reason,omitempty"`
-	MemoryBackend        string `json:"memory_backend,omitempty"`
-	MemoryStatus         string `json:"memory_status,omitempty"`
-	MemoryReason         string `json:"memory_reason,omitempty"`
-	MemoryFallbackReason string `json:"memory_fallback_reason,omitempty"`
-	MemoryFailOpen       bool   `json:"memory_fail_open,omitempty"`
-	MemoryResultCount    int    `json:"memory_result_count,omitempty"`
+	Decision                       string                 `json:"decision,omitempty"`
+	DecisionTier                   int                    `json:"decision_tier,omitempty"`
+	DecisionPriority               int                    `json:"decision_priority,omitempty"`
+	SelectionMethod                string                 `json:"selection_method,omitempty"`
+	SelectionReasoning             string                 `json:"selection_reasoning,omitempty"`
+	PromptHelperModel              string                 `json:"prompt_helper_model,omitempty"`
+	PromptHelperPromptTokens       int64                  `json:"prompt_helper_prompt_tokens,omitempty"`
+	PromptHelperCompletionTokens   int64                  `json:"prompt_helper_completion_tokens,omitempty"`
+	PromptHelperTotalTokens        int64                  `json:"prompt_helper_total_tokens,omitempty"`
+	PromptHelperLatencyMs          int64                  `json:"prompt_helper_latency_ms,omitempty"`
+	OriginalModel                  string                 `json:"original_model,omitempty"`
+	ProposalModel                  string                 `json:"proposal_model,omitempty"`
+	PreviousModel                  string                 `json:"previous_model,omitempty"`
+	SelectedModel                  string                 `json:"selected_model,omitempty"`
+	SessionPolicyApplied           bool                   `json:"session_policy_applied,omitempty"`
+	SessionAction                  string                 `json:"session_action,omitempty"`
+	SessionPhase                   string                 `json:"session_phase,omitempty"`
+	SessionReason                  string                 `json:"session_reason,omitempty"`
+	HardLockReason                 string                 `json:"hard_lock_reason,omitempty"`
+	DecisionReason                 string                 `json:"decision_reason,omitempty"`
+	MemoryBackend                  string                 `json:"memory_backend,omitempty"`
+	MemoryStatus                   string                 `json:"memory_status,omitempty"`
+	MemoryReason                   string                 `json:"memory_reason,omitempty"`
+	MemoryFallbackReason           string                 `json:"memory_fallback_reason,omitempty"`
+	MemoryFailOpen                 bool                   `json:"memory_fail_open,omitempty"`
+	MemoryResultCount              int                    `json:"memory_result_count,omitempty"`
+	ContextCompressionApplied      bool                   `json:"context_compression_applied,omitempty"`
+	ContextCompressionBefore       int                    `json:"context_compression_tokens_before,omitempty"`
+	ContextCompressionAfter        int                    `json:"context_compression_tokens_after,omitempty"`
+	ContextCompressionMessages     int                    `json:"context_compression_messages,omitempty"`
+	ContextCompressionFormat       string                 `json:"context_compression_format,omitempty"`
+	ContextCompressionOmitted      int                    `json:"context_compression_omitted_chunks,omitempty"`
+	ContextCompressionSkipReason   string                 `json:"context_compression_skip_reason,omitempty"`
+	ContextCompressionStrategy     string                 `json:"context_compression_strategy,omitempty"`
+	ContextCompressionBudgetMode   string                 `json:"context_compression_budget_mode,omitempty"`
+	ContextCompressionTokenSource  string                 `json:"context_compression_token_source,omitempty"`
+	ContextCompressionTrigger      string                 `json:"context_compression_trigger,omitempty"`
+	ContextCompressionRevision     string                 `json:"context_compression_revision,omitempty"`
+	ContextCompressionRecoveryKeys int                    `json:"context_compression_recovery_keys,omitempty"`
+	ContextCompressionQuality      string                 `json:"context_compression_quality,omitempty"`
+	ContextCompressionFallback     string                 `json:"context_compression_fallback,omitempty"`
+	ContextCompressionCostSaved    float64                `json:"context_compression_cost_saved,omitempty"`
+	Annotations                    map[string]interface{} `json:"annotations,omitempty"`
+	SignalErrors                   map[string]string      `json:"signal_errors,omitempty"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -148,6 +182,7 @@ type Record struct {
 	TurnIndex             int                    `json:"turn_index"`
 	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
 	ConversationID        string                 `json:"conversation_id,omitempty"`
+	Recipe                string                 `json:"recipe,omitempty"`
 	Decision              string                 `json:"decision,omitempty"`
 	DecisionTier          int                    `json:"decision_tier"`
 	DecisionPriority      int                    `json:"decision_priority"`
@@ -171,6 +206,10 @@ type Record struct {
 	RequestBody           string                 `json:"request_body,omitempty"`
 	ResponseBody          string                 `json:"response_body,omitempty"`
 	ResponseStatus        int                    `json:"response_status,omitempty"`
+	LifecycleState        string                 `json:"lifecycle_state"`
+	EndedAt               *time.Time             `json:"ended_at,omitempty"`
+	DurationMS            int64                  `json:"duration_ms,omitempty"`
+	TerminalReason        string                 `json:"terminal_reason,omitempty"`
 	FromCache             bool                   `json:"from_cache,omitempty"`
 	Streaming             bool                   `json:"streaming,omitempty"`
 	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
@@ -222,7 +261,11 @@ type Record struct {
 	//
 	// CacheSimilarity is the semantic-cache lookup similarity (0 = no lookup),
 	// formerly the x-vsr-cache-similarity header.
-	CacheSimilarity float32 `json:"cache_similarity,omitempty"`
+	CacheSimilarity      float32 `json:"cache_similarity,omitempty"`
+	CacheHitKind         string  `json:"cache_hit_kind,omitempty"`
+	CacheSource          string  `json:"cache_source,omitempty"`
+	CacheEntryAgeSeconds float64 `json:"cache_entry_age_seconds,omitempty"`
+	CacheTTLSeconds      int     `json:"cache_ttl_seconds,omitempty"`
 	// ContextTokenCount is the request context token count used for
 	// context-based routing, formerly the x-vsr-context-token-count header.
 	ContextTokenCount int `json:"context_token_count,omitempty"`
@@ -247,22 +290,40 @@ type Record struct {
 	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
-// Writer mutates router replay records.
-type Writer interface {
+// RecordWriter creates records and advances their routing lifecycle.
+type RecordWriter interface {
 	// Add inserts a new record. Returns the record ID.
 	Add(ctx context.Context, record Record) (string, error)
 
 	// UpdateStatus updates the response status and flags for an existing record.
 	UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error
 
+	// UpdateLifecycle records terminal completion independently of response
+	// headers. A 2xx status is not considered successful until this transition
+	// reaches LifecycleCompleted.
+	UpdateLifecycle(ctx context.Context, id string, state string, endedAt time.Time, durationMS int64, reason string) error
+}
+
+// BodyWriter attaches bounded request and response bodies to replay records.
+type BodyWriter interface {
 	// AttachRequest updates the request body for an existing record.
 	AttachRequest(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+}
 
+// OutcomeWriter appends post-route feedback to replay records.
+type OutcomeWriter interface {
 	// AppendOutcome links post-route feedback to an existing replay record.
 	AppendOutcome(ctx context.Context, id string, outcome Outcome) error
+}
+
+// Writer groups the mutation capabilities required by the replay recorder.
+type Writer interface {
+	RecordWriter
+	BodyWriter
+	OutcomeWriter
 }
 
 // Reader retrieves router replay records.
@@ -396,6 +457,9 @@ func cloneSignal(signal Signal) Signal {
 		PII:          cloneStringSlice(signal.PII),
 		KB:           cloneStringSlice(signal.KB),
 		Conversation: cloneStringSlice(signal.Conversation),
+		Event:        cloneStringSlice(signal.Event),
+		Metadata:     cloneStringSlice(signal.Metadata),
+		Classifier:   cloneStringSlice(signal.Classifier),
 	}
 }
 
@@ -425,6 +489,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }
 
@@ -466,6 +531,8 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 		return nil
 	}
 	cloned := *value
+	cloned.Annotations = cloneInterfaceMap(value.Annotations)
+	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	return &cloned
 }
 
@@ -478,6 +545,14 @@ func cloneIntPtr(value *int) *int {
 }
 
 func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneTimePtr(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}

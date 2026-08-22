@@ -2,14 +2,18 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
+
+var errMilvusCacheEntryNotFound = errors.New("milvus cache entry not found")
 
 // GetAllEntries retrieves all entries from Milvus for HNSW index rebuilding
 // Returns slices of request_ids and embeddings for efficient bulk loading
@@ -27,9 +31,13 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	queryResult, err := c.client.Query(
 		ctx,
 		c.collectionName,
-		[]string{},              // Empty partitions means search all
-		"response_body != \"\"", // Only get complete entries
+		[]string{}, // Empty partitions means search all
+		fmt.Sprintf(
+			`response_body != "" && query != %s`,
+			milvusStringLiteral(exactCacheQueryMarker),
+		),
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
+		c.searchQueryOptions()...,
 	)
 	if err != nil {
 		logging.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
@@ -97,29 +105,40 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	return requestIDs, embeddings, nil
 }
 
-// GetByID retrieves a document from Milvus by its request ID
+// GetByID retrieves a document from Milvus by request ID inside an exact model
+// partition.
 // This is much more efficient than FindSimilar when you already know the ID
 // Used by hybrid cache to fetch documents after local HNSW search
 //
 //nolint:funlen,cyclop,nestif
-func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, error) {
+func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]byte, error) {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil, fmt.Errorf("milvus cache is not enabled")
 	}
-
 	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
 
 	// Query Milvus by request_id (primary key)
 	// Filter for non-empty responses to avoid race condition with pending entries
-	queryResult, err := c.client.Query(
-		ctx,
-		c.collectionName,
-		[]string{}, // Empty partitions means search all
-		fmt.Sprintf("request_id == \"%s\" && response_body != \"\"", requestID),
-		[]string{"response_body"}, // Only fetch document, not embedding!
-	)
+	var queryResult client.ResultSet
+	var err error
+	if c.queryByIDFn != nil {
+		queryResult, err = c.queryByIDFn(ctx, requestID, model)
+	} else {
+		queryResult, err = c.client.Query(
+			ctx,
+			c.collectionName,
+			[]string{}, // Empty partitions means search all
+			fmt.Sprintf(
+				"request_id == %s && model == %s && response_body != \"\"",
+				milvusStringLiteral(requestID),
+				milvusStringLiteral(model),
+			),
+			[]string{"response_body"}, // Only fetch document, not embedding!
+			c.searchQueryOptions()...,
+		)
+	}
 	if err != nil {
 		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
@@ -129,7 +148,7 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 	if len(queryResult) == 0 {
 		logging.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("document not found: %s", requestID)
+		return nil, fmt.Errorf("%w: %s", errMilvusCacheEntryNotFound, requestID)
 	}
 
 	// Milvus automatically includes the primary key but the column order is non-deterministic

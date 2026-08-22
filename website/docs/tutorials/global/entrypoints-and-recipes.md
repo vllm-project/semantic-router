@@ -1,77 +1,112 @@
-# Entrypoints and Multi-Recipe Routing
+---
+title: Virtual Models
+description: Give clients stable virtual model names backed by isolated routing policies in one Semantic Router deployment.
+---
+
+# Virtual Models
 
 ## Overview
 
-One router configuration can carry multiple named routing profiles. The top-level `routing` block is the `default` recipe; `recipes` adds named additional profiles, and `entrypoints` maps request-facing virtual model names onto them. A client selects a routing profile simply by setting the request `model` field to an entrypoint name.
+Entrypoints and recipes turn one Semantic Router deployment into a set of
+purpose-built virtual models:
 
-## Key Advantages
-
-- One deployment serves several routing policies without duplicating provider, model-catalog, or global system configuration.
-- Clients opt into a profile with nothing but the OpenAI-compatible `model` field; no extra headers or endpoints.
-- The default profile keeps working unchanged: `vllm-sr/auto`, `auto`, and concrete model names behave exactly as before.
+- an **entrypoint** is the model name a client requests;
+- a **recipe** is the routing policy that handles requests for that name; and
+- providers, model endpoints, and shared services remain available to every
+  recipe.
 
 ## What Problem Does It Solve?
 
-Before this layer, one router carried exactly one working routing profile. Serving a second policy — a privacy-first profile, a cost-saver profile, a team-specific profile — meant running a second router or overloading one decision graph with unrelated concerns.
+This separation lets an application choose an objective such as low latency,
+high quality, or a balanced trade-off without knowing which backend model will
+serve the request.
 
-`entrypoints` and `recipes` split that cleanly: shared assets stay global, routing profiles become named and selectable per request.
+In canonical YAML, `entrypoints` holds the public-name mappings and `recipes`
+holds the named routing policies.
 
-## When to Use
+## How the pieces fit
 
-Use entrypoints and recipes when:
+```text
+request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
+```
 
-- different consumers of one router need different routing policies
-- a policy such as privacy handling or cost control should be opt-in per request rather than baked into the default decision graph
-- you want to stage a new routing profile next to the production default and switch clients over gradually
+When the request `model` matches an `entrypoints[].model_names` value, the
+Router evaluates only the mapped recipe. The virtual model name is then
+replaced by the backend selected from that recipe.
 
-Keep a single `routing` block when one profile serves all traffic — the layer is entirely optional.
+The top-level `routing` block remains the `default` recipe. Requests for
+`vllm-sr/auto`, `auto`, or another configured auto alias use that default
+policy. If the selected recipe has no matching decision, the Router uses
+`providers.defaults.default_model`.
+
+Concrete backend model names are different: they select that model directly
+and bypass recipe routing. Use a virtual entrypoint when clients should ask for
+an objective, and a concrete model name only when they intentionally need that
+exact backend.
 
 ## Configuration
 
+The model catalog is shared. Each named recipe owns its signals, projections,
+decisions, strategy, algorithms, and route-local plugins.
+
 ```yaml
+routing:
+  modelCards:
+    - name: fast-model
+    - name: accurate-model
+
 entrypoints:
-  - model_names: ["vllm-sr/privacy"]
-    recipe: privacy-first
+  - model_names: [vllm-sr/mom-v1-flash]
+    recipe: flash
+  - model_names: [vllm-sr/mom-v1-ultra]
+    recipe: ultra
 
 recipes:
-  - name: privacy-first
-    description: Keep privacy-sensitive prompts on the local model.
+  - name: flash
+    description: Prefer the lowest-latency eligible backend.
     routing:
-      signals:
-        keywords:
-          - name: privacy_terms
-            operator: OR
-            keywords: ["ssn", "passport number"]
+      strategy: priority
       decisions:
-        - name: privacy_route
+        - name: fast-path
+          description: Serve requests with the fast model.
+          priority: 100
           rules:
             operator: AND
-            conditions:
-              - type: keyword
-                name: privacy_terms
+            conditions: []
           modelRefs:
-            - model: qwen3-8b
-              use_reasoning: false
+            - model: fast-model
+
+  - name: ultra
+    description: Prefer the highest-quality eligible backend.
+    routing:
+      strategy: priority
+      decisions:
+        - name: quality-path
+          description: Serve requests with the accurate model.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: accurate-model
 ```
 
-### How requests resolve
+Clients can discover entrypoint names through `/v1/models`. Routed responses
+include `x-vsr-selected-recipe`, so operators can confirm which policy handled
+a request without exposing the backend selection contract to the client.
 
-- A request model name that matches an entrypoint behaves like an auto-model alias: the router evaluates the selected recipe's decisions and rewrites the body to the concrete model the recipe chooses. The virtual name never reaches a backend.
-- If no decision in the recipe matches, the request falls back to `providers.defaults.default_model`, the same way `vllm-sr/auto` does.
-- Entrypoint names appear in `/v1/models` next to the auto aliases, using the recipe description as the listing description.
-- Request models that match no entrypoint keep the existing behavior: auto aliases run the default profile, concrete model names pass through.
+## When to Use
 
-### Sharing rules
+Use named entrypoints and recipes when one deployment must expose more than one
+routing objective, policy boundary, or rollout track. Keep a single top-level
+`routing` profile when all clients should follow the same policy; the existing
+auto-model flow needs no extra configuration.
 
-- `recipes[].routing` carries `signals`, `projections`, and `decisions` — the same profile shape as the top-level `routing` block — but never `modelCards`. The model catalog and provider bindings stay shared.
-- Signal and projection names share one global registry across recipes. Every recipe may reference every registered signal; declaring the same name in two profiles fails validation.
-- A recipe named `default` is only valid when the top-level `routing` block carries no profile of its own, so existing single-profile configs cannot silently change meaning.
+Continue with:
 
-### Validation
-
-Config load rejects:
-
-- duplicate recipe names, and a `default` recipe conflicting with a non-empty top-level `routing` block
-- entrypoints referencing unknown recipes, entrypoints without model names, and the same model name claimed by two entrypoints
-- recipe-owned `modelCards`
-- signal or projection names declared by more than one profile
+- [Entrypoints](entrypoints) for naming, request resolution, discovery, and
+  validation rules.
+- [Recipes](recipes) for policy isolation, shared infrastructure, lifecycle
+  APIs, and limitations.
+- [Models, Entrypoints, and Serving](models-entrypoints-serving) for the
+  end-to-end catalog, CLI, backend binding, serving, and operations workflow.

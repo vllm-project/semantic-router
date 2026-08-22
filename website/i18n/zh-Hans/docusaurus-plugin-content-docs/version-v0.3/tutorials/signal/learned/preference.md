@@ -9,11 +9,11 @@ translation:
 
 ## 概览
 
-`preference` 从示例与分类器设置推断用户响应风格偏好。映射到 `config/signal/preference/`，在 `routing.signals.preferences` 中声明。
+`preference` 从示例与分类器设置推断用户响应风格偏好。映射到 `config/fragments/signal/preference/`，在 `routing.signals.preferences` 中声明。
 
 该族为学习型：使用 `global.model_catalog.modules.classifier.preference` 下的偏好分类路径。
 
-若省略 `global.model_catalog.modules.classifier.preference.use_contrastive`，vSR 现默认为 `true`。即 `deploy/recipes/balance.yaml` 等配置可依赖偏好信号，除非显式禁用对比模式，否则无需单独全局分类器块。
+若省略 `global.model_catalog.modules.classifier.preference.use_contrastive`，vSR 现默认为 `true`。即 `config/recipes/balance/config.yaml` 等配置可依赖偏好信号，除非显式禁用对比模式，否则无需单独全局分类器块。
 
 ## 主要优势
 
@@ -39,7 +39,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/preference/`
+源片段族：`config/fragments/signal/preference/`
 
 ```yaml
 routing:

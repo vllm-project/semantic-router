@@ -1,37 +1,93 @@
-name: Nightly Build
+name: Nightly
 
 on:
   schedule:
-    - cron: "0 2 * * *" # 2:00 AM UTC every day
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
-# Never cancel a running nightly — let it finish and report.
+permissions:
+  contents: read
+
 concurrency:
-  group: nightly-build
+  group: nightly
   cancel-in-progress: false
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Docker: build all images tagged nightly-YYYYMMDD (multi-arch + nightly ROCm)
-  # docker-publish.yml already owns the nightly logic; we just call it here.
-  # ─────────────────────────────────────────────────────────────────────────────
-  docker-nightly:
-    name: Docker Nightly Images
+  core:
+    name: Nightly core gate
+    uses: ./.github/workflows/test-and-build.yml
+    secrets: inherit
+
+  dashboard:
+    name: Nightly dashboard
+    needs: core
+    uses: ./.github/workflows/dashboard-test.yml
+
+  e2e:
+    name: Nightly E2E
+    needs: core
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      profiles: '["envoy-ai-gateway","dashboard","remote-embedding"]'
+    secrets: inherit
+
+  cli:
+    name: Nightly CLI
+    needs: core
+    uses: ./.github/workflows/integration-test-vllm-sr-cli.yml
+
+  memory:
+    name: Nightly memory
+    needs: core
+    uses: ./.github/workflows/integration-test-memory.yml
+
+  operator:
+    name: Nightly operator
+    needs: core
+    uses: ./.github/workflows/operator-ci.yml
+    with:
+      run_integration: true
+      integration_matrix: >-
+        [{"cache-backend":"memory","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router"},
+        {"cache-backend":"redis","deploy-redis":true,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-redis"},
+        {"cache-backend":"milvus","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-milvus"},
+        {"cache-backend":"qdrant","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":true,"router-name":"test-router-qdrant"},
+        {"cache-backend":"hybrid","deploy-redis":false,"deploy-milvus":true,"deploy-qdrant":false,"router-name":"test-router-hybrid"},
+        {"cache-backend":"mmbert","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-mmbert"},
+        {"cache-backend":"complexity","deploy-redis":false,"deploy-milvus":false,"deploy-qdrant":false,"router-name":"test-router-complexity"}]
+
+  performance:
+    name: Nightly performance
+    needs: core
+    uses: ./.github/workflows/performance-test.yml
+
+  router-learning:
+    name: Nightly router learning
+    needs: core
+    uses: ./.github/workflows/router-learning-eval.yml
+    with:
+      profile: release
+
+  docker:
+    name: Nightly Docker images
+    needs: core
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/docker-publish.yml
     with:
-      is_nightly: true
+      mode: nightly
+      images: '["anthropic-shim","dashboard","extproc","extproc-rocm","llm-katan","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm","vllm-sr-sim"]'
+      publish_latest: false
     secrets: inherit
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Helm: publish chart version 0.0.0-nightly.YYYYMMDD to GHCR OCI registry
-  # ─────────────────────────────────────────────────────────────────────────────
-  helm-nightly:
-    name: Helm Nightly Chart
+  helm:
+    name: Nightly Helm chart
+    needs: core
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/helm-publish.yml
     with:
-      is_nightly: true
+      mode: nightly
     secrets: inherit
-
-  # Failure visibility is handled by GitHub's built-in workflow failure emails
-  # (sent to anyone watching the repo). No issue creation here — similar
-  # auto-issue patterns were previously removed from this repo due to noise.

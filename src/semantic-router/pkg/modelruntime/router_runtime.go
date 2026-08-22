@@ -39,10 +39,20 @@ type PrepareRouterRuntimeOptions struct {
 	InitModalityClassifierFunc func(modelPath string, useCPU bool) error
 }
 
-type WarmupToolsOptions struct {
+type WarmupRouterOptions struct {
 	Component      string
 	MaxParallelism int
 	OnEvent        func(Event)
+}
+
+// RouterWarmupTask describes request-path state that should be materialized
+// before the router reports ready. Readiness is explicit because some tasks
+// depend on an embedding runtime that may be intentionally unavailable.
+type RouterWarmupTask struct {
+	Name       string
+	Ready      bool
+	SkipReason string
+	Load       func() error
 }
 
 type embeddingPaths struct {
@@ -104,45 +114,58 @@ func PrepareRouterRuntime(
 	return state, err
 }
 
-func WarmupToolsDatabase(
+func WarmupRouter(
 	ctx context.Context,
-	toolsReady bool,
-	load func() error,
-	options WarmupToolsOptions,
+	warmups []RouterWarmupTask,
+	options WarmupRouterOptions,
 ) (Summary, error) {
 	component := options.Component
 	if component == "" {
 		component = "router"
 	}
 
-	if !toolsReady {
-		logging.ComponentEvent(component, "tools_database_load_skipped", map[string]interface{}{
-			"reason": "embedding_runtime_not_ready_for_tools",
+	tasks := make([]Task, 0, len(warmups))
+	taskNames := make([]string, 0, len(warmups))
+	for _, warmup := range warmups {
+		if !warmup.Ready {
+			logging.ComponentEvent(component, warmup.Name+"_load_skipped", map[string]interface{}{
+				"reason": warmup.SkipReason,
+			})
+			continue
+		}
+		if warmup.Load == nil {
+			continue
+		}
+		taskName := "router.warmup." + warmup.Name
+		taskNames = append(taskNames, warmup.Name)
+		tasks = append(tasks, Task{
+			Name:       taskName,
+			BestEffort: true,
+			Run: func(context.Context) error {
+				logging.ComponentEvent(component, warmup.Name+"_load_started", map[string]interface{}{})
+				return warmup.Load()
+			},
 		})
+	}
+	if len(tasks) == 0 {
 		return Summary{Results: map[string]TaskResult{}}, nil
 	}
 
 	logging.ComponentEvent(component, "runtime_warmup_started", map[string]interface{}{
-		"tasks": "tools_database",
+		"tasks": strings.Join(taskNames, ","),
 	})
-	summary, err := Execute(ctx, []Task{
-		{
-			Name:       "router.warmup.tools_database",
-			BestEffort: true,
-			Run: func(context.Context) error {
-				logging.ComponentEvent(component, "tools_database_load_started", map[string]interface{}{})
-				return load()
-			},
-		},
-	}, Options{
+	summary, err := Execute(ctx, tasks, Options{
 		MaxParallelism: options.MaxParallelism,
 		OnEvent:        options.OnEvent,
 	})
 	if err != nil {
 		return summary, err
 	}
-	if result, ok := summary.Results["router.warmup.tools_database"]; ok && result.Status == TaskSucceeded {
-		logging.ComponentEvent(component, "tools_database_loaded", map[string]interface{}{})
+	for _, warmup := range warmups {
+		result, ok := summary.Results["router.warmup."+warmup.Name]
+		if ok && result.Status == TaskSucceeded {
+			logging.ComponentEvent(component, warmup.Name+"_loaded", map[string]interface{}{})
+		}
 	}
 	return summary, nil
 }

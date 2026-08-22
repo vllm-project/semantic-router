@@ -83,8 +83,8 @@ func TestCanonicalRecipesRoutingOnlyNormalizesToDefaultRecipe(t *testing.T) {
 	if defaultRecipe == nil {
 		t.Fatal("expected a default recipe")
 	}
-	if len(defaultRecipe.Decisions) != 1 || defaultRecipe.Decisions[0].Name != "default_route" {
-		t.Fatalf("default recipe does not mirror the top-level routing profile: %+v", defaultRecipe.Decisions)
+	if len(defaultRecipe.Profile.Decisions) != 1 || defaultRecipe.Profile.Decisions[0].Name != "default_route" {
+		t.Fatalf("default recipe does not mirror the top-level routing profile: %+v", defaultRecipe.Profile.Decisions)
 	}
 	if len(cfg.Entrypoints) != 0 {
 		t.Fatalf("expected no entrypoints, got %+v", cfg.Entrypoints)
@@ -105,10 +105,10 @@ func TestCanonicalRecipesWithEntrypoints(t *testing.T) {
 	if !ok {
 		t.Fatal("expected vllm-sr/privacy to resolve to a recipe")
 	}
-	if privacy.Name != "privacy" || len(privacy.Decisions) != 1 || privacy.Decisions[0].Name != "privacy_route" {
+	if privacy.Name != "privacy" || len(privacy.Profile.Decisions) != 1 || privacy.Profile.Decisions[0].Name != "privacy_route" {
 		t.Fatalf("unexpected privacy recipe: %+v", privacy)
 	}
-	if privacy.Decisions[0].ModelRefs[0].UseReasoning == nil {
+	if privacy.Profile.Decisions[0].ModelRefs[0].UseReasoning == nil {
 		t.Fatal("expected recipe decisions to receive modelRef defaults")
 	}
 }
@@ -123,8 +123,8 @@ func TestCanonicalEntrypointsResolveDefaultRecipeAlias(t *testing.T) {
 	if !ok || viaAlias.Name != DefaultRecipeName {
 		t.Fatalf("expected vllm-sr/default-alias to resolve to the default recipe, got %+v", viaAlias)
 	}
-	if len(viaAlias.Decisions) != 1 || viaAlias.Decisions[0].Name != "default_route" {
-		t.Fatalf("default recipe does not mirror the flat routing fields: %+v", viaAlias.Decisions)
+	if len(viaAlias.Profile.Decisions) != 1 || viaAlias.Profile.Decisions[0].Name != "default_route" {
+		t.Fatalf("default recipe does not mirror the flat routing fields: %+v", viaAlias.Profile.Decisions)
 	}
 
 	if _, ok := cfg.RecipeForRequestModel("model-a"); ok {
@@ -311,6 +311,15 @@ entrypoints:
 `,
 		wantErr: "already mapped by another entrypoint",
 	},
+	{
+		name: "recipe name with surrounding whitespace",
+		extra: `
+recipes:
+  - name: " privacy "
+    routing: {}
+`,
+		wantErr: "must not contain surrounding whitespace",
+	},
 }
 
 func TestCanonicalRecipeValidationErrors(t *testing.T) {
@@ -324,5 +333,23 @@ func TestCanonicalRecipeValidationErrors(t *testing.T) {
 				t.Fatalf("expected error containing %q, got: %v", testCase.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestDuplicateIdenticalSignalWithinRecipeRejected(t *testing.T) {
+	needle := `      - name: urgent_keywords
+        operator: OR
+        keywords: ["urgent"]`
+	yamlConfig := strings.Replace(
+		recipeTestBaseYAML,
+		needle,
+		needle+"\n"+needle,
+		1,
+	) + recipeTestPrivacyBlockYAML
+
+	_, err := ParseYAMLBytes([]byte(yamlConfig))
+	if err == nil ||
+		!strings.Contains(err.Error(), "duplicate local name") {
+		t.Fatalf("expected same-profile duplicate signal error, got %v", err)
 	}
 }

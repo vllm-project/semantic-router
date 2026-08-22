@@ -1,0 +1,26 @@
+# CODEOWNERS for vLLM Semantic Router
+#
+# OWNER files remain the human-readable source for project ownership. The
+# concrete mappings below mirror them in GitHub's native CODEOWNERS format so
+# reviewer requests do not require a write-token pull_request_target workflow.
+#
+# GitHub Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Root fallback.
+*  @rootfs @Xunzhuo
+
+# Domain mappings generated from the nearest OWNER files.
+/bench/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/candle-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/config/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/dashboard/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/deploy/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/e2e/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/ml-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/nlp-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/onnx-binding/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/paper/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/perf/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/src/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/tools/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu
+/website/ @FAUST-BENCHOU @shraderdm @drivebyer @ramkrishs @WUKUNTAI-0211 @AayushSaini101 @siloteemu

@@ -18,7 +18,7 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
-	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
+	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,20 @@ func (c *Classifier) InitializeRuntime() error {
 	}
 
 	c.logHeuristicClassifierInitialization()
-	tasks := c.runtimeTasks()
+	return c.executeRuntimeTasks(c.runtimeTasks())
+}
+
+// InitializeDefaultAPIRuntime initializes only model dependencies owned by
+// default public APIs. It is used when auto/direct aliases are disabled, so the
+// default routing profile itself is unreachable but its APIs remain available.
+func (c *Classifier) InitializeDefaultAPIRuntime() error {
+	if c == nil {
+		return fmt.Errorf("classifier is nil")
+	}
+	return c.executeRuntimeTasks(c.defaultAPIRuntimeTasks())
+}
+
+func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -84,6 +97,30 @@ func (c *Classifier) InitializeRuntime() error {
 	return nil
 }
 
+func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
+	if !c.ownsDefaultAPIConsumer() {
+		return nil
+	}
+
+	tasks := make([]modelruntime.Task, 0, 3)
+	appendTask := func(name string, enabled bool, init func() error) {
+		if !enabled {
+			return
+		}
+		tasks = append(tasks, modelruntime.Task{
+			Name:       name,
+			BestEffort: true,
+			Run: func(context.Context) error {
+				return init()
+			},
+		})
+	}
+	appendTask("classifier.fact_check", c.Config.NeedsFactCheckModelForAPI(), c.initializeFactCheckClassifier)
+	appendTask("classifier.hallucination", c.Config.NeedsHallucinationDetectorForDefaultRuntime(), c.initializeHallucinationDetector)
+	appendTask("classifier.feedback", c.Config.NeedsFeedbackModelForAPI(), c.initializeFeedbackDetector)
+	return tasks
+}
+
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	tasks := make([]modelruntime.Task, 0, 9)
 	appendTask := func(name string, bestEffort bool, enabled bool, init func() error) {
@@ -103,9 +140,9 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
-	appendTask("classifier.fact_check", true, c.IsFactCheckEnabled(), c.initializeFactCheckClassifier)
-	appendTask("classifier.hallucination", true, c.IsHallucinationDetectionEnabled(), c.initializeHallucinationDetector)
-	appendTask("classifier.feedback", true, c.IsFeedbackDetectorEnabled(), c.initializeFeedbackDetector)
+	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
+	appendTask("classifier.hallucination", true, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
+	appendTask("classifier.feedback", true, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
@@ -113,7 +150,13 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 }
 
 func (c *Classifier) usesRoutingSignalType(signalType string) bool {
-	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInRouting(signalType)
+	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
+}
+
+func (c *Classifier) ownsDefaultAPIConsumer() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.RoutingScope == "" || c.Config.RoutingScope == config.DefaultRecipeName)
 }
 
 func (c *Classifier) initializeConfiguredCategoryRuntime() error {

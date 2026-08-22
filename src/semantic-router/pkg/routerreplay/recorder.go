@@ -2,6 +2,8 @@ package routerreplay
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -11,6 +13,7 @@ const (
 	DefaultMaxRecords        = 200
 	DefaultMaxBodyBytes      = 4096 // 4KB
 	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
+	DefaultOperationTimeout  = 5 * time.Second
 	// DefaultMaxToolTraceSteps caps the number of ToolTraceStep entries kept
 	// per record. Long agent sessions can otherwise produce hundreds of
 	// steps and OOM the router process (see issue #1835). 0 means no limit;
@@ -19,6 +22,12 @@ const (
 	// default in pkg/config sets this to 100 so the router is safe out of
 	// the box.
 	DefaultMaxToolTraceSteps = 0
+
+	LifecycleUnknown    = store.LifecycleUnknown
+	LifecycleInProgress = store.LifecycleInProgress
+	LifecycleCompleted  = store.LifecycleCompleted
+	LifecycleAborted    = store.LifecycleAborted
+	LifecycleFailed     = store.LifecycleFailed
 )
 
 type (
@@ -45,7 +54,15 @@ type (
 
 type Recorder struct {
 	storage store.Storage
+	// operationTimeout bounds audit-store I/O independently from the client
+	// request. It is immutable after construction in production; tests may
+	// shorten it before issuing operations to exercise stalled backends.
+	operationTimeout time.Duration
 
+	lifecycleMu          sync.Mutex
+	lifecycleTransitions map[string]*lifecycleTransition
+
+	policyMu          sync.RWMutex
 	maxBodyBytes      int
 	maxToolTraceBytes int // 0 = no limit
 	maxToolTraceSteps int // 0 = no limit
@@ -54,17 +71,26 @@ type Recorder struct {
 	captureResponseBody bool
 }
 
+type lifecycleTransition struct {
+	done chan struct{}
+	err  error
+}
+
 // NewRecorder creates a new Recorder with the specified storage backend.
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		storage:           storage,
-		maxBodyBytes:      DefaultMaxBodyBytes,
-		maxToolTraceBytes: DefaultMaxToolTraceBytes,
-		maxToolTraceSteps: DefaultMaxToolTraceSteps,
+		storage:              storage,
+		operationTimeout:     DefaultOperationTimeout,
+		lifecycleTransitions: make(map[string]*lifecycleTransition),
+		maxBodyBytes:         DefaultMaxBodyBytes,
+		maxToolTraceBytes:    DefaultMaxToolTraceBytes,
+		maxToolTraceSteps:    DefaultMaxToolTraceSteps,
 	}
 }
 
 func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBodyBytes int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	r.captureRequestBody = captureRequest
 	r.captureResponseBody = captureResponse
 
@@ -79,6 +105,8 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 // fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
 // A value of 0 disables truncation for those fields.
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceBytes = max
 	}
@@ -89,17 +117,39 @@ func (r *Recorder) SetMaxToolTraceBytes(max int) {
 // the most recent timeline) and ToolTrace.StepsTruncated is set. A value of
 // 0 disables step-count truncation. Negative values are ignored.
 func (r *Recorder) SetMaxToolTraceSteps(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
 	if max >= 0 {
 		r.maxToolTraceSteps = max
 	}
 }
 
 func (r *Recorder) ShouldCaptureRequest() bool {
-	return r.captureRequestBody
+	return r.policySnapshot().captureRequestBody
 }
 
 func (r *Recorder) ShouldCaptureResponse() bool {
-	return r.captureResponseBody
+	return r.policySnapshot().captureResponseBody
+}
+
+type recorderPolicy struct {
+	maxBodyBytes        int
+	maxToolTraceBytes   int
+	maxToolTraceSteps   int
+	captureRequestBody  bool
+	captureResponseBody bool
+}
+
+func (r *Recorder) policySnapshot() recorderPolicy {
+	r.policyMu.RLock()
+	defer r.policyMu.RUnlock()
+	return recorderPolicy{
+		maxBodyBytes:        r.maxBodyBytes,
+		maxToolTraceBytes:   r.maxToolTraceBytes,
+		maxToolTraceSteps:   r.maxToolTraceSteps,
+		captureRequestBody:  r.captureRequestBody,
+		captureResponseBody: r.captureResponseBody,
+	}
 }
 
 func (r *Recorder) SetMaxRecords(max int) {
@@ -109,30 +159,31 @@ func (r *Recorder) SetMaxRecords(max int) {
 }
 
 func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
+	policy := r.policySnapshot()
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now().UTC()
 	}
-
-	if r.captureRequestBody && len(rec.RequestBody) > r.maxBodyBytes {
-		rec.RequestBody = rec.RequestBody[:r.maxBodyBytes]
-		rec.RequestBodyTruncated = true
+	if rec.LifecycleState == "" {
+		rec.LifecycleState = store.LifecycleInProgress
 	}
 
-	if r.captureResponseBody && len(rec.ResponseBody) > r.maxBodyBytes {
-		rec.ResponseBody = rec.ResponseBody[:r.maxBodyBytes]
-		rec.ResponseBodyTruncated = true
-	}
+	// Enforce capture switches and apply body truncation limits.
+	rec.RequestBody, rec.RequestBodyTruncated = applyBodyCapturePolicy(
+		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
+	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
+		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
-	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
+	applyMaxToolTraceBytes(&rec, policy.maxToolTraceBytes)
 	// MaxToolTraceSteps is enforced separately so that an unbounded agent
 	// session that produces hundreds of steps per record can't keep growing
 	// the slice and OOM the router (see issue #1835).
-	capToolTraceStepCount(rec.ToolTrace, r.maxToolTraceSteps)
+	capToolTraceStepCount(rec.ToolTrace, policy.maxToolTraceSteps)
 
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.Add(ctx, rec)
 }
 
@@ -142,14 +193,8 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	if max <= 0 {
 		return
 	}
-	if len(rec.Prompt) > max {
-		rec.Prompt = rec.Prompt[:max]
-		rec.PromptTruncated = true
-	}
-	if len(rec.ToolDefinitions) > max {
-		rec.ToolDefinitions = rec.ToolDefinitions[:max]
-		rec.ToolDefinitionsTruncated = true
-	}
+	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
@@ -194,67 +239,137 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 // payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
-	if len(step.Arguments) > max {
-		step.Arguments = step.Arguments[:max]
-		step.Truncated = true
-	}
-	if len(step.Output) > max {
-		step.Output = step.Output[:max]
+	args, t1 := truncateString(step.Arguments, max)
+	out, t2 := truncateString(step.Output, max)
+	step.Arguments = args
+	step.Output = out
+	if t1 || t2 {
 		step.Truncated = true
 	}
 }
 
 func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming bool) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateStatus(ctx, id, status, fromCache, streaming)
 }
 
+// FinalizeLifecycle marks a replay record terminal. It deliberately does not
+// infer completion from response headers: streaming clients can disconnect
+// after a 200 header but before the terminal frame arrives.
+func (r *Recorder) FinalizeLifecycle(id string, state string, reason string) error {
+	r.lifecycleMu.Lock()
+	if transition, exists := r.lifecycleTransitions[id]; exists {
+		r.lifecycleMu.Unlock()
+		<-transition.done
+		return transition.err
+	}
+	transition := &lifecycleTransition{done: make(chan struct{})}
+	r.lifecycleTransitions[id] = transition
+	r.lifecycleMu.Unlock()
+
+	err := r.finalizeLifecycle(id, state, reason)
+	r.lifecycleMu.Lock()
+	transition.err = err
+	close(transition.done)
+	delete(r.lifecycleTransitions, id)
+	r.lifecycleMu.Unlock()
+	return err
+}
+
+func (r *Recorder) finalizeLifecycle(id string, state string, reason string) error {
+	record, found, err := r.getRecord(id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	if record.LifecycleState != "" && record.LifecycleState != store.LifecycleInProgress {
+		return nil
+	}
+	endedAt := time.Now().UTC()
+	durationMS := endedAt.Sub(record.Timestamp).Milliseconds()
+	if durationMS < 0 {
+		durationMS = 0
+	}
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	return r.storage.UpdateLifecycle(
+		ctx,
+		id,
+		state,
+		endedAt,
+		durationMS,
+		boundedTerminalReason(reason),
+	)
+}
+
+func boundedTerminalReason(reason string) string {
+	const maxReasonRunes = 256
+	reason = strings.TrimSpace(reason)
+	runes := []rune(reason)
+	if len(runes) <= maxReasonRunes {
+		return reason
+	}
+	return string(runes[:maxReasonRunes])
+}
+
 func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
-	if !r.captureRequestBody {
+	policy := r.policySnapshot()
+	if !policy.captureRequestBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(requestBody, r.maxBodyBytes)
-	ctx := context.Background()
+	body, truncated := truncateBody(requestBody, policy.maxBodyBytes)
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
-	if !r.captureResponseBody {
+	policy := r.policySnapshot()
+	if !policy.captureResponseBody {
 		return nil
 	}
 
-	body, truncated := truncateBody(responseBody, r.maxBodyBytes)
-	ctx := context.Background()
+	body, truncated := truncateBody(responseBody, policy.maxBodyBytes)
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails)
 }
 
 func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	policy := r.policySnapshot()
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via
 	// this update path (see extproc.attachRouterReplayResponse) and therefore
 	// bypass the AddRecord truncation unless we cap them again. The same
 	// reasoning applies to MaxToolTraceSteps — a long agent session updates
 	// the trace through this method, so without a cap here the OOM scenario
 	// from #1835 can still happen even when AddRecord truncates correctly.
-	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
-	capToolTraceStepCount(&trace, r.maxToolTraceSteps)
-	ctx := context.Background()
+	truncateToolTraceSteps(&trace, policy.maxToolTraceBytes)
+	capToolTraceStepCount(&trace, policy.maxToolTraceSteps)
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
 
@@ -266,16 +381,23 @@ func (r *Recorder) Reader() store.Reader {
 
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
-	ctx := context.Background()
-	rec, found, err := r.storage.Get(ctx, id)
+	rec, found, err := r.getRecord(id)
 	if err != nil {
 		return RoutingRecord{}, false
 	}
 	return rec, found
 }
 
+func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	rec, found, err := r.storage.Get(ctx, id)
+	return rec, found, err
+}
+
 func (r *Recorder) ListAllRecords() []RoutingRecord {
-	ctx := context.Background()
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
 	records, err := r.storage.List(ctx)
 	if err != nil {
 		return []RoutingRecord{}
@@ -288,11 +410,46 @@ func (r *Recorder) Close() error {
 	return r.storage.Close()
 }
 
+// replayOperationContext is intentionally independent from a client request:
+// a disconnected client must not cancel a terminal audit write. It is still
+// bounded so an unavailable replay backend cannot hang chat completion,
+// config reload, or shutdown indefinitely. Store mutations acknowledge queued
+// persistence before returning, so callers can release the timer immediately.
+func (r *Recorder) replayOperationContext() (context.Context, context.CancelFunc) {
+	timeout := r.operationTimeout
+	if timeout <= 0 {
+		timeout = DefaultOperationTimeout
+	}
+	return context.WithTimeout(context.Background(), timeout)
+}
+
+// applyBodyCapturePolicy enforces one capture switch on one body field. The
+// switch decides whether a body may reach storage at all, not just whether it
+// is truncated: when capture is off the body must be dropped entirely —
+// truncation alone only bounds a leak (see #2748). Within the limit the
+// caller's truncated flag is preserved.
+func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) (string, bool) {
+	if !capture {
+		return "", false
+	}
+	if len(body) > maxBytes {
+		return strings.Clone(body[:maxBytes]), true
+	}
+	return body, truncated
+}
+
 func truncateBody(body []byte, maxBytes int) (string, bool) {
 	if maxBytes <= 0 || len(body) <= maxBytes {
 		return string(body), false
 	}
 	return string(body[:maxBytes]), true
+}
+
+func truncateString(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s, false
+	}
+	return strings.Clone(s[:maxBytes]), true
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {
@@ -420,7 +577,15 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		"from_cache":        r.FromCache,
 		"streaming":         r.Streaming,
 		"response_status":   r.ResponseStatus,
+		"lifecycle_state":   r.LifecycleState,
 		"signals":           logSignalFields(r.Signals),
+	}
+	if r.EndedAt != nil {
+		fields["ended_at"] = *r.EndedAt
+		fields["duration_ms"] = r.DurationMS
+	}
+	if r.TerminalReason != "" {
+		fields["terminal_reason"] = r.TerminalReason
 	}
 	if r.SessionID != "" {
 		fields["session_id"] = r.SessionID

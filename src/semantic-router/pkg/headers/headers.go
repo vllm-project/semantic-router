@@ -26,8 +26,8 @@ const (
 	// emits on every /v1/messages request belonging to the same chat thread.
 	// The router mirrors this into RequestContext.SessionID with priority
 	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See docs/sessions.md for the
-	// full priority order.
+	// and the message-fingerprint fallbacks. See the session identification API
+	// documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
@@ -62,6 +62,10 @@ const (
 	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedRecipe identifies the isolated routing profile selected by the
+	// inbound virtual model. Concrete backend model requests omit this header.
+	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
 	// This is the final routing decision made by the DecisionEngine.
@@ -346,6 +350,19 @@ const (
 	//   oauth2-proxy:      "x-forwarded-groups"
 	// Used by the authz signal classifier for group-level routing.
 	AuthzUserGroups = "x-authz-user-groups"
+
+	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
+	// response-cache partitioning. Client-provided values must be stripped by
+	// the gateway before authorization.
+	AuthzTeamID   = "x-authz-team-id"
+	AuthzTenantID = "x-authz-tenant-id"
+)
+
+// Internal Request Authentication
+const (
+	// VSRInternalAuth authenticates in-process request context that must not
+	// be accepted from external callers or forwarded to model backends.
+	VSRInternalAuth = "x-vsr-internal-auth"
 )
 
 // Looper Request Headers

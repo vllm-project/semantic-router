@@ -1,0 +1,19 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: balance
+name: Balanced Routing
+version: 0.1.0
+description: >-
+  A general-purpose recipe that balances quality, latency, cost, safety, and
+  conversation continuity across local and premium model lanes.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - cost
+  - general-purpose
+  - latency
+  - quality
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/balance
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/README.md

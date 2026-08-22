@@ -23,9 +23,12 @@ def render_markdown_summary(
         lines.extend(_render_validate_section(validate_result))
     after_eval = post_eval or pre_eval or {}
     decision_summaries = after_eval.get("decisions", [])
+    tag_summaries = after_eval.get("tags", [])
     after_results = after_eval.get("results", [])
     acceptance = after_eval.get("acceptance", {})
+    lines.extend(_render_performance_section(after_eval.get("performance", {})))
     lines.extend(_render_decision_section(decision_summaries, acceptance))
+    lines.extend(_render_tag_section(tag_summaries))
     lines.extend(_render_variant_section(after_results))
     lines.extend(_render_review_queue(decision_summaries, after_results))
     return "\n".join(lines).rstrip() + "\n"
@@ -50,6 +53,21 @@ def _render_header(
         version = deploy_result.get("version") or "unknown"
         lines.append(f"- Deploy version: `{version}`")
     return lines
+
+
+def _render_performance_section(performance: dict[str, Any]) -> list[str]:
+    if not performance:
+        return []
+    latency = performance.get("latency_ms") or {}
+    return [
+        "## Eval Performance",
+        "",
+        f"- Concurrency: `{performance.get('concurrency', 1)}`",
+        f"- Requests / errors: `{performance.get('requests', 0)} / {performance.get('errors', 0)}`",
+        f"- Throughput: `{performance.get('throughput_rps', 0)} req/s`",
+        f"- End-to-end latency p50 / p95 / p99: `{latency.get('p50', 0)} / {latency.get('p95', 0)} / {latency.get('p99', 0)} ms`",
+        "",
+    ]
 
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
@@ -125,6 +143,25 @@ def _render_variant_section(after_results: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _render_tag_section(tag_summaries: list[dict[str, Any]]) -> list[str]:
+    if not tag_summaries:
+        return []
+    lines = [
+        "## Robustness Dimensions",
+        "",
+        "| Tag | Variants | Pass rate | Result |",
+        "|---|---|---|---|",
+    ]
+    for summary in tag_summaries:
+        status = "pass" if summary["passed"] else "review"
+        lines.append(
+            f"| `{summary['tag']}` | `{summary['matched']}/{summary['total']}` | "
+            f"`{summary['pass_rate']}%` | `{status}` |"
+        )
+    lines.append("")
+    return lines
+
+
 def _render_review_queue(
     decision_summaries: list[dict[str, Any]], after_results: list[dict[str, Any]]
 ) -> list[str]:
@@ -159,6 +196,30 @@ def _render_decision_failures(
         lines.append(f"Query: `{result['query']}`")
         if result.get("notes"):
             lines.append(f"Notes: {result['notes']}")
+        failed_checks = [
+            name
+            for name, passed in (
+                ("request model", result.get("model_matched", True)),
+                ("recipe", result.get("recipe_matched", True)),
+                ("algorithm", result.get("algorithm_matched", True)),
+                ("candidate alias", result.get("alias_matched", True)),
+                ("plugins", result.get("plugins_matched", True)),
+                ("signals", result.get("signals_matched", True)),
+                ("trace", result.get("trace_matched", True)),
+            )
+            if not passed
+        ]
+        if failed_checks:
+            lines.append(f"Failed checks: `{', '.join(failed_checks)}`")
+        if result.get("recommended_models"):
+            lines.append(
+                "Candidate pool: "
+                f"`{', '.join(str(model) for model in result['recommended_models'])}`"
+            )
+        if result.get("trace_errors"):
+            lines.append(f"Trace errors: `{'; '.join(result['trace_errors'])}`")
+        if result.get("error"):
+            lines.append(f"Error: `{result['error']}`")
         lines.append(
             f"Matched signals: `{flatten_signal_summary(result.get('matched_signals', {}))}`"
         )

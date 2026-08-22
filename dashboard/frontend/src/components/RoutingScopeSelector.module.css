@@ -1,0 +1,52 @@
+.root {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 240px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border, #2c2c31);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.root label {
+  color: var(--color-text-secondary, #a1a1aa);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.root select {
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--color-border, #3f3f46);
+  border-radius: 6px;
+  outline: none;
+  background: var(--color-surface, #18181b);
+  color: var(--color-text, #f4f4f5);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.root select:focus-visible {
+  border-color: var(--color-text-secondary, #71717a);
+  box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.2);
+}
+
+.detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted, #71717a);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .root {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

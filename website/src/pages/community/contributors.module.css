@@ -1,6 +1,6 @@
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 1.1rem;
 }
@@ -22,7 +22,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: #111111;
+  background: var(--site-text);
   content: "";
 }
 
@@ -116,13 +116,28 @@
   text-decoration: none;
 }
 
-.podiumCommits {
+.podiumActivity {
+  display: grid;
   flex: 0 0 auto;
+  gap: 0.08rem;
+  justify-items: end;
+}
+
+.podiumActivity strong {
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.podiumActivity span {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .leaderboardSection {
@@ -133,9 +148,15 @@
 
 .sectionHeader {
   display: flex;
+  width: 100%;
   gap: 1rem;
   align-items: end;
   justify-content: space-between;
+}
+
+.sectionHeader > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sectionHeader h2 {
@@ -153,10 +174,22 @@
   line-height: 1.6;
 }
 
+.sectionHeader .methodNote {
+  max-width: 44rem;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .sectionControls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 0 0 17rem;
   gap: 0.85rem;
-  flex-wrap: wrap;
+  align-items: end;
+  width: 100%;
+  max-width: 17rem;
+  margin-left: auto;
 }
 
 .rangeSelectLabel {
@@ -171,6 +204,7 @@
   font-size: 0.68rem;
   font-weight: 850;
   letter-spacing: 0.1em;
+  text-align: right;
   text-transform: uppercase;
 }
 
@@ -181,14 +215,14 @@
   border: 1px solid var(--site-border-strong);
   border-radius: 0;
   background:
-    linear-gradient(45deg, transparent 50%, #111111 50%) calc(100% - 1rem) 1.12rem / 0.38rem 0.38rem no-repeat,
-    linear-gradient(135deg, #111111 50%, transparent 50%) calc(100% - 0.76rem) 1.12rem / 0.38rem 0.38rem no-repeat,
-    repeating-linear-gradient(0deg, rgba(15, 23, 42, 0.035) 0 1px, transparent 1px 10px),
-    #ffffff;
+    linear-gradient(45deg, transparent 50%, var(--site-text) 50%) calc(100% - 1rem) 1.12rem / 0.38rem 0.38rem no-repeat,
+    linear-gradient(135deg, var(--site-text) 50%, transparent 50%) calc(100% - 0.76rem) 1.12rem / 0.38rem 0.38rem no-repeat,
+    var(--site-surface);
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
   font-weight: 850;
+  text-align: right;
   text-transform: uppercase;
   appearance: none;
   cursor: pointer;
@@ -207,7 +241,7 @@
   padding: 0.62rem 1rem;
   border: 1px solid var(--site-border);
   border-bottom: 0;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--site-surface);
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
@@ -220,7 +254,7 @@
   display: grid;
   gap: 0;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--site-surface);
 }
 
 .rankItem {
@@ -234,9 +268,7 @@
   border: 0;
   border-top: 1px solid var(--site-border);
   border-radius: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 252, 0.9)),
-    #ffffff;
+  background: var(--site-surface);
   box-shadow: none;
   transition:
     background 170ms ease,
@@ -251,18 +283,15 @@
 
 .rankItem:hover {
   z-index: 1;
-  background:
-    repeating-linear-gradient(0deg, rgba(15, 23, 42, 0.04) 0 1px, transparent 1px 12px),
-    #ffffff;
-  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.095);
+  background: var(--site-surface-raised);
+  box-shadow: var(--site-shadow-soft);
   transform: translateX(2px);
 }
 
 .rankItemNew {
   background:
-    linear-gradient(90deg, rgba(15, 108, 189, 0.08), transparent 22%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.97), rgba(247, 249, 252, 0.9)),
-    #ffffff;
+    linear-gradient(90deg, var(--site-accent-soft), transparent 22%),
+    var(--site-surface);
 }
 
 .rankItemNew::before {
@@ -278,7 +307,7 @@
   place-items: center;
   width: 3rem;
   height: 2rem;
-  border: 1px solid rgba(15, 23, 42, 0.13);
+  border: 1px solid var(--site-border);
   border-radius: 0;
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
@@ -297,7 +326,7 @@
 .avatar {
   width: 2.8rem;
   height: 2.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.16);
+  border: 1px solid var(--site-border-strong);
   border-radius: 999px;
   object-fit: cover;
   background: var(--site-surface-alt);
@@ -433,7 +462,7 @@
   overflow: hidden;
   height: 0.42rem;
   border-radius: 0;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--site-surface-soft);
 }
 
 .shareFill {
@@ -466,7 +495,7 @@
 
 @media (max-width: 996px) {
   .metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -487,6 +516,9 @@
 
   .sectionControls {
     width: 100%;
+    max-width: none;
+    margin-left: 0;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .rankListHeader {

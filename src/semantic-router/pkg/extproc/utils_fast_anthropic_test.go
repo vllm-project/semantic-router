@@ -3,12 +3,29 @@ package extproc
 import (
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 func TestExtractContentFastAnthropic_MissingModel(t *testing.T) {
 	body := []byte(`{"messages":[{"role":"user","content":"hi"}]}`)
 	if _, err := extractContentFastAnthropic(body); err == nil {
 		t.Fatal("expected error for missing model field")
+	}
+}
+
+func TestExtractContentFastAnthropic_Metadata(t *testing.T) {
+	body := []byte(`{
+		"model": "claude-opus-4-7",
+		"metadata": {"user_id": "tenant-42"},
+		"messages": []
+	}`)
+	got, err := extractContentFastAnthropic(body)
+	if err != nil {
+		t.Fatalf("extractContentFastAnthropic() error = %v", err)
+	}
+	if got.Metadata["user_id"] != "tenant-42" {
+		t.Fatalf("metadata = %v, want user_id", got.Metadata)
 	}
 }
 
@@ -244,5 +261,43 @@ func TestExtractRequestSignalsForProtocol_DispatchesByProtocol(t *testing.T) {
 	}
 	if got.UserContent != "hi" || got.Model != "claude-opus-4-7" {
 		t.Fatalf("anthropic dispatch unexpected: %+v", got)
+	}
+}
+
+func TestExtractContentFastAnthropic_RequestContextEstimateParity(t *testing.T) {
+	body := []byte(`{
+		"model":"claude-opus-4-7",
+		"system":"system",
+		"messages":[
+			{"role":"user","content":"prior"},
+			{"role":"assistant","content":[{
+				"type":"tool_use","id":"call-1","name":"lookup",
+				"input":{"id":9007199254740993123456789}
+			}]},
+			{"role":"user","content":[{
+				"type":"tool_result","tool_use_id":"call-1",
+				"content":{"rows":[1,2,3]}
+			}]},
+			{"role":"user","content":[
+				{"type":"text","text":"finish"},
+				{"type":"image","source":{"type":"base64","data":"PRIVATE"}}
+			]}
+		],
+		"tools":[{"name":"lookup","input_schema":{"type":"object"}}],
+		"max_tokens":2048
+	}`)
+
+	fast, err := extractContentFastAnthropic(body)
+	if err != nil {
+		t.Fatalf("extractContentFastAnthropic() error = %v", err)
+	}
+	want := classification.EstimateAnthropicRequestContext(body)
+	if fast.ContextTokenFloor != want.TokenFloor ||
+		fast.ContextTextBytes != want.TextBytes ||
+		fast.ContextEquivalentBytes != want.EquivalentBytes {
+		t.Fatalf("fast/helper context estimates differ: fast=%+v helper=%+v", fast, want)
+	}
+	if !fast.ContextHasNonText {
+		t.Fatal("expected structured/image context to disable prose calibration")
 	}
 }

@@ -20,9 +20,9 @@ type CanonicalGlobal struct {
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
 	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  string                `yaml:"strategy,omitempty"`
+	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string              `yaml:"auto_model_names,omitempty"`
+	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
@@ -52,9 +52,9 @@ type CanonicalServiceGlobal struct {
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
 type CanonicalStoreGlobal struct {
-	SemanticCache SemanticCache      `yaml:"semantic_cache"`
-	Memory        MemoryConfig       `yaml:"memory"`
-	VectorStore   *VectorStoreConfig `yaml:"vector_store,omitempty"`
+	ResponseCache ResponseCacheStoreConfig `yaml:"response_cache"`
+	Memory        MemoryConfig             `yaml:"memory"`
+	VectorStore   *VectorStoreConfig       `yaml:"vector_store,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -211,7 +211,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = append([]string(nil), global.Router.AutoModelNames...)
+	cfg.AutoModelNames = nil
+	if global.Router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
+	}
 	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
@@ -230,7 +233,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 
-	cfg.SemanticCache = global.Stores.SemanticCache
+	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
 

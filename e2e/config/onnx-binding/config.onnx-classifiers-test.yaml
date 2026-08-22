@@ -164,7 +164,7 @@ global:
         enabled: true
       prompt_guard:
         enabled: true
-        use_mmbert_32k: true
+        variant: mmbert32k
         model_id: models/mmbert32k-jailbreak-detector-merged-onnx
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json
         use_cpu: true
@@ -190,7 +190,7 @@ global:
       ttl_seconds: 2592000
       async_writes: true
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.85
@@ -201,7 +201,7 @@ global:
   integrations:
     tools:
       enabled: true
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       model_type: mmbert
       target_dim: 0
       similarity_threshold: 0.7

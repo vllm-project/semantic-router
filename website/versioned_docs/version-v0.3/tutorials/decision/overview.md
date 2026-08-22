@@ -2,7 +2,7 @@
 
 ## Overview
 
-Latest decision tutorials mirror the boolean-case catalog under `config/decision/`.
+Latest decision tutorials mirror the boolean-case catalog under `config/fragments/decision/`.
 
 Signals tell the router what it detected. Decisions tell the router what to do with those detections:
 
@@ -16,7 +16,7 @@ Signals tell the router what it detected. Decisions tell the router what to do w
 - Keeps route policy readable even when multiple signals must cooperate.
 - Makes boolean logic explicit and reviewable.
 - Separates route matching from deployment bindings, algorithms, and plugins.
-- Maps directly to reusable fragment directories under `config/decision/`.
+- Maps directly to reusable fragment directories under `config/fragments/decision/`.
 
 ## What Problem Does It Solve?
 
@@ -62,11 +62,11 @@ Use the case-shape catalog below in the same order as the fragment tree:
 
 | Decision shape | Fragment example | Best for | Tutorial |
 |----------------|------------------|----------|----------|
-| `single` | `config/decision/single/domain-business.yaml` | one decisive signal | [Single Condition](./single) |
-| `and` | `config/decision/and/urgent-business.yaml` | multiple required signals | [AND Decisions](./and) |
-| `or` | `config/decision/or/business-or-law.yaml` | shared route across alternatives | [OR Decisions](./or) |
-| `not` | `config/decision/not/exclude-jailbreak.yaml` | explicit exclusion or safety guard | [NOT Decisions](./not) |
-| `composite` | `config/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
+| `single` | `config/fragments/decision/single/domain-business.yaml` | one decisive signal | [Single Condition](./single) |
+| `and` | `config/fragments/decision/and/urgent-business.yaml` | multiple required signals | [AND Decisions](./and) |
+| `or` | `config/fragments/decision/or/business-or-law.yaml` | shared route across alternatives | [OR Decisions](./or) |
+| `not` | `config/fragments/decision/not/exclude-jailbreak.yaml` | explicit exclusion or safety guard | [NOT Decisions](./not) |
+| `composite` | `config/fragments/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
 | `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.

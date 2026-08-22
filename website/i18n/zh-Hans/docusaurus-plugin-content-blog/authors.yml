@@ -1,6 +1,6 @@
 rootfs:
   name: Huamin Chen
-  title: Distinguished Engineer @ Red Hat
+  title: AI @Microsoft
   url: https://github.com/rootfs
   image_url: /img/team/huamin.png
 
@@ -18,7 +18,7 @@ yuezhu1:
 
 Xunzhuo:
   name: Xunzhuo Liu
-  title: Intelligent Routing @vLLM
+  title: Intelligent Routing @vLLM | Open Source & AI @AMD
   url: https://github.com/Xunzhuo
   image_url: /img/team/xunzhuo.png
 
@@ -63,3 +63,13 @@ shivjikumarjha:
   title: Staff Engineer (Data & AI) @ Nutanix
   url: https://github.com/ShivjiKumarJha
   image_url: /img/team/shivji.png
+
+adaamko:
+  name: Ádám Kovács
+  title: Co-founder @ KR Labs · LettuceDetect
+  url: https://github.com/adaamko
+  image_url: https://github.com/adaamko.png
+
+boweihe:
+  name: Bowei He
+  title: Postdoctoral Researcher @ MBZUAI · McGill

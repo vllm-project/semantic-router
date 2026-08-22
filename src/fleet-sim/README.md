@@ -2,11 +2,11 @@
 
 `vllm-sr-sim` is the maintained fleet simulator for this repository. It sizes heterogeneous GPU fleets, evaluates routing strategies, and exposes a service mode that the dashboard can call across containers.
 
-Repository-maintained docs now live in the website:
+Long-form guides live on the project website:
 
-- https://vllm-sr.ai/docs/fleet-sim/overview
-- https://vllm-sr.ai/docs/fleet-sim/getting-started
-- https://vllm-sr.ai/docs/fleet-sim/use-cases
+- [Overview](https://vllm-sr.ai/docs/fleet-sim/overview)
+- [Getting started](https://vllm-sr.ai/docs/fleet-sim/getting-started)
+- [Use cases](https://vllm-sr.ai/docs/fleet-sim/use-cases)
 
 ## Install
 
@@ -54,7 +54,3 @@ vllm-sr-sim serve --host 0.0.0.0 --port 8000
 - `tests/`: simulator and service test coverage
 - `data/`: reference workload traces used by the examples and dashboard integration
 - `examples/`: sample scripts and multi-pool input files
-
-## Docs
-
-Long-form simulator docs are maintained in the repository website. Keep the package README focused on installation, CLI usage, and source layout.

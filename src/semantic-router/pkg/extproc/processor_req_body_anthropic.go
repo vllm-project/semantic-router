@@ -28,7 +28,6 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 	accessKey, anthropicBody, errorResponse := r.prepareAnthropicRoutingRequest(
 		openAIRequest,
 		targetModel,
-		decisionName,
 		ctx,
 	)
 	if errorResponse != nil {
@@ -42,7 +41,6 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	openAIRequest *openai.ChatCompletionNewParams,
 	targetModel string,
-	decisionName string,
 	ctx *RequestContext,
 ) (string, []byte, *ext_proc.ProcessingResponse) {
 	accessKey, err := r.CredentialResolver.KeyForProvider(authz.ProviderAnthropic, targetModel, ctx.Headers)
@@ -66,12 +64,19 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	// the rebuild is byte-identical to today. The carrier is also stashed on
 	// the request context so the header builder can consume the same values
 	// without re-parsing.
-	passthrough, ptErr := anthropic.BuildPassthroughFromAnthropicBody(ctx.OriginalRequestBody)
+	passthrough, ptErr := anthropic.BuildPassthroughFromAnthropicBody(ctx.workingRequestBody())
 	if ptErr != nil {
 		logging.Debugf("Anthropic passthrough capture skipped: %v", ptErr)
 	}
 	if passthrough != nil {
 		passthrough.SetHeadersFromIncoming(ctx.Headers)
+		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+			// ParseAnthropicRequest already represents user images in the
+			// canonical message IR. Re-appending the native image sidecar would
+			// duplicate those blocks and can misalign them after privacy policy
+			// removes historical tool messages.
+			passthrough.UserMessageImageBlocks = nil
+		}
 	}
 	ctx.AnthropicPassthrough = passthrough
 
@@ -94,10 +99,6 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	if streaming {
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
-	if decisionName != "" {
-		ctx.VSRSelectedDecision = r.Config.GetDecisionByName(decisionName)
-	}
-
 	return accessKey, anthropicBody, nil
 }
 

@@ -30,7 +30,7 @@ header or the same-named query parameter. Returns 404 when no request
 has been seen for that session yet.
 
 ```bash
-curl -s 'http://127.0.0.1:9080/debug/last-request' \
+curl -s 'http://127.0.0.1:8080/debug/last-request' \
   -H 'x-vsr-test-session-id: my-session' | jq .
 ```
 
@@ -57,20 +57,20 @@ e2e/testing/anthropic-shim/
 ## Running locally
 
 ```bash
-# Start llama-server with a tiny GGUF model on port 8080
-docker run --rm -p 8080:8080 \
+# Start llama-server with a tiny GGUF model on port 8081
+docker run --rm -p 8081:8081 \
   -v /path/to/models:/models:ro \
   ghcr.io/ggml-org/llama.cpp:server \
   -m /models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf \
-  --jinja --host 0.0.0.0 --port 8080 -c 4096
+  --jinja --host 0.0.0.0 --port 8081 -c 4096
 
-# In another terminal, start the shim on port 9080
+# In another terminal, start the shim on port 8080
 pip install -e .
-ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8080 \
+ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8081 \
   python -m anthropic_shim
 
 # Hit the shim with an Anthropic Messages request
-curl -s http://127.0.0.1:9080/v1/messages \
+curl -s http://127.0.0.1:8080/v1/messages \
   -H 'content-type: application/json' \
   -d '{
     "model": "qwen-test",
@@ -90,9 +90,9 @@ reused across overlays:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_SHIM_UPSTREAM_URL` | `http://127.0.0.1:8080` | llama-server base URL |
+| `ANTHROPIC_SHIM_UPSTREAM_URL` | `http://127.0.0.1:8081` | llama-server base URL |
 | `ANTHROPIC_SHIM_HOST` | `0.0.0.0` | bind address |
-| `ANTHROPIC_SHIM_PORT` | `9080` | bind port |
+| `ANTHROPIC_SHIM_PORT` | `8080` | bind port |
 | `ANTHROPIC_SHIM_SESSION_HEADER` | `x-vsr-test-session-id` | request header used to scope prompt-cache state |
 | `ANTHROPIC_SHIM_REQUEST_TIMEOUT` | `300` | upstream request timeout (seconds) |
 

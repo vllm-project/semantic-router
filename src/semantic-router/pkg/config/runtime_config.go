@@ -210,7 +210,7 @@ type MilvusConfig struct {
 	} `json:"development" yaml:"development"`
 }
 
-type SemanticCache struct {
+type ResponseCacheStoreConfig struct {
 	BackendType         string        `yaml:"backend_type,omitempty"`
 	Enabled             bool          `yaml:"enabled"`
 	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
@@ -223,6 +223,9 @@ type SemanticCache struct {
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
+
+// SemanticCache is retained for source compatibility.
+type SemanticCache = ResponseCacheStoreConfig
 
 // QdrantConfig defines the complete configuration structure for Qdrant cache backend.
 type QdrantConfig struct {
@@ -372,13 +375,12 @@ type ResponseAPIRedisConfig struct {
 }
 
 // RouterReplayConfig controls routing-decision replay record storage.
-// StoreBackend defaults to "postgres" for durable, SQL-queryable storage
-// that survives router restarts. Supported backends: "postgres", "redis",
-// "milvus", "qdrant", "memory". Use "redis" for lightweight deployments that already
-// run Redis. Set to "memory" only for local development — all replay
-// records are lost when the router process exits.
+// Replay is disabled by default and uses an in-memory store when a decision
+// explicitly opts in without a global storage configuration. Supported
+// backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
+// deployments should explicitly enable replay and configure a durable backend.
 type RouterReplayConfig struct {
-	Enabled      bool                        `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled      bool                        `json:"enabled" yaml:"enabled"`
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`

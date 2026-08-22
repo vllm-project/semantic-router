@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 from cli.runtime_stack import RuntimeStackLayout
 from cli.utils import get_logger
@@ -16,8 +17,8 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "store_backend": "redis",
     },
     "router_replay": {
-        "enabled": True,
-        "store_backend": "postgres",
+        "enabled": False,
+        "store_backend": "memory",
     },
     "startup_status": {
         "store_backend": "file",
@@ -25,10 +26,15 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
 }
 
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
-    "semantic_cache": {
+    "response_cache": {
         "enabled": True,
-        "backend_type": "milvus",
+        "backend_type": "memory",
     },
+}
+
+LOCAL_MANAGEMENT_API_DEFAULTS: dict[str, object] = {
+    "bind_address": "0.0.0.0",
+    "port": 8080,
 }
 
 _INVALID_MAPPING = object()
@@ -45,48 +51,117 @@ def detect_canonical_storage_backends(
 ) -> set[str]:
     """Return provisionable backends implied by canonical service and store defaults.
 
-    Setup-mode bootstrap still uses the local default sidecar stack so the
-    first `vllm-sr serve` starts the same local storage dependencies that the
-    activated config will later consume.
+    When a stack layout is supplied, canonical omitted service endpoints are
+    resolved to that stack while explicit external endpoints are never
+    converted into speculative local sidecars.
     """
     backends: set[str] = set()
     for service_key in CANONICAL_SERVICE_DEFAULTS:
         backend = effective_service_backend(config, service_key)
-        if backend in {"redis", "postgres"}:
+        if backend in {"redis", "postgres", "milvus"} and (
+            stack_layout is None
+            or _service_uses_managed_backend(config, service_key, backend, stack_layout)
+        ):
             backends.add(backend)
 
-    if _semantic_cache_requires_managed_milvus(config, stack_layout):
+    if _response_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)
-    if vs_metadata == "postgres":
+    if vs_metadata == "postgres" and (
+        stack_layout is None
+        or _vector_metadata_uses_managed_postgres(config, stack_layout)
+    ):
         backends.add("postgres")
 
     return backends
 
 
-def _semantic_cache_requires_managed_milvus(
+def _response_cache_requires_managed_milvus(
     config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None
 ) -> bool:
-    if _effective_store_backend(config, "semantic_cache", "backend_type") != "milvus":
+    if _effective_store_backend(config, "response_cache", "backend_type") != "milvus":
         return False
 
     if stack_layout is None:
         return True
 
-    host = _semantic_cache_milvus_connection_host(config)
+    host = _response_cache_milvus_connection_host(config)
     if not host:
+        # Reaching this branch already means the effective backend was
+        # explicitly Milvus; runtime materialization fills this stack's host.
         return True
 
-    return host == stack_layout.milvus_container_name
+    return _is_managed_storage_endpoint(host, "milvus", stack_layout)
 
 
-def _semantic_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
+def _service_uses_managed_backend(
+    config: Mapping[str, Any],
+    service_key: str,
+    backend: str,
+    stack_layout: RuntimeStackLayout,
+) -> bool:
+    service_config = _merged_service_config(config, service_key)
+    if not isinstance(service_config, Mapping):
+        return False
+    backend_config = service_config.get(backend)
+    if backend_config is None:
+        return True
+    if not isinstance(backend_config, Mapping):
+        return False
+    endpoint_key = "host" if backend == "postgres" else "address"
+    if not str(backend_config.get(endpoint_key) or "").strip():
+        return True
+    return _is_managed_storage_endpoint(
+        backend_config.get(endpoint_key), backend, stack_layout
+    )
+
+
+def _vector_metadata_uses_managed_postgres(
+    config: Mapping[str, Any], stack_layout: RuntimeStackLayout
+) -> bool:
+    stores = _stores_mapping(config)
+    if stores is _INVALID_MAPPING:
+        return False
+    vector_config = stores.get("vector_store")
+    if not isinstance(vector_config, Mapping):
+        return False
+    postgres_config = vector_config.get("metadata_postgres")
+    if postgres_config is None:
+        return True
+    if not isinstance(postgres_config, Mapping):
+        return False
+    if not str(postgres_config.get("host") or "").strip():
+        return True
+    return _is_managed_storage_endpoint(
+        postgres_config.get("host"), "postgres", stack_layout
+    )
+
+
+def _is_managed_storage_endpoint(
+    endpoint: object, backend: str, stack_layout: RuntimeStackLayout
+) -> bool:
+    value = str(endpoint or "").strip()
+    if not value:
+        return False
+    if "://" in value:
+        host = urlparse(value).hostname or ""
+    elif value.startswith("[") and "]" in value:
+        host = value[1 : value.index("]")]
+    elif value.count(":") == 1:
+        host = value.split(":", 1)[0]
+    else:
+        host = value
+    managed_name = getattr(stack_layout, f"{backend}_container_name")
+    return host.rstrip(".").lower() in {backend, managed_name.lower()}
+
+
+def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
     stores = _stores_mapping(config)
     if stores is _INVALID_MAPPING:
         return None
 
-    cache_config = stores.get("semantic_cache")
+    cache_config = _response_cache_mapping(stores)
     if not isinstance(cache_config, Mapping):
         return None
 
@@ -102,6 +177,19 @@ def _semantic_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | N
     if host is None:
         return None
     return str(host).strip() or None
+
+
+def _response_cache_mapping(stores: Mapping[str, Any]) -> object:
+    canonical = stores.get("response_cache")
+    legacy = stores.get("semantic_cache")
+    if canonical is not None:
+        if legacy is not None:
+            log.warning(
+                "Ignoring deprecated global.stores.semantic_cache because "
+                "global.stores.response_cache is configured"
+            )
+        return canonical
+    return legacy
 
 
 def effective_service_backend(
@@ -129,7 +217,7 @@ def inject_local_service_runtime_defaults(
     if services is None:
         return False
 
-    changed = False
+    changed = _inject_local_management_api_defaults(services)
     for service_key, default_config in CANONICAL_SERVICE_DEFAULTS.items():
         changed = (
             _inject_service_runtime_defaults(
@@ -142,6 +230,20 @@ def inject_local_service_runtime_defaults(
         )
 
     return changed
+
+
+def _inject_local_management_api_defaults(services: dict[str, object]) -> bool:
+    """Materialize a container-reachable listener only when intent is absent.
+
+    Explicit management listener fields remain authoritative. The Router's
+    container entrypoint marks this wildcard listener as internal; host
+    publication is independently constrained to loopback by container_start.
+    """
+
+    if "management_api" in services:
+        return False
+    services["management_api"] = dict(LOCAL_MANAGEMENT_API_DEFAULTS)
+    return True
 
 
 def _services_mapping(config: Mapping[str, Any]) -> Mapping[str, Any] | object:
@@ -341,7 +443,7 @@ def inject_local_store_runtime_defaults(
         return False
 
     wants_milvus_cache = (
-        _effective_store_backend(config, "semantic_cache", "backend_type") == "milvus"
+        _effective_store_backend(config, "response_cache", "backend_type") == "milvus"
     )
     wants_vector_metadata_postgres = (
         _vector_store_metadata_backend(config) == "postgres"
@@ -356,7 +458,7 @@ def inject_local_store_runtime_defaults(
     changed = False
     if wants_milvus_cache:
         changed = (
-            _inject_semantic_cache_milvus_defaults(stores, stack_layout) or changed
+            _inject_response_cache_milvus_defaults(stores, stack_layout) or changed
         )
     if wants_vector_metadata_postgres:
         changed = (
@@ -366,17 +468,19 @@ def inject_local_store_runtime_defaults(
     return changed
 
 
-def _inject_semantic_cache_milvus_defaults(
+def _inject_response_cache_milvus_defaults(
     stores: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
-    cache_config = stores.get("semantic_cache")
+    if "response_cache" not in stores and "semantic_cache" in stores:
+        stores["response_cache"] = stores.pop("semantic_cache")
+    cache_config = stores.get("response_cache")
     if cache_config is None:
         cache_mapping: dict[str, object] = {}
-        stores["semantic_cache"] = cache_mapping
+        stores["response_cache"] = cache_mapping
         cache_config = cache_mapping
     elif not isinstance(cache_config, dict):
         log.warning(
-            "Skipping local store default injection for global.stores.semantic_cache "
+            "Skipping local store default injection for global.stores.response_cache "
             "because it is not a mapping"
         )
         return False
@@ -426,7 +530,7 @@ def _inject_semantic_cache_milvus_defaults(
     if not isinstance(milvus_block, dict):
         log.warning(
             "Skipping local store default injection for "
-            "global.stores.semantic_cache.milvus because it is not a mapping"
+            "global.stores.response_cache.milvus because it is not a mapping"
         )
         return False
 
@@ -496,7 +600,11 @@ def _effective_store_backend(
     if stores is _INVALID_MAPPING:
         return None
 
-    store_config = stores.get(store_key)
+    store_config = (
+        _response_cache_mapping(stores)
+        if store_key == "response_cache"
+        else stores.get(store_key)
+    )
     if store_config is None:
         return str(defaults.get(backend_field) or "").strip().lower() or None
     if not isinstance(store_config, Mapping):

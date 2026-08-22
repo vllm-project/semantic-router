@@ -78,7 +78,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 
 		hash, err := hashBootstrapPassword(svc, req.Password)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writePasswordHashError(w, err)
 			return
 		}
 

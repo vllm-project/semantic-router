@@ -1,0 +1,145 @@
+.section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+}
+
+.header,
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2,
+.card h3,
+.header p,
+.card p {
+  margin: 0;
+}
+
+.header h2 {
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.header p,
+.card p {
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.card h3 {
+  font-size: 0.86rem;
+  text-transform: capitalize;
+}
+
+.cardHeader button {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+}
+
+.cardHeader button:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
+}
+
+.aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.aliases span {
+  max-width: 100%;
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0;
+}
+
+.metrics div {
+  padding: 7px;
+  border-radius: 5px;
+  background: var(--color-bg-elevated);
+}
+
+.metrics dt {
+  color: var(--color-text-muted);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+
+.metrics dd {
+  margin: 2px 0 0;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .header {
+    align-items: flex-start;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

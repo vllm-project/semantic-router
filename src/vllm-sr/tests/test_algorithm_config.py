@@ -20,6 +20,7 @@ from cli.algorithms import (  # noqa: E402
     FusionAlgorithmConfig,
     HybridSelectionConfig,
     MultiFactorSelectionConfig,
+    PromptSelectionConfig,
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
     RouterDCSelectionConfig,
@@ -69,6 +70,51 @@ class TestAlgorithmConfigTypes:
         """Test that on_error can be set to 'fail'."""
         config = AlgorithmConfig(type="static", on_error="fail")
         assert config.on_error == "fail"
+
+
+class TestPromptSelectionConfig:
+    """Test prompt-driven selection configuration."""
+
+    def test_minimal_config(self):
+        prompt = PromptSelectionConfig(
+            model="router-small",
+            instructions="Choose the best candidate.",
+        )
+        config = AlgorithmConfig(type="prompt", prompt=prompt)
+        assert config.prompt.model == "router-small"
+        assert config.prompt.timeout_seconds is None
+        assert config.on_error == "fallback"
+
+    def test_zero_timeout_uses_runtime_default(self):
+        prompt = PromptSelectionConfig(
+            model="router-small",
+            instructions="Choose.",
+            timeout_seconds=0,
+        )
+        assert prompt.timeout_seconds == 0
+
+    def test_timeout_cannot_be_negative(self):
+        with pytest.raises(PydanticValidationError):
+            PromptSelectionConfig(
+                model="router-small",
+                instructions="Choose.",
+                timeout_seconds=-1,
+            )
+
+    def test_prompt_block_is_required(self):
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(type="prompt")
+
+    def test_prompt_rejects_unsupported_error_policy(self):
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(
+                type="prompt",
+                prompt=PromptSelectionConfig(
+                    model="router-small",
+                    instructions="Choose.",
+                ),
+                on_error="fail",
+            )
 
 
 class TestRouterDCSelectionConfig:
@@ -205,12 +251,20 @@ class TestReMoMAlgorithmConfig:
         config = ReMoMAlgorithmConfig(
             breadth_schedule=[3],
             synthesis_model="model-b",
+            max_completion_tokens=768,
             round_timeout_seconds=120,
             min_successful_responses=2,
         )
         assert config.synthesis_model == "model-b"
+        assert config.max_completion_tokens == 768
         assert config.round_timeout_seconds == 120
         assert config.min_successful_responses == 2
+
+        with pytest.raises(PydanticValidationError):
+            ReMoMAlgorithmConfig(
+                breadth_schedule=[3],
+                max_completion_tokens=0,
+            )
 
         with pytest.raises(PydanticValidationError):
             ReMoMAlgorithmConfig(
@@ -233,12 +287,21 @@ class TestFusionAlgorithmConfig:
         config = FusionAlgorithmConfig(
             model="judge-model",
             analysis_models=["panel-a", "panel-b"],
+            analysis_overrides=[
+                {
+                    "model": "panel-a",
+                    "temperature": 0.2,
+                    "max_completion_tokens": 384,
+                }
+            ],
             max_concurrent=2,
             max_completion_tokens=512,
             temperature=0.2,
         )
         assert config.model == "judge-model"
         assert config.analysis_models == ["panel-a", "panel-b"]
+        assert config.analysis_overrides is not None
+        assert config.analysis_overrides[0].model == "panel-a"
         assert config.max_concurrent == 2
         assert config.max_completion_tokens == 512
         assert config.temperature == 0.2
@@ -255,6 +318,23 @@ class TestFusionAlgorithmConfig:
 
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(min_successful_responses=0)
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(
+                analysis_overrides=[{"model": "panel-a", "max_completion_tokens": 0}]
+            )
+
+    def test_analysis_override_models_are_unique_and_non_empty(self):
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(analysis_overrides=[{"model": "  "}])
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(
+                analysis_overrides=[
+                    {"model": "panel-a"},
+                    {"model": " panel-a "},
+                ]
+            )
 
     def test_quorum_and_timeout_controls(self):
         config = FusionAlgorithmConfig(

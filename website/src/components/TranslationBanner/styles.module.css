@@ -8,7 +8,7 @@
   border-radius: 1rem;
   font-size: 0.88rem;
   line-height: 1.65;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--site-admonition-bg);
 }
 
 .icon {

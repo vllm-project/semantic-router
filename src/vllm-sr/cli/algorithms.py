@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ModelRef(BaseModel):
@@ -96,6 +96,9 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Maximum concurrent model calls per round
     max_concurrent: int | None = None
 
+    # Maximum completion tokens applied to every ReMoM model call
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
     # Maximum wall-clock time to wait for a ReMoM round before using partial
     # responses when on_error="skip".
     round_timeout_seconds: int | None = Field(default=None, ge=1)
@@ -140,6 +143,22 @@ class FusionGroundingConfig(BaseModel):
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
+class FusionModelOverrideConfig(BaseModel):
+    """Per-analysis-model sampling controls for Fusion."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1)
+    temperature: float | None = Field(default=None, ge=0)
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_model_name(self):
+        if not self.model.strip():
+            raise ValueError("model cannot be empty")
+        return self
+
+
 class FusionAlgorithmConfig(BaseModel):
     """Configuration for Fusion multi-model deliberation.
 
@@ -151,6 +170,7 @@ class FusionAlgorithmConfig(BaseModel):
 
     model: str | None = None
     analysis_models: list[str] | None = None
+    analysis_overrides: list[FusionModelOverrideConfig] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
     round_timeout_seconds: int | None = Field(default=None, ge=1)
@@ -163,6 +183,16 @@ class FusionAlgorithmConfig(BaseModel):
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
     grounding: FusionGroundingConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_analysis_override_models(self):
+        seen: set[str] = set()
+        for override in self.analysis_overrides or []:
+            model = override.model.strip()
+            if model in seen:
+                raise ValueError(f"analysis override model {model!r} is duplicated")
+            seen.add(model)
+        return self
 
 
 class WorkflowPlannerConfig(BaseModel):
@@ -346,6 +376,24 @@ class MultiFactorSelectionConfig(BaseModel):
     on_no_candidates: str | None = "cheapest"
 
 
+class PromptSelectionConfig(BaseModel):
+    """Configuration for prompt-driven candidate selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str
+    instructions: str
+    timeout_seconds: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_required_text(self):
+        if not self.model.strip():
+            raise ValueError("model is required")
+        if not self.instructions.strip():
+            raise ValueError("instructions are required")
+        return self
+
+
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
@@ -394,6 +442,7 @@ class AlgorithmConfig(BaseModel):
         "mlp",
         "multi_factor",
         "latency_aware",
+        "prompt",
     ]
 
     # Looper algorithm configurations
@@ -409,5 +458,19 @@ class AlgorithmConfig(BaseModel):
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
+    prompt: PromptSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    @model_validator(mode="after")
+    def normalize_prompt_fallback(self):
+        if self.type == "prompt":
+            if self.prompt is None:
+                raise ValueError("algorithm.type=prompt requires prompt configuration")
+            if self.on_error == "skip":
+                self.on_error = "fallback"
+            if self.on_error not in (None, "", "fallback"):
+                raise ValueError("prompt on_error must be fallback")
+        elif self.prompt is not None:
+            raise ValueError("prompt configuration requires algorithm.type=prompt")
+        return self

@@ -606,6 +606,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["id"] = fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano())
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
+	normalizeCompletionToolFinishReason(completion)
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
 		completion["fusion"] = trace
 	}

@@ -150,7 +150,118 @@ func apiInfoRoutes() []apiRoute {
 	}
 }
 
+func apiResponseCacheRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/capabilities", Method: "GET", Description: "Get response-cache backend capabilities"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/health", Method: "GET", Description: "Check response-cache backend health"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/stats", Method: "GET", Description: "Get redacted response-cache statistics"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/audit", Method: "GET", Description: "Get redacted response-cache mutation audit entries"},
+			routePolicy{Permission: PermCacheRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheAudit,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/test", Method: "POST", Description: "Validate and probe a response-cache candidate configuration"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleResponseCacheTest,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/invalidate", Method: "POST", Description: "Dry-run or invalidate a scoped response-cache partition"},
+			routePolicy{Permission: PermCacheInvalidate, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheInvalidate},
+			(*ClassificationAPIServer).handleResponseCacheInvalidate,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/response-cache/flush", Method: "POST", Description: "Advance a scoped or global response-cache epoch"},
+			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheFlush},
+			(*ClassificationAPIServer).handleResponseCacheFlush,
+			jsonBody(),
+		),
+	}
+}
+
+func apiContextCompressionRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/capabilities", Method: "GET", Description: "Get context-compression capabilities"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionCapabilities,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/health", Method: "GET", Description: "Check context-compression runtime health"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionHealth,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/stats", Method: "GET", Description: "Get redacted context-compression statistics"},
+			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleContextCompressionStats,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/preview", Method: "POST", Description: "Preview context compression without persistence"},
+			routePolicy{Permission: PermCompressionPreview, Sensitivity: SensitivityOperational, AuditAction: AuditActionCompressionPreview},
+			(*ClassificationAPIServer).handleContextCompressionPreview,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/api/v1/context-compression/recovery/invalidate", Method: "POST", Description: "Invalidate a trusted context-recovery request scope"},
+			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
+			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
+			jsonBody(),
+		),
+	}
+}
+
 func apiConfigRoutes() []apiRoute {
+	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
+}
+
+func apiRecipeRoutes() []apiRoute {
+	return []apiRoute{
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes", Method: "GET", Description: "List the default and named routing recipes with their entrypoints"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
+			(*ClassificationAPIServer).handleListRecipes,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/validate", Method: "POST", Description: "Validate a recipe mutation without writing or reloading config"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
+			(*ClassificationAPIServer).handleValidateRecipe,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "GET", Description: "Read one routing recipe and its entrypoints"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
+			(*ClassificationAPIServer).handleGetRecipe,
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "PUT", Description: "Atomically create or replace one routing recipe; requires If-Match"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
+			(*ClassificationAPIServer).handlePutRecipe,
+			jsonBody(),
+		),
+		managedRoute(
+			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "DELETE", Description: "Delete an unreferenced named routing recipe; requires If-Match"},
+			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeDelete},
+			(*ClassificationAPIServer).handleDeleteRecipe,
+		),
+	}
+}
+
+func apiNonRecipeConfigRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
 			EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
@@ -195,6 +306,12 @@ func apiConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 		),
 		managedRoute(
+			EndpointMetadata{Path: "/config/router/validate", Method: "POST", Description: "Validate and normalize a router config without writing it"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleConfigValidate,
+			jsonBody(),
+		),
+		managedRoute(
 			EndpointMetadata{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPatch},
 			(*ClassificationAPIServer).handleConfigPatch,
@@ -218,7 +335,7 @@ func apiConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigVersions,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/hash", Method: "GET", Description: "Get the active router config hash"},
+			EndpointMetadata{Path: "/config/hash", Method: "GET", Description: "Compare persisted source, generated runtime, and active router config hashes"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigHash,
 		),

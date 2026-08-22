@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import Link from '@docusaurus/Link'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import useGlobalData from '@docusaurus/useGlobalData'
 import {
   HtmlClassNameProvider,
   PageMetadata,
@@ -11,10 +12,15 @@ import BlogLayout from '@theme/BlogLayout'
 import BlogListPaginator from '@theme/BlogListPaginator'
 import BlogListPageStructuredData from '@theme/BlogListPage/StructuredData'
 import type { Props } from '@theme/BlogListPage'
+import {
+  BLOG_SEARCH_INDEX_PLUGIN_NAME,
+  type BlogSearchIndex,
+  type BlogSearchIndexEntry,
+} from '../../plugins/blogSearchIndex'
 
 interface BlogCardProps {
   featured?: boolean
-  item: Props['items'][number]
+  entry: BlogSearchIndexEntry
 }
 
 interface TagSummary {
@@ -38,6 +44,45 @@ function readingTimeLabel(readingTime: number | undefined): string | null {
   }
 
   return `${Math.ceil(readingTime)} min read`
+}
+
+/**
+ * Normalizes a post from `props.items` into the same plain shape the search index
+ * uses, so cards render identically whether they came from the current page or from
+ * the site-wide index.
+ */
+function toEntry(item: Props['items'][number]): BlogSearchIndexEntry {
+  const { frontMatter, metadata } = item.content
+
+  return {
+    permalink: metadata.permalink,
+    title: metadata.title,
+    date: metadata.date,
+    description: metadata.description ?? '',
+    image: typeof frontMatter.image === 'string' ? frontMatter.image : undefined,
+    readingTime: metadata.readingTime,
+    tags: metadata.tags.map(tag => tag.label),
+  }
+}
+
+/**
+ * Reads the site-wide post index published by the `blog-search-index` plugin.
+ *
+ * Returns `null` when the index is unavailable so callers can fall back to the posts
+ * Docusaurus passed in props. Global data is read defensively rather than through
+ * `usePluginData` because a missing entry must degrade, never throw.
+ */
+function useBlogSearchIndex(): BlogSearchIndexEntry[] | null {
+  const globalData = useGlobalData()
+
+  return useMemo(() => {
+    const pluginData = globalData?.[BLOG_SEARCH_INDEX_PLUGIN_NAME]?.default as
+      | BlogSearchIndex
+      | undefined
+    const posts = pluginData?.posts
+
+    return Array.isArray(posts) && posts.length > 0 ? posts : null
+  }, [globalData])
 }
 
 function BlogPostImage({
@@ -73,19 +118,8 @@ function BlogPostImage({
   )
 }
 
-function BlogCard({ featured = false, item }: BlogCardProps): React.ReactNode {
-  const { content: BlogPostContent } = item
-  const { frontMatter, metadata } = BlogPostContent
-  const {
-    date,
-    description,
-    permalink,
-    readingTime,
-    title,
-  } = metadata
-  const image = typeof frontMatter.image === 'string'
-    ? frontMatter.image
-    : undefined
+function BlogCard({ featured = false, entry }: BlogCardProps): React.ReactNode {
+  const { date, description, image, permalink, readingTime, title } = entry
   const readTime = readingTimeLabel(readingTime)
 
   return (
@@ -144,25 +178,30 @@ export default function BlogListPage(props: Props): React.ReactNode {
   const { items, metadata } = props
   const [query, setQuery] = useState('')
   const normalizedQuery = query.trim().toLowerCase()
+  const isSearching = normalizedQuery.length > 0
+  const searchIndex = useBlogSearchIndex()
 
-  const filteredItems = useMemo(() => {
-    if (!normalizedQuery) {
-      return items
+  // Posts for the page Docusaurus rendered. Used verbatim when not searching, and as
+  // the fallback corpus if the site-wide index is ever unavailable.
+  const pageEntries = useMemo(() => items.map(toEntry), [items])
+
+  const searchableEntries = searchIndex ?? pageEntries
+
+  const filteredEntries = useMemo(() => {
+    if (!isSearching) {
+      return pageEntries
     }
 
-    return items.filter(({ content: BlogPostContent }) => {
-      const { frontMatter, metadata: postMetadata } = BlogPostContent
-      const tags = postMetadata.tags.map(tag => tag.label).join(' ')
-      const searchableText = [
-        postMetadata.title,
-        postMetadata.description,
-        frontMatter.description,
-        tags,
+    return searchableEntries.filter((entry) => {
+      const haystack = [
+        entry.title,
+        entry.description,
+        entry.tags.join(' '),
       ].join(' ').toLowerCase()
 
-      return searchableText.includes(normalizedQuery)
+      return haystack.includes(normalizedQuery)
     })
-  }, [items, normalizedQuery])
+  }, [isSearching, normalizedQuery, pageEntries, searchableEntries])
 
   const tagSummaries = useMemo(() => {
     const counts = new Map<string, TagSummary>()
@@ -183,7 +222,7 @@ export default function BlogListPage(props: Props): React.ReactNode {
       .slice(0, 8)
   }, [items])
 
-  const [featuredItem, ...remainingItems] = filteredItems
+  const [featuredEntry, ...remainingEntries] = filteredEntries
 
   return (
     <HtmlClassNameProvider
@@ -214,17 +253,14 @@ export default function BlogListPage(props: Props): React.ReactNode {
 
           <div className="site-blog-index__columns">
             <section aria-live="polite" className="site-blog-index__feed">
-              {featuredItem
+              {featuredEntry
                 ? (
                     <>
-                      <BlogCard featured item={featuredItem} />
-                      {remainingItems.length > 0 && (
+                      <BlogCard featured entry={featuredEntry} />
+                      {remainingEntries.length > 0 && (
                         <div className="site-blog-card-grid">
-                          {remainingItems.map(item => (
-                            <BlogCard
-                              item={item}
-                              key={item.content.metadata.permalink}
-                            />
+                          {remainingEntries.map(entry => (
+                            <BlogCard entry={entry} key={entry.permalink} />
                           ))}
                         </div>
                       )}
@@ -236,7 +272,7 @@ export default function BlogListPage(props: Props): React.ReactNode {
                       <p>Try a different title, topic, or tag.</p>
                     </div>
                   )}
-              {!normalizedQuery && <BlogListPaginator metadata={metadata} />}
+              {!isSearching && <BlogListPaginator metadata={metadata} />}
             </section>
 
             <aside className="site-blog-index__rail">

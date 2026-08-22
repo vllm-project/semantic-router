@@ -11,7 +11,7 @@ from cli.models import (
     PluginType,
     RouterReplayPluginConfig,
     RAGPluginConfig,
-    ToolSelectionPluginConfig,
+    ToolsPluginConfig,
 )
 from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
@@ -58,7 +58,7 @@ class TestPluginTypeValidation:
     def test_valid_plugin_types(self):
         """Test that all valid plugin types are accepted."""
         valid_types = [
-            PluginType.SEMANTIC_CACHE.value,
+            PluginType.RESPONSE_CACHE.value,
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
             PluginType.HALLUCINATION.value,
@@ -77,6 +77,14 @@ class TestPluginTypeValidation:
             plugin = PluginConfig(type=plugin_type, configuration={"enabled": True})
             # plugin.type is now a PluginType enum, compare to enum value
             assert plugin.type.value == plugin_type
+
+    @pytest.mark.parametrize(
+        "alias", ["semantic-cache", "semantic_cache", "response-cache"]
+    )
+    def test_response_cache_aliases_export_canonical(self, alias):
+        with pytest.warns(DeprecationWarning):
+            plugin = PluginConfig(type=alias, configuration={"enabled": True})
+        assert plugin.model_dump()["type"] == "response_cache"
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -242,6 +250,110 @@ providers:
             os.unlink(temp_path)
 
 
+class TestToolsPluginConfig:
+    """Test tools plugin schema and privacy-policy round trips."""
+
+    def test_strip_history_and_dynamic_retrieval_round_trip(self):
+        privacy = ToolsPluginConfig.model_validate(
+            {
+                "enabled": True,
+                "mode": "none",
+                "strip_tool_history": True,
+            }
+        )
+        assert privacy.model_dump(exclude_none=True)["strip_tool_history"] is True
+
+        retrieval = ToolsPluginConfig.model_validate(
+            {
+                "enabled": True,
+                "mode": "passthrough",
+                "strategy": "default",
+                "dynamic_retrieval": {
+                    "enabled": True,
+                    "strategy": "hybrid_history",
+                    "history_window": 8,
+                    "weights": {
+                        "semantic": 1.0,
+                        "history": 0.7,
+                        "decision_prior": 0.2,
+                        "repetition_penalty": 0.1,
+                    },
+                    "min_history_confidence": 0.4,
+                    "fallback_on_low_confidence": True,
+                },
+            }
+        )
+        dumped = retrieval.model_dump(exclude_none=True)
+        assert dumped["strategy"] == "default"
+        assert dumped["dynamic_retrieval"]["history_window"] == 8
+        assert dumped["dynamic_retrieval"]["weights"]["history"] == 0.7
+
+    def test_strip_history_requires_mode_none(self):
+        with pytest.raises(
+            PydanticValidationError, match="strip_tool_history requires mode=none"
+        ):
+            ToolsPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "mode": "passthrough",
+                    "strip_tool_history": True,
+                }
+            )
+
+    def test_hybrid_history_requires_window(self):
+        with pytest.raises(
+            PydanticValidationError, match="history_window must be at least 1"
+        ):
+            ToolsPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "mode": "passthrough",
+                    "dynamic_retrieval": {
+                        "enabled": True,
+                        "strategy": "hybrid_history",
+                    },
+                }
+            )
+
+    def test_disabled_dynamic_retrieval_skips_inactive_constraints(self):
+        config = ToolsPluginConfig.model_validate(
+            {
+                "enabled": False,
+                "mode": "none",
+                "strip_tool_history": True,
+                "dynamic_retrieval": {
+                    "enabled": False,
+                    "strategy": "future_strategy",
+                    "history_window": -1,
+                    "min_history_confidence": 2.0,
+                    "weights": {"history": -1.0},
+                },
+            }
+        )
+        assert config.dynamic_retrieval is not None
+        assert config.dynamic_retrieval.enabled is False
+
+    def test_disabled_tools_plugin_skips_inactive_mode_constraints(self):
+        config = ToolsPluginConfig.model_validate(
+            {
+                "enabled": False,
+                "mode": "future_mode",
+                "allow_tools": ["future.tool"],
+                "strip_tool_history": True,
+            }
+        )
+        assert config.enabled is False
+
+    def test_enabled_tools_plugin_rejects_unknown_mode(self):
+        with pytest.raises(PydanticValidationError, match="mode must be"):
+            ToolsPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "mode": "future_mode",
+                }
+            )
+
+
 class TestPluginConfigurationValidation:
     """Test plugin configuration validation."""
 
@@ -348,9 +460,9 @@ providers:
             config = parse_user_config(temp_path)
             errors = validate_user_config(config)
             assert len(errors) > 0
-            # Check that error mentions semantic-cache
+            # Check that the alias normalized to the canonical plugin.
             error_messages = [str(e) for e in errors]
-            assert any("semantic-cache" in msg.lower() for msg in error_messages)
+            assert any("response_cache" in msg.lower() for msg in error_messages)
         finally:
             os.unlink(temp_path)
 
@@ -393,14 +505,19 @@ providers:
             errors = validate_user_config(config)
             # SemanticCachePluginConfig requires 'enabled' field, so validation should fail
             assert isinstance(errors, list)
-            assert (
-                len(errors) > 0
-            ), "Expected validation errors for missing required field"
+            missing_field_message = (
+                "Expected validation errors for missing required field"
+            )
+            assert len(errors) > 0, missing_field_message
             # Check that the error mentions the missing field
             error_messages = [str(e) for e in errors]
-            assert any(
+            enabled_field_message = (
+                f"Expected error about missing 'enabled' field, got: {error_messages}"
+            )
+            enabled_field_reported = any(
                 "enabled" in msg.lower() for msg in error_messages
-            ), f"Expected error about missing 'enabled' field, got: {error_messages}"
+            )
+            assert enabled_field_reported, enabled_field_message
         finally:
             os.unlink(temp_path)
 
@@ -621,69 +738,3 @@ providers:
             assert any("rag" in msg.lower() for msg in error_messages)
         finally:
             os.unlink(temp_path)
-
-
-class TestToolSelectionAdvancedFiltering:
-    """Test tool_selection plugin's advanced_filtering subtree.
-
-    Pins down the schema parity with the Go-side
-    `config.AdvancedToolFilteringConfig`. Before this surface was modeled,
-    `ToolSelectionPluginConfig` had no `advanced_filtering` field and Pydantic
-    silently dropped the subtree, so users opting into
-    `retrieval_strategy: hybrid_history` ended up with a config equivalent to
-    no advanced filtering at all.
-    """
-
-    def test_hybrid_history_round_trips_without_field_loss(self):
-        """advanced_filtering.hybrid_history survives model_validate -> model_dump."""
-        cfg = ToolSelectionPluginConfig.model_validate(
-            {
-                "enabled": True,
-                "mode": "add",
-                "tools_db_path": "config/tools_db.json",
-                "top_k": 5,
-                "advanced_filtering": {
-                    "enabled": True,
-                    "retrieval_strategy": "hybrid_history",
-                    "hybrid_history": {
-                        "history_horizon": 8,
-                        "weight_history_transition": 2.0,
-                    },
-                },
-            }
-        )
-
-        dump = cfg.model_dump(exclude_none=True)
-        assert "advanced_filtering" in dump
-        assert dump["advanced_filtering"]["retrieval_strategy"] == "hybrid_history"
-        assert dump["advanced_filtering"]["hybrid_history"]["history_horizon"] == 8
-        assert (
-            dump["advanced_filtering"]["hybrid_history"]["weight_history_transition"]
-            == 2.0
-        )
-
-    def test_invalid_retrieval_strategy_rejected(self):
-        """retrieval_strategy must be 'weighted' or 'hybrid_history'."""
-        with pytest.raises(PydanticValidationError):
-            ToolSelectionPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "advanced_filtering": {
-                        "enabled": True,
-                        "retrieval_strategy": "bogus",
-                    },
-                }
-            )
-
-    def test_invalid_threshold_rejected(self):
-        """category_confidence_threshold must be in [0.0, 1.0]."""
-        with pytest.raises(PydanticValidationError):
-            ToolSelectionPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "advanced_filtering": {
-                        "enabled": True,
-                        "category_confidence_threshold": 1.5,
-                    },
-                }
-            )

@@ -221,7 +221,6 @@ prompt_guard:
   model_id: "test-jailbreak-model"
   threshold: 0.5
   use_cpu: false
-  use_modernbert: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 
 vllm_endpoints:
@@ -290,7 +289,6 @@ tools:
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
 				Expect(cfg.PromptGuard.ModelID).To(Equal("test-jailbreak-model"))
-				Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
 
 				// Verify model config
 				Expect(cfg.ModelConfig).To(HaveKey("model-a"))
@@ -3177,15 +3175,19 @@ default_model: "test-model"
 	})
 
 	Describe("IsFactCheckClassifierEnabled", func() {
-		It("should return true when fully configured with legacy config", func() {
+		It("should return true when routing uses the configured model", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.FactCheckRules = []FactCheckRule{{Name: "needs_fact_check"}}
+			cfg.Decisions = []Decision{{
+				Name:  "verified-route",
+				Rules: RuleNode{Type: SignalTypeFactCheck, Name: "needs_fact_check"},
+			}}
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
 
-		It("should return true when fact_check_rules are configured", func() {
+		It("should return true for default API rules even when routing does not reference them", func() {
 			cfg := &RouterConfig{}
 			cfg.FactCheckRules = []FactCheckRule{
 				{Name: "needs_fact_check", Description: "Query needs fact verification"},
@@ -3218,6 +3220,10 @@ default_model: "test-model"
 			cfg.FeedbackDetector.Enabled = true
 			cfg.FeedbackDetector.ModelID = "models/feedback"
 			cfg.UserFeedbackRules = []UserFeedbackRule{{Name: "satisfied"}}
+			cfg.Decisions = []Decision{{
+				Name:  "feedback-route",
+				Rules: RuleNode{Type: SignalTypeUserFeedback, Name: "satisfied"},
+			}}
 
 			Expect(cfg.IsFeedbackDetectorEnabled()).To(BeTrue())
 		})
@@ -3254,17 +3260,24 @@ default_model: "test-model"
 	})
 
 	Describe("IsHallucinationModelEnabled", func() {
-		It("should return true when fully configured", func() {
+		It("should return true when a decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeTrue())
 		})
 
-		It("should return false when hallucination mitigation is disabled", func() {
+		It("should return false when no decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = false
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
@@ -3272,7 +3285,15 @@ default_model: "test-model"
 
 		It("should return false when model_id is missing", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
 		})
@@ -3786,7 +3807,7 @@ model_config:
 						},
 					},
 				}
-				err := validateConfigContracts(cfg, configValidationScopeFile)
+				err := validateConfigContracts(cfg)
 				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
 				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
 			})
@@ -3801,7 +3822,7 @@ model_config:
 						},
 					},
 				}
-				Expect(validateConfigContracts(cfg, configValidationScopeFile)).To(Succeed())
+				Expect(validateConfigContracts(cfg)).To(Succeed())
 			})
 		})
 

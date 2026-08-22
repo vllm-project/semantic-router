@@ -51,9 +51,10 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 
 	return CanonicalRouting{
 		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromSignals(cfg.Signals),
-		Projections: canonicalProjectionsFromProjections(cfg.Projections),
+		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:   copyDecisions(cfg.Decisions),
+		Strategy:    cfg.Strategy,
 	}
 }
 
@@ -77,6 +78,8 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		EventRules:    append([]EventRule(nil), signals.EventRules...),
+		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
+		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 	}
 }
 
@@ -141,7 +144,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
 			Strategy:                  cfg.Strategy,
 			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            append([]string(nil), cfg.AutoModelNames...),
+			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
 			ClearRouteCache:           cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
@@ -164,7 +167,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
-			SemanticCache: cfg.SemanticCache,
+			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 		},
@@ -176,6 +179,14 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	}
 
 	return global
+}
+
+func canonicalAutoModelNames(names []string) *[]string {
+	if names == nil {
+		return nil
+	}
+	cloned := append([]string{}, names...)
+	return &cloned
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
@@ -317,6 +328,7 @@ func canonicalProviderModelFromRuntime(
 		ReasoningFamily:  params.ReasoningFamily,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
+		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
 		BackendRefs: canonicalProviderBackendRefs(
 			name,

@@ -8,7 +8,11 @@ import json
 import sys
 from pathlib import Path
 
-from router_calibration_manifest import load_probe_manifest, resolve_manifest_assets
+from router_calibration_manifest import (
+    load_probe_manifest,
+    report_safe_probe_manifest,
+    resolve_manifest_assets,
+)
 from router_calibration_report import render_markdown_summary
 from router_calibration_support import (
     default_report_dir,
@@ -16,6 +20,7 @@ from router_calibration_support import (
     evaluate_probes,
     fetch_router_snapshot,
     run_validate,
+    wait_for_config_activation,
     wait_for_router_ready,
     write_json,
 )
@@ -32,15 +37,21 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 def cmd_eval(args: argparse.Namespace) -> int:
     manifest, probes = load_probe_manifest(Path(args.probes))
+    evaluation = evaluate_probes(
+        args.router_url,
+        probes,
+        manifest,
+        selected_probe_ids=getattr(args, "probe_ids", None),
+    )
     report = {
-        "manifest": manifest,
-        "evaluation": evaluate_probes(args.router_url, probes, manifest),
+        "manifest": report_safe_probe_manifest(manifest),
+        "evaluation": evaluation,
     }
     if args.output:
         write_json(Path(args.output), report)
     else:
         print(json.dumps(report, indent=2, ensure_ascii=False))
-    return 0
+    return 0 if evaluation.get("passed", False) else 1
 
 
 def cmd_deploy(args: argparse.Namespace) -> int:
@@ -48,6 +59,12 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         args.router_url,
         Path(args.yaml),
         Path(args.dsl) if args.dsl else None,
+    )
+    activation_state = wait_for_config_activation(
+        args.router_url,
+        str(response.get("runtime_hash") or ""),
+        timeout_seconds=args.ready_timeout,
+        interval_seconds=args.ready_interval,
     )
     ready_state = wait_for_router_ready(
         args.router_url,
@@ -59,6 +76,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             Path(args.output),
             {
                 "deploy": response,
+                "activation": activation_state,
                 "ready": ready_state,
             },
         )
@@ -67,6 +85,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             json.dumps(
                 {
                     "deploy": response,
+                    "activation": activation_state,
                     "ready": ready_state,
                 },
                 indent=2,
@@ -111,10 +130,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         write_json(report_dir / "validate.json", validate_result)
 
     deploy_result = None
+    activation_result = None
     ready_result = None
     if yaml_path is not None:
         deploy_result = deploy_config(args.router_url, yaml_path, dsl_path)
         write_json(report_dir / "deploy.json", deploy_result)
+        activation_result = wait_for_config_activation(
+            args.router_url,
+            str(deploy_result.get("runtime_hash") or ""),
+            timeout_seconds=args.ready_timeout,
+            interval_seconds=args.ready_interval,
+        )
+        write_json(report_dir / "activation-after-deploy.json", activation_result)
         ready_result = wait_for_router_ready(
             args.router_url,
             timeout_seconds=args.ready_timeout,
@@ -180,6 +207,15 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Router base URL, for example http://host:8080",
     )
     eval_parser.add_argument("--probes", required=True, help="YAML probe manifest path")
+    eval_parser.add_argument(
+        "--id",
+        dest="probe_ids",
+        action="append",
+        help=(
+            "Evaluate only this exact decision:variant probe ID. Repeat the flag "
+            "to run an ordered subset while validating traces against the complete recipe."
+        ),
+    )
     eval_parser.add_argument("--output", help="Optional JSON output path")
     eval_parser.set_defaults(func=cmd_eval)
 
@@ -201,7 +237,7 @@ def add_deploy_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--ready-timeout",
         type=float,
         default=300.0,
-        help="Seconds to wait for GET /ready after deploy",
+        help="Seconds to wait for runtime activation and GET /ready after deploy",
     )
     deploy.add_argument(
         "--ready-interval",
@@ -251,7 +287,7 @@ def add_run_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--ready-timeout",
         type=float,
         default=300.0,
-        help="Seconds to wait for GET /ready after deploy",
+        help="Seconds to wait for runtime activation and GET /ready after deploy",
     )
     run.add_argument(
         "--ready-interval",

@@ -20,6 +20,7 @@ type signalEvaluationInput struct {
 	priorUserMessages      []string
 	hasAssistantReply      bool
 	conversationFacts      classification.ConversationFacts
+	requestFacts           classification.RequestFacts
 }
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
@@ -39,9 +40,17 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ToolDefinitionCount:     history.toolDefinitionCount,
 			AssistantToolCallCount:  history.assistantToolCallCount,
 			ToolResultCount:         history.toolResultCount,
+			ImageContentCount:       history.imageContentCount,
 			LastMessageRole:         history.lastMessageRole,
 			LastMessageToolResult:   history.lastMessageToolResult,
 			LastUserAfterToolResult: history.lastUserAfterToolResult,
+		},
+		requestFacts: classification.RequestFacts{
+			Metadata:               cloneRoutingMetadata(history.metadata),
+			ContextTokenFloor:      history.contextTokenFloor,
+			ContextTextBytes:       history.contextTextBytes,
+			ContextEquivalentBytes: history.contextEquivalentBytes,
+			ContextHasNonText:      history.contextHasNonText,
 		},
 	}
 
@@ -111,10 +120,13 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
 	ctx.VSRMatchedEvent = signals.MatchedEventRules
+	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
+	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
+	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 
 	if signals.JailbreakDetected {
@@ -159,6 +171,17 @@ func cloneReplayFloat64Map(values map[string]float64) map[string]float64 {
 	return cloned
 }
 
+func cloneReplayStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules := []string{}
 	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
@@ -179,6 +202,8 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedEventRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedClassifierRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

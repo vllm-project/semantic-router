@@ -1,9 +1,12 @@
 import os
-import socket
 
 from cli import container_services
 from cli.bootstrap import build_bootstrap_config
-from cli.container_services import _is_port_in_use, container_start_milvus
+from cli.container_services import (
+    container_start_milvus,
+    container_start_postgres,
+    container_start_redis,
+)
 from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import (
     inject_local_service_runtime_defaults,
@@ -18,7 +21,8 @@ def test_detect_required_backends_uses_canonical_defaults():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
     }
 
-    assert detect_required_backends(config) == {"redis", "postgres", "milvus"}
+    assert detect_required_backends(config) == {"redis"}
+    assert detect_required_backends(config, resolve_runtime_stack()) == {"redis"}
 
 
 def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_path):
@@ -53,7 +57,7 @@ def test_detect_required_backends_skips_external_semantic_cache_milvus():
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "milvus",
                     "milvus": {
@@ -71,7 +75,56 @@ def test_detect_required_backends_skips_external_semantic_cache_milvus():
 
     assert "milvus" not in required
     assert "redis" in required
-    assert "postgres" in required
+    assert "postgres" not in required
+
+
+def test_detect_required_backends_with_stack_ignores_external_service_stores():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "services": {
+                "response_api": {
+                    "enabled": True,
+                    "store_backend": "redis",
+                    "redis": {"address": "redis.external.example:6379"},
+                },
+                "router_replay": {
+                    "enabled": True,
+                    "store_backend": "postgres",
+                    "postgres": {"host": "postgres.external.example"},
+                },
+            },
+            "stores": {"response_cache": {"backend_type": "memory"}},
+        },
+    }
+
+    assert detect_required_backends(config, resolve_runtime_stack()) == set()
+
+
+def test_detect_required_backends_with_stack_selects_exact_managed_services():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "services": {
+                "response_api": {
+                    "enabled": True,
+                    "store_backend": "redis",
+                    "redis": {"address": "vllm-sr-redis:6379"},
+                },
+                "router_replay": {
+                    "enabled": True,
+                    "store_backend": "postgres",
+                    "postgres": {"host": "postgres"},
+                },
+            },
+            "stores": {"response_cache": {"backend_type": "memory"}},
+        },
+    }
+
+    assert detect_required_backends(config, resolve_runtime_stack()) == {
+        "redis",
+        "postgres",
+    }
 
 
 def test_container_start_milvus_reuses_network_alias(monkeypatch, tmp_path):
@@ -86,6 +139,11 @@ def test_container_start_milvus_reuses_network_alias(monkeypatch, tmp_path):
         container_services,
         "_running_container_for_network_alias",
         lambda _runtime, _network, _alias: "milvus-semantic-cache",
+    )
+    monkeypatch.setattr(
+        container_services,
+        "_storage_ports_are_loopback_only",
+        lambda _name: (True, ""),
     )
     monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: True)
     monkeypatch.setattr(container_services, "_run_service_start", fail_run)
@@ -106,6 +164,11 @@ def test_container_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     monkeypatch.setattr(
         container_services, "container_status", lambda _name: "not found"
     )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
+    )
     monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: False)
     monkeypatch.setattr(
         container_services,
@@ -123,6 +186,265 @@ def test_container_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     assert f"{expected_data_dir}:/var/lib/milvus:z" in commands[0]
 
 
+def test_container_start_milvus_uses_explicit_host_hidden_state_mount(
+    monkeypatch, tmp_path
+):
+    commands = []
+    host_hidden = tmp_path / "host-state"
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_services, "container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
+    )
+    monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: False)
+    monkeypatch.setattr(
+        container_services,
+        "_run_service_start",
+        lambda cmd, _label: commands.append(cmd) or (0, "", ""),
+    )
+
+    container_start_milvus(
+        "test-network",
+        resolve_runtime_stack(),
+        state_root_dir=str(tmp_path / "container-view"),
+        host_hidden_state_dir=str(host_hidden),
+    )
+
+    assert f"{host_hidden / 'milvus-data'}:/var/lib/milvus:z" in commands[0]
+    assert not any(
+        "container-view" in argument and ":/var/lib/milvus" in argument
+        for argument in commands[0]
+    )
+
+
+def test_managed_storage_ports_bind_only_to_host_loopback(monkeypatch, tmp_path):
+    commands = []
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_services, "container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
+    )
+    monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: False)
+    monkeypatch.setattr(
+        container_services,
+        "_run_service_start",
+        lambda cmd, _label: commands.append(cmd) or (0, "", ""),
+    )
+    layout = resolve_runtime_stack()
+
+    container_start_redis("test-network", layout)
+    container_start_postgres("test-network", layout)
+    container_start_milvus("test-network", layout, state_root_dir=str(tmp_path))
+
+    assert f"127.0.0.1:{layout.redis_port}:6379" in commands[0]
+    assert f"127.0.0.1:{layout.postgres_port}:5432" in commands[1]
+    assert f"127.0.0.1:{layout.milvus_port}:19530" in commands[2]
+
+
+def test_running_storage_with_public_port_binding_is_not_reused(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"default","publish_all_ports":false,'
+                    '"configured":{"6379/tcp":[{"HostIp":"0.0.0.0",'
+                    '"HostPort":"6379"}]},"actual":{"6379/tcp":'
+                    '[{"HostIp":"0.0.0.0","HostPort":"6379"}]}}'
+                ),
+            },
+        )(),
+    )
+
+    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+
+    assert code == 1
+    assert "unsafe published storage ports" in stderr
+    assert "127.0.0.1 bindings" in stderr
+
+
+def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
+    calls = []
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if "inspect" in cmd:
+            return type(
+                "Result",
+                (),
+                {
+                    "stdout": (
+                        '{"network_mode":"default","publish_all_ports":false,'
+                        '"configured":{"6379/tcp":[{"HostIp":"127.0.0.1",'
+                        '"HostPort":"6379"}]},"actual":{"6379/tcp":'
+                        '[{"HostIp":"127.0.0.1","HostPort":"6379"}]}}'
+                    ),
+                },
+            )()
+        return type("Result", (), {"stdout": "", "stderr": "", "returncode": 0})()
+
+    monkeypatch.setattr(container_services.subprocess, "run", fake_run)
+
+    code, _, stderr = container_start_redis(None, resolve_runtime_stack())
+
+    assert code == 0
+    assert stderr == ""
+    assert len(calls) == 2
+    assert calls[0][1] == "inspect"
+    assert calls[1][1:3] == ["network", "connect"]
+
+
+def test_running_storage_with_host_network_is_not_reused(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"host","publish_all_ports":false,'
+                    '"configured":{},"actual":{}}'
+                ),
+            },
+        )(),
+    )
+
+    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+
+    assert code == 1
+    assert "host network mode" in stderr
+
+
+def test_running_storage_with_container_network_namespace_is_not_reused(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"container:peer","publish_all_ports":false,'
+                    '"configured":{},"actual":{}}'
+                ),
+            },
+        )(),
+    )
+
+    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+
+    assert code == 1
+    assert "container network mode" in stderr
+
+
+def test_storage_isolation_accepts_complete_ipv4_loopback_range(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"default","publish_all_ports":false,'
+                    '"configured":{"6379/tcp":[{"HostIp":"127.12.34.56",'
+                    '"HostPort":"6379"}]},"actual":{}}'
+                ),
+            },
+        )(),
+    )
+
+    assert container_services._storage_ports_are_loopback_only("redis") == (True, "")
+
+
+def test_storage_isolation_rejects_missing_inspection_fields(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type("Result", (), {"stdout": "{}"})(),
+    )
+
+    safe, detail = container_services._storage_ports_are_loopback_only("redis")
+
+    assert not safe
+    assert "inspection is invalid" in detail
+
+
+def test_running_storage_with_publish_all_ports_is_not_reused(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"default","publish_all_ports":true,'
+                    '"configured":{},"actual":{}}'
+                ),
+            },
+        )(),
+    )
+
+    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+
+    assert code == 1
+    assert "PublishAllPorts" in stderr
+
+
+def test_running_storage_with_unsafe_effective_binding_is_not_reused(monkeypatch):
+    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_services, "container_status", lambda _name: "running")
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Result",
+            (),
+            {
+                "stdout": (
+                    '{"network_mode":"default","publish_all_ports":false,'
+                    '"configured":{"6379/tcp":[{"HostIp":"127.0.0.1",'
+                    '"HostPort":"6379"}]},"actual":{"6379/tcp":'
+                    '[{"HostIp":"0.0.0.0","HostPort":"6379"}]}}'
+                ),
+            },
+        )(),
+    )
+
+    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+
+    assert code == 1
+    assert (
+        "inspection failed: actual published port 6379/tcp uses non-loopback "
+        "host address '0.0.0.0'"
+    ) in stderr
+
+
 def test_container_start_milvus_fails_on_port_conflict_without_container(
     monkeypatch, tmp_path
 ):
@@ -132,6 +454,11 @@ def test_container_start_milvus_fails_on_port_conflict_without_container(
     monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_services, "container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(
+        container_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: None,
     )
     monkeypatch.setattr(container_services, "_is_port_in_use", lambda _port: True)
     monkeypatch.setattr(container_services, "_run_service_start", fail_run)
@@ -148,11 +475,7 @@ def test_container_start_milvus_fails_on_port_conflict_without_container(
 
 
 def test_detect_required_backends_uses_defaults_for_setup_mode_bootstrap_config():
-    assert detect_required_backends(build_bootstrap_config()) == {
-        "redis",
-        "postgres",
-        "milvus",
-    }
+    assert detect_required_backends(build_bootstrap_config()) == {"redis"}
 
 
 def test_detect_required_backends_respects_explicit_service_disable():
@@ -168,7 +491,7 @@ def test_detect_required_backends_respects_explicit_service_disable():
         },
     }
 
-    assert detect_required_backends(config) == {"redis", "milvus"}
+    assert detect_required_backends(config) == {"redis"}
 
 
 def test_detect_required_backends_excludes_milvus_when_memory_override():
@@ -177,7 +500,7 @@ def test_detect_required_backends_excludes_milvus_when_memory_override():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "memory",
                 }
@@ -188,7 +511,7 @@ def test_detect_required_backends_excludes_milvus_when_memory_override():
     required = detect_required_backends(config)
     assert "milvus" not in required
     assert "redis" in required
-    assert "postgres" in required
+    assert "postgres" not in required
 
 
 def test_detect_required_backends_excludes_milvus_when_cache_disabled():
@@ -197,7 +520,7 @@ def test_detect_required_backends_excludes_milvus_when_cache_disabled():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 }
             }
@@ -214,7 +537,7 @@ def test_detect_required_backends_includes_postgres_for_vector_store_metadata():
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -242,7 +565,7 @@ def test_detect_required_backends_ignores_disabled_vector_store_metadata():
                 },
             },
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -269,10 +592,10 @@ def test_inject_local_service_runtime_defaults_populates_canonical_connections()
     assert services["response_api"]["store_backend"] == "redis"
     assert services["response_api"]["redis"]["address"] == "vllm-sr-redis:6379"
     assert services["response_api"]["redis"]["db"] == 0
-    assert services["router_replay"]["store_backend"] == "postgres"
-    assert services["router_replay"]["postgres"]["host"] == "vllm-sr-postgres"
-    assert services["router_replay"]["postgres"]["database"] == "vsr"
-    assert services["router_replay"]["postgres"]["user"] == "router"
+    assert services["router_replay"] == {
+        "enabled": False,
+        "store_backend": "memory",
+    }
 
 
 def test_inject_local_service_runtime_defaults_keeps_setup_bootstrap_minimal():
@@ -318,13 +641,21 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
     config = {
         "version": "v0.3",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "global": {
+            "stores": {
+                "response_cache": {
+                    "enabled": True,
+                    "backend_type": "milvus",
+                }
+            }
+        },
     }
 
     changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
 
     assert changed is True
     stores = config["global"]["stores"]
-    cache = stores["semantic_cache"]
+    cache = stores["response_cache"]
     assert cache["backend_type"] == "milvus"
     milvus = cache["milvus"]
     conn = milvus["connection"]
@@ -347,7 +678,7 @@ def test_inject_local_store_runtime_defaults_populates_vector_store_metadata_pos
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -375,7 +706,7 @@ def test_inject_local_store_runtime_defaults_backfills_vector_store_metadata_pos
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": False,
                 },
                 "vector_store": {
@@ -404,7 +735,7 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "milvus",
                     "milvus": {
@@ -423,7 +754,7 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
 
     changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
 
-    milvus = config["global"]["stores"]["semantic_cache"]["milvus"]
+    milvus = config["global"]["stores"]["response_cache"]["milvus"]
     conn = milvus["connection"]
     assert conn["host"] == "custom-milvus-host"
     assert conn["port"] == 19531
@@ -431,46 +762,3 @@ def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
     assert conn["timeout"] == 30
     assert milvus["collection"]["name"] == "my_custom_collection"
     assert changed is True
-
-
-def test_inject_local_store_runtime_defaults_skips_memory_backend():
-    config = {
-        "version": "v0.3",
-        "global": {
-            "stores": {
-                "semantic_cache": {
-                    "enabled": True,
-                    "backend_type": "memory",
-                }
-            }
-        },
-    }
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is False
-    assert "milvus" not in config["global"]["stores"]["semantic_cache"]
-
-
-def test_inject_local_store_runtime_defaults_keeps_setup_bootstrap_minimal():
-    config = build_bootstrap_config()
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is False
-
-
-def test_is_port_in_use_returns_false_for_unused_port():
-    assert _is_port_in_use(59999) is False
-
-
-def test_is_port_in_use_returns_true_for_bound_port():
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind(("127.0.0.1", 0))
-    srv.listen(1)
-    port = srv.getsockname()[1]
-    try:
-        assert _is_port_in_use(port) is True
-    finally:
-        srv.close()

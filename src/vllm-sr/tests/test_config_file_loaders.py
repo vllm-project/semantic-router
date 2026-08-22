@@ -81,6 +81,73 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
+def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["entrypoints"] = [
+        {"model_names": ["vllm-sr/mom-v1-vault"], "recipe": "privacy-first"}
+    ]
+    data["recipes"] = [
+        {
+            "name": "privacy-first",
+            "description": "Keep sensitive prompts on the private route.",
+            "routing": {
+                "signals": {
+                    "keywords": [
+                        {
+                            "name": "privacy-markers",
+                            "operator": "OR",
+                            "keywords": ["confidential"],
+                        }
+                    ]
+                },
+                "decisions": [
+                    {
+                        "name": "privacy-route",
+                        "description": "Route confidential prompts privately.",
+                        "priority": 100,
+                        "rules": {
+                            "operator": "AND",
+                            "conditions": [
+                                {"type": "keyword", "name": "privacy-markers"}
+                            ],
+                        },
+                        "modelRefs": [{"model": "demo-model"}],
+                    }
+                ],
+            },
+        }
+    ]
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-v1-vault"]
+    assert parsed.entrypoints[0].recipe == "privacy-first"
+    assert parsed.recipes[0].name == "privacy-first"
+    assert parsed.recipes[0].routing.decisions[0].name == "privacy-route"
+
+
+def test_parse_user_config_rejects_recipe_owned_model_cards(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["recipes"] = [
+        {
+            "name": "invalid",
+            "routing": {"modelCards": [{"name": "recipe-owned-model"}]},
+        }
+    ]
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as exc:
+        parse_user_config(str(config_path))
+
+    assert "recipes -> 0 -> routing -> modelCards" in str(exc.value)
+    assert "Extra inputs are not permitted" in str(exc.value)
+
+
 def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
@@ -145,6 +212,16 @@ def test_parse_user_config_accepts_decision_learning_controls(
             "enabled": True,
             "scope": "conversation",
         },
+        "state_store": {
+            "backend": "redis",
+            "ttl_seconds": 86400,
+            "timeout_ms": 50,
+            "redis": {
+                "address": "redis:6379",
+                "database": 2,
+                "key_prefix": "vsr:router-session:v1:",
+            },
+        },
     }
     data["routing"]["decisions"][0]["adaptations"] = {
         "adaptation": {
@@ -170,6 +247,10 @@ def test_parse_user_config_accepts_decision_learning_controls(
     assert adaptations.protection.mode == "apply"
     assert adaptations.protection.stability_weight == 1.5
     assert adaptations.protection.switch_margin == 0.11
+    assert parsed.global_ is not None
+    state_store = parsed.global_["router"]["learning"]["state_store"]
+    assert state_store["backend"] == "redis"
+    assert state_store["redis"]["address"] == "redis:6379"
 
 
 def test_parse_user_config_rejects_unknown_decision_adaptation(tmp_path: Path) -> None:
@@ -548,10 +629,17 @@ def test_load_profile_values_returns_none_without_profile(tmp_path: Path) -> Non
     assert load_profile_values(None, str(tmp_path)) is None
 
 
-def test_load_profile_values_returns_none_when_profile_file_missing(
-    tmp_path: Path,
+def test_load_profile_values_fails_when_profile_file_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="profile values file not found"):
+        load_profile_values("dev", str(tmp_path))
+
+
+@pytest.mark.parametrize("profile", ["../prod", "dev/prod", "-prod", "prod.yaml"])
+def test_load_profile_values_rejects_non_name_profiles(
+    tmp_path: Path, profile: str
 ) -> None:
-    assert load_profile_values("dev", str(tmp_path)) is None
+    with pytest.raises(ValueError, match="profile names"):
+        load_profile_values(profile, str(tmp_path))
 
 
 def test_load_profile_values_loads_named_profile(tmp_path: Path) -> None:

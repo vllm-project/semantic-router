@@ -1,9 +1,11 @@
 import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
-import { buildPromptWithAttachments, type PlaygroundAttachment } from './playgroundFileAttachments'
+import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
+import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
+import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 export interface OutboundChatMessage {
   role: string
-  content: string | null
+  content: unknown
   tool_calls?: Array<{
     id: string
     type: 'function'
@@ -13,6 +15,30 @@ export interface OutboundChatMessage {
     }
   }>
   tool_call_id?: string
+}
+
+export const PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS = 2048
+export const PLAYGROUND_REQUEST_TIMEOUT_MS = 120_000
+export const PLAYGROUND_MAX_REQUEST_BYTES = 10 * 1024 * 1024
+
+export const assertPlaygroundRequestSize = (request: Record<string, unknown>): void => {
+  const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength
+  if (bytes > PLAYGROUND_MAX_REQUEST_BYTES) {
+    throw new Error('Playground request exceeds the 10 MB request limit.')
+  }
+}
+
+export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  'x-session-id': conversationId,
+  'x-vsr-debug': 'true',
+})
+
+const withDefaultCompletionBudget = (request: Record<string, unknown>): Record<string, unknown> => {
+  if (request.max_tokens !== undefined || request.max_completion_tokens !== undefined) {
+    return request
+  }
+  return { ...request, max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS }
 }
 
 const RESPONSE_HEADER_KEYS = [
@@ -78,13 +104,67 @@ export const buildChatMessages = (
     if (message.role === 'user') {
       chatMessages.push({
         role: 'user',
-        content: buildPromptWithAttachments(message.content, message.playgroundAttachments ?? []),
+        content:
+          message.requestContent ??
+          buildPlaygroundUserContent(message.content, message.playgroundAttachments ?? []),
       })
       continue
     }
 
-    if (message.role === 'assistant' && message.content) {
-      chatMessages.push({ role: 'assistant', content: message.content })
+    if (message.role === 'system') {
+      chatMessages.push({
+        role: 'system',
+        content: message.requestContent ?? message.content,
+      })
+      continue
+    }
+
+    if (message.role === 'assistant') {
+      const resultsByCallId = new Map(
+        (message.toolResults ?? []).map((result) => [result.callId, result]),
+      )
+      const completedToolCalls = (message.toolCalls ?? []).filter(
+        (toolCall) =>
+          resultsByCallId.has(toolCall.id) &&
+          Boolean(toolCall.function.name) &&
+          Boolean(toolCall.function.arguments),
+      )
+
+      if (completedToolCalls.length > 0) {
+        chatMessages.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: completedToolCalls.map((toolCall) => ({
+            id: toolCall.id,
+            type: 'function',
+            function: {
+              name: toolCall.function.name,
+              arguments: normalizeToolCallArguments(toolCall.function.arguments),
+            },
+          })),
+        })
+        completedToolCalls.forEach((toolCall) => {
+          const result = resultsByCallId.get(toolCall.id)
+          if (!result) return
+          chatMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: serializeToolResultForModel(result),
+          })
+        })
+      }
+
+      const assistantContent =
+        message.requestContent ??
+        (/<tool_call/i.test(message.content)
+          ? extractTextToolCalls(message.content).content
+          : message.content)
+      if (
+        (typeof assistantContent === 'string' && assistantContent.length > 0) ||
+        (Array.isArray(assistantContent) && assistantContent.length > 0)
+      ) {
+        chatMessages.push({ role: 'assistant', content: assistantContent })
+      }
     }
   }
 
@@ -94,7 +174,7 @@ export const buildChatMessages = (
 
   chatMessages.push({
     role: 'user',
-    content: buildPromptWithAttachments(nextUserMessage, nextUserAttachments),
+    content: buildPlaygroundUserContent(nextUserMessage, nextUserAttachments),
   })
   return chatMessages
 }
@@ -108,6 +188,7 @@ export const buildChatRequestBody = (
     model,
     messages,
     stream: true,
+    max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
   }
 
   if (activeTools.length > 0) {
@@ -115,7 +196,25 @@ export const buildChatRequestBody = (
     requestBody.tool_choice = 'auto'
   }
 
+  assertPlaygroundRequestSize(requestBody)
   return requestBody
+}
+
+export const buildExactChatRequestBody = (
+  request: Record<string, unknown>,
+  fallbackModel: string,
+): Record<string, unknown> => {
+  const messages = Array.isArray(request.messages) ? request.messages : []
+  const requestModel = typeof request.model === 'string' ? request.model.trim() : ''
+
+  const result = withDefaultCompletionBudget({
+    ...request,
+    model: requestModel || fallbackModel,
+    messages,
+    stream: true,
+  })
+  assertPlaygroundRequestSize(result)
+  return result
 }
 
 export const collectResponseHeaders = (response: Response): Record<string, string> => {

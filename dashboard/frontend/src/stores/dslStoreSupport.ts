@@ -1,8 +1,4 @@
-import type {
-  BuilderNLProgressEvent,
-  BuilderNLReview,
-  BuilderNLValidation,
-} from '@/types/dsl'
+import type { BuilderNLProgressEvent, BuilderNLReview, BuilderNLValidation } from '@/types/dsl'
 import type { DSLState, DSLStore } from './dslStoreTypes'
 
 export interface DeployStatusService {
@@ -17,6 +13,7 @@ export interface DeployStatusResponse {
 
 export const initialDSLState: DSLState = {
   dslSource: '',
+  renderedYamlOutput: '',
   yamlOutput: '',
   crdOutput: '',
   diagnostics: [],
@@ -27,7 +24,7 @@ export const initialDSLState: DSLState = {
   wasmError: null,
   loading: false,
   compileError: null,
-  mode: 'dsl',
+  mode: 'visual',
   dirty: false,
   lastCompileAt: null,
   deploying: false,

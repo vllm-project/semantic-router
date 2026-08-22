@@ -35,6 +35,9 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"multi_factor": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.MultiFactor = c.compileMultiFactorAlgo(fields)
 	},
+	"prompt": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.Prompt = c.compilePromptAlgo(fields)
+	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
@@ -42,10 +45,35 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 }
 
+func (c *Compiler) compilePromptAlgo(
+	fields map[string]Value,
+) *config.PromptSelectionConfig {
+	cfg := &config.PromptSelectionConfig{}
+	prompt, ok := fields["prompt"].(ObjectValue)
+	if !ok {
+		return cfg
+	}
+	if value, ok := getStringField(prompt.Fields, "model"); ok {
+		cfg.Model = value
+	}
+	if value, ok := getStringField(prompt.Fields, "instructions"); ok {
+		cfg.Instructions = value
+	}
+	if value, ok := getIntField(prompt.Fields, "timeout_seconds"); ok {
+		cfg.TimeoutSeconds = value
+	}
+	return cfg
+}
+
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
+	if algo.ReMoM != nil {
+		if err := config.ValidateReMoMAlgorithmConfig(algo.ReMoM); err != nil {
+			c.addError(spec.Pos, "invalid remom algorithm: %v", err)
+		}
+	}
 	return algo
 }
 
@@ -164,6 +192,9 @@ func fillReMoMRuntimeFields(cfg *config.ReMoMAlgorithmConfig, fields map[string]
 	if v, ok := getIntField(fields, "max_concurrent"); ok {
 		cfg.MaxConcurrent = v
 	}
+	if v, ok := getIntField(fields, "max_completion_tokens"); ok {
+		cfg.MaxCompletionTokens = &v
+	}
 	if v, ok := getIntField(fields, "round_timeout_seconds"); ok {
 		cfg.RoundTimeoutSeconds = v
 	}
@@ -277,6 +308,9 @@ func compileWorkflowPlanner(fields map[string]Value, cfg *config.WorkflowsAlgori
 	if planner, ok := fields["planner"].(ObjectValue); ok {
 		if v, ok := getStringField(planner.Fields, "model"); ok {
 			cfg.Planner.Model = v
+		}
+		if v, ok := getIntField(planner.Fields, "max_completion_tokens"); ok {
+			cfg.Planner.MaxCompletionTokens = v
 		}
 	}
 	if v, ok := getStringField(fields, "planner.model"); ok {

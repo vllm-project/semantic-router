@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from release_contract_markers import (
     sim_upgrade_docs_markers,
     upgrade_runbook_fixture_markers,
 )
+from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
@@ -25,21 +27,21 @@ CANDLE_CARGO_PATH = REPO_ROOT / "candle-binding/Cargo.toml"
 CANDLE_LOCK_PATH = REPO_ROOT / "candle-binding/Cargo.lock"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
-DOCKER_RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-release.yml"
-OPERATOR_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/operator-ci.yml"
+DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 PUBLISH_CRATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/publish-crate.yml"
 UPGRADE_ROLLBACK_DOC_PATH = REPO_ROOT / "website/docs/installation/upgrade-rollback.md"
+BUILT_IN_CATALOG_ROOT = REPO_ROOT / "config/recipes/built-in"
 GHCR_IMAGE_PREFIX = "ghcr.io/vllm-project/semantic-router"
 HELM_CHART_REF = "oci://ghcr.io/vllm-project/charts/semantic-router"
 
 
-SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
-TAGGED_IMAGE_RE = re.compile(
-    r"semantic-router/([a-z0-9-]+):\$\{\{\s*steps\.extract_tag\.outputs\.tag\s*\}\}"
+SEMVER_RE = re.compile(
+    r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)"
+    r"(?:[-+][0-9A-Za-z.-]+)?$"
 )
-OPERATOR_TAGGED_IMAGE_RE = re.compile(r"semantic-router/([a-z0-9-]+):\$\{TAG\}")
+RELEASE_IMAGES_RE = re.compile(r"^\s+images:\s+'(\[[^']+\])'", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -106,14 +108,85 @@ def parse_chart_key(path: Path, key: str) -> str:
     return match.group(1).strip()
 
 
-def parse_release_images() -> tuple[str, ...]:
-    images = sorted(
-        set(TAGGED_IMAGE_RE.findall(read_text(DOCKER_RELEASE_WORKFLOW_PATH)))
-        | set(OPERATOR_TAGGED_IMAGE_RE.findall(read_text(OPERATOR_WORKFLOW_PATH)))
+def catalog_snapshot_for_version(version: str) -> str:
+    match = SEMVER_RE.fullmatch(version)
+    if match is None:
+        raise ValueError(f"invalid semantic release version: {version}")
+    return f"v{match.group('major')}.{match.group('minor')}"
+
+
+def parse_catalog_key(path: Path, key: str) -> str:
+    match = re.search(
+        rf"^{re.escape(key)}:\s*['\"]?([^'\"\s#]+)['\"]?\s*(?:#.*)?$",
+        read_text(path),
+        re.MULTILINE,
     )
-    if not images:
+    if match is None:
+        raise ValueError(f"could not find {key} in {path.relative_to(REPO_ROOT)}")
+    return match.group(1)
+
+
+def validate_release_catalog(errors: list[str], version: str) -> str:
+    snapshot = catalog_snapshot_for_version(version)
+    snapshot_dir = BUILT_IN_CATALOG_ROOT / snapshot
+    catalog_path = snapshot_dir / "catalog.yaml"
+    if not snapshot_dir.is_dir():
+        message = (
+            f"release v{version} requires built-in catalog snapshot "
+            f"config/recipes/built-in/{snapshot}"
+        )
+        errors.append(f"{snapshot_dir.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(snapshot_dir, "Missing release catalog snapshot", message)
+        return snapshot
+    if not catalog_path.is_file():
+        message = f"release catalog snapshot {snapshot} is missing catalog.yaml"
+        errors.append(f"{catalog_path.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(catalog_path, "Missing release catalog manifest", message)
+        return snapshot
+
+    expected_values = {
+        "channel": "release",
+        "release": snapshot,
+        "catalog_version": snapshot,
+    }
+    for key, expected in expected_values.items():
+        try:
+            actual = parse_catalog_key(catalog_path, key)
+        except ValueError as error:
+            message = str(error)
+            errors.append(message)
+            emit_github_error(catalog_path, "Release catalog mismatch", message)
+            continue
+        require_equal(
+            errors,
+            catalog_path,
+            f"release catalog {key}",
+            actual,
+            expected,
+        )
+    try:
+        drift_errors = release_snapshot_errors(BUILT_IN_CATALOG_ROOT, snapshot)
+    except (OSError, ValueError) as error:
+        drift_errors = [f"release snapshot validation failed: {error}"]
+    for message in drift_errors:
+        errors.append(f"{snapshot_dir.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(snapshot_dir, "Release catalog snapshot drift", message)
+    return snapshot
+
+
+def parse_release_images() -> tuple[str, ...]:
+    match = RELEASE_IMAGES_RE.search(read_text(RELEASE_WORKFLOW_PATH))
+    if match is None:
         raise ValueError(
-            "could not find tagged release images in docker or operator workflows"
+            "could not find the release image inventory in release workflow"
+        )
+    images = sorted(json.loads(match.group(1)))
+    docker_workflow = read_text(DOCKER_PUBLISH_WORKFLOW_PATH)
+    missing = [image for image in images if f"{image})" not in docker_workflow]
+    if missing:
+        raise ValueError(
+            "release images are missing from the canonical Docker publisher: "
+            + ", ".join(missing)
         )
     return tuple(images)
 
@@ -163,13 +236,13 @@ def validate_helm_workflow(errors: list[str]) -> None:
         errors,
         HELM_WORKFLOW_PATH,
         "Helm release chart version",
-        'CHART_VERSION="${GITHUB_REF#refs/tags/v}"',
+        'CHART_VERSION="$RELEASE_VERSION"',
     )
     require_contains(
         errors,
         HELM_WORKFLOW_PATH,
         "Helm release app version",
-        'APP_VERSION="${GITHUB_REF#refs/tags/}"',
+        'APP_VERSION="$RELEASE_TAG"',
     )
     require_contains(
         errors,
@@ -300,10 +373,17 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     validate_sim_upgrade_docs(errors, contract.sim_version)
     validate_candle_crate_workflow(errors)
     validate_candle_release_notes(errors)
+    # An explicit version is the publication boundary used by release.yml and
+    # `make release-validate RELEASE_VERSION=...`. Source-only validation may
+    # run before maintainers cut the next immutable minor snapshot.
+    if expected_version is not None:
+        validate_release_catalog(errors, expected)
     return contract, errors
 
 
-def write_github_outputs(path: Path, contract: ReleaseContract) -> None:
+def write_github_outputs(
+    path: Path, contract: ReleaseContract, release_version: str
+) -> None:
     with path.open("a", encoding="utf-8") as output:
         output.write(f"pyproject_version={contract.pyproject_version}\n")
         output.write(f"candle_version={contract.candle_version}\n")
@@ -312,6 +392,9 @@ def write_github_outputs(path: Path, contract: ReleaseContract) -> None:
         output.write(f"helm_app_version={contract.helm_app_version}\n")
         output.write(f"sim_version={contract.sim_version}\n")
         output.write(f"release_images={','.join(contract.release_images)}\n")
+        output.write(
+            f"catalog_snapshot={catalog_snapshot_for_version(release_version)}\n"
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,9 +414,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     contract, errors = validate(args.version)
+    release_version = args.version or contract.pyproject_version
 
     if args.github_output:
-        write_github_outputs(args.github_output, contract)
+        write_github_outputs(args.github_output, contract, release_version)
 
     print("Release version contract")
     print(f"  vllm-sr package:        {contract.pyproject_version}")
@@ -343,6 +427,14 @@ def main() -> int:
     print(f"  helm source appVersion: {contract.helm_app_version}")
     print(f"  vllm-sr-sim package:    {contract.sim_version} (independent tag stream)")
     print(f"  Docker release images:  {', '.join(contract.release_images)}")
+    catalog_snapshot = catalog_snapshot_for_version(release_version)
+    if args.version is not None:
+        print(f"  Built-in catalog:       {catalog_snapshot} (release-bound)")
+    else:
+        print(
+            f"  Built-in catalog target: {catalog_snapshot} "
+            "(checked when --version is explicit)"
+        )
 
     if not errors:
         print("  Status: pass")
