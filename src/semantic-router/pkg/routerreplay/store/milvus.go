@@ -37,6 +37,15 @@ type MilvusStore struct {
 	lifecycle        *storageLifecycle
 }
 
+// readLevel floors Session at Bounded until this process has written, since the
+// SDK degrades Session to Eventually while no session timestamp exists.
+func (m *MilvusStore) readLevel() entity.ConsistencyLevel {
+	if m.consistencyLevel == entity.ClSession && !m.wrote.Load() {
+		return entity.ClBounded
+	}
+	return m.consistencyLevel
+}
+
 // NewMilvusStore creates a new Milvus storage backend.
 func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*MilvusStore, error) {
 	if cfg == nil {
