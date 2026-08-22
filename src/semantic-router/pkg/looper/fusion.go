@@ -112,6 +112,14 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"streaming":       req.IsStreaming,
 	})
 
+	// Fusion's panel -> analysis -> final stages are not independently
+	// truncatable (analysis needs the panel, final needs analysis), so budget
+	// is checked once before the whole pipeline starts rather than between
+	// stages; usage from every stage is still recorded below.
+	if stop, reason := CheckBudget(req); stop {
+		return nil, fmt.Errorf("fusion: budget exhausted before any model call (%s)", reason)
+	}
+
 	panelResponses, failedModels, err := l.executeFusionPanel(ctx, req, cfg)
 	if err != nil {
 		if cfg.OnError == config.FusionOnErrorFail || len(panelResponses) == 0 {
@@ -131,11 +139,14 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
+	RecordBudgetUsageForResponses(req, panelResponses)
 	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
+	RecordBudgetUsageForResponse(req, analysisResp)
 	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
 	if err != nil {
 		return nil, err
 	}
+	RecordBudgetUsageForResponse(req, finalResp)
 	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
 
 	trace := buildFusionTrace(cfg, groundedPanel, failedModels, analysis, groundingMode, groundingScores)

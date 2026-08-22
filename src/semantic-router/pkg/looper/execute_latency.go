@@ -34,6 +34,11 @@ func ExecuteWithLatency(ctx context.Context, l Looper, req *Request) (*Response,
 	if req != nil {
 		ctx = contextWithRoutingRecipe(ctx, req.RecipeName)
 	}
+	if req != nil && req.Budget != nil && req.Budget.MaxWallTimeMs > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.Budget.MaxWallTimeMs)*time.Millisecond)
+		defer cancel()
+	}
 	start := time.Now()
 	resp, err := l.Execute(ctx, req)
 	if err != nil || resp == nil {

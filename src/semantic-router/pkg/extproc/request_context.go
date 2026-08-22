@@ -181,6 +181,7 @@ type RequestContext struct {
 	VSRSelectedCategory             string                                      // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName         string                                      // The decision name from DecisionEngine evaluation
 	VSRSelectedDecisionConfidence   float64                                     // Confidence score from DecisionEngine evaluation
+	VSRSelectedDecisionMatchedRules []string                                    // Matched rule/category identifiers for the selected decision (config-defined, never prompt text)
 	VSRReasoningMode                string                                      // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
