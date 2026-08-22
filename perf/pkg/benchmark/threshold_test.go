@@ -86,7 +86,7 @@ func TestLoadThresholds_ShippedConfigMapsEverySuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadThresholds: %v", err)
 	}
-	if got := getThresholdsForBenchmark("BenchmarkEvaluateDecisions_SingleDomain", cfg).MaxAllocsRegressionPercent; got != 5 {
+	if got := getThresholdsForBenchmark("BenchmarkDecisionTopology/decisions=16/position=last/serial", cfg).MaxAllocsRegressionPercent; got != 5 {
 		t.Errorf("shipped config: decision allocs bound = %v, want 5", got)
 	}
 	looper := getThresholdsForBenchmark("BenchmarkReMoM_DistributeRoundRobin", cfg)

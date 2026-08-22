@@ -1,214 +1,99 @@
-# ============== performance.mk ==============
-# =   Performance testing related targets   =
-# ============== performance.mk ==============
+# ================= performance.mk =================
+# Manifest-driven performance runs and reports.
+# ==================================================
 
 ##@ Performance Testing
 
-# Create reports directory if it doesn't exist
+PERF_ENV ?= cpu
+PERF_PROFILE ?= quick
+PERF_CONFIG ?= $(CURDIR)/perf/config/perf.yaml
+PERF_THRESHOLDS ?= $(CURDIR)/perf/config/thresholds.yaml
+PERF_OUTPUT_DIR ?= $(CURDIR)/reports/perf/$(PERF_ENV)-$(PERF_PROFILE)
+PERF_BASELINE ?= $(CURDIR)/perf/testdata/baselines/$(PERF_ENV)-ci.json
+PERF_GATE_FLAGS ?=
+
 .PHONY: ensure-reports-dir
 ensure-reports-dir:
-	@mkdir -p reports
+	@mkdir -p "$(PERF_OUTPUT_DIR)"
 
-# Run all performance benchmarks
-perf-bench: ## Run all performance benchmarks
-perf-bench: build-router ensure-reports-dir
+perf-validate: ## Validate the manifest and threshold policy
 	@$(LOG_TARGET)
-	@echo "Running performance benchmarks..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=. -benchmem -benchtime=10s ./benchmarks/... \
-	  -cpuprofile=../reports/cpu.prof \
-	  -memprofile=../reports/mem.prof \
-	  -timeout=30m
+	@cd perf && go run ./cmd/perftest validate \
+		--config "$(PERF_CONFIG)" \
+		--thresholds "$(PERF_THRESHOLDS)"
 
-# Run quick performance benchmarks (shorter benchtime for faster iteration)
-perf-bench-quick: ## Run quick performance benchmarks (3s benchtime)
-perf-bench-quick: build-router ensure-reports-dir
+perf-unit: ## Run performance harness unit tests
 	@$(LOG_TARGET)
-	@echo "Running quick performance benchmarks..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=. -benchmem -benchtime=3s ./benchmarks/... \
-	  -timeout=15m
+	@cd perf && go test ./pkg/benchmark/... ./cmd/perftest/...
 
-# Run specific benchmark suite
-perf-bench-classification: ## Run classification benchmarks
-perf-bench-classification: build-router ensure-reports-dir
+# The actual benchmark functions live beside the package hot paths. build-router
+# prepares the cgo/native libraries those packages link against; the manifest
+# chooses the environment, profile, suite inventory, repetition count, and
+# benchmark duration. Every run writes current/comparison/report JSON plus
+# Markdown, HTML, and per-suite raw logs under PERF_OUTPUT_DIR.
+perf-run: rust-ci perf-validate ensure-reports-dir ## Run a manifest profile and generate reports
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=BenchmarkClassify.* -benchmem -benchtime=10s ./benchmarks/
+	@export LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release:$(CURDIR)/ml-binding/target/release:$(CURDIR)/nlp-binding/target/release:$${LD_LIBRARY_PATH}"; \
+	cd perf && go run ./cmd/perftest run \
+		--config "$(PERF_CONFIG)" \
+		--thresholds "$(PERF_THRESHOLDS)" \
+		--repo-root "$(CURDIR)" \
+		--environment "$(PERF_ENV)" \
+		--profile "$(PERF_PROFILE)" \
+		--output-dir "$(PERF_OUTPUT_DIR)" \
+		$(if $(strip $(PERF_BASELINE)),--baseline "$(PERF_BASELINE)",) \
+		$(PERF_GATE_FLAGS)
 
-perf-bench-decision: ## Run decision engine benchmarks
-perf-bench-decision: build-router ensure-reports-dir
+perf-bench-quick: PERF_PROFILE = quick
+perf-bench-quick: perf-run ## Fast local CPU hot-path report
+
+perf-check: PERF_PROFILE = ci
+perf-check: PERF_GATE_FLAGS = --fail-on-regression --require-complete
+perf-check: perf-run ## Run the fail-closed CPU PR performance gate
+
+perf-nightly: PERF_PROFILE = nightly
+perf-nightly: PERF_GATE_FLAGS = --fail-on-regression --require-complete
+perf-nightly: perf-run ## Run the longer CPU trend profile
+
+perf-bench: PERF_PROFILE = cpu-full
+perf-bench: PERF_GATE_FLAGS =
+perf-bench: perf-run ## Run all currently available CPU suites (models required)
+
+perf-compare: ensure-reports-dir ## Recompare an existing current.json and regenerate reports
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=BenchmarkEvaluate.* -benchmem -benchtime=10s ./benchmarks/
+	@cd perf && go run ./cmd/perftest compare \
+		--current "$(PERF_OUTPUT_DIR)/current.json" \
+		--baseline "$(PERF_BASELINE)" \
+		--thresholds "$(PERF_THRESHOLDS)" \
+		--output-dir "$(PERF_OUTPUT_DIR)"
 
-perf-bench-cache: ## Run cache benchmarks
-perf-bench-cache: build-router ensure-reports-dir
+perf-report: ensure-reports-dir ## Regenerate JSON, Markdown, and HTML from comparison.json
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=BenchmarkCache.* -benchmem -benchtime=10s ./benchmarks/
+	@cd perf && go run ./cmd/perftest report \
+		--input "$(PERF_OUTPUT_DIR)/comparison.json" \
+		--output-dir "$(PERF_OUTPUT_DIR)"
 
-# Run Looper family benchmarks. Unlike the other component benchmarks, the
-# Looper/Fusion/Flow/ReMoM benches live in the main module (src/semantic-router)
-# next to the unexported hot-path functions they measure, so go test runs there.
-perf-bench-looper: ## Run Looper family (ReMoM/Fusion/Flow/Base) benchmarks
-perf-bench-looper: build-router ensure-reports-dir
+# Baselines are never updated by scheduled CI. This explicit local command
+# captures the CPU CI inventory, then promotes the reviewed current result.
+perf-baseline-update: PERF_PROFILE = ci
+perf-baseline-update: PERF_BASELINE =
+perf-baseline-update: perf-run ## Capture and promote a reviewed CPU CI baseline
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... \
-	  | tee ../../reports/bench-results-looper.txt
+	@cd perf && go run ./cmd/perftest promote \
+		--current "$(PERF_OUTPUT_DIR)/current.json" \
+		--output "$(CURDIR)/perf/testdata/baselines/$(PERF_ENV)-ci.json"
 
-# Run E2E performance tests
-perf-e2e: ## Run E2E performance tests
-perf-e2e: build-e2e ensure-reports-dir
+perf-clean: ## Remove generated performance artifacts
 	@$(LOG_TARGET)
-	@echo "Running E2E performance tests..."
-	@./bin/e2e -profile=envoy-ai-gateway \
-	  -tests=performance-throughput,performance-latency,performance-resource
+	@rm -rf "$(CURDIR)/reports/perf"
 
-# Compare against baseline (report only; use perf-check to fail on regression).
-# Consumes reports/bench-output.txt (a captured benchmark run — 'make perf-check'
-# writes it, or tee one there yourself; CI also produces it), turns it into
-# reports/current.json, and diffs it against every per-suite baseline in
-# perf/testdata/baselines.
-perf-compare: ## Compare current benchmark output against baseline (report only)
-perf-compare: ensure-reports-dir
-	@$(LOG_TARGET)
-	@test -f reports/bench-output.txt || { \
-	  echo "reports/bench-output.txt not found — run 'make perf-check' (runs benchmarks + gates), or capture a run first: make perf-bench-quick 2>&1 | tee reports/bench-output.txt"; \
-	  exit 1; }
-	@echo "Building current results from benchmark output..."
-	@cd perf && go run cmd/perftest/main.go \
-	  --parse-bench=../reports/bench-output.txt \
-	  --output=../reports/current.json
-	@echo "Comparing performance against baseline..."
-	@cd perf && go run cmd/perftest/main.go \
-	  --compare-baseline=testdata/baselines/ \
-	  --current=../reports/current.json \
-	  --threshold-file=config/thresholds.yaml \
-	  --output=../reports/comparison.json
-
-# Run benchmarks with CPU profiling
-perf-profile-cpu: ## Run benchmarks with CPU profiling and open pprof
-perf-profile-cpu: perf-bench
-	@$(LOG_TARGET)
-	@echo "Opening CPU profile..."
-	@go tool pprof -http=:8080 reports/cpu.prof
-
-# Run benchmarks with memory profiling
-perf-profile-mem: ## Run benchmarks with memory profiling and open pprof
-perf-profile-mem: perf-bench
-	@$(LOG_TARGET)
-	@echo "Opening memory profile..."
-	@go tool pprof -http=:8080 reports/mem.prof
-
-# Generate CPU flame graph
-perf-flamegraph: ## Generate CPU flame graph
-perf-flamegraph: perf-bench
-	@$(LOG_TARGET)
-	@echo "Generating CPU flame graph..."
-	@go tool pprof -http=:8080 reports/cpu.prof &
-
-# Update performance baselines
-perf-baseline-update: ## Update performance baselines
-perf-baseline-update: ensure-reports-dir
-	@$(LOG_TARGET)
-	@echo "Running benchmarks to update baseline..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=. -benchmem -benchtime=30s ./benchmarks/... \
-	  | tee ../reports/bench-results.txt
-	@echo "Running Looper family benchmarks to update baseline..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=30s ./pkg/looper/... \
-	  | tee -a ../../reports/bench-results.txt
-	@echo "Updating baselines..."
-	@cd perf/scripts && ./update-baseline.sh
-
-# Generate performance report
-perf-report: ## Generate performance report (requires comparison.json)
-perf-report: ensure-reports-dir
-	@$(LOG_TARGET)
-	@echo "Generating performance report..."
-	@cd perf && go run cmd/perftest/main.go \
-	  --generate-report \
-	  --input=../reports/comparison.json \
-	  --output=../reports/perf-report.html
-
-# Clean performance test artifacts
-perf-clean: ## Clean performance test artifacts
-	@$(LOG_TARGET)
-	@echo "Cleaning performance test artifacts..."
-	@rm -rf reports/*.prof reports/*.json reports/*.html reports/*.md
-	@echo "Performance artifacts cleaned"
-
-# Run continuous performance monitoring (for local development)
-perf-watch: ## Continuously run quick benchmarks on file changes
-	@echo "Watching for changes and running quick benchmarks..."
-	@while true; do \
-		make perf-bench-quick; \
-		echo "Waiting for changes... (Ctrl+C to stop)"; \
-		sleep 30; \
-	done
-
-# Performance test with specific concurrency
-perf-bench-concurrency: ## Run benchmarks with specific concurrency (e.g., CONCURRENCY=4)
-perf-bench-concurrency: build-router ensure-reports-dir
-	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	export GOMAXPROCS=$${CONCURRENCY:-4} && \
-	cd perf && go test -bench=.*Parallel -benchmem -benchtime=10s ./benchmarks/...
-
-# Run benchmarks and fail if any benchmark regresses beyond its threshold.
-# Compares against the committed baselines in perf/testdata/baselines — refresh
-# them for your hardware with 'make perf-baseline-update' before trusting a
-# local pass/fail, since absolute ns/op is machine-dependent. CI self-baselines
-# against main in the same runner (see .github/workflows/performance-test.yml),
-# so it needs no committed baseline.
-perf-check: ## Run benchmarks and fail if regressions exceed thresholds
-perf-check: build-router ensure-reports-dir
-	@$(LOG_TARGET)
-	@echo "Running benchmarks for regression check..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd perf && go test -bench=. -benchmem -benchtime=10s ./benchmarks/... | tee ../reports/bench-output.txt
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-	cd src/semantic-router && go test -bench='^Benchmark(ReMoM|Fusion|Flow|Base)' -benchmem -benchtime=10s ./pkg/looper/... | tee -a ../../reports/bench-output.txt
-	@echo "Building current results and comparing against baseline..."
-	@cd perf && go run cmd/perftest/main.go \
-	  --parse-bench=../reports/bench-output.txt \
-	  --output=../reports/current.json
-	@cd perf && go run cmd/perftest/main.go \
-	  --compare-baseline=testdata/baselines/ \
-	  --current=../reports/current.json \
-	  --threshold-file=config/thresholds.yaml \
-	  --output=../reports/comparison.json \
-	  --fail-on-regression
-
-# Show performance test help
-perf-help: ## Show performance testing help
-	@echo "Performance Testing Targets:"
+perf-help: ## Show performance framework commands and overrides
+	@echo "Performance framework:"
+	@echo "  make perf-bench-quick                 fast local CPU report"
+	@echo "  make perf-check                       fail-closed CPU PR gate"
+	@echo "  make perf-nightly                     longer CPU trend run"
+	@echo "  make perf-bench                       opt-in full CPU/model run"
+	@echo "  make perf-baseline-update             explicitly promote CPU CI baseline"
+	@echo "  make perf-compare PERF_OUTPUT_DIR=... recompare captured results"
 	@echo ""
-	@echo "Quick Start:"
-	@echo "  make perf-bench              - Run all benchmarks (10s per test)"
-	@echo "  make perf-bench-quick        - Run quick benchmarks (3s per test)"
-	@echo "  make perf-compare            - Compare against baseline"
-	@echo "  make perf-check              - Run benchmarks and fail on regression"
-	@echo ""
-	@echo "Component Benchmarks:"
-	@echo "  make perf-bench-classification - Benchmark classification"
-	@echo "  make perf-bench-decision       - Benchmark decision engine"
-	@echo "  make perf-bench-cache          - Benchmark cache"
-	@echo ""
-	@echo "Profiling:"
-	@echo "  make perf-profile-cpu        - Profile CPU usage"
-	@echo "  make perf-profile-mem        - Profile memory usage"
-	@echo "  make perf-flamegraph         - Generate flame graph"
-	@echo ""
-	@echo "E2E Performance:"
-	@echo "  make perf-e2e                - Run E2E performance tests"
-	@echo ""
-	@echo "Baselines & Reports:"
-	@echo "  make perf-baseline-update    - Update performance baselines"
-	@echo "  make perf-report             - Generate HTML report"
-	@echo ""
-	@echo "Cleanup:"
-	@echo "  make perf-clean              - Clean performance artifacts"
+	@echo "Overrides: PERF_ENV, PERF_PROFILE, PERF_OUTPUT_DIR, PERF_BASELINE"
