@@ -33,7 +33,7 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			token := extractAccessToken(r)
+			token, tokenSource := extractAccessTokenWithSource(r)
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -43,6 +43,30 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
+			}
+
+			// Repairs sessions minted before this shipped, which would otherwise 403 on
+			// every write. Safe methods too, so a page load fixes it. Sets a response
+			// cookie only; it must not authorise this request.
+			if tokenSource == tokenSourceCookie {
+				if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
+					!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
+					setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
+				}
+			}
+
+			// The browser attaches the session cookie to any request aimed here, including
+			// one a hostile page caused, so a cookie-authenticated write must prove it
+			// originated here. Bearer is exempt: a browser never sets it. See #2465.
+			if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
+				if !originAllowed(r, service.allowedOrigins) {
+					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+					return
+				}
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
+					return
+				}
 			}
 
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
@@ -411,18 +435,36 @@ func extractBearer(raw string) string {
 	return normalizeAccessToken(parts[1])
 }
 
-func extractAccessToken(r *http.Request) string {
+// Which transport supplied the credential, so the CSRF check can apply to cookies only.
+type accessTokenSource int
+
+const (
+	tokenSourceNone accessTokenSource = iota
+	tokenSourceHeader
+	tokenSourceCookie
+)
+
+// The query-string transport is deliberately absent: a credential in a URL is written down
+// by proxy access logs, browser history and the Referer header. Browser transports use the
+// HttpOnly vsr_session cookie the browser attaches for them; non-browser clients use
+// Authorization: Bearer. See #2465.
+func extractAccessTokenWithSource(r *http.Request) (string, accessTokenSource) {
 	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
+		return token, tokenSourceHeader
 	}
 
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
-			return token
+			return token, tokenSourceCookie
 		}
 	}
 
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	return "", tokenSourceNone
+}
+
+func extractAccessToken(r *http.Request) string {
+	token, _ := extractAccessTokenWithSource(r)
+	return token
 }
 
 func normalizeAccessToken(raw string) string {

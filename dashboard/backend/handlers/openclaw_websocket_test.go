@@ -262,3 +262,66 @@ func TestWSOutboundFromLastRoomEvent(t *testing.T) {
 		t.Fatalf("expected replay message to be copied")
 	}
 }
+
+func TestWSCheckOrigin(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		origin  string
+		referer string
+		want    bool
+	}{
+		{name: "same origin", origin: "http://example.com", want: true},
+		{name: "cross origin", origin: "https://evil.example"},
+		{name: "cross origin wins over a same-origin referer", origin: "https://evil.example", referer: "http://example.com/rooms"},
+		{name: "null origin", origin: "null"},
+		// No Origin means a non-browser client; see auth.OriginChecker.
+		{name: "no origin at all", want: true},
+		{name: "no origin, cross-origin referer", referer: "https://evil.example/rooms", want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms/r1/ws", nil)
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			if got := wsUpgrader.CheckOrigin(r); got != tc.want {
+				t.Fatalf("CheckOrigin = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A browser on an allowed origin must be able to open a room socket, not just write. Not
+// parallel: it mutates the package-level allowlist that startup normally owns.
+func TestWSCheckOriginHonorsAllowlist(t *testing.T) {
+	SetWebSocketAllowedOrigins([]string{"http://localhost:3001"})
+	t.Cleanup(func() { SetWebSocketAllowedOrigins(nil) })
+
+	cases := []struct {
+		name   string
+		origin string
+		want   bool
+	}{
+		{name: "allowlisted dev origin", origin: "http://localhost:3001", want: true},
+		{name: "own origin still allowed", origin: "http://example.com", want: true},
+		{name: "cross origin still denied", origin: "https://evil.example"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms/r1/ws", nil)
+			r.Header.Set("Origin", tc.origin)
+
+			if got := wsUpgrader.CheckOrigin(r); got != tc.want {
+				t.Fatalf("CheckOrigin = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

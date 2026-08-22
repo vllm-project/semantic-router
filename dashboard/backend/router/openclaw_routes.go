@@ -29,6 +29,10 @@ func registerOpenClawRoutes(
 	cfg *config.Config,
 	openClawHandler *handlers.OpenClawHandler,
 ) {
+	// The room WebSocket needs the same allowlist as the CSRF origin check; see
+	// auth.OriginChecker.
+	handlers.SetWebSocketAllowedOrigins(cfg.AllowedOrigins)
+
 	if cfg.OpenClawEnabled && openClawHandler != nil {
 		registerEnabledOpenClawRoutes(mux, openClawHandler)
 		log.Printf("OpenClaw API endpoints registered: /api/openclaw/*")

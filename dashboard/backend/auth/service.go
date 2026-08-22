@@ -39,6 +39,10 @@ type Service struct {
 	// guard), so a process-level mutex is sufficient; a multi-writer deployment would
 	// need a transactional guard in the store instead.
 	bootstrapMu sync.Mutex
+
+	// Extra origins accepted for state-changing requests. Written once during route
+	// setup, before the server serves, so it needs no lock.
+	allowedOrigins []string
 }
 
 // ErrBootstrapClosed is returned by BootstrapRegister when an admin already exists.
@@ -82,6 +86,9 @@ func (s *Service) SetSetupModeFunc(fn func() bool) { s.setupModeFn = fn }
 // SetSetupMode pins setup mode to a fixed value. Retained for tests and for
 // callers with no resolver. Production wiring uses SetSetupModeFunc.
 func (s *Service) SetSetupMode(v bool) { s.setupModeFn = func() bool { return v } }
+
+// A non-empty list also stops X-Forwarded-Host being trusted (see requestOrigin).
+func (s *Service) SetAllowedOrigins(origins []string) { s.allowedOrigins = origins }
 
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
 //
