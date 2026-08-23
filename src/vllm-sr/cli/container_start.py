@@ -1,7 +1,6 @@
 """Container startup orchestration for vLLM Semantic Router."""
 
 import os
-import subprocess
 
 from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
@@ -14,6 +13,7 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_runtime_env
 from cli.container_images import (
     _normalize_platform,
@@ -39,16 +39,12 @@ from cli.container_run_command import (
     maybe_append_nvidia_gpu_passthrough,
 )
 from cli.container_runtime import get_container_runtime, resolve_container_cli_path
-from cli.container_services import (
-    container_remove_container,
-    container_status,
-    container_stop_container,
-)
 from cli.container_start_paths import (
     _active_recipe_mount_specs,
     _prepare_runtime_paths,
     _runtime_mount_specs,
 )
+from cli.container_start_runner import run_container_specs
 from cli.parser import parse_user_config
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
@@ -131,35 +127,9 @@ def container_start_vllm_sr(
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
-    started_containers = []
-    stdout_chunks = []
-    stderr_chunks = []
-
-    for service_name, container_name, cmd in container_specs:
-        log.info(f"Starting {service_name} container: {container_name}")
-        log.debug(f"Container command: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                env=_service_child_env(service_name, storage_secret_values),
-            )
-        except subprocess.CalledProcessError as exc:
-            if exc.stdout:
-                stdout_chunks.append(exc.stdout)
-            stderr_chunks.append(exc.stderr)
-            _cleanup_started_containers(started_containers)
-            return (exc.returncode, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
-
-        started_containers.append(container_name)
-        if result.stdout:
-            stdout_chunks.append(result.stdout)
-        if result.stderr:
-            stderr_chunks.append(result.stderr)
-
-    return (0, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
+    return run_container_specs(
+        container_specs, storage_secret_values=storage_secret_values
+    )
 
 
 def _resolve_storage_secret_env(
@@ -180,24 +150,6 @@ def _resolve_storage_secret_env(
     return storage_secret_env(
         load_storage_secrets(state_root_dir, stack_layout=stack_layout)
     )
-
-
-def _service_child_env(
-    service_name: str, storage_secret_values: dict[str, str]
-) -> dict[str, str] | None:
-    """Hand the storage credentials to the Router's ``run`` invocation alone.
-
-    The values travel in this one child's environment, paired with the
-    inheriting ``-e NAME`` flag, so they never appear in a command line. They
-    are never assigned into ``os.environ``: that would expose them to every
-    other process the CLI spawns, including ``docker exec`` and OpenClaw
-    workloads. ``None`` means "inherit", which is what every other service
-    gets.
-    """
-
-    if service_name != "router" or not storage_secret_values:
-        return None
-    return {**os.environ, **storage_secret_values}
 
 
 def _build_common_runtime_env(
@@ -315,7 +267,6 @@ def _runtime_container_specs(
         normalized_platform=normalized_platform,
         common_env=common_env,
         runtime_paths=runtime_paths,
-        setup_mode=setup_mode,
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
@@ -334,8 +285,20 @@ def _runtime_container_specs(
     )
 
     specs = [
-        ("router", stack_layout.router_container_name, router_cmd),
-        ("envoy", stack_layout.envoy_container_name, envoy_cmd),
+        (
+            "router",
+            stack_layout.router_container_name,
+            (
+                router_cmd,
+                *router_data_network_commands(
+                    runtime,
+                    stack_layout.router_container_name,
+                    stack_layout.data_network_name,
+                    start_now=not setup_mode,
+                ),
+            ),
+        ),
+        ("envoy", stack_layout.envoy_container_name, (envoy_cmd,)),
     ]
 
     if minimal:
@@ -355,7 +318,7 @@ def _runtime_container_specs(
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
     )
-    specs.append(("dashboard", stack_layout.dashboard_container_name, dashboard_cmd))
+    specs.append(("dashboard", stack_layout.dashboard_container_name, (dashboard_cmd,)))
 
     return specs
 
@@ -369,7 +332,6 @@ def _build_router_runtime_command(
     normalized_platform: str,
     common_env: dict[str, str],
     runtime_paths: dict[str, str],
-    setup_mode: bool,
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
@@ -414,7 +376,11 @@ def _build_router_runtime_command(
         command_args=service_args,
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
         enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
-        start_immediately=not setup_mode,
+        # Never `run`: Router is the one container on both stack networks, and
+        # the second one can only be attached to a container that already
+        # exists. `router_data_network_commands` supplies the connect and the
+        # start that follow, in that order.
+        start_immediately=False,
         inherited_env_keys=inherited_sensitive_env,
     )
 
@@ -718,10 +684,3 @@ def _build_service_run_command(
     cmd.append(image)
     cmd.extend(command_args)
     return cmd
-
-
-def _cleanup_started_containers(container_names: list[str]) -> None:
-    for container_name in reversed(container_names):
-        if container_status(container_name) == "running":
-            container_stop_container(container_name)
-        container_remove_container(container_name)

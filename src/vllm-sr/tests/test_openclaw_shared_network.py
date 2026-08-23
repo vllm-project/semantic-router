@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -30,7 +31,7 @@ def _capture_run_commands(monkeypatch):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )
@@ -566,8 +567,8 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
     )
     monkeypatch.setattr(
         core,
-        "container_network_disconnect",
-        record("container_network_disconnect"),
+        "container_network_disconnect_if_attached",
+        record("container_network_disconnect_if_attached"),
     )
     monkeypatch.setattr(
         core,
@@ -584,7 +585,9 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         args[0] for name, args, _ in calls if name == "container_remove_container"
     ]
     disconnect_calls = [
-        args for name, args, _ in calls if name == "container_network_disconnect"
+        args
+        for name, args, _ in calls
+        if name == "container_network_disconnect_if_attached"
     ]
     remove_network_calls = [
         args for name, args, _ in calls if name == "container_remove_network"
@@ -595,11 +598,20 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
     ]
+    # A workload normally joins the application network only, but the network
+    # comes from OPENCLAW_DEFAULT_NETWORK_MODE, which the caller's environment
+    # can point at the data network. Teardown covers both so `stop` can remove
+    # both; detaching from one it never joined is reported as success.
     assert disconnect_calls == [
         (stack_layout.network_name, "openclaw-a"),
+        (stack_layout.data_network_name, "openclaw-a"),
         (stack_layout.network_name, "openclaw-b"),
+        (stack_layout.data_network_name, "openclaw-b"),
     ]
-    assert remove_network_calls == [(stack_layout.network_name,)]
+    assert remove_network_calls == [
+        (stack_layout.network_name,),
+        (stack_layout.data_network_name,),
+    ]
 
 
 def test_runtime_service_container_name_prefers_split_runtime_container(monkeypatch):
@@ -687,8 +699,8 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
     )
     monkeypatch.setattr(
         core,
-        "container_network_disconnect",
-        record("container_network_disconnect"),
+        "container_network_disconnect_if_attached",
+        record("container_network_disconnect_if_attached"),
     )
     monkeypatch.setattr(
         core,
