@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -23,15 +25,26 @@ const (
 // MilvusStore implements Storage using Milvus as the backend.
 // Records are stored as entities in a Milvus collection.
 type MilvusStore struct {
-	client         client.Client
-	collectionName string
-	ttl            time.Duration
-	asyncWrites    bool
-	asyncChan      chan asyncOp
-	done           chan struct{}
-	writerDone     chan struct{}
-	updateMu       sync.Mutex
-	lifecycle      *storageLifecycle
+	client           client.Client
+	collectionName   string
+	consistencyLevel entity.ConsistencyLevel
+	wrote            atomic.Bool
+	ttl              time.Duration
+	asyncWrites      bool
+	asyncChan        chan asyncOp
+	done             chan struct{}
+	writerDone       chan struct{}
+	updateMu         sync.Mutex
+	lifecycle        *storageLifecycle
+}
+
+// readLevel floors Session at Bounded until this process has written, since the
+// SDK degrades Session to Eventually while no session timestamp exists.
+func (m *MilvusStore) readLevel() entity.ConsistencyLevel {
+	if m.consistencyLevel == entity.ClSession && !m.wrote.Load() {
+		return entity.ClBounded
+	}
+	return m.consistencyLevel
 }
 
 // NewMilvusStore creates a new Milvus storage backend.
@@ -48,6 +61,10 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	if collectionName == "" {
 		collectionName = DefaultMilvusCollection
 	}
+	consistencyLevel, validConsistencyLevel := milvusConsistencyLevel(cfg.ConsistencyLevel)
+	if !validConsistencyLevel {
+		logging.Warnf("unknown router replay Milvus consistency level %q; using %q", cfg.ConsistencyLevel, DefaultMilvusConsistencyLevel)
+	}
 
 	milvusClient, err := milvuslifecycle.Connect(context.Background(), client.Config{
 		Address:  cfg.Address,
@@ -59,12 +76,13 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	}
 
 	store := &MilvusStore{
-		client:         milvusClient,
-		collectionName: collectionName,
-		ttl:            time.Duration(ttlSeconds) * time.Second,
-		asyncWrites:    asyncWrites,
-		done:           make(chan struct{}),
-		lifecycle:      newStorageLifecycle(),
+		client:           milvusClient,
+		collectionName:   collectionName,
+		consistencyLevel: consistencyLevel,
+		ttl:              time.Duration(ttlSeconds) * time.Second,
+		asyncWrites:      asyncWrites,
+		done:             make(chan struct{}),
+		lifecycle:        newStorageLifecycle(),
 	}
 
 	if err := milvuslifecycle.Retry(
@@ -144,7 +162,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 
 			// Create collection
 			//nolint:gosec // shardNum is validated to be within int32 range
-			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum)); err != nil {
+			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum), client.WithConsistencyLevel(m.consistencyLevel)); err != nil {
 				return err
 			}
 
@@ -210,6 +228,22 @@ func (m *MilvusStore) asyncWriter() {
 	}
 }
 
+// insertRecord writes one marshalled record as a Milvus entity.
+func (m *MilvusStore) insertRecord(ctx context.Context, record Record, data []byte) error {
+	idColumn := entity.NewColumnVarChar("id", []string{record.ID})
+	timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
+	dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
+	vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
+
+	if _, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
+		return err
+	}
+	// Record that this client has written, so Session reads no longer
+	// degrade to Eventually for want of a session timestamp.
+	m.wrote.Store(true)
+	return nil
+}
+
 // Add inserts a new record into Milvus.
 func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 	release, err := m.lifecycle.beginMutation()
@@ -238,17 +272,7 @@ func (m *MilvusStore) Add(ctx context.Context, record Record) (string, error) {
 		return "", fmt.Errorf("failed to marshal record: %w", err)
 	}
 
-	fn := func() error {
-		// Create columns
-		idColumn := entity.NewColumnVarChar("id", []string{record.ID})
-		timestampColumn := entity.NewColumnInt64("timestamp", []int64{record.Timestamp.Unix()})
-		dataColumn := entity.NewColumnVarChar("data", []string{string(data)})
-		vectorColumn := entity.NewColumnFloatVector("vector", 2, [][]float32{{0.0, 0.0}})
-
-		// Insert
-		_, err := m.client.Insert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn)
-		return err
-	}
+	fn := func() error { return m.insertRecord(ctx, record, data) }
 
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error {
@@ -295,7 +319,7 @@ func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, e
 
 	// Query by ID
 	expr := fmt.Sprintf("id == '%s'", id)
-	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"})
+	result, err := m.client.Query(ctx, m.collectionName, nil, expr, []string{"id", "timestamp", "data"}, client.WithSearchQueryConsistencyLevel(m.readLevel()))
 	if err != nil {
 		return Record{}, false, fmt.Errorf("failed to query record: %w", err)
 	}
@@ -350,6 +374,7 @@ func (m *MilvusStore) listRecords(ctx context.Context) ([]Record, error) {
 		"",
 		[]string{"id", "timestamp", "data"},
 		client.WithLimit(10000),
+		client.WithSearchQueryConsistencyLevel(m.readLevel()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query records: %w", err)
@@ -513,6 +538,7 @@ func (m *MilvusStore) replaceRecord(ctx context.Context, record Record) error {
 	if _, err := m.client.Upsert(ctx, m.collectionName, "", idColumn, timestampColumn, dataColumn, vectorColumn); err != nil {
 		return fmt.Errorf("failed to upsert updated record: %w", err)
 	}
+	m.wrote.Store(true)
 	return m.client.Flush(ctx, m.collectionName, false)
 }
 
