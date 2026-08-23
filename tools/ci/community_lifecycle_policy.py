@@ -26,6 +26,15 @@ WORKGROUP_LABELS = (
     "wg/dev-community",
 )
 
+WORKGROUP_LABEL_ALIASES = {
+    "wg/mom-routing": "wg/mom-routing-intelligence",
+    "wg/router-models-inference-runtime": "wg/router-models-runtime-ecosystem",
+    "wg/data-plane-networking": "wg/data-plane-deployment",
+    "wg/enterprise-environment": "wg/platform-operations",
+    "wg/evaluation-quality": "wg/quality-release",
+    "wg/developer-experience-ecosystem": "wg/dev-community",
+}
+
 WORKGROUP_OPTIONS = {
     "MoM & Routing Intelligence": "wg/mom-routing-intelligence",
     "Router Models, Runtime & Ecosystem": "wg/router-models-runtime-ecosystem",
@@ -70,6 +79,16 @@ def label_names(item: dict[str, Any]) -> set[str]:
         label["name"] if isinstance(label, dict) else str(label)
         for label in item.get("labels", [])
     }
+
+
+def canonical_workgroup_labels(raw_labels: set[str]) -> set[str]:
+    canonical: set[str] = set()
+    for label in raw_labels:
+        if label in WORKGROUP_LABELS:
+            canonical.add(label)
+        elif label in WORKGROUP_LABEL_ALIASES:
+            canonical.add(WORKGROUP_LABEL_ALIASES[label])
+    return canonical
 
 
 def parse_form_field(body: str | None, heading: str) -> str | None:
@@ -154,7 +173,7 @@ def normalize_proposed_workgroup(
     *,
     accepted: bool,
 ) -> set[str]:
-    workgroups = labels.intersection(WORKGROUP_LABELS)
+    workgroups = canonical_workgroup_labels(labels)
     form_workgroup = proposed_workgroup(issue.get("body"))
     if accepted or not form_workgroup or workgroups == {form_workgroup}:
         return workgroups
@@ -344,12 +363,13 @@ def evaluate_pull_request(
     elif requires_admission and not accepted_issues:
         errors.append("At least one linked issue must carry the `accepted` label.")
 
-    owner_labels = {
-        label
-        for issue in accepted_issues
-        for label in label_names(issue)
-        if label in WORKGROUP_LABELS
-    }
+    owner_labels = canonical_workgroup_labels(
+        {
+            label
+            for issue in accepted_issues
+            for label in label_names(issue)
+        }
+    )
     if accepted_issues and len(owner_labels) != 1:
         errors.append(
             "Accepted linked work must resolve to exactly one owning `wg/*` label."
